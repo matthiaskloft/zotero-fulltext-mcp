@@ -43,8 +43,9 @@ python=~/.venvs/zotero_fulltext_mcp/bin/python
 ```
 
 Optional extras: `[zotero-write]` (write-plan workflow via pyzotero), `[marker]` (marker-pdf,
-needed for `reconvert-math`/`reconvert_with_math_ocr`, GPU-bound). A plain `pip install -e .`
-with no extras gets you the conversion pipeline and CLI but not the MCP server.
+needed for `reconvert-math`/`reconvert_with_math_ocr`, GPU-bound), `[test]` (pytest, needed to
+run the test suite — `pip install -e .[mcp,test]`). A plain `pip install -e .` with no extras
+gets you the conversion pipeline and CLI but not the MCP server.
 
 ## Configure
 
@@ -98,7 +99,7 @@ Smoke-test the index directly:
 ```
 
 This resolves the current venv's `zotero-fulltext-mcp` executable, your config, and the FTS
-database path, then prints a ready-to-paste `claude mcp add-json` command and a Codex
+database path, then prints a ready-to-paste `claude mcp add` command and a Codex
 `config.toml` block — no manual path editing. Add `--apply` to also run the Claude Code
 registration for you (falls back to printing the command if `claude` isn't on PATH). Codex's
 `config.toml` is never edited automatically; paste the printed block in yourself.

@@ -63,8 +63,8 @@ this repo. Treat it accordingly:
 ```
 
 If the virtual environment is unavailable, use Python 3.11+ and install dependencies from
-`pyproject.toml` (`pip install -e .[mcp]` for MCP support, add `[zotero-write]`/`[marker]` as
-needed).
+`pyproject.toml` (`pip install -e .[mcp,test]` for MCP support plus pytest, add
+`[zotero-write]`/`[marker]` as needed).
 
 ## Implementation Guidelines
 
