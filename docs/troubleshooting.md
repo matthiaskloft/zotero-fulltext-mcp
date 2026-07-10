@@ -202,23 +202,27 @@ key with no stale server history.
 
 ## Installing / Registering On A New Machine — Known Roadblocks
 
-Snags hit while installing the MCP server on a fresh Windows machine. None are
-bugs in this project, but each blocked an install step until worked around.
+Snags hit while installing the MCP server on a fresh Windows machine. All three
+are now fixed as of the roadblock-fix pass below; kept here in case an older
+checkout or a different platform still hits the underlying issue.
 
-1. **`install-mcp --apply` prints `'claude' was not found on PATH` even though
-   `claude` works in the same shell.** On Windows the Claude Code CLI is an npm
-   shim (`claude.cmd` / a shell script), not a `claude.exe`. `install-mcp --apply`
-   launches it via `subprocess.run(["claude", ...])` without `shell=True`, which
-   does not resolve `.cmd`/extensionless shims the way an interactive shell does.
-   The command still prints the exact `claude mcp add-json ...` line — just run
-   that yourself. `--apply` is a convenience, not the only path.
+1. **Fixed.** `install-mcp --apply` used to print `'claude' was not found on
+   PATH` even though `claude` worked in the same shell, because on Windows the
+   Claude Code CLI is an npm shim (`claude.cmd`), not a `claude.exe`, and
+   `subprocess.run(["claude", ...])` without `shell=True` does not resolve
+   `.cmd`/extensionless shims the way an interactive shell does. `install-mcp`
+   now resolves the executable via `shutil.which("claude")` first, which
+   applies `PATHEXT` resolution the same way a shell would. If `which` still
+   can't find it, the command reports the failure and falls back to the printed
+   command for you to run manually — `--apply` remains a convenience, not the
+   only path.
 
-2. **`claude mcp add-json '<json>'` fails with `Invalid configuration: : Invalid
-   input` under Git Bash / other POSIX shells.** The single-quoted JSON payload
-   gets mangled before `claude` sees it, so the parse fails. Two fixes: paste the
-   printed `add-json` command into **PowerShell or cmd** (where the quoting the
-   generator emits is correct), or skip JSON entirely and use the equivalent
-   positional form, which is quoting-robust:
+2. **Fixed.** `claude mcp add-json '<json>'` used to fail with `Invalid
+   configuration: : Invalid input` under Git Bash / other POSIX shells, because
+   the single-quoted JSON payload got mangled before `claude` saw it.
+   `install-mcp` now prints (and applies) the equivalent positional form
+   instead of JSON entirely, which is quoting-robust across PowerShell, cmd, and
+   Git Bash alike:
 
    ```powershell
    claude mcp add --scope user zotero-fulltext `
@@ -228,9 +232,10 @@ bugs in this project, but each blocked an install step until worked around.
    ```
 
    The `--` separates the server executable from the flags passed to it, and the
-   resulting stdio registration is identical to the `add-json` one.
+   resulting stdio registration is identical to the old `add-json` one.
 
-3. **`pytest` is not installed by `pip install -e .[mcp]`.** The `[mcp]` extra
-   pulls only runtime deps, so `python -m pytest -q` fails with
-   `No module named 'pytest'` in a fresh MCP-only venv. Install it explicitly
-   (`pip install pytest`) before running the suite. Expected result: `106 passed`.
+3. **Fixed.** `pytest` used to not be installed by `pip install -e .[mcp]`,
+   since the `[mcp]` extra pulls only runtime deps — `python -m pytest -q` would
+   fail with `No module named 'pytest'` in a fresh MCP-only venv. A `test` extra
+   now bundles it: install with `pip install -e .[mcp,test]` before running the
+   suite. Expected result: `107 passed`.

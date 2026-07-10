@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from zotero_pdf_text.cli import build_parser, main
+from zotero_pdf_text.cli import _shell_quote, build_parser, main
 from zotero_pdf_text.math_ocr import ReconvertResult
 
 
@@ -79,6 +79,18 @@ class ReconvertMathCliTests(unittest.TestCase):
             self.assertEqual(exit_code, 1)
 
 
+class ShellQuoteTests(unittest.TestCase):
+    def test_plain_windows_path_is_not_quoted(self):
+        self.assertEqual(_shell_quote(r"C:\Users\you\Scripts\zotero-fulltext-mcp.exe"), r"C:\Users\you\Scripts\zotero-fulltext-mcp.exe")
+
+    def test_path_with_space_is_quoted(self):
+        self.assertEqual(_shell_quote(r"C:\Program Files\zotero-fulltext-mcp.exe"), '"C:\\Program Files\\zotero-fulltext-mcp.exe"')
+
+    def test_path_with_shell_metacharacter_is_quoted(self):
+        # '&' is a command separator in both cmd and PowerShell when left unquoted.
+        self.assertEqual(_shell_quote(r"C:\Zotero&Research\config.json"), '"C:\\Zotero&Research\\config.json"')
+
+
 class InstallMcpCliTests(unittest.TestCase):
     def test_parser_defaults(self):
         args = build_parser().parse_args(["install-mcp"])
@@ -113,11 +125,13 @@ class InstallMcpCliTests(unittest.TestCase):
                 exit_code = main(["install-mcp", "--config", str(config_path)])
             printed = "".join(call.args[0] for call in mock_stdout.write.call_args_list)
             self.assertEqual(exit_code, 0)
-            self.assertIn("claude mcp add-json", printed)
+            self.assertIn("claude mcp add", printed)
+            self.assertNotIn("add-json", printed)
+            self.assertIn(" -- --db ", printed)  # separator, or Claude parses --db as its own flag
             self.assertIn(str(root / "converted_text" / "index" / "zotero_text_index.sqlite"), printed)
             self.assertIn("[mcp_servers.zotero_fulltext]", printed)
             self.assertIn(str(config_path), printed)
-            self.assertIn("'--config'", printed)
+            self.assertIn("--config", printed)
 
     def test_apply_invokes_subprocess_with_expected_args(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -135,18 +149,48 @@ class InstallMcpCliTests(unittest.TestCase):
                 encoding="utf-8",
             )
             with patch("sys.executable", str(root / "Scripts" / "python.exe")), patch(
-                "zotero_pdf_text.cli.subprocess.run"
-            ) as mock_run:
+                "zotero_pdf_text.cli.shutil.which", return_value="C:/fake/claude.cmd"
+            ), patch("zotero_pdf_text.cli.subprocess.run") as mock_run:
                 mock_run.return_value.returncode = 0
                 exit_code = main(["install-mcp", "--config", str(config_path), "--apply"])
             self.assertEqual(exit_code, 0)
             mock_run.assert_called_once()
             call_args = mock_run.call_args[0][0]
-            self.assertEqual(call_args[:5], ["claude", "mcp", "add-json", "--scope", "user"])
-            self.assertEqual(call_args[5], "zotero-fulltext")
-            payload = json.loads(call_args[6])
-            self.assertIn("--config", payload["args"])
-            self.assertEqual(payload["args"][payload["args"].index("--config") + 1], str(config_path))
+            expected_db = str(root / "converted_text" / "index" / "zotero_text_index.sqlite")
+            expected_exe = str(root / "Scripts" / "zotero-fulltext-mcp.exe")
+            # Exact ordered argv, not just membership -- catches regressions like a dropped '--'
+            # separator, which would make Claude parse '--db'/'--config' as its own options
+            # instead of forwarding them to the server.
+            self.assertEqual(
+                call_args,
+                [
+                    "C:/fake/claude.cmd",
+                    "mcp", "add", "--scope", "user", "zotero-fulltext",
+                    expected_exe,
+                    "--", "--db", expected_db, "--config", str(config_path),
+                ],
+            )
+
+    def test_apply_reports_error_when_claude_not_on_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config_path = root / "config.json"
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "zotero_root": str(root),
+                        "zotero_data_directory": str(root),
+                        "linked_attachments": str(root),
+                        "output_root": str(root / "converted_text"),
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with patch("sys.executable", str(root / "Scripts" / "python.exe")), patch(
+                "zotero_pdf_text.cli.shutil.which", return_value=None
+            ):
+                exit_code = main(["install-mcp", "--config", str(config_path), "--apply"])
+            self.assertEqual(exit_code, 2)
 
 
 class AppendIndexCliTests(unittest.TestCase):

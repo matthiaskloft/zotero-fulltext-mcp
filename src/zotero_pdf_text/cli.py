@@ -4,6 +4,7 @@ import argparse
 import csv
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -382,7 +383,7 @@ def build_parser() -> argparse.ArgumentParser:
     install_mcp.add_argument(
         "--apply",
         action="store_true",
-        help="Also run 'claude mcp add-json' to register the server, instead of only printing it.",
+        help="Also run 'claude mcp add' to register the server, instead of only printing it.",
     )
     return parser
 
@@ -797,12 +798,11 @@ def _install_mcp(args: argparse.Namespace) -> int:
         print(f"Warning: {server_exe} does not exist yet -- install with 'pip install -e .[mcp]' first.", file=sys.stderr)
 
     server_name = args.server_name
-    claude_payload = {
-        "type": "stdio",
-        "command": str(server_exe),
-        "args": ["--db", str(db_path), "--config", str(config_path)],
-    }
-    claude_cmd = f"claude mcp add-json --scope user {server_name} '{json.dumps(claude_payload)}'"
+    claude_add_args = [
+        "mcp", "add", "--scope", "user", server_name, str(server_exe),
+        "--", "--db", str(db_path), "--config", str(config_path),
+    ]
+    claude_cmd = "claude " + " ".join(_shell_quote(a) for a in claude_add_args)
 
     toml_name = server_name.replace("-", "_")
     codex_block = (
@@ -829,19 +829,47 @@ def _install_mcp(args: argparse.Namespace) -> int:
     if args.apply:
         print()
         print(f"Applying Claude Code registration for '{server_name}'...")
-        try:
-            result = subprocess.run(
-                ["claude", "mcp", "add-json", "--scope", "user", server_name, json.dumps(claude_payload)],
-                check=False,
-            )
-        except FileNotFoundError:
+        # shutil.which resolves PATHEXT (e.g. claude.cmd) the way an interactive shell does;
+        # subprocess.run(["claude", ...]) without shell=True does not, and fails with
+        # FileNotFoundError on Windows even though "claude" works fine in the same shell.
+        claude_exe = shutil.which("claude")
+        if claude_exe is None:
             print("'claude' was not found on PATH -- run the printed command manually instead.", file=sys.stderr)
             return 2
+        try:
+            result = subprocess.run([claude_exe, *claude_add_args], check=False)
+        except FileNotFoundError:
+            print(
+                f"'{claude_exe}' was found via PATH lookup but could not be launched -- "
+                "run the printed command manually instead.",
+                file=sys.stderr,
+            )
+            return 2
         if result.returncode != 0:
-            print("claude mcp add-json failed; run the printed command manually.", file=sys.stderr)
+            print("claude mcp add failed; run the printed command manually.", file=sys.stderr)
             return result.returncode
         print(f"Applied. Verify with: claude mcp get {server_name}")
     return 0
+
+
+_SHELL_SAFE_CHARS = frozenset(
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.:/\\-"
+)
+
+
+def _shell_quote(value: str) -> str:
+    """Quote an arg for the printed command if it contains anything shell-meaningful.
+
+    Double quotes are used rather than shlex.quote's POSIX single-quoting because the printed
+    command is meant to be pasteable into PowerShell, cmd, or Git Bash alike -- all three accept
+    double-quoted arguments with the same semantics for plain paths. Quoting on a safe-charset
+    allowlist (rather than only whitespace) also covers shell metacharacters that are legal in
+    Windows paths/server names, e.g. '&', '(', ')', which cmd and PowerShell both treat as command
+    separators/operators when unquoted.
+    """
+    if value and all(c in _SHELL_SAFE_CHARS for c in value):
+        return value
+    return f'"{value}"'
 
 
 def _print_zotero_status(status: dict[str, object]) -> None:
