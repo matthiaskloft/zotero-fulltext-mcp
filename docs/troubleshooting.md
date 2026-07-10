@@ -1,7 +1,7 @@
 # Troubleshooting
 
-Paths below are the desktop machine's own example paths — substitute this machine's own
-locations (see `docs/multi-machine.md`). Commands assume `$python` is set to this machine's own
+Paths below use the same `$repo`/`$data` placeholders as `docs/operations.md` — substitute your
+own repo checkout and `converted_text` location. Commands assume `$python` is set to your own
 venv (see `docs/operations.md`) — not `.\.venv\...` inside the project folder, which is never
 correct on any machine.
 
@@ -192,11 +192,13 @@ both:
 
 ## Zotero Sync Stalls With "Cannot Change Attachment LinkMode"
 
-See `docs/multi-machine.md`'s Zotero Sync section — this means the server
-already has a record under that item's key with a different attachment link
-mode than the local one. Trash *and permanently erase* the conflicting
-attachment (trash alone still fails), then re-link the PDF fresh if it had a
-real parent item.
+This can occur if you sync the same Zotero library across multiple machines via Zotero's own
+account sync (zotero.org). It means the server already has a record under that item's key with
+a different attachment link mode than the local one — Zotero's API can create or delete an
+attachment record but never convert one type to another via sync. Fix: trash *and permanently
+erase* the conflicting attachment (trash alone still fails, since it still pushes a blocked
+update), then re-link the PDF fresh via `link-pdf` if it had a real parent item, so it gets a new
+key with no stale server history.
 
 ## Installing / Registering On A New Machine — Known Roadblocks
 
