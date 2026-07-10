@@ -197,3 +197,38 @@ already has a record under that item's key with a different attachment link
 mode than the local one. Trash *and permanently erase* the conflicting
 attachment (trash alone still fails), then re-link the PDF fresh if it had a
 real parent item.
+
+## Installing / Registering On A New Machine — Known Roadblocks
+
+Snags hit while installing the MCP server on a fresh Windows machine. None are
+bugs in this project, but each blocked an install step until worked around.
+
+1. **`install-mcp --apply` prints `'claude' was not found on PATH` even though
+   `claude` works in the same shell.** On Windows the Claude Code CLI is an npm
+   shim (`claude.cmd` / a shell script), not a `claude.exe`. `install-mcp --apply`
+   launches it via `subprocess.run(["claude", ...])` without `shell=True`, which
+   does not resolve `.cmd`/extensionless shims the way an interactive shell does.
+   The command still prints the exact `claude mcp add-json ...` line — just run
+   that yourself. `--apply` is a convenience, not the only path.
+
+2. **`claude mcp add-json '<json>'` fails with `Invalid configuration: : Invalid
+   input` under Git Bash / other POSIX shells.** The single-quoted JSON payload
+   gets mangled before `claude` sees it, so the parse fails. Two fixes: paste the
+   printed `add-json` command into **PowerShell or cmd** (where the quoting the
+   generator emits is correct), or skip JSON entirely and use the equivalent
+   positional form, which is quoting-robust:
+
+   ```powershell
+   claude mcp add --scope user zotero-fulltext `
+     C:\path\to\venv\Scripts\zotero-fulltext-mcp.exe `
+     -- --db <converted_text>\index\zotero_text_index.sqlite `
+        --config <config path>
+   ```
+
+   The `--` separates the server executable from the flags passed to it, and the
+   resulting stdio registration is identical to the `add-json` one.
+
+3. **`pytest` is not installed by `pip install -e .[mcp]`.** The `[mcp]` extra
+   pulls only runtime deps, so `python -m pytest -q` fails with
+   `No module named 'pytest'` in a fresh MCP-only venv. Install it explicitly
+   (`pip install pytest`) before running the suite. Expected result: `106 passed`.
