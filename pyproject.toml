@@ -1,0 +1,30 @@
+[project]
+name = "zotero-fulltext-mcp"
+version = "0.1.0"
+description = "Convert a Zotero library's linked PDF attachments to Markdown, build a full-text search index, and expose it via an MCP server."
+requires-python = ">=3.11"
+dependencies = [
+  "pymupdf>=1.24",
+  "pymupdf4llm>=0.0.17",
+  "pyyaml>=6.0",
+  "rapidfuzz>=3.6",
+]
+
+[project.scripts]
+zotero-pdf-text = "zotero_pdf_text.cli:main"
+zotero-fulltext-mcp = "zotero_pdf_text.mcp_server:main"
+
+[project.optional-dependencies]
+mcp = [
+  "mcp>=1.9",
+]
+zotero-write = [
+  "pyzotero>=1.6",
+]
+marker = [
+  "marker-pdf>=1.0",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

@@ -1,0 +1,11 @@
+{
+  "_comment": "Copy this file to config.json (or config.<hostname>.json for a multi-machine setup) and fill in your own paths. Never commit the real file -- config.json and config.*.json are gitignored.",
+  "zotero_root": "C:\\Users\\researcher\\ZoteroFullText",
+  "zotero_data_directory": "C:\\Users\\researcher\\Documents\\Zotero",
+  "linked_attachments": "C:\\Users\\researcher\\ZoteroFullText\\zotero_linked_attachments",
+  "output_root": "C:\\Users\\researcher\\ZoteroFullText\\converted_text",
+  "early_pages": 3,
+  "max_page_chars": 12000,
+  "manually_accepted_attachment_keys": [],
+  "manually_accepted_mappings": []
+}

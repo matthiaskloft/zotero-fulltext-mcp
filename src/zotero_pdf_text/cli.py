@@ -1,0 +1,946 @@
+from __future__ import annotations
+
+import argparse
+import csv
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+from .bibtex import (
+    DEFAULT_BBT_ENDPOINT,
+    DEFAULT_BBT_TRANSLATOR,
+    DEFAULT_CONNECTOR_ENDPOINT,
+    DEFAULT_DEBUG_BRIDGE_ENDPOINT,
+    append_bibtex_entries,
+    check_better_bibtex,
+    export_bibtex_entries,
+    find_available_pdf_for_item,
+    find_item_key_via_connector,
+    import_doi_via_connector,
+    link_local_pdf,
+)
+from .config import load_config, resolve_config_path, validate_config
+from .converter import convert_sample, convert_verified, default_worker_count
+from .fts import build_fts_index, coverage_report, get_fulltext, search_fts
+from .ingestion import dry_run_ingest, ingest_approved
+from .indexer import append_text_index, build_text_index, load_indexed_keys
+from .lock import PipelineLockedError, pipeline_write_lock
+from .mapper import run_dry_run
+from .runtime import DEFAULT_ZOTERO_EXE, ensure_zotero_running
+from .verifier import apply_verification, verify_unverified
+from .zotero_write import (
+    apply_write_plan,
+    approve_write_plan_rows,
+    build_write_plan,
+    validate_write_plan,
+    write_plan_status,
+)
+
+
+def _default_fts_db() -> Path:
+    """Best-effort default for --db/--output flags that don't otherwise take --config.
+
+    Tries ZOTERO_FULLTEXT_DB, then the current machine's resolved project config, before
+    falling back to a plain relative path -- never a different machine's absolute path.
+    """
+    env = os.environ.get("ZOTERO_FULLTEXT_DB")
+    if env:
+        return Path(env)
+    try:
+        config = load_config(resolve_config_path())
+        return config.output_root / "index" / "zotero_text_index.sqlite"
+    except (FileNotFoundError, KeyError, ValueError, OSError):
+        return Path("converted_text") / "index" / "zotero_text_index.sqlite"
+
+
+DEFAULT_FTS_DB = _default_fts_db()
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="zotero-pdf-text")
+    subparsers = parser.add_subparsers(dest="command", required=True)
+    dry_run = subparsers.add_parser("dry-run", help="Map Zotero metadata to linked PDFs without conversion.")
+    dry_run.add_argument("--config", type=Path, default=Path("config.json"), help="Path to project config JSON.")
+    sample = subparsers.add_parser("convert-sample", help="Convert a small mapped_verified PDF sample to Markdown.")
+    sample.add_argument("--config", type=Path, default=Path("config.json"), help="Path to project config JSON.")
+    sample.add_argument("--mapping-report", type=Path, required=True, help="Path to mapping_report.csv from a dry-run.")
+    sample.add_argument("--limit", type=int, default=10, help="Maximum number of mapped_verified PDFs to convert.")
+    sample.add_argument("--output-dir", type=Path, default=None, help="Optional output folder for this sample run.")
+    sample.add_argument("--force", action="store_true", help="Reconvert PDFs even when Markdown already exists.")
+    sample.add_argument(
+        "--workers",
+        type=int,
+        default=None,
+        help=f"Number of parallel Markdown conversion workers. Default: max(1, CPU cores - 4), currently {default_worker_count()}.",
+    )
+    sample.add_argument("--timeout-seconds", type=int, default=600, help="Per-PDF extraction timeout in seconds.")
+    verified = subparsers.add_parser("convert-verified", help="Convert mapped_verified PDFs to Markdown.")
+    verified.add_argument("--config", type=Path, default=Path("config.json"), help="Path to project config JSON.")
+    verified.add_argument("--mapping-report", type=Path, required=True, help="Path to mapping_report.csv from a dry-run.")
+    verified.add_argument("--limit", type=int, default=None, help="Optional maximum number of mapped_verified PDFs.")
+    verified.add_argument("--output-dir", type=Path, default=None, help="Optional output folder for this conversion run.")
+    verified.add_argument(
+        "--resume",
+        action="store_true",
+        help="Reuse an existing output folder, reuse existing Markdown bodies, and refresh metadata front matter.",
+    )
+    verified.add_argument("--force", action="store_true", help="Reconvert PDFs even when Markdown already exists.")
+    verified.add_argument(
+        "--workers",
+        type=int,
+        default=None,
+        help=f"Number of parallel Markdown conversion workers. Default: max(1, CPU cores - 4), currently {default_worker_count()}.",
+    )
+    verified.add_argument("--timeout-seconds", type=int, default=600, help="Per-PDF extraction timeout in seconds.")
+    unverified = subparsers.add_parser(
+        "verify-unverified",
+        help="Convert mapped_unverified PDFs to quarantine Markdown and write full-text review decisions.",
+    )
+    unverified.add_argument("--config", type=Path, default=Path("config.json"), help="Path to project config JSON.")
+    unverified.add_argument("--mapping-report", type=Path, required=True, help="Path to mapping_report.csv from a dry-run.")
+    unverified.add_argument("--limit", type=int, default=None, help="Optional maximum number of mapped_unverified PDFs.")
+    unverified.add_argument("--output-dir", type=Path, default=None, help="Optional output folder for this review run.")
+    unverified.add_argument("--resume", action="store_true", help="Reuse an existing output folder and Markdown bodies.")
+    unverified.add_argument("--force", action="store_true", help="Reconvert PDFs even when quarantine Markdown already exists.")
+    unverified.add_argument(
+        "--include-possible-mismatch",
+        action="store_true",
+        help="Also review possible_mismatch rows; default reviews only mapped_unverified.",
+    )
+    unverified.add_argument(
+        "--workers",
+        type=int,
+        default=None,
+        help=f"Number of parallel Markdown conversion workers. Default: max(1, CPU cores - 4), currently {default_worker_count()}.",
+    )
+    unverified.add_argument("--timeout-seconds", type=int, default=600, help="Per-PDF extraction timeout in seconds.")
+    unverified.add_argument(
+        "--agent-batch-size",
+        type=int,
+        default=25,
+        help="Rows per agent_batches JSONL file for cheap LLM review of ambiguous cases; 0 disables batches.",
+    )
+    apply_review = subparsers.add_parser(
+        "apply-verification",
+        help="Promote accepted unverified reviews into a conversion-manifest-compatible trusted manifest.",
+    )
+    apply_review.add_argument("--review", type=Path, required=True, help="review.jsonl or reviewed JSONL from agents.")
+    apply_review.add_argument(
+        "--base-manifest",
+        type=Path,
+        default=None,
+        help="Existing trusted manifest.csv to prepend before promoted rows.",
+    )
+    apply_review.add_argument("--output-manifest", type=Path, required=True, help="Manifest path to write.")
+    apply_review.add_argument(
+        "--min-confidence",
+        type=float,
+        default=0.92,
+        help="Minimum confidence required to promote an accepted review row.",
+    )
+    index = subparsers.add_parser("build-index", help="Build a JSONL sidecar index from a conversion manifest.")
+    index.add_argument("--manifest", type=Path, required=True, help="Path to manifest.csv from a conversion run.")
+    index.add_argument(
+        "--output",
+        type=Path,
+        default=Path("converted_text/index/zotero_text_index.jsonl"),
+        help="Path to the JSONL index to write.",
+    )
+    append_index = subparsers.add_parser(
+        "append-index",
+        help="Append a small manifest's rows into an existing JSONL index (skips already-indexed attachment keys) and rebuild FTS.",
+    )
+    append_index.add_argument(
+        "--manifest", type=Path, required=True, help="Manifest.csv with the new rows to add (e.g. from apply-verification)."
+    )
+    append_index.add_argument(
+        "--index",
+        type=Path,
+        default=Path("converted_text/index/zotero_text_index.jsonl"),
+        help="Existing JSONL index to append into, in place.",
+    )
+    append_index.add_argument(
+        "--fts-db",
+        type=Path,
+        default=None,
+        help="SQLite FTS database to rebuild from the updated index. Defaults next to --index.",
+    )
+    ensure = subparsers.add_parser("ensure-zotero", help="Start Zotero if needed and report connector health.")
+    ensure.add_argument("--zotero-exe", type=Path, default=DEFAULT_ZOTERO_EXE, help="Path to zotero.exe.")
+    ensure.add_argument("--wait-seconds", type=int, default=15, help="Seconds to wait for Zotero startup.")
+    ensure.add_argument("--no-launch", action="store_true", help="Only check status; do not launch Zotero.")
+    ensure.add_argument("--require-connector", action="store_true", help="Return non-zero if the local connector ping fails.")
+    ensure.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+    fts = subparsers.add_parser("build-fts", help="Build a SQLite FTS index from the JSONL sidecar.")
+    fts.add_argument("--index-jsonl", type=Path, required=True, help="Path to zotero_text_index.jsonl.")
+    fts.add_argument("--output", type=Path, default=DEFAULT_FTS_DB, help="SQLite FTS database to write.")
+    fts.add_argument("--chunk-chars", type=int, default=6000, help="Maximum characters per searchable chunk.")
+    fts.add_argument("--overlap-chars", type=int, default=500, help="Characters of overlap between chunks.")
+    search = subparsers.add_parser("search-fts", help="Search the SQLite FTS full-text index.")
+    search.add_argument("--db", type=Path, default=DEFAULT_FTS_DB, help="SQLite FTS database path.")
+    search.add_argument("--query", required=True, help="Search query.")
+    search.add_argument("--limit", type=int, default=10, help="Maximum results.")
+    search.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+    fulltext = subparsers.add_parser("get-fulltext", help="Fetch bounded converted full text for one attachment.")
+    fulltext.add_argument("--db", type=Path, default=DEFAULT_FTS_DB, help="SQLite FTS database path.")
+    fulltext.add_argument("--attachment-key", required=True, help="Zotero attachment key.")
+    fulltext.add_argument("--chunk-index", type=int, default=None, help="Optional chunk index to fetch.")
+    fulltext.add_argument("--max-chars", type=int, default=12000, help="Maximum text characters to print.")
+    fulltext.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+    coverage = subparsers.add_parser("coverage-report", help="Summarize SQLite FTS coverage.")
+    coverage.add_argument("--db", type=Path, default=DEFAULT_FTS_DB, help="SQLite FTS database path.")
+    coverage.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+    bibtex_check = subparsers.add_parser("bibtex-check", help="Check Better BibTeX JSON-RPC availability.")
+    bibtex_check.add_argument("--endpoint", default=DEFAULT_BBT_ENDPOINT, help="Better BibTeX JSON-RPC endpoint.")
+    bibtex_export = subparsers.add_parser("bibtex-export", help="Export Better BibTeX/BibLaTeX entries by citation key.")
+    _add_bibtex_key_args(bibtex_export)
+    bibtex_export.add_argument("--translator", default=DEFAULT_BBT_TRANSLATOR, help="BBT translator name.")
+    bibtex_export.add_argument("--endpoint", default=DEFAULT_BBT_ENDPOINT, help="Better BibTeX JSON-RPC endpoint.")
+    bibtex_export.add_argument("--library-id", default=None, help="Optional Zotero library ID. Omit for My Library.")
+    bibtex_export.add_argument("--output", type=Path, default=None, help="Optional .bib file to write instead of stdout.")
+    bibtex_export.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+    bibtex_add = subparsers.add_parser("bibtex-add", help="Append missing Better BibTeX entries to a references.bib file.")
+    _add_bibtex_key_args(bibtex_add)
+    bibtex_add.add_argument("--references-bib", type=Path, required=True, help="LaTeX project references.bib path.")
+    bibtex_add.add_argument("--translator", default=DEFAULT_BBT_TRANSLATOR, help="BBT translator name.")
+    bibtex_add.add_argument("--endpoint", default=DEFAULT_BBT_ENDPOINT, help="Better BibTeX JSON-RPC endpoint.")
+    bibtex_add.add_argument("--library-id", default=None, help="Optional Zotero library ID. Omit for My Library.")
+    bibtex_add.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+    ingest = subparsers.add_parser("ingest-candidates", help="Dry-run dedupe for an LLM article import queue.")
+    ingest.add_argument("--config", type=Path, default=Path("config.json"), help="Path to project config JSON.")
+    ingest.add_argument("--input", type=Path, required=True, help="Candidate queue JSONL or JSON array.")
+    ingest.add_argument("--output", type=Path, default=None, help="Optional JSONL dry-run report to write.")
+    ingest_approved_parser = subparsers.add_parser(
+        "ingest-approved",
+        help="Deprecated guarded write entrypoint; use zotero-write plan/validate/apply.",
+    )
+    ingest_approved_parser.add_argument("--input", type=Path, required=True, help="Approved candidate JSONL.")
+    zotero_write = subparsers.add_parser("zotero-write", help="Approval-gated Zotero write-plan workflow.")
+    write_subparsers = zotero_write.add_subparsers(dest="write_command", required=True)
+    write_plan = write_subparsers.add_parser("plan", help="Create an audited Zotero write plan from candidates.")
+    write_plan.add_argument("--config", type=Path, default=Path("config.json"), help="Path to project config JSON.")
+    write_plan.add_argument("--input", type=Path, required=True, help="Candidate queue JSONL or JSON array.")
+    write_plan.add_argument("--output", type=Path, required=True, help="Write-plan JSONL to create.")
+    write_validate = write_subparsers.add_parser("validate", help="Validate a Zotero write plan.")
+    write_validate.add_argument("--plan", type=Path, required=True, help="Write-plan JSONL.")
+    write_validate.add_argument(
+        "--require-approved",
+        action="store_true",
+        help="Require approval_status='approved' for all write operations.",
+    )
+    write_approve = write_subparsers.add_parser("approve", help="Approve selected 1-based rows in a write plan.")
+    write_approve.add_argument("--plan", type=Path, required=True, help="Write-plan JSONL to update in place.")
+    write_approve.add_argument(
+        "--rows",
+        required=True,
+        help="Comma-, semicolon-, or whitespace-separated 1-based row numbers to approve.",
+    )
+    write_apply = write_subparsers.add_parser("apply", help="Generate approved Zotero JavaScript from a write plan.")
+    write_apply.add_argument("--plan", type=Path, required=True, help="Approved write-plan JSONL.")
+    write_apply.add_argument("--approve", action="store_true", help="Required explicit approval gate.")
+    write_apply.add_argument("--out-script", type=Path, required=True, help="Generated Zotero JavaScript path.")
+    write_apply.add_argument(
+        "--no-auto-run",
+        action="store_true",
+        help="Do not attempt local auto-run discovery; just write the JavaScript script.",
+    )
+    write_status = write_subparsers.add_parser("status", help="Summarize a Zotero write plan.")
+    write_status.add_argument("--plan", type=Path, required=True, help="Write-plan JSONL.")
+    import_doi = subparsers.add_parser(
+        "import-doi",
+        help="Add a reference to Zotero by DOI via the Zotero connector (no plugins required).",
+    )
+    import_doi.add_argument("--doi", required=True, help="DOI to import (e.g. 10.1037/xge0001375).")
+    import_doi.add_argument("--config", type=Path, default=Path("config.json"), help="Path to project config JSON.")
+    import_doi.add_argument(
+        "--connector-endpoint",
+        default=DEFAULT_CONNECTOR_ENDPOINT,
+        help="Zotero connector base URL.",
+    )
+    import_doi.add_argument(
+        "--debug-bridge-endpoint",
+        default=DEFAULT_DEBUG_BRIDGE_ENDPOINT,
+        help="debug-bridge execute endpoint (requires plugin + ZOTERO_DEBUG_BRIDGE_TOKEN env var).",
+    )
+    import_doi.add_argument(
+        "--debug-bridge-token",
+        default="",
+        help="debug-bridge Bearer token (overrides ZOTERO_DEBUG_BRIDGE_TOKEN env var).",
+    )
+    check_pdf = subparsers.add_parser(
+        "check-pdf",
+        help="Check whether a Zotero item has a PDF attachment (reads local SQLite, no connector required).",
+    )
+    check_pdf.add_argument("--key", required=True, help="Zotero item key (8-character alphanumeric).")
+    check_pdf.add_argument("--config", type=Path, default=Path("config.json"), help="Path to project config JSON.")
+    check_pdf.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+    find_pdf = subparsers.add_parser(
+        "find-pdf",
+        help=(
+            "Trigger Zotero's own 'Find Available PDF' search for an item that has no PDF "
+            "attachment yet (requires the debug-bridge plugin)."
+        ),
+    )
+    find_pdf.add_argument("--key", required=True, help="Zotero item key (8-character alphanumeric).")
+    find_pdf.add_argument("--config", type=Path, default=Path("config.json"), help="Path to project config JSON.")
+    find_pdf.add_argument(
+        "--debug-bridge-endpoint",
+        default=DEFAULT_DEBUG_BRIDGE_ENDPOINT,
+        help="debug-bridge execute endpoint (requires plugin + ZOTERO_DEBUG_BRIDGE_TOKEN env var).",
+    )
+    find_pdf.add_argument(
+        "--debug-bridge-token",
+        default="",
+        help="debug-bridge Bearer token (overrides ZOTERO_DEBUG_BRIDGE_TOKEN env var).",
+    )
+    link_pdf = subparsers.add_parser(
+        "link-pdf",
+        help=(
+            "Link a local PDF to a Zotero item, then relocate it into the managed linked-attachments "
+            "folder via the ZotMoov plugin (copies + renames it, matching Zotero's own auto-move "
+            "behavior). Use this instead of manually attaching a PDF found outside Zotero's storage -- "
+            "a plain link left at its original location becomes a dangling attachment if that location "
+            "is ever cleaned up. Requires the debug-bridge and ZotMoov plugins."
+        ),
+    )
+    link_pdf.add_argument("--key", required=True, help="Zotero parent item key (8-character alphanumeric).")
+    link_pdf.add_argument("--file", required=True, help="Absolute path to the local PDF to attach.")
+    link_pdf.add_argument("--config", type=Path, default=Path("config.json"), help="Path to project config JSON.")
+    link_pdf.add_argument(
+        "--debug-bridge-endpoint",
+        default=DEFAULT_DEBUG_BRIDGE_ENDPOINT,
+        help="debug-bridge execute endpoint (requires plugin + ZOTERO_DEBUG_BRIDGE_TOKEN env var).",
+    )
+    link_pdf.add_argument(
+        "--debug-bridge-token",
+        default="",
+        help="debug-bridge Bearer token (overrides ZOTERO_DEBUG_BRIDGE_TOKEN env var).",
+    )
+    convert_new = subparsers.add_parser(
+        "convert-new",
+        help=(
+            "Incremental pipeline: run dry-run, detect new items not yet in the JSONL index, "
+            "convert them, and merge into the index and FTS database."
+        ),
+    )
+    convert_new.add_argument("--config", type=Path, default=Path("config.json"), help="Path to project config JSON.")
+    convert_new.add_argument(
+        "--jsonl",
+        type=Path,
+        default=None,
+        help="JSONL index to update. Default: <output_root>/index/zotero_text_index.jsonl.",
+    )
+    convert_new.add_argument(
+        "--fts-db",
+        type=Path,
+        default=None,
+        help="SQLite FTS database to rebuild. Default: ZOTERO_FULLTEXT_DB env var or the standard path.",
+    )
+    convert_new.add_argument(
+        "--workers",
+        type=int,
+        default=None,
+        help=f"Parallel conversion workers. Default: {default_worker_count()}.",
+    )
+    convert_new.add_argument("--timeout-seconds", type=int, default=600, help="Per-PDF timeout in seconds.")
+    reconvert_math = subparsers.add_parser(
+        "reconvert-math",
+        help=(
+            "Re-extract a single paper's markdown using marker-pdf (LaTeX-aware equation and "
+            "figure handling), overwriting the existing markdown file in place. Use when the "
+            "default pymupdf4llm extraction produced garbled or missing equations. Requires the "
+            "optional 'marker' extra (pip install -e .[marker])."
+        ),
+    )
+    reconvert_math.add_argument("--key", required=True, help="Zotero attachment key.")
+    reconvert_math.add_argument("--config", type=Path, default=Path("config.json"), help="Path to project config JSON.")
+    reconvert_math.add_argument(
+        "--jsonl",
+        type=Path,
+        default=None,
+        help="JSONL index to update. Default: <output_root>/index/zotero_text_index.jsonl.",
+    )
+    reconvert_math.add_argument(
+        "--fts-db",
+        type=Path,
+        default=None,
+        help="SQLite FTS database to rebuild. Default: ZOTERO_FULLTEXT_DB env var or the standard path.",
+    )
+    reconvert_math.add_argument("--timeout-seconds", type=int, default=5400, help="marker-pdf timeout in seconds.")
+    install_mcp = subparsers.add_parser(
+        "install-mcp",
+        help=(
+            "Print (or apply) the MCP client registration for this machine's venv/config, "
+            "generated from resolved paths instead of hand-edited JSON."
+        ),
+    )
+    install_mcp.add_argument("--server-name", default="zotero-fulltext", help="MCP server name to register.")
+    install_mcp.add_argument("--config", type=Path, default=None, help="Path to project config JSON. Default: resolved for this machine.")
+    install_mcp.add_argument("--db", type=Path, default=None, help="SQLite FTS database path. Default: <output_root>/index/zotero_text_index.sqlite.")
+    install_mcp.add_argument(
+        "--apply",
+        action="store_true",
+        help="Also run 'claude mcp add-json' to register the server, instead of only printing it.",
+    )
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    _configure_stdio()
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    if args.command == "dry-run":
+        config = load_config(args.config)
+        validate_config(config)
+        run_dir = run_dry_run(config)
+        print(f"Dry-run complete: {run_dir}")
+        return 0
+    if args.command == "convert-sample":
+        config = load_config(args.config)
+        validate_config(config)
+        try:
+            with pipeline_write_lock(config.output_root, command="convert-sample"):
+                run_dir = convert_sample(
+                    config,
+                    args.mapping_report,
+                    limit=args.limit,
+                    output_dir=args.output_dir,
+                    workers=args.workers,
+                    timeout_seconds=args.timeout_seconds,
+                    force=args.force,
+                )
+        except PipelineLockedError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        print(f"Sample conversion complete: {run_dir}")
+        return 0
+    if args.command == "convert-verified":
+        config = load_config(args.config)
+        validate_config(config)
+        try:
+            with pipeline_write_lock(config.output_root, command="convert-verified"):
+                run_dir = convert_verified(
+                    config,
+                    args.mapping_report,
+                    limit=args.limit,
+                    output_dir=args.output_dir,
+                    resume=args.resume,
+                    workers=args.workers,
+                    timeout_seconds=args.timeout_seconds,
+                    force=args.force,
+                )
+        except PipelineLockedError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        print(f"Verified conversion complete: {run_dir}")
+        return 0
+    if args.command == "verify-unverified":
+        config = load_config(args.config)
+        validate_config(config)
+        try:
+            with pipeline_write_lock(config.output_root, command="verify-unverified"):
+                run_dir = verify_unverified(
+                    config,
+                    args.mapping_report,
+                    limit=args.limit,
+                    output_dir=args.output_dir,
+                    resume=args.resume,
+                    workers=args.workers,
+                    timeout_seconds=args.timeout_seconds,
+                    force=args.force,
+                    include_possible_mismatch=args.include_possible_mismatch,
+                    agent_batch_size=args.agent_batch_size,
+                )
+        except PipelineLockedError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        print(f"Unverified full-text review complete: {run_dir}")
+        return 0
+    if args.command == "apply-verification":
+        try:
+            with pipeline_write_lock(args.output_manifest.parent, command="apply-verification"):
+                summary = apply_verification(
+                    args.review,
+                    args.output_manifest,
+                    base_manifest=args.base_manifest,
+                    min_confidence=args.min_confidence,
+                )
+        except PipelineLockedError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        print(json.dumps(summary, ensure_ascii=False, indent=2))
+        return 0
+    if args.command == "build-index":
+        try:
+            with pipeline_write_lock(args.output.parent, command="build-index"):
+                output = build_text_index(args.manifest, args.output)
+        except PipelineLockedError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        print(f"Text index complete: {output}")
+        return 0
+    if args.command == "append-index":
+        fts_db = args.fts_db or (args.index.parent / f"{args.index.stem}.sqlite")
+        try:
+            with pipeline_write_lock(args.index.parent, command="append-index"):
+                before = len(load_indexed_keys(args.index))
+                append_text_index(args.manifest, args.index, args.index)
+                after = len(load_indexed_keys(args.index))
+                summary = build_fts_index(args.index, fts_db)
+        except PipelineLockedError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        result = summary.to_dict()
+        result["new_records"] = after - before
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0
+    if args.command == "ensure-zotero":
+        status = ensure_zotero_running(
+            zotero_exe=args.zotero_exe,
+            wait_seconds=args.wait_seconds,
+            launch=not args.no_launch,
+            require_connector=args.require_connector,
+        )
+        if args.json:
+            print(json.dumps(status.to_dict(), ensure_ascii=False, indent=2))
+        else:
+            _print_zotero_status(status.to_dict())
+        return 0 if status.running and (status.connector_ok or not args.require_connector) else 1
+    if args.command == "build-fts":
+        try:
+            with pipeline_write_lock(args.output.parent, command="build-fts"):
+                summary = build_fts_index(
+                    args.index_jsonl,
+                    args.output,
+                    chunk_chars=args.chunk_chars,
+                    overlap_chars=args.overlap_chars,
+                )
+        except PipelineLockedError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        print(json.dumps(summary.to_dict(), ensure_ascii=False, indent=2))
+        return 0
+    if args.command == "search-fts":
+        results = search_fts(args.db, args.query, limit=args.limit)
+        if args.json:
+            print(json.dumps([result.to_dict() for result in results], ensure_ascii=False, indent=2))
+        else:
+            _print_search_results(results)
+        return 0
+    if args.command == "get-fulltext":
+        result = get_fulltext(
+            args.db,
+            attachment_key=args.attachment_key,
+            max_chars=args.max_chars,
+            chunk_index=args.chunk_index,
+        )
+        if args.json:
+            print(json.dumps(result.to_dict(), ensure_ascii=False, indent=2))
+        else:
+            _print_fulltext_result(result.to_dict())
+        return 0
+    if args.command == "coverage-report":
+        report = coverage_report(args.db)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            _print_coverage_report(report)
+        return 0
+    if args.command == "bibtex-check":
+        print(json.dumps(check_better_bibtex(args.endpoint), ensure_ascii=False, indent=2))
+        return 0
+    if args.command == "bibtex-export":
+        export = export_bibtex_entries(
+            _citation_keys_from_args(args),
+            translator=args.translator,
+            endpoint=args.endpoint,
+            library_id=args.library_id,
+        )
+        if args.output:
+            args.output.parent.mkdir(parents=True, exist_ok=True)
+            args.output.write_text(export.entry, encoding="utf-8", newline="\n")
+        if args.json:
+            print(json.dumps(export.to_dict(), ensure_ascii=False, indent=2))
+        elif not args.output:
+            print(export.entry, end="")
+        else:
+            print(f"BibTeX export complete: {args.output}")
+        return 0
+    if args.command == "bibtex-add":
+        result = append_bibtex_entries(
+            _citation_keys_from_args(args),
+            args.references_bib,
+            translator=args.translator,
+            endpoint=args.endpoint,
+            library_id=args.library_id,
+        )
+        if args.json:
+            print(json.dumps(result.to_dict(), ensure_ascii=False, indent=2))
+        else:
+            print(f"references.bib: {result.references_bib}")
+            print(f"added: {', '.join(result.added_keys) if result.added_keys else '(none)'}")
+            print(
+                "skipped_existing: "
+                + (", ".join(result.skipped_existing_keys) if result.skipped_existing_keys else "(none)")
+            )
+        return 0
+    if args.command == "ingest-candidates":
+        config = load_config(args.config)
+        validate_config(config)
+        decisions = dry_run_ingest(args.input, config.zotero_sqlite, args.output)
+        print(json.dumps([decision.to_dict() for decision in decisions], ensure_ascii=False, indent=2))
+        return 0
+    if args.command == "ingest-approved":
+        try:
+            ingest_approved(args.input)
+        except NotImplementedError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        return 0
+    if args.command == "zotero-write":
+        if args.write_command == "plan":
+            config = load_config(args.config)
+            validate_config(config)
+            records = build_write_plan(args.input, config.zotero_sqlite, args.output)
+            print(json.dumps(write_plan_status(args.output), ensure_ascii=False, indent=2))
+            print(f"Write plan created: {args.output}")
+            print(
+                "Approve intended write rows with zotero-write approve --rows <row_numbers>, then run "
+                "zotero-write validate --require-approved and zotero-write apply --approve."
+            )
+            return 0
+        if args.write_command == "validate":
+            result = validate_write_plan(args.plan, require_approved=args.require_approved)
+            print(json.dumps(result.to_dict(), ensure_ascii=False, indent=2))
+            return 0 if result.ok else 1
+        if args.write_command == "approve":
+            try:
+                result = approve_write_plan_rows(args.plan, _row_numbers_from_arg(args.rows))
+            except (ValueError, FileNotFoundError) as exc:
+                print(str(exc), file=sys.stderr)
+                return 2
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            return 0
+        if args.write_command == "apply":
+            try:
+                result = apply_write_plan(
+                    args.plan,
+                    args.out_script,
+                    approve=args.approve,
+                    auto_run=not args.no_auto_run,
+                )
+            except (PermissionError, ValueError, FileNotFoundError) as exc:
+                print(str(exc), file=sys.stderr)
+                return 2
+            print(json.dumps(result.to_dict(), ensure_ascii=False, indent=2))
+            return 0
+        if args.write_command == "status":
+            print(json.dumps(write_plan_status(args.plan), ensure_ascii=False, indent=2))
+            return 0
+    if args.command == "import-doi":
+        import time
+        from .zotero_db import find_item_by_doi  # used only for pre-import dedup check
+        config = load_config(args.config)
+        validate_config(config)
+        doi = args.doi.strip()
+
+        existing_key = find_item_by_doi(doi, config.zotero_sqlite)
+        if existing_key:
+            print(json.dumps({"status": "already_in_library", "doi": doi, "key": existing_key},
+                             ensure_ascii=False, indent=2))
+            return 0
+
+        result = import_doi_via_connector(
+            doi,
+            connector_endpoint=args.connector_endpoint,
+            debug_bridge_endpoint=args.debug_bridge_endpoint,
+            debug_bridge_token=args.debug_bridge_token,
+        )
+        if not result.ok:
+            print(json.dumps(result.to_dict(), ensure_ascii=False, indent=2), file=sys.stderr)
+            return 1
+
+        # Poll Zotero connector REST API for the newly created item (connector returns 201 with no body).
+        # The connector API reads live in-process data, avoiding SQLite WAL lag.
+        new_key: str | None = None
+        for _ in range(5):
+            time.sleep(1)
+            new_key = find_item_key_via_connector(
+                doi, title_hint=result.title, connector_endpoint=args.connector_endpoint
+            )
+            if new_key:
+                break
+
+        print(json.dumps({
+            "status": "imported",
+            "doi": doi,
+            "title": result.title,
+            "item_type": result.item_type,
+            "key": new_key,
+        }, ensure_ascii=False, indent=2))
+        return 0
+    if args.command == "check-pdf":
+        from .zotero_db import check_pdf_attachment
+        config = load_config(args.config)
+        validate_config(config)
+        result = check_pdf_attachment(args.key, config.zotero_sqlite)
+        if args.json:
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        elif result["found"]:
+            print(f"PDF attachment found for {args.key}:")
+            for att in result["attachments"]:
+                print(f"  key={att['key']}  path={att['path']}")
+        else:
+            print(f"No PDF attachment found for {args.key}.")
+        return 0
+    if args.command == "find-pdf":
+        result = find_available_pdf_for_item(
+            args.key,
+            debug_bridge_endpoint=args.debug_bridge_endpoint,
+            debug_bridge_token=args.debug_bridge_token,
+        )
+        print(json.dumps(result.to_dict(), ensure_ascii=False, indent=2))
+        return 0 if result.ok else 1
+    if args.command == "link-pdf":
+        result = link_local_pdf(
+            args.key,
+            args.file,
+            debug_bridge_endpoint=args.debug_bridge_endpoint,
+            debug_bridge_token=args.debug_bridge_token,
+        )
+        print(json.dumps(result.to_dict(), ensure_ascii=False, indent=2))
+        return 0 if result.ok else 1
+    if args.command == "convert-new":
+        config = load_config(args.config)
+        validate_config(config)
+        jsonl_path = args.jsonl or (config.output_root / "index" / "zotero_text_index.jsonl")
+        fts_db = args.fts_db or (config.output_root / "index" / "zotero_text_index.sqlite")
+        try:
+            with pipeline_write_lock(config.output_root, command="convert-new"):
+                print("Running dry-run to regenerate mapping report...")
+                run_dir = run_dry_run(config)
+                mapping_report = run_dir / "mapping_report.csv"
+                indexed_keys = load_indexed_keys(jsonl_path)
+                print(f"Existing index: {len(indexed_keys)} records")
+                new_rows = _filter_new_mapping_rows(mapping_report, indexed_keys)
+                if not new_rows:
+                    print("No new mapped_verified items detected. Index is up to date.")
+                    return 0
+                print(f"New items to convert: {len(new_rows)}")
+                filtered_report = run_dir / "new_items_mapping_report.csv"
+                _write_filtered_mapping_csv(mapping_report, filtered_report, new_rows)
+                conv_run_dir = convert_verified(
+                    config,
+                    filtered_report,
+                    workers=args.workers,
+                    timeout_seconds=args.timeout_seconds,
+                )
+                print(f"Conversion complete: {conv_run_dir}")
+                new_manifest = conv_run_dir / "manifest.csv"
+                append_text_index(new_manifest, jsonl_path, jsonl_path)
+                print(f"JSONL index updated: {jsonl_path}")
+                summary = build_fts_index(jsonl_path, fts_db)
+        except PipelineLockedError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        print(json.dumps(summary.to_dict(), ensure_ascii=False, indent=2))
+        return 0
+    if args.command == "reconvert-math":
+        from .math_ocr import reconvert_with_marker
+
+        config = load_config(args.config)
+        validate_config(config)
+        jsonl_path = args.jsonl or (config.output_root / "index" / "zotero_text_index.jsonl")
+        fts_db = args.fts_db or (config.output_root / "index" / "zotero_text_index.sqlite")
+        result = reconvert_with_marker(
+            args.key,
+            db_path=fts_db,
+            jsonl_path=jsonl_path,
+            fts_db_path=fts_db,
+            timeout_seconds=args.timeout_seconds,
+        )
+        print(json.dumps(result.to_dict(), ensure_ascii=False, indent=2))
+        return 0 if result.ok else 1
+    if args.command == "install-mcp":
+        return _install_mcp(args)
+    parser.error(f"Unknown command: {args.command}")
+    return 2
+
+
+def _install_mcp(args: argparse.Namespace) -> int:
+    """Generate this machine's MCP client registration from resolved paths.
+
+    Replaces a hand-edit-the-JSON-paths workflow: every path here comes from the current venv
+    (sys.executable) and this machine's own resolved config, so a new machine is a run of this
+    command, not a find-and-replace across a doc.
+
+    Both --db and --config are baked into the generated registration explicitly. This matters
+    once the server code and the config/data it points at live in different locations (e.g. the
+    server installed from a cloned repo, config and converted-text data in a separate Zotero
+    workspace folder) -- the server subprocess must not depend on inheriting the right cwd from
+    whatever process launches it.
+    """
+    config_path = args.config if args.config is not None else resolve_config_path()
+    if not config_path.exists():
+        print(f"No project config found at {config_path}.", file=sys.stderr)
+        print("Set ZOTERO_PDF_TEXT_CONFIG, pass --config, or create config.json for this machine.", file=sys.stderr)
+        return 2
+    config = load_config(config_path)
+    db_path = args.db if args.db is not None else (config.output_root / "index" / "zotero_text_index.sqlite")
+
+    venv_scripts_dir = Path(sys.executable).resolve().parent
+    exe_name = "zotero-fulltext-mcp.exe" if os.name == "nt" else "zotero-fulltext-mcp"
+    server_exe = venv_scripts_dir / exe_name
+    if not server_exe.exists():
+        print(f"Warning: {server_exe} does not exist yet -- install with 'pip install -e .[mcp]' first.", file=sys.stderr)
+
+    server_name = args.server_name
+    claude_payload = {
+        "type": "stdio",
+        "command": str(server_exe),
+        "args": ["--db", str(db_path), "--config", str(config_path)],
+    }
+    claude_cmd = f"claude mcp add-json --scope user {server_name} '{json.dumps(claude_payload)}'"
+
+    toml_name = server_name.replace("-", "_")
+    codex_block = (
+        f"[mcp_servers.{toml_name}]\n"
+        f"command = '{server_exe}'\n"
+        f"args = ['--db', '{db_path}', '--config', '{config_path}']\n"
+        "enabled = true\n"
+        "startup_timeout_sec = 30\n"
+        "tool_timeout_sec = 120\n"
+        "enabled_tools = ['ensure_zotero_running', 'search_fulltext', 'get_fulltext_chunk', "
+        "'get_item_context', 'coverage_report', 'export_bibtex_entries_by_key']"
+    )
+
+    print(f"Resolved config: {config_path}")
+    print(f"Resolved db: {db_path}")
+    print(f"Resolved server executable: {server_exe}")
+    print()
+    print("# Claude Code registration:")
+    print(claude_cmd)
+    print()
+    print("# Codex registration -- paste into your config.toml (this command does not edit it for you):")
+    print(codex_block)
+
+    if args.apply:
+        print()
+        print(f"Applying Claude Code registration for '{server_name}'...")
+        try:
+            result = subprocess.run(
+                ["claude", "mcp", "add-json", "--scope", "user", server_name, json.dumps(claude_payload)],
+                check=False,
+            )
+        except FileNotFoundError:
+            print("'claude' was not found on PATH -- run the printed command manually instead.", file=sys.stderr)
+            return 2
+        if result.returncode != 0:
+            print("claude mcp add-json failed; run the printed command manually.", file=sys.stderr)
+            return result.returncode
+        print(f"Applied. Verify with: claude mcp get {server_name}")
+    return 0
+
+
+def _print_zotero_status(status: dict[str, object]) -> None:
+    print(f"Zotero executable: {status['zotero_exe']}")
+    print(f"Running: {status['running']}")
+    print(f"Launched: {status['launched']}")
+    print(f"Connector OK: {status['connector_ok']}")
+    print(f"Connector message: {status['connector_message']}")
+    troubleshooting = status.get("troubleshooting") or []
+    if troubleshooting:
+        print("Troubleshooting:")
+        for item in troubleshooting:
+            print(f"- {item}")
+
+
+def _add_bibtex_key_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--citation-key", action="append", default=[], help="Citation key to export; can be repeated.")
+    parser.add_argument(
+        "--citation-keys",
+        default="",
+        help="Comma-, semicolon-, or whitespace-separated citation keys.",
+    )
+
+
+def _citation_keys_from_args(args: argparse.Namespace) -> list[str]:
+    return [*args.citation_key, args.citation_keys]
+
+
+def _row_numbers_from_arg(value: str) -> list[int]:
+    normalized = value.replace(",", " ").replace(";", " ")
+    rows: list[int] = []
+    for token in normalized.split():
+        rows.append(int(token))
+    return rows
+
+
+def _configure_stdio() -> None:
+    for stream in [sys.stdout, sys.stderr]:
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
+
+
+def _print_search_results(results: list[object]) -> None:
+    for index, result in enumerate(results, start=1):
+        data = result.to_dict()
+        print(f"{index}. {data['title']} ({data['year']})")
+        print(f"   creators: {data['creators']}")
+        print(f"   keys: parent={data['zotero_parent_key']} attachment={data['zotero_attachment_key']}")
+        print(f"   citation_key: {data['citation_key']}")
+        print(f"   score: {data['score']} chunk={data['chunk_index']} chars={data['start_char']}-{data['end_char']}")
+        print(f"   extraction: {data['extraction_tool']} confidence={data['classification']}/{data['identity_status']}")
+        print(f"   snippet: {data['snippet']}")
+        print(f"   markdown: {data['markdown_path']}")
+
+
+def _print_fulltext_result(result: dict[str, object]) -> None:
+    print(f"# {result['title']}")
+    print(f"zotero_parent_key: {result['zotero_parent_key']}")
+    print(f"zotero_attachment_key: {result['zotero_attachment_key']}")
+    print(f"citation_key: {result['citation_key']}")
+    print(f"chunk_index: {result['chunk_index']}")
+    print(f"chars: {result['start_char']}-{result['end_char']} of {result['total_chars']}")
+    print(f"extraction_tool: {result['extraction_tool']}")
+    print("")
+    print(result["text"])
+
+
+def _print_coverage_report(report: dict[str, object]) -> None:
+    print(f"Records: {report['records']}")
+    print(f"Chunks: {report['chunks']}")
+    print(f"Total characters: {report['total_chars']}")
+    print(f"Total words: {report['total_words']}")
+    for field in ["by_classification", "by_identity_status", "by_extraction_tool"]:
+        print(field + ":")
+        for key, count in sorted(dict(report[field]).items()):
+            print(f"- {key}: {count}")
+
+
+def _filter_new_mapping_rows(mapping_report: Path, indexed_keys: set[str]) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    with mapping_report.open("r", encoding="utf-8-sig", newline="") as handle:
+        reader = csv.DictReader(handle)
+        for row in reader:
+            if row.get("classification") != "mapped_verified":
+                continue
+            key = row.get("zotero_attachment_key", "")
+            if key and key not in indexed_keys:
+                rows.append(row)
+    return rows
+
+
+def _write_filtered_mapping_csv(source: Path, output: Path, rows: list[dict[str, str]]) -> None:
+    with source.open("r", encoding="utf-8-sig", newline="") as handle:
+        fieldnames = csv.DictReader(handle).fieldnames or []
+    with output.open("w", encoding="utf-8", newline="\n") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
