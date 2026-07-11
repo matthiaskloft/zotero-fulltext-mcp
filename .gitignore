@@ -12,3 +12,4 @@ config.*.json
 *.sqlite
 *.jsonl
 .env
+.workflow-state.json
