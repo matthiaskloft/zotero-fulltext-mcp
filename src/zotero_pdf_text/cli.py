@@ -183,6 +183,12 @@ def build_parser() -> argparse.ArgumentParser:
     search = subparsers.add_parser("search-fts", help="Search the SQLite FTS full-text index.")
     search.add_argument("--db", type=Path, default=DEFAULT_FTS_DB, help="SQLite FTS database path.")
     search.add_argument("--query", required=True, help="Search query.")
+    search.add_argument(
+        "--search-mode",
+        choices=("all_terms", "any_terms", "phrase"),
+        default="all_terms",
+        help="Match all normalized terms (default), any term, or the normalized phrase.",
+    )
     search.add_argument("--limit", type=int, default=10, help="Maximum results.")
     search.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
     fulltext = subparsers.add_parser("get-fulltext", help="Fetch bounded converted full text for one attachment.")
@@ -531,11 +537,17 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(summary.to_dict(), ensure_ascii=False, indent=2))
         return 0
     if args.command == "search-fts":
-        results = search_fts(args.db, args.query, limit=args.limit)
+        results = search_fts(args.db, args.query, limit=args.limit, search_mode=args.search_mode)
         if args.json:
-            print(json.dumps([result.to_dict() for result in results], ensure_ascii=False, indent=2))
+            print(
+                json.dumps(
+                    {"search_mode": args.search_mode, "no_results": not results, "results": [result.to_dict() for result in results]},
+                    ensure_ascii=False,
+                    indent=2,
+                )
+            )
         else:
-            _print_search_results(results)
+            _print_search_results(results, search_mode=args.search_mode)
         return 0
     if args.command == "get-fulltext":
         result = get_fulltext(
@@ -932,7 +944,11 @@ def _configure_stdio() -> None:
             stream.reconfigure(encoding="utf-8", errors="replace")
 
 
-def _print_search_results(results: list[object]) -> None:
+def _print_search_results(results: list[object], *, search_mode: str) -> None:
+    print(f"search_mode: {search_mode}")
+    if not results:
+        print("No results.")
+        return
     for index, result in enumerate(results, start=1):
         data = result.to_dict()
         print(f"{index}. {data['title']} ({data['year']})")

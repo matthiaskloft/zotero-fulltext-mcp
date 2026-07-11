@@ -99,6 +99,9 @@ Smoke-test the index directly:
 & $python -m zotero_pdf_text search-fts --db .\converted_text\index\zotero_text_index.sqlite --query "some topic" --limit 3
 ```
 
+Search uses `all_terms` by default. Pass `--search-mode any_terms` for a broader fallback, or
+`--search-mode phrase` to require the normalized query words in order.
+
 ## Register the MCP server
 
 ```powershell
@@ -129,7 +132,9 @@ Expected status: `Connected`.
 
 The server exposes:
 
-- `search_fulltext(query)` — ranked full-text search with bounded snippets.
+- `search_fulltext(query, search_mode="all_terms")` — ranked full-text search with bounded
+  snippets. `any_terms` is the broad fallback and `phrase` requires the normalized query words in
+  order; every response reports the effective mode and an explicit `no_results` flag.
 - `get_fulltext_chunk(attachment_key)` — a bounded converted-text passage for one paper.
 - `get_item_context(parent_key | attachment_key)` — sidecar metadata (title, authors, DOI,
   citation key, and extraction identity fields).
