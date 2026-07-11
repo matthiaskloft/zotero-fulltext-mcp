@@ -15,7 +15,7 @@
 | Package 3: Canonical Library and Reconciliation | OPTIONAL | | Pursue only if the timestamped-run layout becomes an actual pain point. Highest migration risk in this plan. |
 | Package 4: Retrieval Contract for LLM Workflows (reduced scope) | OPTIONAL | | |
 | Package 5: Operational Quality and Release Readiness (reduced scope) | OPTIONAL | | CI/uv.lock only if the project becomes shared/public. |
-| Ship | TODO | | Ship packages separately; do not combine all behavior changes in one PR. Re-approve each optional package before starting it. |
+| Ship | IN_PROGRESS | 2026-07-11 | Draft PR opened while Package 1's remaining retrieval-bound review items are resolved. |
 
 ## Spec
 
