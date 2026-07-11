@@ -29,6 +29,7 @@ from .ingestion import dry_run_ingest, ingest_approved
 from .indexer import append_text_index, build_text_index, load_indexed_keys
 from .lock import PipelineLockedError, pipeline_write_lock
 from .mapper import run_dry_run
+from .mcp_contract import BIBTEX_MCP_TOOL_NAME, DEFAULT_MCP_TOOL_NAMES
 from .runtime import DEFAULT_ZOTERO_EXE, ensure_zotero_running
 from .verifier import apply_verification, verify_unverified
 from .zotero_write import (
@@ -380,6 +381,12 @@ def build_parser() -> argparse.ArgumentParser:
     install_mcp.add_argument("--server-name", default="zotero-fulltext", help="MCP server name to register.")
     install_mcp.add_argument("--config", type=Path, default=None, help="Path to project config JSON. Default: resolved for this machine.")
     install_mcp.add_argument("--db", type=Path, default=None, help="SQLite FTS database path. Default: <output_root>/index/zotero_text_index.sqlite.")
+    install_mcp.add_argument("--enable-bibtex", action="store_true", help="Enable the optional local Better BibTeX MCP integration.")
+    install_mcp.add_argument(
+        "--bibtex-endpoint",
+        default=None,
+        help="Optional local Better BibTeX endpoint to pass at server startup; requires --enable-bibtex.",
+    )
     install_mcp.add_argument(
         "--apply",
         action="store_true",
@@ -798,22 +805,30 @@ def _install_mcp(args: argparse.Namespace) -> int:
         print(f"Warning: {server_exe} does not exist yet -- install with 'pip install -e .[mcp]' first.", file=sys.stderr)
 
     server_name = args.server_name
-    claude_add_args = [
-        "mcp", "add", "--scope", "user", server_name, str(server_exe),
-        "--", "--db", str(db_path), "--config", str(config_path),
-    ]
+    server_args = ["--db", str(db_path), "--config", str(config_path)]
+    if args.enable_bibtex:
+        server_args.append("--enable-bibtex")
+    if args.bibtex_endpoint:
+        if not args.enable_bibtex:
+            print("--bibtex-endpoint requires --enable-bibtex.", file=sys.stderr)
+            return 2
+        server_args.extend(["--bibtex-endpoint", args.bibtex_endpoint])
+    claude_add_args = ["mcp", "add", "--scope", "user", server_name, str(server_exe), "--", *server_args]
     claude_cmd = "claude " + " ".join(_shell_quote(a) for a in claude_add_args)
 
     toml_name = server_name.replace("-", "_")
+    enabled_tools = list(DEFAULT_MCP_TOOL_NAMES)
+    if args.enable_bibtex:
+        enabled_tools.append(BIBTEX_MCP_TOOL_NAME)
+    toml_tools = ", ".join(f"'{tool}'" for tool in enabled_tools)
     codex_block = (
         f"[mcp_servers.{toml_name}]\n"
         f"command = '{server_exe}'\n"
-        f"args = ['--db', '{db_path}', '--config', '{config_path}']\n"
+        f"args = {server_args!r}\n"
         "enabled = true\n"
         "startup_timeout_sec = 30\n"
         "tool_timeout_sec = 120\n"
-        "enabled_tools = ['ensure_zotero_running', 'search_fulltext', 'get_fulltext_chunk', "
-        "'get_item_context', 'coverage_report', 'export_bibtex_entries_by_key']"
+        f"enabled_tools = [{toml_tools}]"
     )
 
     print(f"Resolved config: {config_path}")

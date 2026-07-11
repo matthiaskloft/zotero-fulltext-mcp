@@ -205,6 +205,28 @@ Append missing entries to a LaTeX project's bibliography:
 The default translator is `Better BibLaTeX`. Use
 `--translator "Better BibTeX"` for classic BibTeX projects.
 
+## MCP Safety Boundary
+
+Run the MCP server with an explicit database when only offline full-text retrieval is needed:
+
+```powershell
+& $python -m zotero_pdf_text.mcp_server --db $data\index\zotero_text_index.sqlite
+```
+
+This mode does not require a Zotero config. It exposes bounded search, passage retrieval, item
+context, and confirmation-gated math OCR. The latter additionally needs `--config` and the exact
+tool argument `confirm="reconvert"`; the server rate-limits starts in a process. Zotero process
+launch remains the explicit `ensure-zotero` CLI command.
+
+Better BibTeX export is off by default. Enable it only for a local installation:
+
+```powershell
+& $python -m zotero_pdf_text.mcp_server --db $data\index\zotero_text_index.sqlite --enable-bibtex
+```
+
+The optional endpoint accepts credential-free `http` loopback URLs on port 23119 only. MCP results
+omit local source and Markdown paths and label converted content as `untrusted_source`.
+
 ## Approval-Gated Zotero Writes
 
 The read-only MCP server never writes to Zotero. Use `zotero-write` when an LLM

@@ -98,6 +98,8 @@ class InstallMcpCliTests(unittest.TestCase):
         self.assertEqual(args.server_name, "zotero-fulltext")
         self.assertIsNone(args.config)
         self.assertIsNone(args.db)
+        self.assertFalse(args.enable_bibtex)
+        self.assertIsNone(args.bibtex_endpoint)
         self.assertFalse(args.apply)
 
     def test_missing_config_returns_error(self):
@@ -191,6 +193,48 @@ class InstallMcpCliTests(unittest.TestCase):
             ):
                 exit_code = main(["install-mcp", "--config", str(config_path), "--apply"])
             self.assertEqual(exit_code, 2)
+
+    def test_optional_bibtex_registration_forwards_only_startup_options(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config_path = root / "config.json"
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "zotero_root": str(root),
+                        "zotero_data_directory": str(root),
+                        "linked_attachments": str(root),
+                        "output_root": str(root / "converted_text"),
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with patch("sys.executable", str(root / "Scripts" / "python.exe")), patch("sys.stdout") as mock_stdout:
+                exit_code = main(["install-mcp", "--config", str(config_path), "--enable-bibtex"])
+            printed = "".join(call.args[0] for call in mock_stdout.write.call_args_list)
+            self.assertEqual(exit_code, 0)
+            self.assertIn("--enable-bibtex", printed)
+            self.assertIn("export_bibtex_entries_by_key", printed)
+
+    def test_bibtex_endpoint_requires_integration_flag(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config_path = root / "config.json"
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "zotero_root": str(root),
+                        "zotero_data_directory": str(root),
+                        "linked_attachments": str(root),
+                        "output_root": str(root / "converted_text"),
+                    }
+                ),
+                encoding="utf-8",
+            )
+            self.assertEqual(
+                main(["install-mcp", "--config", str(config_path), "--bibtex-endpoint", "http://127.0.0.1:23119/x"]),
+                2,
+            )
 
 
 class AppendIndexCliTests(unittest.TestCase):
