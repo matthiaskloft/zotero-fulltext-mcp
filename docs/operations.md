@@ -158,6 +158,13 @@ Search:
   --limit 10
 ```
 
+The default `--search-mode all_terms` requires every normalized query term. Use
+`--search-mode any_terms` as a broader fallback, or `--search-mode phrase` to require the
+normalized words in order. Search results report the effective mode; JSON output also includes an
+explicit `no_results` flag. The parser accepts up to 1,000 query characters, 20 normalized terms,
+and 64 characters per term. CLI searches accept at most 100 results; the MCP server further caps
+requests at 20 results.
+
 Fetch bounded text:
 
 ```powershell

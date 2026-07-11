@@ -17,6 +17,10 @@ from .config import ProjectConfig, validate_config
 from .fts import (
     DEFAULT_CONTEXT_RECORD_LIMIT,
     FullTextResult,
+    MAX_QUERY_CHARS,
+    MAX_QUERY_TERM_CHARS,
+    MAX_QUERY_TERMS,
+    SEARCH_MODES,
     SearchResult,
     get_fulltext,
     get_item_context as get_item_context_fn,
@@ -24,8 +28,6 @@ from .fts import (
 )
 
 
-MAX_QUERY_CHARS = 1_000
-MAX_QUERY_TERMS = 20
 MAX_SEARCH_RESULTS = 20
 MAX_RETRIEVED_CHARS = 12_000
 MAX_CHUNK_INDEX = 100_000
@@ -106,13 +108,18 @@ def create_server(
     limiter = ReconvertRateLimiter()
 
     @mcp.tool()
-    def search_fulltext(query: str, limit: int = 10) -> dict[str, object]:
+    def search_fulltext(query: str, limit: int = 10, search_mode: str = "all_terms") -> dict[str, object]:
         """Search converted PDF text and return bounded, untrusted snippets."""
-        return _public_call(
-            lambda: {
-                "results": [serialize_search_result(result) for result in search_fts(db_path, _validate_query(query), limit=_validate_limit(limit))]
+        def operation() -> dict[str, object]:
+            validated_mode = _validate_search_mode(search_mode)
+            results = search_fts(db_path, _validate_query(query), limit=_validate_limit(limit), search_mode=validated_mode)
+            return {
+                "search_mode": validated_mode,
+                "no_results": not results,
+                "results": [serialize_search_result(result) for result in results],
             }
-        )
+
+        return _public_call(operation)
 
     @mcp.tool()
     def get_fulltext_chunk(
@@ -358,9 +365,21 @@ def _error(code: str, message: str) -> dict[str, object]:
 def _validate_query(query: str) -> str:
     if not isinstance(query, str) or not query.strip() or len(query) > MAX_QUERY_CHARS:
         raise PublicMcpError("invalid_query", f"Query must contain 1 to {MAX_QUERY_CHARS} characters.")
-    if len(re.findall(r"[\w]+", query, flags=re.UNICODE)) > MAX_QUERY_TERMS:
+    terms = re.findall(r"[\w]+", query, flags=re.UNICODE)
+    if not terms:
+        raise PublicMcpError("invalid_query", "Query must contain at least one searchable term.")
+    if len(terms) > MAX_QUERY_TERMS:
         raise PublicMcpError("invalid_query", f"Query may contain at most {MAX_QUERY_TERMS} searchable terms.")
+    if any(len(term) > MAX_QUERY_TERM_CHARS for term in terms):
+        raise PublicMcpError("invalid_query", f"Each query term may contain at most {MAX_QUERY_TERM_CHARS} characters.")
     return query
+
+
+def _validate_search_mode(search_mode: str) -> str:
+    if not isinstance(search_mode, str) or search_mode not in SEARCH_MODES:
+        modes = ", ".join(sorted(SEARCH_MODES))
+        raise PublicMcpError("invalid_search_mode", f"search_mode must be one of: {modes}.")
+    return search_mode
 
 
 def _validate_limit(limit: int) -> int:

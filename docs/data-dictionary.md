@@ -59,6 +59,11 @@ just-in-time only — roughly 27s/page, so it is not meant for bulk reconversion
 - `chunks_fts`: FTS5 search table over title, creators, citation key, and chunk text
 
 The default chunk size is 6,000 characters with 500 characters of overlap.
+Stored chunk character ranges refer exactly to their trimmed stored text. FTS ranking deliberately
+weights title matches most strongly, citation-key matches next, and body text as the baseline.
+
+Search normalizes query text into at most 20 word terms. `all_terms` is the default mode,
+`any_terms` matches any normalized term, and `phrase` requires the normalized terms in order.
 
 ## Confidence Fields
 

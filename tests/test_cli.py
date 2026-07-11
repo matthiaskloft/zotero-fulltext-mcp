@@ -1,6 +1,8 @@
+import io
 import json
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
@@ -332,6 +334,27 @@ class AppendIndexCliTests(unittest.TestCase):
             }
             self.assertEqual(keys, {"OLD1", "NEW1"})
             self.assertTrue((root / "index" / "zotero_text_index.sqlite").exists())
+
+
+class SearchCliTests(unittest.TestCase):
+    def test_parser_exposes_the_explicit_search_modes(self):
+        args = build_parser().parse_args(["search-fts", "--query", "topic"])
+        self.assertEqual(args.search_mode, "all_terms")
+
+        any_terms = build_parser().parse_args(["search-fts", "--query", "topic", "--search-mode", "any_terms"])
+        self.assertEqual(any_terms.search_mode, "any_terms")
+
+    def test_json_search_result_reports_mode_and_no_results(self):
+        with patch("zotero_pdf_text.cli.search_fts", return_value=[]) as search:
+            output = io.StringIO()
+            with redirect_stdout(output):
+                exit_code = main(
+                    ["search-fts", "--db", "unused.sqlite", "--query", "topic", "--search-mode", "any_terms", "--json"]
+                )
+
+        self.assertEqual(exit_code, 0)
+        search.assert_called_once_with(Path("unused.sqlite"), "topic", limit=10, search_mode="any_terms")
+        self.assertEqual(json.loads(output.getvalue()), {"search_mode": "any_terms", "no_results": True, "results": []})
 
 
 if __name__ == "__main__":

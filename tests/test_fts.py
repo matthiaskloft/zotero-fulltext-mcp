@@ -12,6 +12,7 @@ from zotero_pdf_text.fts import (
     get_fulltext,
     get_item_context,
     search_fts,
+    _chunk_text,
 )
 
 
@@ -70,6 +71,137 @@ class FtsTests(unittest.TestCase):
 
             with self.assertRaises(ValueError):
                 search_fts(sqlite_db, " / ")
+
+    def test_search_modes_and_bounds_are_explicit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            jsonl = root / "index.jsonl"
+            sqlite_db = root / "index.sqlite"
+            _write_jsonl(jsonl)
+            build_fts_index(jsonl, sqlite_db)
+
+            self.assertEqual(search_fts(sqlite_db, "cultural psychometric", search_mode="all_terms"), [])
+            self.assertEqual(
+                {result.zotero_attachment_key for result in search_fts(sqlite_db, "cultural psychometric", search_mode="any_terms")},
+                {"ATTACH1", "ATTACH2"},
+            )
+            phrase_results = search_fts(sqlite_db, "cultural consensus", search_mode="phrase")
+            self.assertEqual([result.zotero_attachment_key for result in phrase_results], ["ATTACH1"])
+            self.assertEqual(
+                [result.zotero_attachment_key for result in search_fts(sqlite_db, "consensus cultural", search_mode="all_terms")],
+                ["ATTACH1"],
+            )
+            self.assertEqual(search_fts(sqlite_db, "consensus cultural", search_mode="phrase"), [])
+
+            with self.assertRaises(ValueError):
+                search_fts(sqlite_db, "topic", search_mode="unsupported")
+            with self.assertRaises(ValueError):
+                search_fts(sqlite_db, "x" * 65)
+            with self.assertRaises(ValueError):
+                search_fts(sqlite_db, "topic", limit=101)
+
+    def test_title_matches_rank_before_body_only_matches_and_ties_are_deterministic(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            jsonl = root / "index.jsonl"
+            sqlite_db = root / "index.sqlite"
+            _write_jsonl(jsonl)
+            records = [json.loads(line) for line in jsonl.read_text(encoding="utf-8").splitlines()]
+            records[0].update({"title": "Unrelated", "text": "target " * 20})
+            records[1].update({"title": "Target methods", "text": "unrelated"})
+            jsonl.write_text("".join(json.dumps(record) + "\n" for record in records), encoding="utf-8")
+            build_fts_index(jsonl, sqlite_db)
+
+            ranked = search_fts(sqlite_db, "target")
+            self.assertEqual(ranked[0].zotero_attachment_key, "ATTACH2")
+
+            records[0].update({"title": "Unrelated", "citation_key": "", "text": "target"})
+            records[1].update({"title": "Unrelated", "citation_key": "target", "text": "unrelated"})
+            jsonl.write_text("".join(json.dumps(record) + "\n" for record in records), encoding="utf-8")
+            build_fts_index(jsonl, sqlite_db)
+            self.assertEqual(search_fts(sqlite_db, "target")[0].zotero_attachment_key, "ATTACH2")
+
+            records[0].update({"title": "Tie", "creators": "", "citation_key": "", "text": "target"})
+            records[1].update({"title": "Tie", "creators": "", "citation_key": "", "text": "target"})
+            jsonl.write_text("".join(json.dumps(record) + "\n" for record in records), encoding="utf-8")
+            build_fts_index(jsonl, sqlite_db)
+            self.assertEqual(
+                [result.zotero_attachment_key for result in search_fts(sqlite_db, "target")],
+                ["ATTACH1", "ATTACH2"],
+            )
+
+    def test_chunk_offsets_describe_the_stored_trimmed_text(self):
+        text = "  abcdefghij  "
+        chunks = list(_chunk_text(text, chunk_chars=5, overlap_chars=2))
+
+        self.assertEqual(chunks[0], (0, 2, 5, "abc"))
+        self.assertEqual(chunks[-1], (3, 9, 12, "hij"))
+        for _, start, end, chunk in chunks:
+            self.assertEqual(text[start:end], chunk)
+
+    def test_rebuild_replaces_old_chunks_and_preserves_trimmed_offsets(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            jsonl = root / "index.jsonl"
+            sqlite_db = root / "index.sqlite"
+            _write_jsonl(jsonl)
+            build_fts_index(jsonl, sqlite_db)
+
+            records = [json.loads(line) for line in jsonl.read_text(encoding="utf-8").splitlines()]
+            records[0]["text"] = "  replacement evidence  "
+            records[0]["char_count"] = len(records[0]["text"])
+            jsonl.write_text("".join(json.dumps(record) + "\n" for record in records), encoding="utf-8")
+            build_fts_index(jsonl, sqlite_db)
+
+            self.assertEqual(search_fts(sqlite_db, "bayesian"), [])
+            replacement = get_fulltext(sqlite_db, attachment_key="ATTACH1", chunk_index=0)
+            self.assertEqual((replacement.start_char, replacement.end_char, replacement.text), (2, 22, "replacement evidence"))
+
+    def test_search_candidate_query_is_capped(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            jsonl = root / "index.jsonl"
+            sqlite_db = root / "index.sqlite"
+            _write_jsonl(jsonl)
+            build_fts_index(jsonl, sqlite_db)
+
+            class _RecordingConnection(sqlite3.Connection):
+                captured_limit = None
+
+                def execute(self, sql, parameters=()):
+                    if "FROM chunks_fts f" in sql and "LIMIT ?" in sql:
+                        type(self).captured_limit = parameters[-1]
+                    return super().execute(sql, parameters)
+
+            real_connect = sqlite3.connect
+
+            def connect_with_recording(*args, **kwargs):
+                kwargs.setdefault("factory", _RecordingConnection)
+                return real_connect(*args, **kwargs)
+
+            with patch("zotero_pdf_text.fts.sqlite3.connect", side_effect=connect_with_recording):
+                search_fts(sqlite_db, "cultural", limit=1)
+                self.assertEqual(_RecordingConnection.captured_limit, 50)
+                search_fts(sqlite_db, "cultural", limit=100)
+
+            self.assertEqual(_RecordingConnection.captured_limit, 500)
+
+    def test_search_deduplicates_long_title_matches_before_applying_the_limit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            jsonl = root / "index.jsonl"
+            sqlite_db = root / "index.sqlite"
+            _write_jsonl(jsonl)
+            records = [json.loads(line) for line in jsonl.read_text(encoding="utf-8").splitlines()]
+            records[0].update({"title": "Shared title", "text": "x " * 2_000})
+            records[1].update({"title": "Shared title", "text": "short"})
+            jsonl.write_text("".join(json.dumps(record) + "\n" for record in records), encoding="utf-8")
+            build_fts_index(jsonl, sqlite_db, chunk_chars=20, overlap_chars=0)
+
+            self.assertEqual(
+                {result.zotero_attachment_key for result in search_fts(sqlite_db, "shared title", limit=2)},
+                {"ATTACH1", "ATTACH2"},
+            )
 
     def test_get_fulltext_bounds_the_chunk_query_for_large_documents(self):
         # Regression test: get_fulltext used to fetch every chunk row for a record before
