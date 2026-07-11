@@ -8,13 +8,14 @@
 | Phase | Status | Date | Notes |
 |-------|--------|------|-------|
 | Spec | DONE | 2026-07-10 | Derived from repository review and the library-layout discussion. |
-| Plan | DONE | 2026-07-10 | Five independently shippable packages. |
-| Package 1: Safe MCP Read Surface | TODO | | |
-| Package 2: Transactional Derived Artifacts | TODO | | |
-| Package 3: Canonical Library and Reconciliation | TODO | | |
-| Package 4: Retrieval Contract for LLM Workflows | TODO | | |
-| Package 5: Operational Quality and Release Readiness | TODO | | |
-| Ship | TODO | | Ship packages separately; do not combine all behavior changes in one PR. |
+| Plan | DONE | 2026-07-10 | Five packages. Package 1 is the committed near-term deliverable. |
+| Plan revision | DONE | 2026-07-11 | Rescoped for a single-user/few-machine personal tool: Packages 2-5 marked optional/deferred, several reduced in scope. See "Revision Notes" at the end. |
+| Package 1: Safe MCP Read Surface | TODO | | Committed. |
+| Package 2: Transactional Derived Artifacts (reduced scope) | OPTIONAL | | Start only after Package 1 ships and a real need appears; confirm multi-writer usage before building lock heartbeat machinery. |
+| Package 3: Canonical Library and Reconciliation | OPTIONAL | | Pursue only if the timestamped-run layout becomes an actual pain point. Highest migration risk in this plan. |
+| Package 4: Retrieval Contract for LLM Workflows (reduced scope) | OPTIONAL | | |
+| Package 5: Operational Quality and Release Readiness (reduced scope) | OPTIONAL | | CI/uv.lock only if the project becomes shared/public. |
+| Ship | TODO | | Ship packages separately; do not combine all behavior changes in one PR. Re-approve each optional package before starting it. |
 
 ## Spec
 
@@ -61,7 +62,7 @@ publication; and an auditable lifecycle view of current, stale, missing, and orp
 | Decision | Options | Chosen | Rationale |
 |----------|---------|--------|-----------|
 | Default MCP capability | Keep all current tools; client-side allowlist only; safe default surface plus explicit integrations | Safe default surface plus opt-in local integrations | A client allowlist is deployment-specific. The server itself must not offer an LLM a destructive or process-launching capability by default. |
-| Maintenance operation | Keep `reconvert_with_math_ocr` as an MCP tool; add a confirmation argument; CLI-only | CLI-only | A boolean supplied by an LLM is not human approval. Reconversion writes output, can consume a GPU for a long time, and may download model weights. |
+| Maintenance operation | Keep `reconvert_with_math_ocr` as an MCP tool; add a confirmation argument; CLI-only | MCP tool with a required literal confirmation string plus a per-session rate limit | The real risk here is cost (GPU-minutes) and blast radius (overwrites one Markdown file), not lack of consent — both are bounded and reversible enough for a single-user tool. CLI-only would remove the documented, valued in-conversation "garbled equations -> fix -> keep chatting" workflow. `ensure_zotero_running` stays CLI-only; process launch is a cleaner line to hold and the CLI workflow already covers it. |
 | Canonical converted-text location | Keep per-run Markdown; move all history to one flat directory; hybrid current-library plus run evidence | Hybrid | Run folders provide reproducibility. A stable library path provides maintainability, reconciliation, and safe replacement. |
 | Canonical filename | Human title; content hash; Zotero attachment key with optional slug | Attachment key with optional slug | The attachment key is the existing join key across Zotero, manifests, JSONL, FTS, and MCP. A slug is presentation-only. |
 | Publication model | Delete/rebuild live files; mutable SQLite in place; staged files then atomic replacement with recovery journal | Immutable index generations plus an atomic current-generation pointer | A reader resolves exactly one complete DB/JSONL/manifest generation. A failed build never changes the pointer, so it cannot take search offline. |
@@ -162,10 +163,13 @@ LLM client without relying on a client configuration allowlist.
 
 **Steps:**
 
-1. Reduce the default MCP tool set to index-only reads: search, bounded passage retrieval,
-   and item context. Do not register `ensure_zotero_running` or
-   `reconvert_with_math_ocr` in this process. Retain `ensure-zotero` and `reconvert-math` as
-   explicit CLI operations.
+1. Reduce the default MCP tool set to index-only reads plus one guarded maintenance tool: search,
+   bounded passage retrieval, item context, and `reconvert_with_math_ocr`. Do not register
+   `ensure_zotero_running` in this process; retain `ensure-zotero` as an explicit CLI operation.
+   Change `reconvert_with_math_ocr` to require a literal `confirm="reconvert"` argument (reject
+   any other value with a stable error naming the required literal) and enforce a per-process
+   rate limit (e.g. at most one reconversion per N minutes) before it runs marker-pdf. Keep
+   `reconvert-math` available as a CLI operation too, for maintenance outside a live MCP session.
 2. Factor `create_server(...)` out of `main()` and route internal FTS DTOs through MCP-only
    serializers. The serializers remove paths, add the provenance block, and map expected
    `FileNotFoundError`, invalid query, missing attachment, unsupported schema, and unavailable
@@ -200,7 +204,9 @@ LLM client without relying on a client configuration allowlist.
 **Acceptance criteria:**
 
 - A default MCP startup with only `--db` succeeds when no Zotero config is present.
-- A normal tool list contains no write, process-launch, arbitrary-URL, or GPU-heavy operation.
+- A normal tool list contains no unguarded write, no process-launch, and no arbitrary-URL
+  operation. The one retained GPU-heavy operation (`reconvert_with_math_ocr`) refuses to run
+  without the exact required confirmation literal and is rate-limited.
 - Paper text appears only in a result marked `untrusted_source`; ordinary results contain no
   absolute local paths.
 - Overlarge/invalid inputs and an unavailable DB yield a stable tool error without a traceback or
@@ -270,16 +276,16 @@ silently leaves the managed derived artifacts in an unknown state.
    `--jsonl`, `--fts-db`, manifest output, and image target (including parent/symlink containment)
    and reject anything outside `config.output_root`; then acquire that one root's lock. Direct
    Python APIs are documented as caller-responsible and do not implicitly acquire process locks.
-7. Replace lock check-then-write with exclusive creation, a random owner token, hostname/PID,
-   periodic heartbeat, and owner-token verification before release. A stale/corrupt lock requires
-   an explicit recovery path that cannot delete a newly acquired owner’s lock. Wrap the complete
-   writer inventory, including CLI `reconvert-math`, with this resolver. Document a designated
-   writer rule for cloud-synced output despite the strengthened local lock.
+7. Keep the existing `lock.py` check-then-write advisory lock, but make it exclusive-create with a
+   hostname/PID marker, and fail loudly (naming the recorded holder) on a stale/corrupt lock rather
+   than silently overwriting it. Wrap the complete writer inventory, including CLI
+   `reconvert-math`, with this resolver. Skip the owner-token/heartbeat protocol from the earlier
+   draft of this package: it solves distributed-writer races, and this deployment has not
+   confirmed it runs concurrent writers across machines. If a real multi-machine concurrent-write
+   need shows up later, revisit locking as its own follow-up rather than building it speculatively
+   now. Document a designated single-writer rule for cloud-synced output.
 8. Add attachment-key uniqueness validation during FTS build. Reject duplicate keys rather than
    returning an arbitrary row from `get_fulltext`.
-9. Add `prune-index-generations --dry-run` with an explicit apply mode. It retains current, prior,
-   journal-referenced, and user-pinned generations, reports reclaimable disk space, and never runs
-   automatically as part of publication.
 
 **Depends on:** Package 1 only for removal of MCP maintenance writes; the artifact layer itself
 is independently usable by CLI commands.
@@ -290,17 +296,23 @@ is independently usable by CLI commands.
   `current.json` pointing at the previous complete FTS generation, which remains searchable.
 - Interruption during publication is recovered deterministically on the next writer run; a reader
   sees either the old complete generation or the new complete generation, never a mixed index set.
-- Two local writers cannot both acquire the lock, and an old owner cannot remove a successor’s
-  lock.
+- Two local writers cannot both acquire the lock; a stale lock fails loudly and names its recorded
+  holder instead of being silently overwritten.
 - A duplicate attachment key fails the build with an actionable error.
 - Existing registrations using the default legacy `--db` path resolve the managed current
   generation after successful publication.
 - Supplied config-managed output/index paths outside `output_root`, including traversal and
   symlink escapes, are rejected before writing or locking.
-- The new managed command family can only publish complete generations; generation pruning is
-  dry-run-first and cannot remove a current, prior, pinned, or recovery-referenced generation.
+- The new managed command family can only publish complete generations.
 
 ### Package 3: Canonical Library and Reconciliation
+
+**Status note**: Optional. This is the highest-risk package in the plan for a personal corpus —
+the migration step rewrites file locations and image references across the whole library. Do not
+start it speculatively; start it only once the timestamped-run layout is an actual pain point in
+practice. Before running `migrate-library-layout --apply`, take a manual backup of `output_root`
+outside the tool's own safeguards (e.g. a plain filesystem copy), independent of the dry-run
+report.
 
 **Goal**: Separate immutable conversion-run evidence from one stable, current converted-text
 library and make drift visible before it is repaired.
@@ -424,17 +436,18 @@ embedding service or making unsupported claims about PDF page mapping.
    ordering for score ties. Return the actual effective query mode and a clear `no_results` result
    rather than requiring an LLM to infer parser behavior.
 3. Make passage retrieval cursor-like: search returns the stable attachment key, index generation,
-   chunk index, normalized extracted-body character range, and an opaque versioned
-   `source_locator`. `get_fulltext_chunk` accepts that locator (or explicit expected generation
-   plus attachment/chunk) and returns `stale_locator` if the requested generation is no longer
-   retained. It retrieves exactly one bounded chunk (or a bounded adjacent-chunk window), rather
-   than reading every chunk before truncation. Include `has_more`/next chunk information.
-4. Define `source_locator` as an unsigned opaque encoding of attachment key, generation,
-   source PDF hash, canonical Markdown hash, chunk index, and normalized extracted-body character
-   range. Validate every decoded field against the retained generation rather than relying on an
-   unplanned signing-key lifecycle. Correct chunk creation so stored offsets refer exactly to the stored normalized text
-   after whitespace trimming; test leading/trailing whitespace, overlap, and replacement. This is
-   the citation contract for now. Return page information only when a future, verified conversion
+   chunk index, and normalized extracted-body character range as a plain
+   `source_locator` object: `{attachment_key, generation_id, chunk_index, char_start, char_end}`
+   — no opaque encoding or signing. The caller is always the same trusted local MCP client, not an
+   external party, so there is no real adversary to defend the locator's contents against;
+   encoding it would add decode/validate complexity without a corresponding security gain.
+   `get_fulltext_chunk` accepts that object (or explicit attachment/chunk) and returns
+   `stale_locator` if the requested generation is no longer retained. It retrieves exactly one
+   bounded chunk (or a bounded adjacent-chunk window), rather than reading every chunk before
+   truncation. Include `has_more`/next chunk information.
+4. Correct chunk creation so stored offsets refer exactly to the stored normalized text after
+   whitespace trimming; test leading/trailing whitespace, overlap, and replacement. This is the
+   citation contract for now. Return page information only when a future, verified conversion
    mapping supplies it; otherwise omit it rather than guessing.
 5. Move aggregate reporting to SQL and expose `library_status` from Package 3. It must distinguish
    indexed snapshot statistics from source-library health and report the index generation used.
@@ -454,15 +467,16 @@ embedding service or making unsupported claims about PDF page mapping.
 
 ### Package 5: Operational Quality and Release Readiness
 
+**Status note**: `uv.lock` and GitHub Actions CI (step 1) are deferred unless this project becomes
+shared/public — for a personal tool, running the test suite locally before each package ships is
+enough and avoids adding a second dependency-management workflow alongside `requirements.txt`.
+Steps 2-6 (schema-compatibility tests, fixture tests, upgrade guide) remain useful regardless and
+should land alongside whichever of Packages 2-4 they cover.
+
 **Goal**: Make the new behavior reproducible for installers and maintainable as dependencies and
 schema evolve.
 
-**Files to create:**
-
-- `.github/workflows/test.yml` — run the supported test matrix with required dependency extras
-  when the repository is hosted on GitHub.
-- `uv.lock` — generated by `uv lock` from `pyproject.toml`; it records the tested dependency
-  resolution while package metadata remains authoritative.
+**Files to create:** None in the deferred-CI scope; revisit if CI is adopted later.
 
 **Files to modify:**
 
@@ -481,11 +495,12 @@ schema evolve.
 
 **Steps:**
 
-1. Adopt `uv` as the one lock mechanism: document `uv lock` as the update command and `uv sync
-   --extra mcp --extra test --locked` as the supported test install. Make CI use the same locked
-   resolution and run the full suite; a missing optional conversion dependency must no longer make
-   the advertised full suite fail at collection time. Keep `marker` uninstalled and its tests
-   subprocess-mocked unless a separate integration matrix deliberately opts in.
+1. (Deferred — only if CI is adopted) Adopt `uv` as the one lock mechanism: document `uv lock` as
+   the update command and `uv sync --extra mcp --extra test --locked` as the supported test
+   install. Make CI use the same locked resolution and run the full suite; a missing optional
+   conversion dependency must no longer make the advertised full suite fail at collection time.
+   Keep `marker` uninstalled and its tests subprocess-mocked unless a separate integration matrix
+   deliberately opts in.
 2. Add schema-compatibility tests: an old managed index either migrates through a documented
    rebuild/migration command or fails with a precise recovery instruction, never with a low-level
    SQLite error.
@@ -511,8 +526,8 @@ schema evolve.
   collection errors.
 - Upgrade, rollback, migration, and one-writer multi-machine procedures are documented and
   exercised against fixtures.
-- CI prevents regressions in read-only MCP capabilities, artifact recovery, canonical-path
-  containment on reads and writes, and reconciliation status.
+- If CI is adopted (deferred by default), it prevents regressions in read-only MCP capabilities,
+  artifact recovery, canonical-path containment on reads and writes, and reconciliation status.
 
 ## Verification & Validation
 
@@ -612,3 +627,32 @@ without a fourth review iteration (the review-loop cap is three):
   rows remain quarantine/unverified and cannot publish to `library/`.
 
 Final independent-review result: 0 blockers, 2 warnings addressed in the plan.
+
+## Revision Notes (2026-07-11)
+
+The original plan was sound but sized for a multi-tenant/production deployment rather than the
+actual deployment: a single-user (or few-machine) personal research tool driven from one Claude
+Code session at a time. This revision keeps the technical designs intact but changes what's
+committed versus optional, and trims a few mechanisms that solve problems this deployment has not
+confirmed it has:
+
+- **Package 1 is the only committed deliverable now.** Packages 2-5 are marked optional and
+  require a fresh go/no-go decision before starting, rather than being pre-approved as one
+  five-package program.
+- **`reconvert_with_math_ocr` stays an MCP tool** (behind a required literal confirmation string
+  and a rate limit) instead of moving to CLI-only, preserving the documented in-conversation
+  "garbled equations -> fix -> keep chatting" workflow. `ensure_zotero_running` still moves to
+  CLI-only.
+- **Package 2's lock hardening is reduced** to exclusive-create plus a loud, named failure on a
+  stale lock. The owner-token/heartbeat protocol and `prune-index-generations` are dropped unless
+  a real concurrent-multi-machine-write need is confirmed; building distributed-lock machinery for
+  an unconfirmed scenario is speculative.
+- **Package 3 is flagged as the highest-risk, most speculative package** — it is a one-time,
+  whole-library migration for a personal corpus with no confirmed pain point yet. A manual backup
+  step is now called out explicitly before any apply-mode migration run.
+- **Package 4 drops the opaque/encoded `source_locator`** in favor of a plain
+  `{attachment_key, generation_id, chunk_index, char_start, char_end}` object. There is no
+  external adversary between this server and its one trusted local client to justify encoding.
+- **Package 5 defers `uv.lock` and CI** unless the project becomes shared/public; a second
+  dependency-management workflow isn't worth adopting for a personal repo maintained by one person
+  running tests locally.
