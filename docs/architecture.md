@@ -44,11 +44,15 @@ as primary library records.
 
 - Zotero MCP: live metadata, collections, tags, child attachments, notes, and
   Zotero URIs. Zotero must be running.
-- Full-text CLI/MCP: read-only search over converted Markdown and conversion
-  metadata. It does not modify Zotero.
-- Better BibTeX CLI/MCP bridge: returns full `.bib` entries by citation key.
-  The MCP tool is read-only; the CLI can append missing entries to an explicit
-  LaTeX project `references.bib`.
+- Full-text MCP: bounded search, passage retrieval, and item context over converted Markdown.
+  It never launches Zotero or exposes local paths; returned library material is labelled
+  untrusted. Its one maintenance exception, math OCR, requires an exact confirmation literal and
+  is rate-limited, but it still never modifies Zotero.
+- Full-text CLI: maintenance and operational commands, including Zotero process startup and
+  unguarded `reconvert-math`, remain explicit local workflows.
+- Better BibTeX CLI/MCP bridge: the CLI returns or appends full `.bib` entries by citation key.
+  The MCP export bridge is disabled by default and, when explicitly enabled, can only call the
+  configured credential-free loopback endpoint on Zotero's local port.
 - Ingestion queue: dry-run dedupe for LLM literature-search imports.
 - Zotero write CLI: approval-gated write plans that generate local Zotero
   JavaScript for creating items, linking local PDFs, updating exact-key metadata,

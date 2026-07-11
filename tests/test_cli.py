@@ -98,6 +98,8 @@ class InstallMcpCliTests(unittest.TestCase):
         self.assertEqual(args.server_name, "zotero-fulltext")
         self.assertIsNone(args.config)
         self.assertIsNone(args.db)
+        self.assertFalse(args.enable_bibtex)
+        self.assertIsNone(args.bibtex_endpoint)
         self.assertFalse(args.apply)
 
     def test_missing_config_returns_error(self):
@@ -132,6 +134,43 @@ class InstallMcpCliTests(unittest.TestCase):
             self.assertIn("[mcp_servers.zotero_fulltext]", printed)
             self.assertIn(str(config_path), printed)
             self.assertIn("--config", printed)
+
+    def test_codex_toml_block_round_trips_windows_style_paths(self):
+        # Regression test: the codex_block used to build its `args` list with Python's repr(),
+        # which escapes each backslash as two characters. TOML single-quoted (literal) strings
+        # don't interpret escapes, so parsing that output doubled every backslash in a Windows
+        # path. Build a config/db path that contains backslashes even on non-Windows CI, and
+        # verify the printed TOML block parses back to the exact original path.
+        import tomllib
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            windows_style_root = root / "Users" / "Matze" / "zotero-data"
+            windows_style_root.mkdir(parents=True)
+            config_path = windows_style_root / "config.json"
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "zotero_root": str(windows_style_root),
+                        "zotero_data_directory": str(windows_style_root),
+                        "linked_attachments": str(windows_style_root),
+                        "output_root": str(windows_style_root / "converted_text"),
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with patch("sys.executable", str(root / "Scripts" / "python.exe")), patch("sys.stdout") as mock_stdout:
+                exit_code = main(["install-mcp", "--config", str(config_path)])
+            self.assertEqual(exit_code, 0)
+            printed = "".join(call.args[0] for call in mock_stdout.write.call_args_list)
+
+            toml_start = printed.index("[mcp_servers.zotero_fulltext]")
+            toml_block = printed[toml_start:]
+            parsed = tomllib.loads(toml_block)
+            server = parsed["mcp_servers"]["zotero_fulltext"]
+            self.assertIn("--config", server["args"])
+            config_arg = server["args"][server["args"].index("--config") + 1]
+            self.assertEqual(config_arg, str(config_path))
 
     def test_apply_invokes_subprocess_with_expected_args(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -191,6 +230,48 @@ class InstallMcpCliTests(unittest.TestCase):
             ):
                 exit_code = main(["install-mcp", "--config", str(config_path), "--apply"])
             self.assertEqual(exit_code, 2)
+
+    def test_optional_bibtex_registration_forwards_only_startup_options(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config_path = root / "config.json"
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "zotero_root": str(root),
+                        "zotero_data_directory": str(root),
+                        "linked_attachments": str(root),
+                        "output_root": str(root / "converted_text"),
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with patch("sys.executable", str(root / "Scripts" / "python.exe")), patch("sys.stdout") as mock_stdout:
+                exit_code = main(["install-mcp", "--config", str(config_path), "--enable-bibtex"])
+            printed = "".join(call.args[0] for call in mock_stdout.write.call_args_list)
+            self.assertEqual(exit_code, 0)
+            self.assertIn("--enable-bibtex", printed)
+            self.assertIn("export_bibtex_entries_by_key", printed)
+
+    def test_bibtex_endpoint_requires_integration_flag(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config_path = root / "config.json"
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "zotero_root": str(root),
+                        "zotero_data_directory": str(root),
+                        "linked_attachments": str(root),
+                        "output_root": str(root / "converted_text"),
+                    }
+                ),
+                encoding="utf-8",
+            )
+            self.assertEqual(
+                main(["install-mcp", "--config", str(config_path), "--bibtex-endpoint", "http://127.0.0.1:23119/x"]),
+                2,
+            )
 
 
 class AppendIndexCliTests(unittest.TestCase):

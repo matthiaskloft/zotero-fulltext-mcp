@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 import sqlite3
 from collections import Counter
@@ -11,6 +12,12 @@ from typing import Iterable
 
 DEFAULT_CHUNK_CHARS = 6000
 DEFAULT_OVERLAP_CHARS = 500
+# Starting guess for how many characters consecutive stored chunks advance by. An index is not
+# required to have been built with the default chunk_chars/overlap_chars, so this is only an
+# initial estimate for the first fetch in _fetch_covering_chunks below, never assumed correct.
+_CHUNK_ADVANCE_CHARS_ESTIMATE = max(DEFAULT_CHUNK_CHARS - DEFAULT_OVERLAP_CHARS, 1)
+_MAX_CHUNK_FETCH_ITERATIONS = 6
+DEFAULT_CONTEXT_RECORD_LIMIT = 50
 
 
 @dataclass(frozen=True)
@@ -126,7 +133,7 @@ def search_fts(db_path: Path, query: str, *, limit: int = 10) -> list[SearchResu
     if limit < 1:
         raise ValueError("limit must be at least 1")
     match_query = _match_query(query)
-    con = _connect_readonly(db_path)
+    con = connect_readonly(db_path)
     con.row_factory = sqlite3.Row
     try:
         rows = con.execute(
@@ -190,7 +197,7 @@ def get_fulltext(
     if max_chars < 1:
         raise ValueError("max_chars must be at least 1")
 
-    con = _connect_readonly(db_path)
+    con = connect_readonly(db_path)
     con.row_factory = sqlite3.Row
     try:
         metadata = con.execute(
@@ -200,15 +207,7 @@ def get_fulltext(
         if metadata is None:
             raise KeyError(f"No record found for attachment key {attachment_key}")
         if chunk_index is None:
-            chunk_rows = con.execute(
-                """
-                SELECT chunk_index, start_char, end_char, text
-                FROM chunks
-                WHERE record_id = ?
-                ORDER BY chunk_index
-                """,
-                (metadata["record_id"],),
-            ).fetchall()
+            chunk_rows = _fetch_covering_chunks(con, metadata["record_id"], max_chars)
         else:
             chunk_rows = con.execute(
                 """
@@ -270,26 +269,61 @@ def get_fulltext(
     )
 
 
+def _fetch_covering_chunks(con: sqlite3.Connection, record_id: int, max_chars: int) -> list[sqlite3.Row]:
+    """Fetch just enough leading chunks (in order) to cover max_chars characters of text.
+
+    An index is not required to have been built with DEFAULT_CHUNK_CHARS/DEFAULT_OVERLAP_CHARS,
+    so a single LIMIT computed from those defaults can under-fetch for a smaller chunk size. This
+    starts from that default as an estimate, then grows the LIMIT and re-queries until the
+    actually-fetched rows span at least max_chars characters or no more rows exist -- bounded by
+    _MAX_CHUNK_FETCH_ITERATIONS so a small window request still never degrades into reading an
+    entire large document's chunks.
+    """
+    limit = math.ceil(max_chars / _CHUNK_ADVANCE_CHARS_ESTIMATE) + 1
+    rows: list[sqlite3.Row] = []
+    for _ in range(_MAX_CHUNK_FETCH_ITERATIONS):
+        rows = con.execute(
+            """
+            SELECT chunk_index, start_char, end_char, text
+            FROM chunks
+            WHERE record_id = ?
+            ORDER BY chunk_index
+            LIMIT ?
+            """,
+            (record_id, limit),
+        ).fetchall()
+        if not rows or len(rows) < limit:
+            return rows
+        span = int(rows[-1]["end_char"]) - int(rows[0]["start_char"])
+        if span >= max_chars:
+            return rows
+        limit *= 2
+    return rows
+
+
 def get_item_context(
     db_path: Path,
     *,
     parent_key: str | None = None,
     attachment_key: str | None = None,
+    limit: int = DEFAULT_CONTEXT_RECORD_LIMIT,
 ) -> dict[str, object]:
     if not parent_key and not attachment_key:
         raise ValueError("parent_key or attachment_key is required")
-    con = _connect_readonly(db_path)
+    if limit < 1:
+        raise ValueError("limit must be at least 1")
+    con = connect_readonly(db_path)
     con.row_factory = sqlite3.Row
     try:
         if attachment_key:
             rows = con.execute(
-                "SELECT * FROM metadata WHERE zotero_attachment_key = ? ORDER BY title",
-                (attachment_key,),
+                "SELECT * FROM metadata WHERE zotero_attachment_key = ? ORDER BY title LIMIT ?",
+                (attachment_key, limit),
             ).fetchall()
         else:
             rows = con.execute(
-                "SELECT * FROM metadata WHERE zotero_parent_key = ? ORDER BY title",
-                (parent_key,),
+                "SELECT * FROM metadata WHERE zotero_parent_key = ? ORDER BY title LIMIT ?",
+                (parent_key, limit),
             ).fetchall()
     finally:
         con.close()
@@ -297,7 +331,7 @@ def get_item_context(
 
 
 def coverage_report(db_path: Path) -> dict[str, object]:
-    con = _connect_readonly(db_path)
+    con = connect_readonly(db_path)
     con.row_factory = sqlite3.Row
     try:
         metadata_rows = con.execute("SELECT * FROM metadata").fetchall()
@@ -463,7 +497,7 @@ def _match_query(query: str) -> str:
     return " AND ".join(f'"{term}"' for term in terms)
 
 
-def _connect_readonly(db_path: Path) -> sqlite3.Connection:
+def connect_readonly(db_path: Path) -> sqlite3.Connection:
     if not db_path.exists():
         raise FileNotFoundError(db_path)
     return sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)

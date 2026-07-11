@@ -10,6 +10,7 @@ from zotero_pdf_text.bibtex import (
     find_available_pdf_for_item,
     link_local_pdf,
 )
+from zotero_pdf_text.bibtex import _read_bounded
 
 
 class BibtexTests(unittest.TestCase):
@@ -23,6 +24,18 @@ class BibtexTests(unittest.TestCase):
             "http://127.0.0.1:23119/better-bibtex/json-rpc",
             "item.export",
             [["smith2024", "doe2020"], "Better BibLaTeX"],
+            max_response_bytes=None,
+        )
+
+    def test_export_bibtex_entries_forwards_max_response_bytes(self):
+        with patch("zotero_pdf_text.bibtex._json_rpc", return_value="@article{smith2024,\n}\n") as rpc:
+            export_bibtex_entries(["smith2024"], max_response_bytes=500_000)
+
+        rpc.assert_called_once_with(
+            "http://127.0.0.1:23119/better-bibtex/json-rpc",
+            "item.export",
+            [["smith2024"], "Better BibLaTeX"],
+            max_response_bytes=500_000,
         )
 
     def test_append_bibtex_entries_skips_existing_keys(self):
@@ -129,6 +142,37 @@ class BibtexTests(unittest.TestCase):
 
         self.assertFalse(result.ok)
         self.assertEqual(result.error, "debug-bridge unreachable")
+
+
+class _FakeHttpResponse:
+    def __init__(self, data: bytes) -> None:
+        self._data = data
+
+    def read(self, n: int = -1) -> bytes:
+        if n < 0:
+            chunk, self._data = self._data, b""
+            return chunk
+        chunk, self._data = self._data[:n], self._data[n:]
+        return chunk
+
+
+class ReadBoundedTests(unittest.TestCase):
+    """Regression tests for the bounded Better BibTeX read (previously response.read() with
+    no size cap, so a misbehaving local endpoint could exhaust memory before the MCP
+    contract's post-hoc size check ever ran)."""
+
+    def test_unbounded_reads_everything(self):
+        response = _FakeHttpResponse(b"x" * 1000)
+        self.assertEqual(len(_read_bounded(response, None)), 1000)
+
+    def test_bounded_read_rejects_oversized_response(self):
+        response = _FakeHttpResponse(b"x" * 1000)
+        with self.assertRaisesRegex(RuntimeError, "exceeds"):
+            _read_bounded(response, 500)
+
+    def test_bounded_read_accepts_response_within_limit(self):
+        response = _FakeHttpResponse(b"x" * 500)
+        self.assertEqual(len(_read_bounded(response, 500)), 500)
 
 
 if __name__ == "__main__":

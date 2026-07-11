@@ -104,11 +104,23 @@ Returned/exported fields:
 - `entry`: full `.bib` entry text returned by Better BibTeX.
 - `endpoint`: local Better BibTeX JSON-RPC endpoint.
 
+The CLI reports `endpoint` for local diagnostics. The optional MCP export response intentionally
+does not expose it and is bounded to 500,000 UTF-8 bytes.
+
 `bibtex-add` also reports:
 
 - `references_bib`
 - `added_keys`
 - `skipped_existing_keys`
+
+## MCP Response Contract
+
+MCP search, passage, and context results never include `source_path` or `markdown_path`. Every
+record containing converted-paper material carries a `provenance` object with
+`content_trust: "untrusted_source"`, `source_kind: "converted_pdf"`, attachment key, extraction
+tool, classification, and identity status. Search and passage results also include a stable
+attachment/chunk/character-range `source_locator` for citation. The current locator is a plain
+object; generation binding is deferred with the managed-generation index work.
 
 ## Zotero Write Plan
 
