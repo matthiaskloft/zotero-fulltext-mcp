@@ -4,6 +4,7 @@ import ipaddress
 import json
 import re
 import sqlite3
+import threading
 import time
 from collections.abc import Callable
 from dataclasses import asdict
@@ -59,22 +60,30 @@ class PublicMcpError(Exception):
 
 
 class ReconvertRateLimiter:
-    """Keep one MCP process from starting repeated GPU-heavy reconversions."""
+    """Keep one MCP process from starting repeated GPU-heavy reconversions.
+
+    FastMCP's stdio transport dispatches tool calls one at a time today, but the check-then-set
+    below is guarded by a lock anyway so this stays correct if that ever changes to a threaded or
+    concurrent-async transport -- two racing calls must not both observe an expired cooldown and
+    both start a GPU reconversion before either write lands.
+    """
 
     def __init__(self, cooldown_seconds: int = RECONVERT_COOLDOWN_SECONDS) -> None:
         self.cooldown_seconds = cooldown_seconds
         self._last_started_at: float | None = None
+        self._lock = threading.Lock()
 
     def acquire(self) -> None:
-        now = time.monotonic()
-        if self._last_started_at is not None:
-            remaining = self.cooldown_seconds - (now - self._last_started_at)
-            if remaining > 0:
-                raise PublicMcpError(
-                    "reconversion_rate_limited",
-                    "A math reconversion was started recently. Wait before requesting another one.",
-                )
-        self._last_started_at = now
+        with self._lock:
+            now = time.monotonic()
+            if self._last_started_at is not None:
+                remaining = self.cooldown_seconds - (now - self._last_started_at)
+                if remaining > 0:
+                    raise PublicMcpError(
+                        "reconversion_rate_limited",
+                        "A math reconversion was started recently. Wait before requesting another one.",
+                    )
+            self._last_started_at = now
 
 
 def create_server(
@@ -387,8 +396,8 @@ def _validate_optional_key(value: str | None) -> str | None:
 def _validate_citation_keys(values: list[str]) -> list[str]:
     if not isinstance(values, list) or not values or len(values) > MAX_CITATION_KEYS:
         raise PublicMcpError("invalid_citation_keys", f"Provide between 1 and {MAX_CITATION_KEYS} citation keys.")
-    if any(not isinstance(value, str) or len(value) > MAX_CITATION_KEY_CHARS for value in values):
-        raise PublicMcpError("invalid_citation_keys", "Each citation key must be a bounded string.")
+    if any(not isinstance(value, str) or not value.strip() or len(value) > MAX_CITATION_KEY_CHARS for value in values):
+        raise PublicMcpError("invalid_citation_keys", "Each citation key must be a non-empty bounded string.")
     return values
 
 

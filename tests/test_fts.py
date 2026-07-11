@@ -127,6 +127,46 @@ class FtsTests(unittest.TestCase):
             self.assertLess(_RecordingConnection.captured_limit, summary.chunks)
             self.assertLessEqual(len(result.text), 500)
 
+    def test_get_fulltext_covers_max_chars_for_non_default_chunk_sizing(self):
+        # Regression test: the chunk-covering query used to compute a single LIMIT from the
+        # DEFAULT_CHUNK_CHARS/DEFAULT_OVERLAP_CHARS estimate. An index built with a smaller
+        # chunk_chars (as here) advances faster than that estimate assumes, so the old fixed
+        # LIMIT under-fetched and silently returned less than max_chars of text even though
+        # more was available.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            jsonl = root / "index.jsonl"
+            sqlite_db = root / "index.sqlite"
+            long_text = " ".join(f"word{i}" for i in range(5000))
+            record = {
+                "zotero_parent_key": "PARENT4",
+                "zotero_attachment_key": "ATTACH4",
+                "title": "Long document",
+                "creators": "A",
+                "year": "2024",
+                "doi": "",
+                "citation_key": "",
+                "source_path": "long.pdf",
+                "markdown_path": "long.md",
+                "markdown_sha256": "x",
+                "extraction_tool": "pymupdf4llm.to_markdown",
+                "char_count": len(long_text),
+                "word_count": 5000,
+                "page_count": "50",
+                "classification": "mapped_verified",
+                "identity_status": "verified",
+                "identity_rule": "doi_exact",
+                "has_math": False,
+                "text": long_text,
+            }
+            with jsonl.open("w", encoding="utf-8", newline="\n") as handle:
+                handle.write(json.dumps(record) + "\n")
+            build_fts_index(jsonl, sqlite_db, chunk_chars=2000, overlap_chars=200)
+
+            result = get_fulltext(sqlite_db, attachment_key="ATTACH4", max_chars=12000)
+
+            self.assertEqual(len(result.text), 12000)
+
     def test_get_item_context_bounds_record_count(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

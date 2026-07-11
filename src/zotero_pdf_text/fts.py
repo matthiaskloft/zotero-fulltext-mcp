@@ -12,10 +12,11 @@ from typing import Iterable
 
 DEFAULT_CHUNK_CHARS = 6000
 DEFAULT_OVERLAP_CHARS = 500
-# Consecutive stored chunks advance by (chunk size - overlap) characters. Fetching this many
-# chunks is always enough to cover any max_chars request without reading a whole large
-# document's chunk rows just to truncate them afterward.
-_CHUNK_ADVANCE_CHARS = max(DEFAULT_CHUNK_CHARS - DEFAULT_OVERLAP_CHARS, 1)
+# Starting guess for how many characters consecutive stored chunks advance by. An index is not
+# required to have been built with the default chunk_chars/overlap_chars, so this is only an
+# initial estimate for the first fetch in _fetch_covering_chunks below, never assumed correct.
+_CHUNK_ADVANCE_CHARS_ESTIMATE = max(DEFAULT_CHUNK_CHARS - DEFAULT_OVERLAP_CHARS, 1)
+_MAX_CHUNK_FETCH_ITERATIONS = 6
 DEFAULT_CONTEXT_RECORD_LIMIT = 50
 
 
@@ -206,17 +207,7 @@ def get_fulltext(
         if metadata is None:
             raise KeyError(f"No record found for attachment key {attachment_key}")
         if chunk_index is None:
-            chunk_limit = math.ceil(max_chars / _CHUNK_ADVANCE_CHARS) + 1
-            chunk_rows = con.execute(
-                """
-                SELECT chunk_index, start_char, end_char, text
-                FROM chunks
-                WHERE record_id = ?
-                ORDER BY chunk_index
-                LIMIT ?
-                """,
-                (metadata["record_id"], chunk_limit),
-            ).fetchall()
+            chunk_rows = _fetch_covering_chunks(con, metadata["record_id"], max_chars)
         else:
             chunk_rows = con.execute(
                 """
@@ -276,6 +267,38 @@ def get_fulltext(
         identity_rule=metadata["identity_rule"],
         has_math=bool(metadata["has_math"]),
     )
+
+
+def _fetch_covering_chunks(con: sqlite3.Connection, record_id: int, max_chars: int) -> list[sqlite3.Row]:
+    """Fetch just enough leading chunks (in order) to cover max_chars characters of text.
+
+    An index is not required to have been built with DEFAULT_CHUNK_CHARS/DEFAULT_OVERLAP_CHARS,
+    so a single LIMIT computed from those defaults can under-fetch for a smaller chunk size. This
+    starts from that default as an estimate, then grows the LIMIT and re-queries until the
+    actually-fetched rows span at least max_chars characters or no more rows exist -- bounded by
+    _MAX_CHUNK_FETCH_ITERATIONS so a small window request still never degrades into reading an
+    entire large document's chunks.
+    """
+    limit = math.ceil(max_chars / _CHUNK_ADVANCE_CHARS_ESTIMATE) + 1
+    rows: list[sqlite3.Row] = []
+    for _ in range(_MAX_CHUNK_FETCH_ITERATIONS):
+        rows = con.execute(
+            """
+            SELECT chunk_index, start_char, end_char, text
+            FROM chunks
+            WHERE record_id = ?
+            ORDER BY chunk_index
+            LIMIT ?
+            """,
+            (record_id, limit),
+        ).fetchall()
+        if not rows or len(rows) < limit:
+            return rows
+        span = int(rows[-1]["end_char"]) - int(rows[0]["start_char"])
+        if span >= max_chars:
+            return rows
+        limit *= 2
+    return rows
 
 
 def get_item_context(
