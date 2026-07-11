@@ -58,6 +58,7 @@ def export_bibtex_entries(
     translator: str = DEFAULT_BBT_TRANSLATOR,
     endpoint: str = DEFAULT_BBT_ENDPOINT,
     library_id: str | int | None = None,
+    max_response_bytes: int | None = None,
 ) -> BibtexExport:
     keys = _clean_citation_keys(citation_keys)
     if not keys:
@@ -65,7 +66,7 @@ def export_bibtex_entries(
     params: list[Any] = [keys, translator]
     if library_id is not None:
         params.append(library_id)
-    entry = _json_rpc(endpoint, "item.export", params)
+    entry = _json_rpc(endpoint, "item.export", params, max_response_bytes=max_response_bytes)
     if not isinstance(entry, str):
         raise RuntimeError(f"Better BibTeX returned a non-string export: {type(entry).__name__}")
     return BibtexExport(citation_keys=keys, translator=translator, entry=entry.strip() + "\n", endpoint=endpoint)
@@ -590,7 +591,13 @@ def _doi_meta_to_zotero(meta: dict[str, object], doi: str) -> dict[str, object]:
     }
 
 
-def _json_rpc(endpoint: str, method: str, params: list[Any] | dict[str, Any]) -> Any:
+def _json_rpc(
+    endpoint: str,
+    method: str,
+    params: list[Any] | dict[str, Any],
+    *,
+    max_response_bytes: int | None = None,
+) -> Any:
     payload = json.dumps({"jsonrpc": "2.0", "method": method, "params": params, "id": 1}).encode("utf-8")
     request = urllib.request.Request(
         endpoint,
@@ -600,7 +607,8 @@ def _json_rpc(endpoint: str, method: str, params: list[Any] | dict[str, Any]) ->
     )
     try:
         with urllib.request.urlopen(request, timeout=30) as response:
-            data = json.loads(response.read().decode("utf-8"))
+            raw = _read_bounded(response, max_response_bytes)
+            data = json.loads(raw.decode("utf-8"))
     except urllib.error.URLError as exc:
         raise RuntimeError(
             "Could not reach Better BibTeX JSON-RPC. Ensure Zotero is running and Better BibTeX is installed."
@@ -609,6 +617,16 @@ def _json_rpc(endpoint: str, method: str, params: list[Any] | dict[str, Any]) ->
         message = data["error"].get("message", data["error"]) if isinstance(data["error"], dict) else data["error"]
         raise RuntimeError(f"Better BibTeX JSON-RPC error: {message}")
     return data.get("result")
+
+
+def _read_bounded(response: Any, max_response_bytes: int | None) -> bytes:
+    """Read a response body, refusing to buffer more than max_response_bytes into memory."""
+    if max_response_bytes is None:
+        return response.read()
+    body = response.read(max_response_bytes + 1)
+    if len(body) > max_response_bytes:
+        raise RuntimeError("Better BibTeX response exceeds the allowed size limit.")
+    return body
 
 
 def _clean_citation_keys(citation_keys: list[str]) -> list[str]:

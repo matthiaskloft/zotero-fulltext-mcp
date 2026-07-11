@@ -8,6 +8,7 @@ import sqlite3
 from pathlib import Path
 
 from .config import load_config, resolve_config_path
+from .fts import connect_readonly
 from .mcp_contract import PublicMcpError, create_server
 
 
@@ -79,12 +80,12 @@ def _validate_startup_database(db_path: Path) -> None:
     if not db_path.is_file():
         raise SystemExit(_startup_error("database_unavailable", "The selected local full-text index is unavailable."))
     try:
-        connection = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+        connection = connect_readonly(db_path)
         try:
             connection.execute("PRAGMA schema_version").fetchone()
         finally:
             connection.close()
-    except (sqlite3.DatabaseError, OSError) as exc:
+    except (sqlite3.DatabaseError, OSError, FileNotFoundError) as exc:
         raise SystemExit(_startup_error("database_unavailable", "The selected local full-text index is unavailable.")) from exc
 
 

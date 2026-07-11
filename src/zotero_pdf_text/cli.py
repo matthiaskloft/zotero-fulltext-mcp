@@ -820,11 +820,16 @@ def _install_mcp(args: argparse.Namespace) -> int:
     enabled_tools = list(DEFAULT_MCP_TOOL_NAMES)
     if args.enable_bibtex:
         enabled_tools.append(BIBTEX_MCP_TOOL_NAME)
-    toml_tools = ", ".join(f"'{tool}'" for tool in enabled_tools)
+    # Use json.dumps for every embedded string, not Python repr(): repr() renders a backslash
+    # as two characters, but TOML single-quoted (literal) strings treat backslashes literally,
+    # so repr() output silently doubles every backslash in a Windows path once TOML parses it.
+    # json.dumps's backslash/quote escaping matches TOML basic (double-quoted) string escaping.
+    toml_args = ", ".join(json.dumps(arg) for arg in server_args)
+    toml_tools = ", ".join(json.dumps(tool) for tool in enabled_tools)
     codex_block = (
         f"[mcp_servers.{toml_name}]\n"
-        f"command = '{server_exe}'\n"
-        f"args = {server_args!r}\n"
+        f"command = {json.dumps(str(server_exe))}\n"
+        f"args = [{toml_args}]\n"
         "enabled = true\n"
         "startup_timeout_sec = 30\n"
         "tool_timeout_sec = 120\n"
