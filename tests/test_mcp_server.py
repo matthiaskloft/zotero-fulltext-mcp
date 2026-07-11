@@ -10,7 +10,13 @@ from zotero_pdf_text.bibtex import BibtexExport
 from zotero_pdf_text.config import ProjectConfig
 from zotero_pdf_text.fts import build_fts_index
 from zotero_pdf_text.math_ocr import ReconvertResult
-from zotero_pdf_text.mcp_contract import MAX_RETRIEVED_CHARS, create_server, validate_bibtex_endpoint
+from zotero_pdf_text.mcp_contract import (
+    MAX_BIBTEX_RESPONSE_BYTES,
+    MAX_CONTEXT_RECORDS,
+    MAX_RETRIEVED_CHARS,
+    create_server,
+    validate_bibtex_endpoint,
+)
 from zotero_pdf_text.mcp_server import main
 
 
@@ -63,6 +69,24 @@ class McpServerTests(unittest.TestCase):
             context = server.tools["get_item_context"](attachment_key="ATTACH1")
             self.assertNotIn(str(root), json.dumps(context))
             self.assertEqual(context["records"][0]["provenance"]["source_kind"], "converted_pdf")
+
+    def test_get_item_context_bounds_records_via_the_mcp_contract_limit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _, sqlite_path, _ = _build_index(Path(tmp))
+            server = create_server(sqlite_path, mcp_factory=FakeFastMCP)
+
+            with patch(
+                "zotero_pdf_text.mcp_contract.get_item_context_fn",
+                return_value={"records": []},
+            ) as get_context:
+                server.tools["get_item_context"](attachment_key="ATTACH1")
+
+            get_context.assert_called_once_with(
+                sqlite_path,
+                parent_key=None,
+                attachment_key="ATTACH1",
+                limit=MAX_CONTEXT_RECORDS,
+            )
 
     def test_invalid_inputs_and_missing_database_return_stable_errors(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -123,10 +147,11 @@ class McpServerTests(unittest.TestCase):
             with patch(
                 "zotero_pdf_text.mcp_contract.export_bibtex_entries",
                 return_value=BibtexExport(["smith2024"], "Better BibLaTeX", "@article{smith2024}\n", "http://x"),
-            ):
+            ) as export:
                 exported = server.tools["export_bibtex_entries_by_key"](["smith2024"])
             self.assertNotIn("endpoint", exported)
             self.assertEqual(exported["provenance"]["content_trust"], "untrusted_source")
+            self.assertEqual(export.call_args.kwargs["max_response_bytes"], MAX_BIBTEX_RESPONSE_BYTES)
 
     def test_db_only_startup_does_not_load_or_validate_a_config(self):
         with tempfile.TemporaryDirectory() as tmp:

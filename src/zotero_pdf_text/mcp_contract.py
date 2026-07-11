@@ -13,7 +13,14 @@ from urllib.parse import urlsplit, urlunsplit
 
 from .bibtex import DEFAULT_BBT_ENDPOINT, DEFAULT_BBT_TRANSLATOR, export_bibtex_entries
 from .config import ProjectConfig, validate_config
-from .fts import FullTextResult, SearchResult, get_fulltext, get_item_context as get_item_context_fn, search_fts
+from .fts import (
+    DEFAULT_CONTEXT_RECORD_LIMIT,
+    FullTextResult,
+    SearchResult,
+    get_fulltext,
+    get_item_context as get_item_context_fn,
+    search_fts,
+)
 
 
 MAX_QUERY_CHARS = 1_000
@@ -23,6 +30,7 @@ MAX_RETRIEVED_CHARS = 12_000
 MAX_CHUNK_INDEX = 100_000
 MAX_CITATION_KEYS = 50
 MAX_CITATION_KEY_CHARS = 256
+MAX_CONTEXT_RECORDS = DEFAULT_CONTEXT_RECORD_LIMIT
 MAX_RESPONSE_BYTES = 500_000
 MAX_BIBTEX_RESPONSE_BYTES = 500_000
 RECONVERT_COOLDOWN_SECONDS = 300
@@ -127,6 +135,7 @@ def create_server(
                     db_path,
                     parent_key=_validate_optional_key(parent_key),
                     attachment_key=_validate_optional_key(attachment_key),
+                    limit=MAX_CONTEXT_RECORDS,
                 )
             )
         )
@@ -155,6 +164,7 @@ def create_server(
                         _validate_citation_keys(citation_keys),
                         translator=DEFAULT_BBT_TRANSLATOR,
                         endpoint=bibtex_endpoint,
+                        max_response_bytes=MAX_BIBTEX_RESPONSE_BYTES,
                     )
                 ),
                 integration=True,
