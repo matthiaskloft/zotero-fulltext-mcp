@@ -153,6 +153,18 @@ class McpServerTests(unittest.TestCase):
             self.assertEqual(exported["provenance"]["content_trust"], "untrusted_source")
             self.assertEqual(export.call_args.kwargs["max_response_bytes"], MAX_BIBTEX_RESPONSE_BYTES)
 
+    def test_bibtex_rejects_empty_or_whitespace_only_citation_keys(self):
+        # Regression test: previously ["", "  "] passed length/type checks, got filtered to
+        # nothing by bibtex._clean_citation_keys, and export_bibtex_entries raised a generic
+        # ValueError that surfaced as the misleading "invalid_input" code instead of
+        # "invalid_citation_keys".
+        with tempfile.TemporaryDirectory() as tmp:
+            _, sqlite_path, _ = _build_index(Path(tmp))
+            server = create_server(sqlite_path, enable_bibtex=True, mcp_factory=FakeFastMCP)
+
+            result = server.tools["export_bibtex_entries_by_key"](["", "  "])
+            self.assertEqual(result["error"]["code"], "invalid_citation_keys")
+
     def test_db_only_startup_does_not_load_or_validate_a_config(self):
         with tempfile.TemporaryDirectory() as tmp:
             _, sqlite_path, _ = _build_index(Path(tmp))
@@ -170,6 +182,38 @@ class McpServerTests(unittest.TestCase):
             error = json.loads(str(raised.exception))
             self.assertEqual(error["error"]["code"], "database_unavailable")
             self.assertNotIn(str(missing), str(raised.exception))
+
+
+class ReconvertRateLimiterConcurrencyTests(unittest.TestCase):
+    def test_only_one_concurrent_acquire_succeeds(self):
+        # Regression test: acquire() used to read-then-write _last_started_at as separate,
+        # unguarded statements. Racing threads could both observe an expired cooldown and both
+        # start a GPU reconversion before either write landed.
+        import threading
+
+        from zotero_pdf_text.mcp_contract import PublicMcpError, ReconvertRateLimiter
+
+        limiter = ReconvertRateLimiter(cooldown_seconds=300)
+        successes = []
+        failures = []
+        start_barrier = threading.Barrier(20)
+
+        def attempt():
+            start_barrier.wait()
+            try:
+                limiter.acquire()
+                successes.append(True)
+            except PublicMcpError:
+                failures.append(True)
+
+        threads = [threading.Thread(target=attempt) for _ in range(20)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+
+        self.assertEqual(len(successes), 1)
+        self.assertEqual(len(failures), 19)
 
 
 def _build_index(root: Path) -> tuple[Path, Path, ProjectConfig]:
