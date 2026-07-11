@@ -10,7 +10,7 @@
 | Spec | DONE | 2026-07-10 | Derived from repository review and the library-layout discussion. |
 | Plan | DONE | 2026-07-10 | Five packages. Package 1 is the committed near-term deliverable. |
 | Plan revision | DONE | 2026-07-11 | Rescoped for a single-user/few-machine personal tool: Packages 2-5 marked optional/deferred, several reduced in scope. See "Revision Notes" at the end. |
-| Package 1: Safe MCP Read Surface | TODO | | Committed. |
+| Package 1: Safe MCP Read Surface | IN_PROGRESS | 2026-07-11 | Implementation started on `codex/mcp-safe-read-surface`. |
 | Package 2: Transactional Derived Artifacts (reduced scope) | OPTIONAL | | Start only after Package 1 ships and a real need appears; confirm multi-writer usage before building lock heartbeat machinery. |
 | Package 3: Canonical Library and Reconciliation | OPTIONAL | | Pursue only if the timestamped-run layout becomes an actual pain point. Highest migration risk in this plan. |
 | Package 4: Retrieval Contract for LLM Workflows (reduced scope) | OPTIONAL | | |
