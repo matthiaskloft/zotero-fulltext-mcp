@@ -6,11 +6,12 @@ import math
 import os
 import re
 import sqlite3
-import time
 from collections import Counter
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Iterable, Literal
+
+from ._atomic import replace_with_retry
 
 
 DEFAULT_CHUNK_CHARS = 6000
@@ -137,7 +138,7 @@ def build_fts_index(
             con.close()
 
         _check_integrity(tmp_path)
-        _replace_with_retry(tmp_path, output)
+        replace_with_retry(tmp_path, output)
     finally:
         # Suppress cleanup failures here so they never shadow a real exception from the build or
         # integrity check above (missing_ok=True already handles the common case where the
@@ -164,28 +165,6 @@ def _check_integrity(db_path: Path) -> None:
     if not rows or rows[0][0] != "ok":
         details = "; ".join(row[0] for row in rows) if rows else "no result"
         raise RuntimeError(f"FTS build failed integrity check: {details}")
-
-
-def _replace_with_retry(src: Path, dst: Path, *, attempts: int = 5, initial_delay: float = 0.05) -> None:
-    """os.replace with short retries against a transient Windows PermissionError.
-
-    Windows can raise PermissionError if another process (e.g. a concurrently running search
-    query) has `dst` open at the exact instant of rename; POSIX allows renaming over an open file
-    unconditionally, so this only matters on Windows. Callers here only ever hold `dst` open
-    briefly per query (see connect_readonly usage), so a short retry resolves the collision
-    without weakening the atomicity guarantee -- the destination is still replaced in one step
-    whenever a retry succeeds.
-    """
-    delay = initial_delay
-    for attempt in range(attempts):
-        try:
-            os.replace(src, dst)
-            return
-        except PermissionError:
-            if attempt == attempts - 1:
-                raise
-            time.sleep(delay)
-            delay *= 2
 
 
 def search_fts(
