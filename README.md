@@ -72,13 +72,6 @@ file explicitly via the `ZOTERO_PDF_TEXT_CONFIG` environment variable, which tak
 both the hostname-based file and the plain `config.json` fallback. This is the mechanism to use
 when your config/data live somewhere other than next to this repo checkout.
 
-For a multi-machine setup, put settings that should be the same everywhere — `early_pages`,
-`max_page_chars`, `manually_accepted_mappings` — in an optional `config.shared.json` next to
-the machine files instead of copy-pasting them into each one. `load_config` layers the
-machine-specific file's keys on top of `config.shared.json`, so each machine's file only needs
-to hold its own paths. This is entirely optional: without a `config.shared.json`, a single
-self-contained `config.json` still works exactly as before.
-
 ## Build the index
 
 ```powershell
