@@ -7,11 +7,20 @@ import sqlite3
 from collections import Counter
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Literal
 
 
 DEFAULT_CHUNK_CHARS = 6000
 DEFAULT_OVERLAP_CHARS = 500
+MAX_QUERY_CHARS = 1_000
+MAX_QUERY_TERMS = 20
+MAX_QUERY_TERM_CHARS = 64
+MAX_SEARCH_RESULTS = 100
+SEARCH_CANDIDATE_MULTIPLIER = 5
+MIN_SEARCH_CANDIDATES = 50
+MAX_SEARCH_CANDIDATES = 500
+SearchMode = Literal["all_terms", "any_terms", "phrase"]
+SEARCH_MODES = frozenset({"all_terms", "any_terms", "phrase"})
 # Starting guess for how many characters consecutive stored chunks advance by. An index is not
 # required to have been built with the default chunk_chars/overlap_chars, so this is only an
 # initial estimate for the first fetch in _fetch_covering_chunks below, never assumed correct.
@@ -129,60 +138,80 @@ def build_fts_index(
     )
 
 
-def search_fts(db_path: Path, query: str, *, limit: int = 10) -> list[SearchResult]:
-    if limit < 1:
-        raise ValueError("limit must be at least 1")
-    match_query = _match_query(query)
+def search_fts(
+    db_path: Path,
+    query: str,
+    *,
+    limit: int = 10,
+    search_mode: SearchMode = "all_terms",
+) -> list[SearchResult]:
+    terms = _validate_search_request(query, limit, search_mode)
+    match_query = _match_query(terms, search_mode)
+    candidate_limit = min(MAX_SEARCH_CANDIDATES, max(limit * SEARCH_CANDIDATE_MULTIPLIER, MIN_SEARCH_CANDIDATES))
     con = connect_readonly(db_path)
     con.row_factory = sqlite3.Row
     try:
+        # record_rank dedup requires ranking the full matched-row set before LIMIT applies (a
+        # window function can't use SQLite's top-N/ORDER BY LIMIT shortcut), so a common query
+        # term can force a full scan of matching chunk rows. Acceptable for this tool's
+        # single-user/personal-index scale; revisit if the index grows much larger.
         rows = con.execute(
             """
-            SELECT
-                m.record_id,
-                m.zotero_parent_key,
-                m.zotero_attachment_key,
-                m.title,
-                m.creators,
-                m.year,
-                m.doi,
-                m.citation_key,
-                snippet(chunks_fts, 2, '[', ']', ' ... ', 32) AS snippet,
-                bm25(chunks_fts) AS score,
-                c.chunk_index,
-                c.start_char,
-                c.end_char,
-                m.source_path,
-                m.markdown_path,
-                m.extraction_tool,
-                m.classification,
-                m.identity_status,
-                m.identity_rule,
-                m.has_math
-            FROM chunks_fts f
-            JOIN chunks c ON c.chunk_id = f.chunk_id
-            JOIN metadata m ON m.record_id = f.record_id
-            WHERE chunks_fts MATCH ?
-            ORDER BY score ASC
+            WITH matches AS (
+                SELECT
+                    m.record_id,
+                    m.zotero_parent_key,
+                    m.zotero_attachment_key,
+                    m.title,
+                    m.creators,
+                    m.year,
+                    m.doi,
+                    m.citation_key,
+                    snippet(chunks_fts, 2, '[', ']', ' ... ', 32) AS snippet,
+                    -- Body-match detection only, using control characters that cannot appear in
+                    -- indexed document text (unlike '[' or ']', which are common in citations and
+                    -- math notation and would otherwise falsely signal a body-text match).
+                    snippet(chunks_fts, 2, char(2), char(3), '', 32) AS body_match_marker,
+                    bm25(chunks_fts, 8.0, 1.0, 1.0, 6.0) AS score,
+                    c.chunk_index,
+                    c.start_char,
+                    c.end_char,
+                    m.source_path,
+                    m.markdown_path,
+                    m.extraction_tool,
+                    m.classification,
+                    m.identity_status,
+                    m.identity_rule,
+                    m.has_math
+                FROM chunks_fts f
+                JOIN chunks c ON c.chunk_id = f.chunk_id
+                JOIN metadata m ON m.record_id = f.record_id
+                WHERE chunks_fts MATCH ?
+            ), ranked AS (
+                SELECT *, ROW_NUMBER() OVER (
+                    PARTITION BY record_id
+                    ORDER BY CASE WHEN instr(body_match_marker, char(2)) > 0 THEN 0 ELSE 1 END, score ASC, chunk_index ASC
+                ) AS record_rank
+                FROM matches
+            )
+            SELECT * FROM ranked
+            WHERE record_rank = 1
+            ORDER BY score ASC, zotero_attachment_key ASC, chunk_index ASC
             LIMIT ?
             """,
-            (match_query, max(limit * 5, 50)),
+            (match_query, candidate_limit),
         ).fetchall()
     finally:
         con.close()
-    deduped: list[SearchResult] = []
-    seen_records: set[int] = set()
-    for row in rows:
+    results: list[SearchResult] = []
+    for row in rows[:limit]:
         row_dict = dict(row)
-        record_id = int(row_dict.pop("record_id"))
-        if record_id in seen_records:
-            continue
-        seen_records.add(record_id)
+        row_dict.pop("record_id")
+        row_dict.pop("record_rank")
+        row_dict.pop("body_match_marker")
         row_dict["has_math"] = bool(row_dict["has_math"])
-        deduped.append(SearchResult(**row_dict))
-        if len(deduped) >= limit:
-            break
-    return deduped
+        results.append(SearchResult(**row_dict))
+    return results
 
 
 def get_fulltext(
@@ -472,9 +501,11 @@ def _chunk_text(text: str, chunk_chars: int, overlap_chars: int) -> Iterable[tup
     text_len = len(text)
     while start < text_len:
         end = min(start + chunk_chars, text_len)
-        chunk = text[start:end].strip()
+        raw_chunk = text[start:end]
+        chunk = raw_chunk.strip()
         if chunk:
-            yield chunk_index, start, end, chunk
+            leading_whitespace = len(raw_chunk) - len(raw_chunk.lstrip())
+            yield chunk_index, start + leading_whitespace, start + leading_whitespace + len(chunk), chunk
             chunk_index += 1
         if end >= text_len:
             break
@@ -490,11 +521,28 @@ def _validate_chunking(chunk_chars: int, overlap_chars: int) -> None:
         raise ValueError("overlap_chars must be smaller than chunk_chars")
 
 
-def _match_query(query: str) -> str:
+def _validate_search_request(query: str, limit: int, search_mode: str) -> list[str]:
+    if not isinstance(query, str) or not query.strip() or len(query) > MAX_QUERY_CHARS:
+        raise ValueError(f"query must contain 1 to {MAX_QUERY_CHARS} characters")
     terms = re.findall(r"[\w]+", query, flags=re.UNICODE)
     if not terms:
         raise ValueError("query must contain at least one searchable term")
-    return " AND ".join(f'"{term}"' for term in terms)
+    if len(terms) > MAX_QUERY_TERMS:
+        raise ValueError(f"query may contain at most {MAX_QUERY_TERMS} searchable terms")
+    if any(len(term) > MAX_QUERY_TERM_CHARS for term in terms):
+        raise ValueError(f"query terms may contain at most {MAX_QUERY_TERM_CHARS} characters")
+    if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= MAX_SEARCH_RESULTS:
+        raise ValueError(f"limit must be between 1 and {MAX_SEARCH_RESULTS}")
+    if search_mode not in SEARCH_MODES:
+        raise ValueError(f"search_mode must be one of: {', '.join(sorted(SEARCH_MODES))}")
+    return terms
+
+
+def _match_query(terms: list[str], search_mode: str) -> str:
+    if search_mode == "phrase":
+        return '"' + " ".join(terms) + '"'
+    operator = " AND " if search_mode == "all_terms" else " OR "
+    return operator.join(f'"{term}"' for term in terms)
 
 
 def connect_readonly(db_path: Path) -> sqlite3.Connection:
