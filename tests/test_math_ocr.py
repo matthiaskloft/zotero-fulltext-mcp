@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from zotero_pdf_text.fts import build_fts_index
+from zotero_pdf_text.lock import pipeline_write_lock
 from zotero_pdf_text.math_ocr import reconvert_with_marker
 
 
@@ -24,6 +25,7 @@ class ReconvertWithMarkerTests(unittest.TestCase):
                     db_path=sqlite_path,
                     jsonl_path=jsonl_path,
                     fts_db_path=sqlite_path,
+                    lock_root=root,
                     timeout_seconds=60,
                 )
 
@@ -58,6 +60,7 @@ class ReconvertWithMarkerTests(unittest.TestCase):
                     db_path=sqlite_path,
                     jsonl_path=jsonl_path,
                     fts_db_path=sqlite_path,
+                    lock_root=root,
                 )
 
             self.assertFalse(result.ok)
@@ -82,6 +85,7 @@ class ReconvertWithMarkerTests(unittest.TestCase):
                     db_path=sqlite_path,
                     jsonl_path=jsonl_path,
                     fts_db_path=sqlite_path,
+                    lock_root=root,
                 )
 
             self.assertFalse(result.ok)
@@ -101,11 +105,42 @@ class ReconvertWithMarkerTests(unittest.TestCase):
                     db_path=sqlite_path,
                     jsonl_path=jsonl_path,
                     fts_db_path=sqlite_path,
+                    lock_root=root,
                 )
 
             self.assertFalse(result.ok)
             self.assertIn("no longer exists", result.error)
             mock_run.assert_not_called()
+
+    def test_shares_lock_with_convert_new_over_the_same_output_root(self):
+        # Regression test: reconvert-math used to lock jsonl_path.parent (the index directory)
+        # while convert-new locks config.output_root -- different lock files, so both could run
+        # concurrently and silently discard one writer's update. Both must now lock the same
+        # config.output_root so one blocks the other.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source_path, markdown_path, jsonl_path, sqlite_path = _build_fixture(root)
+            original_jsonl = jsonl_path.read_text(encoding="utf-8")
+
+            def _write_marker_output(args, **kwargs):
+                Path(args[4]).write_text("# Better body\n\nEquation: $x^2$", encoding="utf-8")
+
+            # Simulate convert-new already holding root's pipeline lock.
+            with pipeline_write_lock(root, command="convert-new"):
+                with patch("zotero_pdf_text.math_ocr.subprocess.run", side_effect=_write_marker_output):
+                    result = reconvert_with_marker(
+                        "ATTACH1",
+                        db_path=sqlite_path,
+                        jsonl_path=jsonl_path,
+                        fts_db_path=sqlite_path,
+                        lock_root=root,
+                    )
+
+            self.assertFalse(result.ok)
+            self.assertIn("is held by host", result.error)
+            # The index was untouched -- reconvert-math backed off instead of racing past the
+            # lock and silently overwriting/losing convert-new's concurrent update.
+            self.assertEqual(jsonl_path.read_text(encoding="utf-8"), original_jsonl)
 
 
 def _build_fixture(root: Path) -> tuple[Path, Path, Path, Path]:

@@ -323,6 +323,7 @@ def _reconvert_with_math_ocr(
         db_path=db_path,
         jsonl_path=config.output_root / "index" / "zotero_text_index.jsonl",
         fts_db_path=db_path,
+        lock_root=config.output_root,
     )
     if not result.ok:
         raise PublicMcpError("reconversion_failed", "Math reconversion did not complete successfully.")

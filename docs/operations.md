@@ -320,11 +320,16 @@ for newly linked verified PDFs in one step.)
 ## Multi-Machine Write Lock
 
 If `converted_text` is a single index shared across more than one machine (e.g. via a synced
-cloud folder), every command
-that writes under it (`convert-sample`, `convert-verified`, `convert-new`, `verify-unverified`,
-`apply-verification`, `build-index`, `build-fts`) takes a lock file (`.pipeline.lock`, next to the
-files it writes) before starting and releases it on exit, so two machines can never rebuild the
-same SQLite/JSONL files at once — the same corruption class as syncing a live Zotero database.
+cloud folder), every command that writes under it (`convert-sample`, `convert-verified`,
+`convert-new`, `verify-unverified`, `apply-verification`, `build-index`, `append-index`,
+`build-fts`, `reconvert-math`/`reconvert_with_math_ocr`) takes the same lock file
+(`config.output_root\.pipeline.lock`) before starting and releases it on exit, so two machines
+(or two commands on the same machine) can never rebuild the same SQLite/JSONL files at once — the
+same corruption class as syncing a live Zotero database. `build-index`/`append-index`/`build-fts`
+take an explicit `--output`/`--index` path instead of `--config`; they derive the same canonical
+root from that path's conventional `<output_root>\index\<file>` layout rather than locking the
+narrower `index` subdirectory, so they still share the lock with `convert-new` and
+`reconvert-math` even though they never load a `ProjectConfig`.
 
 If a command refuses to start with a message naming another host, pid, and start time, check that
 the other machine isn't actually mid-run before doing anything. If that machine's process has

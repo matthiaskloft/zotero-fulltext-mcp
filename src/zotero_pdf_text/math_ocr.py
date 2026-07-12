@@ -40,6 +40,7 @@ def reconvert_with_marker(
     db_path: Path,
     jsonl_path: Path,
     fts_db_path: Path,
+    lock_root: Path,
     timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS,
 ) -> ReconvertResult:
     context = get_item_context(db_path, attachment_key=attachment_key)
@@ -129,13 +130,16 @@ def reconvert_with_marker(
         text=new_text_for_index,
     )
     # Every other writer of jsonl_path/fts_db_path (build-index, append-index, convert-*) takes
-    # this same lock; without it here, a reconvert-math run racing another write command could
-    # have its update silently discarded by "last atomic replace wins" -- no exception, no data
-    # corruption, just a lost update. Held only around the shared JSONL/FTS writes, not the
-    # preceding GPU-bound marker extraction or the attachment-specific Markdown write above, so
-    # it doesn't unnecessarily block other commands for minutes.
+    # a lock; without one here, a reconvert-math run racing another write command could have its
+    # update silently discarded by "last atomic replace wins" -- no exception, no data corruption,
+    # just a lost update. `lock_root` must be the same canonical root the caller's other pipeline
+    # commands lock (e.g. convert-new's config.output_root) -- locking jsonl_path.parent here
+    # would use a different lock file than convert-new's, defeating mutual exclusion between them
+    # even though both write the same index files. Held only around the shared JSONL/FTS writes,
+    # not the preceding GPU-bound marker extraction or the attachment-specific Markdown write
+    # above, so it doesn't unnecessarily block other commands for minutes.
     try:
-        with pipeline_write_lock(jsonl_path.parent, command="reconvert-math"):
+        with pipeline_write_lock(lock_root, command="reconvert-math"):
             replace_text_index_record(jsonl_path, attachment_key, new_record)
             build_fts_index(jsonl_path, fts_db_path)
     except PipelineLockedError as exc:
