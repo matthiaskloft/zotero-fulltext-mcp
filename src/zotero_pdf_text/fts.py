@@ -168,6 +168,10 @@ def search_fts(
                     m.doi,
                     m.citation_key,
                     snippet(chunks_fts, 2, '[', ']', ' ... ', 32) AS snippet,
+                    -- Body-match detection only, using control characters that cannot appear in
+                    -- indexed document text (unlike '[' or ']', which are common in citations and
+                    -- math notation and would otherwise falsely signal a body-text match).
+                    snippet(chunks_fts, 2, char(2), char(3), '', 32) AS body_match_marker,
                     bm25(chunks_fts, 8.0, 1.0, 1.0, 6.0) AS score,
                     c.chunk_index,
                     c.start_char,
@@ -186,7 +190,7 @@ def search_fts(
             ), ranked AS (
                 SELECT *, ROW_NUMBER() OVER (
                     PARTITION BY record_id
-                    ORDER BY CASE WHEN instr(snippet, '[') > 0 THEN 0 ELSE 1 END, score ASC, chunk_index ASC
+                    ORDER BY CASE WHEN instr(body_match_marker, char(2)) > 0 THEN 0 ELSE 1 END, score ASC, chunk_index ASC
                 ) AS record_rank
                 FROM matches
             )
@@ -204,6 +208,7 @@ def search_fts(
         row_dict = dict(row)
         row_dict.pop("record_id")
         row_dict.pop("record_rank")
+        row_dict.pop("body_match_marker")
         row_dict["has_math"] = bool(row_dict["has_math"])
         results.append(SearchResult(**row_dict))
     return results
