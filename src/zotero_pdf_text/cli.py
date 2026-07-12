@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import csv
 import importlib.util
 import json
@@ -8,6 +9,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -60,6 +62,22 @@ def _default_fts_db() -> Path:
 
 
 DEFAULT_FTS_DB = _default_fts_db()
+
+
+def _pipeline_lock_root(index_related_path: Path) -> Path:
+    """Best-effort output_root for locking, for commands that take an explicit index path
+    instead of --config.
+
+    Index files conventionally live at <output_root>/index/<file> (see docs/operations.md).
+    convert-new and reconvert-math derive lock_root from their loaded config.output_root
+    directly; build-index/append-index/build-fts have no config, only an explicit --output/
+    --index path, so they must derive the equivalent root the same way to lock the same file --
+    otherwise two commands writing into the same pipeline output can race past each other's
+    lock. Walk up past a literal "index" directory component when present; otherwise fall back
+    to the immediate parent (locking a narrower, but still safe, scope).
+    """
+    parent = index_related_path.parent
+    return parent.parent if parent.name == "index" else parent
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -509,7 +527,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "build-index":
         try:
-            with pipeline_write_lock(args.output.parent, command="build-index"):
+            with pipeline_write_lock(_pipeline_lock_root(args.output), command="build-index"):
                 output = build_text_index(args.manifest, args.output)
         except PipelineLockedError as exc:
             print(str(exc), file=sys.stderr)
@@ -519,7 +537,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "append-index":
         fts_db = args.fts_db or (args.index.parent / f"{args.index.stem}.sqlite")
         try:
-            with pipeline_write_lock(args.index.parent, command="append-index"):
+            with pipeline_write_lock(_pipeline_lock_root(args.index), command="append-index"):
                 before = len(load_indexed_keys(args.index))
                 append_text_index(args.manifest, args.index, args.index)
                 after = len(load_indexed_keys(args.index))
@@ -545,7 +563,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if status.running and (status.connector_ok or not args.require_connector) else 1
     if args.command == "build-fts":
         try:
-            with pipeline_write_lock(args.output.parent, command="build-fts"):
+            with pipeline_write_lock(_pipeline_lock_root(args.output), command="build-fts"):
                 summary = build_fts_index(
                     args.index_jsonl,
                     args.output,
@@ -800,6 +818,7 @@ def main(argv: list[str] | None = None) -> int:
             db_path=fts_db,
             jsonl_path=jsonl_path,
             fts_db_path=fts_db,
+            lock_root=config.output_root,
             timeout_seconds=args.timeout_seconds,
         )
         print(json.dumps(result.to_dict(), ensure_ascii=False, indent=2))
@@ -1063,20 +1082,38 @@ def run_setup_checks(config_path: Path, *, require_mcp: bool = False) -> list[Se
 
 
 def _check_output_root_writable(output_root: Path) -> tuple[bool, str]:
-    if output_root.exists():
-        if not output_root.is_dir():
-            return False, f"{output_root} exists but is not a directory"
-        if os.access(output_root, os.W_OK):
-            return True, f"{output_root} exists and is writable"
-        return False, f"{output_root} exists but is not writable"
-    ancestor = output_root
-    while not ancestor.exists():
-        if ancestor.parent == ancestor:
+    """Probe writability by actually creating and removing a file, not just os.access.
+
+    os.access(path, os.W_OK) doesn't guarantee file creation will succeed -- Windows ACLs,
+    controlled-folder protection, quotas, and network filesystems can all permit the access-check
+    bit while still rejecting a real write. Never creates output_root itself if it doesn't exist
+    yet; the probe file is created in (and immediately removed from) the nearest existing
+    ancestor instead, so this stays read-only with respect to the directory tree.
+    """
+    if output_root.exists() and not output_root.is_dir():
+        return False, f"{output_root} exists but is not a directory"
+
+    target = output_root
+    while not target.exists():
+        if target.parent == target:
             return False, f"{output_root} does not exist and no existing ancestor directory was found"
-        ancestor = ancestor.parent
-    if os.access(ancestor, os.W_OK):
-        return True, f"{output_root} does not exist yet but is creatable under {ancestor}"
-    return False, f"{output_root} does not exist and {ancestor} is not writable"
+        target = target.parent
+
+    try:
+        fd, tmp_name = tempfile.mkstemp(dir=target, prefix=".zotero_pdf_text_write_check_")
+    except OSError as exc:
+        return False, f"Cannot create files under {target}: {exc}"
+    try:
+        os.close(fd)
+    finally:
+        # Suppress cleanup failures so they never shadow the successful-write result above --
+        # the probe file already proved writability by the time cleanup runs.
+        with contextlib.suppress(OSError):
+            Path(tmp_name).unlink(missing_ok=True)
+
+    if output_root.exists():
+        return True, f"{output_root} exists and is writable"
+    return True, f"{output_root} does not exist yet but is creatable under {target}"
 
 
 def _print_setup_check_results(results: list[SetupCheckResult]) -> None:

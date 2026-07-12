@@ -160,6 +160,28 @@ class CheckOutputRootWritableTests(unittest.TestCase):
             self.assertFalse(ok)
             self.assertIn("not a directory", detail)
 
+    def test_probe_leaves_no_stray_file_behind(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _check_output_root_writable(Path(tmp))
+            self.assertEqual(list(Path(tmp).iterdir()), [])
+
+    def test_creation_failure_is_reported_as_not_writable(self):
+        # os.access can report a directory as writable while an actual write still fails --
+        # Windows ACLs, controlled-folder protection, quotas, network filesystems. Simulate that
+        # by making the real write probe itself fail.
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch("zotero_pdf_text.cli.tempfile.mkstemp", side_effect=OSError("access denied")):
+                ok, detail = _check_output_root_writable(Path(tmp))
+            self.assertFalse(ok)
+            self.assertIn("Cannot create files", detail)
+
+    def test_cleanup_failure_does_not_mask_a_successful_probe(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch("pathlib.Path.unlink", side_effect=OSError("cleanup failed")):
+                ok, detail = _check_output_root_writable(Path(tmp))
+            self.assertTrue(ok)
+            self.assertIn("writable", detail)
+
 
 class CheckSetupCliTests(unittest.TestCase):
     def test_dispatch_returns_zero_for_valid_config(self):

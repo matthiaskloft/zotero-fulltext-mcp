@@ -7,7 +7,7 @@ from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
-from zotero_pdf_text.cli import _shell_quote, build_parser, main
+from zotero_pdf_text.cli import _pipeline_lock_root, _shell_quote, build_parser, main
 from zotero_pdf_text.math_ocr import ReconvertResult
 
 
@@ -80,6 +80,20 @@ class ReconvertMathCliTests(unittest.TestCase):
                 exit_code = main(["reconvert-math", "--key", "ABCD1234"])
 
             self.assertEqual(exit_code, 1)
+
+
+class PipelineLockRootTests(unittest.TestCase):
+    def test_walks_up_past_index_directory(self):
+        # build-index/append-index/build-fts have no --config, only an explicit index path, but
+        # must lock the same root convert-new/reconvert-math derive from config.output_root --
+        # otherwise commands writing the same index files can race past each other's lock.
+        output_root = Path("C:/data/converted_text")
+        index_path = output_root / "index" / "zotero_text_index.jsonl"
+        self.assertEqual(_pipeline_lock_root(index_path), output_root)
+
+    def test_falls_back_to_immediate_parent_for_non_conventional_layout(self):
+        path = Path("C:/data/custom_index.jsonl")
+        self.assertEqual(_pipeline_lock_root(path), Path("C:/data"))
 
 
 class ShellQuoteTests(unittest.TestCase):
