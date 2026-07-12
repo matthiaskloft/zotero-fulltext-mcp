@@ -1,6 +1,10 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "zotero-fulltext-mcp"
-version = "0.1.0"
+version = "0.2.0"
 description = "Convert a Zotero library's linked PDF attachments to Markdown, build a full-text search index, and expose it via an MCP server."
 requires-python = ">=3.11"
 dependencies = [
@@ -9,6 +13,9 @@ dependencies = [
   "pyyaml>=6.0",
   "rapidfuzz>=3.6",
 ]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/zotero_pdf_text"]
 
 [project.scripts]
 zotero-pdf-text = "zotero_pdf_text.cli:main"

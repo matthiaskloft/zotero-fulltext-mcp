@@ -15,6 +15,20 @@ The venv should live **outside** `$repo` (see README's "Install" section) — a 
 machine-specific absolute path and compiled dependencies, so keeping it inside a repo you might
 sync or re-clone elsewhere just creates dead weight.
 
+## Setup Check
+
+```powershell
+& $python -m zotero_pdf_text check-setup --config .\config.json
+```
+
+Read-only and fast: validates that the config loads, that `zotero_data_directory`,
+`linked_attachments`, and `zotero.sqlite` exist, that `output_root` exists (or is creatable) and
+writable, and reports Python version and which optional extras (`mcp`, `zotero-write`, `marker`)
+are installed. Exits non-zero if any required check fails. Optional extras are informational by
+default — pass `--require-mcp` to fail if `mcp` isn't installed. Add `--json` for machine-readable
+output. Run this first on a new machine or after editing `config.json`, before `dry-run` or any
+conversion command.
+
 ## Zotero Preflight
 
 ```powershell
@@ -85,6 +99,11 @@ then rebuilds SQLite FTS from the updated JSONL:
   --index $data\index\zotero_text_index.jsonl
 ```
 
+`append-index` writes its updated JSONL to a same-directory temp file first and only replaces the
+existing one via an atomic rename once the write succeeds. If the process crashes or is killed
+mid-write, the previous JSONL is untouched rather than truncated — re-run the same `append-index`
+command once the underlying issue is fixed; nothing needs manual recovery.
+
 ## Unverified PDF Review
 
 Use this when a dry run reports `mapped_unverified` rows. The command converts
@@ -148,6 +167,12 @@ values before picking a threshold rather than reusing 0.92 by default.
   --index-jsonl $data\index\zotero_text_index.jsonl `
   --output $data\index\zotero_text_index.sqlite
 ```
+
+Like `append-index`, `build-fts` builds into a same-directory temp file, runs a `PRAGMA
+integrity_check` against it, and only replaces `--output` via an atomic rename once that check
+passes. A crash, kill, or failed integrity check during rebuild leaves the previous SQLite
+database in place and still queryable — search keeps working against the last good index until a
+successful rebuild replaces it.
 
 Search:
 

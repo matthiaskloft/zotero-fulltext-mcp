@@ -1,5 +1,7 @@
 # zotero-fulltext-mcp
 
+[![CI](https://github.com/matthiaskloft/zotero-fulltext-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/matthiaskloft/zotero-fulltext-mcp/actions/workflows/ci.yml)
+
 Convert a Zotero library's linked PDF attachments to Markdown, build a full-text search index,
 and expose it to LLM tools (Claude Code, Codex, etc.) through an MCP server — so an assistant
 can search and read your papers' full text, not just their metadata.
@@ -14,15 +16,30 @@ Zotero's data and writes only to a separate `converted_text` output folder that 
 - A Zotero library that uses **linked** attachments (`Zotero.Attachments.linkFromFile`, i.e. PDFs
   stay in a folder you choose rather than Zotero's internal `storage/`). Stored/managed
   attachments are not the tested path for this project.
-- Windows is the primary, verified platform. macOS/Linux are supported in the code (path
-  resolution, process detection) but not yet verified end-to-end — see "Cross-platform notes"
-  below.
+- Windows, macOS, and Linux all run the full test suite in CI (see the badge above). Zotero
+  executable auto-detection and process-name checks remain Windows-verified against a real Zotero
+  install; macOS/Linux detection defaults are best-effort — see "Cross-platform notes" below.
 
 ## Install
 
 Create a virtual environment **outside** this repository — a venv contains a machine-specific
 absolute Python path and compiled dependencies, so keeping it inside a folder you might sync or
 re-clone elsewhere just produces a broken venv there.
+
+If you aren't actively developing this project, install a pinned release tag rather than a
+floating `HEAD` — a tag is a known-good, CI-verified snapshot; `HEAD` on `master` could be
+mid-change:
+
+```powershell
+C:\Users\you\.venvs\zotero_fulltext_mcp\Scripts\python.exe -m pip install "git+https://github.com/matthiaskloft/zotero-fulltext-mcp@v0.2.0#egg=zotero-fulltext-mcp[mcp]"
+```
+
+Substitute the latest tag from the
+[releases page](https://github.com/matthiaskloft/zotero-fulltext-mcp/releases). This installs a
+normal (non-editable) copy — fine unless you intend to modify the source.
+
+If you're contributing to this project (or want an editable install you can point `git pull` at),
+clone the repo instead:
 
 ```powershell
 py -3.11 -m venv C:\Users\you\.venvs\zotero_fulltext_mcp
@@ -46,6 +63,23 @@ Optional extras: `[zotero-write]` (write-plan workflow via pyzotero), `[marker]`
 needed for `reconvert-math`/`reconvert_with_math_ocr`, GPU-bound), `[test]` (pytest, needed to
 run the test suite — `pip install -e .[mcp,test]`). A plain `pip install -e .` with no extras
 gets you the conversion pipeline and CLI but not the MCP server.
+
+### Reproducible install with `uv` (recommended for contributors)
+
+If you cloned the repo above, this is a faster alternative to the `pip install -e .[mcp]` step:
+this repo commits a `uv.lock` pinning exact dependency versions, so installing with
+[`uv`](https://docs.astral.sh/uv/) gets you the same resolved environment CI tests against,
+rather than whatever the latest compatible versions happen to be on the day you install:
+
+```bash
+uv sync --extra mcp --extra test --locked
+uv run zotero-fulltext-mcp --help
+```
+
+Add `--extra zotero-write` and/or `--extra marker` if you need those workflows. `uv sync
+--locked` fails loudly instead of silently re-resolving if `uv.lock` is out of date with
+`pyproject.toml`. The plain `pip install -e .[mcp]` path above remains fully supported and does
+not require installing `uv`; `uv lock` is the update command whenever dependencies change.
 
 ## Configure
 
@@ -71,6 +105,18 @@ files — `zotero-pdf-text` picks the right one automatically. You can also poin
 file explicitly via the `ZOTERO_PDF_TEXT_CONFIG` environment variable, which takes priority over
 both the hostname-based file and the plain `config.json` fallback. This is the mechanism to use
 when your config/data live somewhere other than next to this repo checkout.
+
+Before running anything else, validate the config and environment:
+
+```powershell
+& $python -m zotero_pdf_text check-setup --config .\config.json
+```
+
+This is read-only and fast — it checks that the config parses, that `zotero_data_directory`,
+`linked_attachments`, and `zotero.sqlite` exist, that `output_root` exists (or is creatable) and
+is writable, and reports which optional extras (`mcp`, `zotero-write`, `marker`) are installed.
+Catching a bad path or a missing extra here takes seconds; catching it 40 minutes into a `dry-run`
+or `convert-new` does not. Add `--require-mcp` to fail if the `mcp` extra isn't installed yet.
 
 ## Build the index
 
@@ -174,8 +220,9 @@ without them.
   (`ensure_zotero_running`) are Windows-verified. macOS (`/Applications/Zotero.app/...`) and
   Linux (`/usr/lib/zotero/zotero`) defaults are best-effort, untested guesses — pass
   `--zotero-exe` explicitly if the default doesn't match your install.
-- Dependencies (`pyproject.toml`) are minimum-pinned (`>=`) only, with no lockfile and no tested
-  upper bounds.
+- Dependencies (`pyproject.toml`) are minimum-pinned (`>=`) only, with no tested upper bounds.
+  `uv.lock` pins exact resolved versions for reproducible installs — see "Reproducible install
+  with `uv`" above.
 
 ## License
 

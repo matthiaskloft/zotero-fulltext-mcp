@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import argparse
 import csv
+import importlib.util
 import json
 import os
 import shutil
 import subprocess
 import sys
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from .bibtex import (
@@ -63,6 +65,17 @@ DEFAULT_FTS_DB = _default_fts_db()
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="zotero-pdf-text")
     subparsers = parser.add_subparsers(dest="command", required=True)
+    check_setup = subparsers.add_parser(
+        "check-setup",
+        help="Validate config paths and environment before running a conversion. Read-only.",
+    )
+    check_setup.add_argument("--config", type=Path, default=Path("config.json"), help="Path to project config JSON.")
+    check_setup.add_argument(
+        "--require-mcp",
+        action="store_true",
+        help="Fail if the mcp extra isn't installed. Informational-only by default.",
+    )
+    check_setup.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
     dry_run = subparsers.add_parser("dry-run", help="Map Zotero metadata to linked PDFs without conversion.")
     dry_run.add_argument("--config", type=Path, default=Path("config.json"), help="Path to project config JSON.")
     sample = subparsers.add_parser("convert-sample", help="Convert a small mapped_verified PDF sample to Markdown.")
@@ -405,6 +418,14 @@ def main(argv: list[str] | None = None) -> int:
     _configure_stdio()
     parser = build_parser()
     args = parser.parse_args(argv)
+    if args.command == "check-setup":
+        results = run_setup_checks(args.config, require_mcp=args.require_mcp)
+        if args.json:
+            print(json.dumps([asdict(result) for result in results], ensure_ascii=False, indent=2))
+        else:
+            _print_setup_check_results(results)
+        failed_required = [result for result in results if result.required and not result.ok]
+        return 1 if failed_required else 0
     if args.command == "dry-run":
         config = load_config(args.config)
         validate_config(config)
@@ -982,6 +1003,86 @@ def _print_coverage_report(report: dict[str, object]) -> None:
         print(field + ":")
         for key, count in sorted(dict(report[field]).items()):
             print(f"- {key}: {count}")
+
+
+@dataclass(frozen=True)
+class SetupCheckResult:
+    name: str
+    ok: bool
+    detail: str
+    required: bool
+
+
+def run_setup_checks(config_path: Path, *, require_mcp: bool = False) -> list[SetupCheckResult]:
+    """Validate config, paths, and environment without performing any conversion work.
+
+    Fails fast on the first missing piece a first-time user is likely to hit, rather than letting
+    a bad path or missing dependency surface as a confusing failure partway through a long
+    dry-run/conversion. Read-only: never writes to output_root beyond the writability probe in
+    `_check_output_root_writable`, which itself never leaves a stray file behind.
+    """
+    results: list[SetupCheckResult] = [
+        SetupCheckResult(
+            "python_version",
+            sys.version_info >= (3, 11),
+            f"Python {'.'.join(str(part) for part in sys.version_info[:3])} (requires >=3.11)",
+            required=True,
+        )
+    ]
+
+    try:
+        config = load_config(config_path)
+    # TypeError covers structurally-malformed-but-syntactically-valid JSON: a top-level array
+    # instead of an object, a non-dict entry in manually_accepted_mappings, a path field given as
+    # a number, etc. -- load_config indexes/constructs Path() without validating shape first.
+    except (FileNotFoundError, KeyError, ValueError, OSError, TypeError) as exc:
+        results.append(SetupCheckResult("config", False, f"Failed to load {config_path}: {exc}", required=True))
+        return results
+    results.append(SetupCheckResult("config", True, f"Loaded {config_path}", required=True))
+
+    # validate_config() covers everything below except output_root, which it doesn't check at
+    # all since it's a write target rather than a required-to-exist input.
+    for name, path in (
+        ("zotero_root", config.zotero_root),
+        ("zotero_data_directory", config.zotero_data_directory),
+        ("linked_attachments", config.linked_attachments),
+        ("zotero.sqlite", config.zotero_sqlite),
+    ):
+        results.append(SetupCheckResult(name, path.exists(), str(path), required=True))
+
+    output_ok, output_detail = _check_output_root_writable(config.output_root)
+    results.append(SetupCheckResult("output_root", output_ok, output_detail, required=True))
+
+    for extra_name, module_name in (("mcp", "mcp"), ("zotero-write", "pyzotero"), ("marker", "marker")):
+        available = importlib.util.find_spec(module_name) is not None
+        detail = "installed" if available else "not installed (optional extra)"
+        required = require_mcp and extra_name == "mcp"
+        results.append(SetupCheckResult(f"extra:{extra_name}", available, detail, required=required))
+
+    return results
+
+
+def _check_output_root_writable(output_root: Path) -> tuple[bool, str]:
+    if output_root.exists():
+        if not output_root.is_dir():
+            return False, f"{output_root} exists but is not a directory"
+        if os.access(output_root, os.W_OK):
+            return True, f"{output_root} exists and is writable"
+        return False, f"{output_root} exists but is not writable"
+    ancestor = output_root
+    while not ancestor.exists():
+        if ancestor.parent == ancestor:
+            return False, f"{output_root} does not exist and no existing ancestor directory was found"
+        ancestor = ancestor.parent
+    if os.access(ancestor, os.W_OK):
+        return True, f"{output_root} does not exist yet but is creatable under {ancestor}"
+    return False, f"{output_root} does not exist and {ancestor} is not writable"
+
+
+def _print_setup_check_results(results: list[SetupCheckResult]) -> None:
+    for result in results:
+        status = "OK" if result.ok else ("FAIL" if result.required else "WARN")
+        print(f"[{status}] {result.name}: {result.detail}")
 
 
 def _filter_new_mapping_rows(mapping_report: Path, indexed_keys: set[str]) -> list[dict[str, str]]:

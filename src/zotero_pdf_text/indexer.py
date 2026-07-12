@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import contextlib
 import csv
 import hashlib
 import json
+import os
+import time
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
@@ -29,6 +32,42 @@ class TextIndexRecord:
     identity_rule: str
     has_math: bool
     text: str
+
+
+def _atomic_write_text(path: Path, content: str) -> None:
+    """Write content to path via a same-directory temp file plus atomic replace.
+
+    A crash or interruption mid-write leaves the temp file orphaned (cleaned up on the next
+    successful call, or manually) rather than leaving `path` itself truncated or half-written.
+    """
+    tmp_path = path.with_name(f".{path.name}.tmp-{os.getpid()}")
+    try:
+        tmp_path.write_text(content, encoding="utf-8", newline="\n")
+        _replace_with_retry(tmp_path, path)
+    finally:
+        # Suppress cleanup failures so they never shadow a real exception from the write/replace
+        # above (missing_ok=True already handles the common case where the temp file no longer
+        # exists because the replace succeeded).
+        with contextlib.suppress(OSError):
+            tmp_path.unlink(missing_ok=True)
+
+
+def _replace_with_retry(src: Path, dst: Path, *, attempts: int = 5, initial_delay: float = 0.05) -> None:
+    """os.replace with short retries against a transient Windows PermissionError.
+
+    See the identical helper in fts.py for the rationale -- Windows can raise PermissionError if
+    another process has `dst` open at the exact instant of rename; POSIX doesn't have this issue.
+    """
+    delay = initial_delay
+    for attempt in range(attempts):
+        try:
+            os.replace(src, dst)
+            return
+        except PermissionError:
+            if attempt == attempts - 1:
+                raise
+            time.sleep(delay)
+            delay *= 2
 
 
 def load_indexed_keys(jsonl_path: Path) -> set[str]:
@@ -63,13 +102,14 @@ def append_text_index(new_manifest: Path, existing_jsonl: Path, output: Path) ->
         return output
     new_records = [_record_from_manifest_row(row) for row in new_rows]
     existing_text = existing_jsonl.read_text(encoding="utf-8") if existing_jsonl.exists() else ""
-    with output.open("w", encoding="utf-8", newline="\n") as handle:
-        if existing_text:
-            handle.write(existing_text)
-            if not existing_text.endswith("\n"):
-                handle.write("\n")
-        for record in new_records:
-            handle.write(json.dumps(asdict(record), ensure_ascii=False) + "\n")
+    parts: list[str] = []
+    if existing_text:
+        parts.append(existing_text)
+        if not existing_text.endswith("\n"):
+            parts.append("\n")
+    for record in new_records:
+        parts.append(json.dumps(asdict(record), ensure_ascii=False) + "\n")
+    _atomic_write_text(output, "".join(parts))
     return output
 
 
@@ -98,8 +138,7 @@ def replace_text_index_record(jsonl_path: Path, attachment_key: str, new_record:
             new_lines.append(line)
     if not replaced:
         raise KeyError(f"No JSONL record found for attachment key {attachment_key}")
-    with jsonl_path.open("w", encoding="utf-8", newline="\n") as handle:
-        handle.write("\n".join(new_lines) + "\n")
+    _atomic_write_text(jsonl_path, "\n".join(new_lines) + "\n")
     return jsonl_path
 
 
@@ -109,9 +148,8 @@ def build_text_index(manifest: Path, output: Path) -> Path:
     output.parent.mkdir(parents=True, exist_ok=True)
 
     records = [_record_from_manifest_row(row) for row in _converted_rows(manifest)]
-    with output.open("w", encoding="utf-8", newline="\n") as handle:
-        for record in records:
-            handle.write(json.dumps(asdict(record), ensure_ascii=False) + "\n")
+    content = "".join(json.dumps(asdict(record), ensure_ascii=False) + "\n" for record in records)
+    _atomic_write_text(output, content)
     _write_summary(output.with_suffix(".summary.md"), manifest, output, records)
     return output
 

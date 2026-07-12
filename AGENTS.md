@@ -66,6 +66,22 @@ If the virtual environment is unavailable, use Python 3.11+ and install dependen
 `pyproject.toml` (`pip install -e .[mcp,test]` for MCP support plus pytest, add
 `[zotero-write]`/`[marker]` as needed).
 
+The reproducible install path is `uv sync --extra mcp --extra test --locked` followed by
+`uv run pytest -q` — this resolves the exact dependency versions pinned in `uv.lock`, the same
+versions CI tests against on Windows, macOS, and Linux. Run `uv lock` to regenerate `uv.lock`
+after changing `pyproject.toml` dependencies; commit the updated lockfile in the same change.
+
+## Release Convention
+
+1. Update `CHANGELOG.md`: move relevant `[Unreleased]` entries under a new `## [X.Y.Z] - YYYY-MM-DD`
+   heading, and add the corresponding link reference at the bottom of the file.
+2. Bump `version` in `pyproject.toml` to match.
+3. Run `uv lock` if dependencies changed since the last release; commit the updated `uv.lock`.
+4. Once merged to `master` and CI is green, tag the release and push the tag:
+   `git tag vX.Y.Z && git push origin vX.Y.Z`.
+5. Anyone not actively developing this project should install a pinned tag rather than `HEAD` —
+   see README's install section for the exact command.
+
 ## Implementation Guidelines
 
 - Keep paths `pathlib.Path`-based and cross-platform where practical. Zotero executable
