@@ -7,7 +7,7 @@ import sqlite3
 from collections import Counter
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Literal
 
 
 DEFAULT_CHUNK_CHARS = 6000
@@ -19,6 +19,7 @@ MAX_SEARCH_RESULTS = 100
 SEARCH_CANDIDATE_MULTIPLIER = 5
 MIN_SEARCH_CANDIDATES = 50
 MAX_SEARCH_CANDIDATES = 500
+SearchMode = Literal["all_terms", "any_terms", "phrase"]
 SEARCH_MODES = frozenset({"all_terms", "any_terms", "phrase"})
 # Starting guess for how many characters consecutive stored chunks advance by. An index is not
 # required to have been built with the default chunk_chars/overlap_chars, so this is only an
@@ -142,7 +143,7 @@ def search_fts(
     query: str,
     *,
     limit: int = 10,
-    search_mode: str = "all_terms",
+    search_mode: SearchMode = "all_terms",
 ) -> list[SearchResult]:
     terms = _validate_search_request(query, limit, search_mode)
     match_query = _match_query(terms, search_mode)
@@ -150,6 +151,10 @@ def search_fts(
     con = connect_readonly(db_path)
     con.row_factory = sqlite3.Row
     try:
+        # record_rank dedup requires ranking the full matched-row set before LIMIT applies (a
+        # window function can't use SQLite's top-N/ORDER BY LIMIT shortcut), so a common query
+        # term can force a full scan of matching chunk rows. Acceptable for this tool's
+        # single-user/personal-index scale; revisit if the index grows much larger.
         rows = con.execute(
             """
             WITH matches AS (
