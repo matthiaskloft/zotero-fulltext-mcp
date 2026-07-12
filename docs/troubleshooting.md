@@ -53,6 +53,7 @@ q = ("SELECT i.key FROM items i "
      "JOIN fields f ON f.fieldID=d.fieldID "
      "WHERE f.fieldName='DOI' AND v.value LIKE '%<doi-tail>%'")
 print(list(c.execute(q)))
+c.close()
 ```
 
 Caveat: `immutable=1` ignores the WAL, so a very recently connector-created item may not appear
