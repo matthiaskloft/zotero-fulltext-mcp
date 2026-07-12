@@ -30,6 +30,35 @@ If `search-fts` reports a missing database, build it:
   --output $data\index\zotero_text_index.sqlite
 ```
 
+## `import-doi` Returns No Item Key
+
+`import-doi` posts to Zotero's local connector but does not hand back the new item's key, so
+`check-pdf`/`find-pdf`/`link-pdf` (all require `--key`) can't be chained directly afterward — you
+have to look the key up yourself. Also, CrossRef's metadata fetch can transiently return HTTP 404;
+retry once before assuming a DOI is bad.
+
+To find the key, query the **live** `zotero.sqlite` (the one at `zotero_data_directory` in your
+config) — not any other `zotero.sqlite` that might exist elsewhere in an old/backup location, which
+can be stale and missing the newest items. The live DB is normally locked by the running Zotero
+(`mode=ro` fails with "database is locked"); open it with `immutable=1` instead to bypass the lock
+and WAL:
+
+```python
+import sqlite3
+c = sqlite3.connect(
+    "file:C:/path/to/zotero_data_directory/zotero.sqlite?immutable=1", uri=True)
+q = ("SELECT i.key FROM items i "
+     "JOIN itemData d ON d.itemID=i.itemID "
+     "JOIN itemDataValues v ON v.valueID=d.valueID "
+     "JOIN fields f ON f.fieldID=d.fieldID "
+     "WHERE f.fieldName='DOI' AND v.value LIKE '%<doi-tail>%'")
+print(list(c.execute(q)))
+c.close()
+```
+
+Caveat: `immutable=1` ignores the WAL, so a very recently connector-created item may not appear
+until Zotero checkpoints (usually visible within seconds in practice).
+
 ## Stale Full-Text Index
 
 Rebuild in this order:

@@ -24,19 +24,7 @@ class ProjectConfig:
 
 
 def load_config(path: Path) -> ProjectConfig:
-    """Load a machine-specific config, layered on top of a sibling ``config.shared.json``.
-
-    ``config.shared.json`` (if present next to ``path``) holds settings that are the same
-    across machines — ``early_pages``, ``max_page_chars``, ``manually_accepted_mappings``,
-    etc. — so they live in one place instead of being copy-pasted into every machine's
-    config file. Keys in ``path`` override the shared file; ``path`` is expected to hold
-    only the genuinely machine-specific paths.
-    """
-    data: dict = {}
-    shared_path = path.parent / "config.shared.json"
-    if shared_path.exists() and shared_path != path:
-        data.update(json.loads(shared_path.read_text(encoding="utf-8")))
-    data.update(json.loads(path.read_text(encoding="utf-8")))
+    data = json.loads(path.read_text(encoding="utf-8"))
     return ProjectConfig(
         zotero_root=Path(data["zotero_root"]),
         zotero_data_directory=Path(data["zotero_data_directory"]),
