@@ -203,7 +203,10 @@ class InstallMcpCliTests(unittest.TestCase):
             # the shape of the mocked sys.executable path, so the expectation must match whatever
             # platform this test is actually running on.
             exe_name = "zotero-fulltext-mcp.exe" if os.name == "nt" else "zotero-fulltext-mcp"
-            expected_exe = str(root / "Scripts" / exe_name)
+            # _install_mcp resolves sys.executable's parent (Path.resolve()), which on macOS
+            # follows the /tmp -> /private/tmp (and /var -> /private/var) symlink -- resolve here
+            # too so the expectation matches on macOS runners, not just Windows/Linux.
+            expected_exe = str((root / "Scripts" / exe_name).resolve())
             # Exact ordered argv, not just membership -- catches regressions like a dropped '--'
             # separator, which would make Claude parse '--db'/'--config' as its own options
             # instead of forwarding them to the server.
