@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import contextlib
 import json
 import math
+import os
 import re
 import sqlite3
+import time
 from collections import Counter
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -105,28 +108,42 @@ def build_fts_index(
         raise FileNotFoundError(index_jsonl)
     _validate_chunking(chunk_chars, overlap_chars)
     output.parent.mkdir(parents=True, exist_ok=True)
-    if output.exists():
-        output.unlink()
 
-    con = sqlite3.connect(output)
+    # Build into a same-directory temp file and only replace `output` via an atomic os.replace
+    # once the build is complete and passes an integrity check. A crash or interruption mid-build
+    # then leaves the previous `output` (if any) untouched and still queryable, rather than
+    # destroyed by the old unlink-then-build-in-place approach.
+    tmp_path = output.with_name(f".{output.name}.tmp-{os.getpid()}")
+    tmp_path.unlink(missing_ok=True)
     try:
-        _create_schema(con)
-        records = chunks = total_chars = total_words = 0
-        with index_jsonl.open("r", encoding="utf-8") as handle:
-            for line in handle:
-                if not line.strip():
-                    continue
-                record = json.loads(line)
-                records += 1
-                total_chars += int(record.get("char_count") or 0)
-                total_words += int(record.get("word_count") or 0)
-                record_id = _insert_metadata(con, record)
-                for chunk in _chunk_text(record.get("text", ""), chunk_chars, overlap_chars):
-                    chunks += 1
-                    _insert_chunk(con, record_id, record, chunk)
-        con.commit()
+        con = sqlite3.connect(tmp_path)
+        try:
+            _create_schema(con)
+            records = chunks = total_chars = total_words = 0
+            with index_jsonl.open("r", encoding="utf-8") as handle:
+                for line in handle:
+                    if not line.strip():
+                        continue
+                    record = json.loads(line)
+                    records += 1
+                    total_chars += int(record.get("char_count") or 0)
+                    total_words += int(record.get("word_count") or 0)
+                    record_id = _insert_metadata(con, record)
+                    for chunk in _chunk_text(record.get("text", ""), chunk_chars, overlap_chars):
+                        chunks += 1
+                        _insert_chunk(con, record_id, record, chunk)
+            con.commit()
+        finally:
+            con.close()
+
+        _check_integrity(tmp_path)
+        _replace_with_retry(tmp_path, output)
     finally:
-        con.close()
+        # Suppress cleanup failures here so they never shadow a real exception from the build or
+        # integrity check above (missing_ok=True already handles the common case where the
+        # temp file no longer exists because the replace above succeeded).
+        with contextlib.suppress(OSError):
+            tmp_path.unlink(missing_ok=True)
 
     return FtsBuildSummary(
         database=str(output),
@@ -136,6 +153,39 @@ def build_fts_index(
         total_chars=total_chars,
         total_words=total_words,
     )
+
+
+def _check_integrity(db_path: Path) -> None:
+    con = sqlite3.connect(db_path)
+    try:
+        rows = con.execute("PRAGMA integrity_check").fetchall()
+    finally:
+        con.close()
+    if not rows or rows[0][0] != "ok":
+        details = "; ".join(row[0] for row in rows) if rows else "no result"
+        raise RuntimeError(f"FTS build failed integrity check: {details}")
+
+
+def _replace_with_retry(src: Path, dst: Path, *, attempts: int = 5, initial_delay: float = 0.05) -> None:
+    """os.replace with short retries against a transient Windows PermissionError.
+
+    Windows can raise PermissionError if another process (e.g. a concurrently running search
+    query) has `dst` open at the exact instant of rename; POSIX allows renaming over an open file
+    unconditionally, so this only matters on Windows. Callers here only ever hold `dst` open
+    briefly per query (see connect_readonly usage), so a short retry resolves the collision
+    without weakening the atomicity guarantee -- the destination is still replaced in one step
+    whenever a retry succeeds.
+    """
+    delay = initial_delay
+    for attempt in range(attempts):
+        try:
+            os.replace(src, dst)
+            return
+        except PermissionError:
+            if attempt == attempts - 1:
+                raise
+            time.sleep(delay)
+            delay *= 2
 
 
 def search_fts(

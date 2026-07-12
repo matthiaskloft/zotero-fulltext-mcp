@@ -9,6 +9,7 @@ from pathlib import Path
 from .converter import _with_front_matter
 from .fts import build_fts_index, get_item_context
 from .indexer import TextIndexRecord, _sha256, _strip_front_matter, replace_text_index_record
+from .lock import PipelineLockedError, pipeline_write_lock
 
 MARKER_TOOL = "marker"
 # Empirically ~70-90s/page for equation/figure-dense papers on a 6GB GPU (measured directly:
@@ -127,8 +128,25 @@ def reconvert_with_marker(
         has_math=has_math,
         text=new_text_for_index,
     )
-    replace_text_index_record(jsonl_path, attachment_key, new_record)
-    build_fts_index(jsonl_path, fts_db_path)
+    # Every other writer of jsonl_path/fts_db_path (build-index, append-index, convert-*) takes
+    # this same lock; without it here, a reconvert-math run racing another write command could
+    # have its update silently discarded by "last atomic replace wins" -- no exception, no data
+    # corruption, just a lost update. Held only around the shared JSONL/FTS writes, not the
+    # preceding GPU-bound marker extraction or the attachment-specific Markdown write above, so
+    # it doesn't unnecessarily block other commands for minutes.
+    try:
+        with pipeline_write_lock(jsonl_path.parent, command="reconvert-math"):
+            replace_text_index_record(jsonl_path, attachment_key, new_record)
+            build_fts_index(jsonl_path, fts_db_path)
+    except PipelineLockedError as exc:
+        return _error_result(
+            attachment_key,
+            str(exc),
+            previous_extraction_tool=previous_extraction_tool,
+            previous_char_count=previous_char_count,
+            markdown_path=str(markdown_path),
+            source_path=str(source_path),
+        )
 
     return ReconvertResult(
         ok=True,
