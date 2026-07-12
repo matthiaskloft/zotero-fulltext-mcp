@@ -5,10 +5,11 @@ import csv
 import hashlib
 import json
 import os
-import time
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
+
+from ._atomic import replace_with_retry
 
 
 @dataclass
@@ -43,31 +44,13 @@ def _atomic_write_text(path: Path, content: str) -> None:
     tmp_path = path.with_name(f".{path.name}.tmp-{os.getpid()}")
     try:
         tmp_path.write_text(content, encoding="utf-8", newline="\n")
-        _replace_with_retry(tmp_path, path)
+        replace_with_retry(tmp_path, path)
     finally:
         # Suppress cleanup failures so they never shadow a real exception from the write/replace
         # above (missing_ok=True already handles the common case where the temp file no longer
         # exists because the replace succeeded).
         with contextlib.suppress(OSError):
             tmp_path.unlink(missing_ok=True)
-
-
-def _replace_with_retry(src: Path, dst: Path, *, attempts: int = 5, initial_delay: float = 0.05) -> None:
-    """os.replace with short retries against a transient Windows PermissionError.
-
-    See the identical helper in fts.py for the rationale -- Windows can raise PermissionError if
-    another process has `dst` open at the exact instant of rename; POSIX doesn't have this issue.
-    """
-    delay = initial_delay
-    for attempt in range(attempts):
-        try:
-            os.replace(src, dst)
-            return
-        except PermissionError:
-            if attempt == attempts - 1:
-                raise
-            time.sleep(delay)
-            delay *= 2
 
 
 def load_indexed_keys(jsonl_path: Path) -> set[str]:

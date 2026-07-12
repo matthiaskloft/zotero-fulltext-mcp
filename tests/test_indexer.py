@@ -53,7 +53,7 @@ class IndexerTests(unittest.TestCase):
             build_text_index(manifest, output)
             previous_content = output.read_text(encoding="utf-8")
 
-            with patch("zotero_pdf_text.indexer.os.replace", side_effect=OSError("boom")):
+            with patch("zotero_pdf_text._atomic.os.replace", side_effect=OSError("boom")):
                 with self.assertRaises(OSError):
                     build_text_index(manifest, output)
 
@@ -154,7 +154,7 @@ class ReplaceTextIndexRecordTests(unittest.TestCase):
             previous_content = jsonl.read_text(encoding="utf-8")
 
             updated = replace(first, extraction_tool="marker", text="New marker text")
-            with patch("zotero_pdf_text.indexer.os.replace", side_effect=OSError("boom")):
+            with patch("zotero_pdf_text._atomic.os.replace", side_effect=OSError("boom")):
                 with self.assertRaises(OSError):
                     replace_text_index_record(jsonl, "ATTACH1", updated)
 
@@ -176,7 +176,7 @@ class AppendTextIndexTests(unittest.TestCase):
             manifest = root / "manifest.csv"
             _write_manifest(manifest, markdown)
 
-            with patch("zotero_pdf_text.indexer.os.replace", side_effect=OSError("boom")):
+            with patch("zotero_pdf_text._atomic.os.replace", side_effect=OSError("boom")):
                 with self.assertRaises(OSError):
                     append_text_index(manifest, jsonl, jsonl)
 
@@ -210,7 +210,7 @@ class AtomicWriteTextTests(unittest.TestCase):
             path = Path(tmp) / "data.txt"
             path.write_text("original", encoding="utf-8")
 
-            with patch("zotero_pdf_text.indexer.os.replace", side_effect=OSError("boom")):
+            with patch("zotero_pdf_text._atomic.os.replace", side_effect=OSError("boom")):
                 with self.assertRaises(OSError):
                     _atomic_write_text(path, "replacement")
 
@@ -241,8 +241,8 @@ class AtomicWriteTextTests(unittest.TestCase):
                     raise PermissionError("simulated concurrent reader")
                 real_replace(src, dst)
 
-            with patch("zotero_pdf_text.indexer.os.replace", side_effect=flaky_replace), patch(
-                "zotero_pdf_text.indexer.time.sleep"
+            with patch("zotero_pdf_text._atomic.os.replace", side_effect=flaky_replace), patch(
+                "zotero_pdf_text._atomic.time.sleep"
             ):
                 _atomic_write_text(path, "replacement")
 
@@ -254,7 +254,7 @@ class AtomicWriteTextTests(unittest.TestCase):
             path = Path(tmp) / "data.txt"
             path.write_text("original", encoding="utf-8")
 
-            with patch("zotero_pdf_text.indexer.os.replace", side_effect=OSError("replace failed")), patch(
+            with patch("zotero_pdf_text._atomic.os.replace", side_effect=OSError("replace failed")), patch(
                 "pathlib.Path.unlink", side_effect=OSError("cleanup also failed")
             ):
                 with self.assertRaises(OSError) as ctx:

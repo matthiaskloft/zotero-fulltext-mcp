@@ -115,8 +115,8 @@ class FtsTests(unittest.TestCase):
                     raise PermissionError("simulated concurrent reader")
                 real_replace(src, dst)
 
-            with patch("zotero_pdf_text.fts.os.replace", side_effect=flaky_replace), patch(
-                "zotero_pdf_text.fts.time.sleep"
+            with patch("zotero_pdf_text._atomic.os.replace", side_effect=flaky_replace), patch(
+                "zotero_pdf_text._atomic.time.sleep"
             ):
                 summary = build_fts_index(jsonl, sqlite_db, chunk_chars=40, overlap_chars=5)
 
@@ -132,8 +132,8 @@ class FtsTests(unittest.TestCase):
             _write_jsonl(jsonl)
 
             with patch(
-                "zotero_pdf_text.fts.os.replace", side_effect=PermissionError("always locked")
-            ), patch("zotero_pdf_text.fts.time.sleep"):
+                "zotero_pdf_text._atomic.os.replace", side_effect=PermissionError("always locked")
+            ), patch("zotero_pdf_text._atomic.time.sleep"):
                 with self.assertRaises(PermissionError):
                     build_fts_index(jsonl, sqlite_db, chunk_chars=40, overlap_chars=5)
 
