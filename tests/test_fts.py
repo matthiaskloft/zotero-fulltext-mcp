@@ -203,6 +203,39 @@ class FtsTests(unittest.TestCase):
                 {"ATTACH1", "ATTACH2"},
             )
 
+    def test_literal_brackets_in_body_text_do_not_win_the_representative_chunk(self):
+        # Regression test: the per-record chunk-selection heuristic used to check for a literal
+        # '[' in the snippet, which collides with citation/math brackets that commonly occur in
+        # body text unrelated to the actual match. Neither chunk here genuinely matches the query
+        # in its body (the match is title-only), so the bracket-free, lower-chunk_index chunk
+        # should win on the ordinary score/chunk_index tie-break rather than the chunk that merely
+        # happens to contain a literal bracket.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            jsonl = root / "index.jsonl"
+            sqlite_db = root / "index.sqlite"
+            _write_jsonl(jsonl)
+            records = [json.loads(line) for line in jsonl.read_text(encoding="utf-8").splitlines()]
+            records[0].update(
+                {
+                    "title": "Consensus study",
+                    "text": (
+                        "Plain background details unrelated to the search term whatsoever. "
+                        "References [3][4][5] cited here for additional background context."
+                    ),
+                }
+            )
+            jsonl.write_text("".join(json.dumps(record) + "\n" for record in records), encoding="utf-8")
+            # Both sentences are 66 characters, so chunk_chars=66 puts the bracket-free sentence
+            # in chunk_index 0 and the bracket-containing sentence in chunk_index 1.
+            build_fts_index(jsonl, sqlite_db, chunk_chars=66, overlap_chars=0)
+
+            results = search_fts(sqlite_db, "consensus", limit=1)
+
+            self.assertEqual(results[0].zotero_attachment_key, "ATTACH1")
+            self.assertEqual(results[0].chunk_index, 0)
+            self.assertNotIn("[", results[0].snippet)
+
     def test_get_fulltext_bounds_the_chunk_query_for_large_documents(self):
         # Regression test: get_fulltext used to fetch every chunk row for a record before
         # truncating the assembled text to max_chars. A small window request against a very
