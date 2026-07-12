@@ -10,12 +10,13 @@
 | Spec | DONE | 2026-07-10 | Derived from repository review and the library-layout discussion. |
 | Plan | DONE | 2026-07-10 | Five packages. Package 1 is the committed near-term deliverable. |
 | Plan revision | DONE | 2026-07-11 | Rescoped for a single-user/few-machine personal tool: Packages 2-5 marked optional/deferred, several reduced in scope. See "Revision Notes" at the end. |
-| Package 1: Safe MCP Read Surface | IN_PROGRESS | 2026-07-11 | Implementation started on `codex/mcp-safe-read-surface`. |
-| Package 2: Transactional Derived Artifacts (reduced scope) | OPTIONAL | | Start only after Package 1 ships and a real need appears; confirm multi-writer usage before building lock heartbeat machinery. |
-| Package 3: Canonical Library and Reconciliation | OPTIONAL | | Pursue only if the timestamped-run layout becomes an actual pain point. Highest migration risk in this plan. |
-| Package 4: Retrieval Contract for LLM Workflows (reduced scope) | OPTIONAL | | |
-| Package 5: Operational Quality and Release Readiness (reduced scope) | OPTIONAL | | CI/uv.lock only if the project becomes shared/public. |
-| Ship | IN_PROGRESS | 2026-07-11 | Draft PR opened while Package 1's remaining retrieval-bound review items are resolved. |
+| Package 1: Safe MCP Read Surface | DONE | 2026-07-11 | Merged as PR #4 (`codex/mcp-safe-read-surface`). |
+| Package 2: Transactional Derived Artifacts (reduced scope) | OPTIONAL | | Blocking prerequisite for Package 3 and generation-bound retrieval. Start only after Package 1 ships and a real need appears. |
+| Package 3: Canonical Library and Reconciliation | OPTIONAL | | Depends on Package 2; blocking prerequisite for library status. Pursue only if the timestamped-run layout becomes an actual pain point. |
+| Package 4A: Retrieval Foundation | DONE | 2026-07-11 | Implemented on `codex/package-4-retrieval-foundation`; ready to ship. |
+| Package 4B: Generation-Aware Retrieval and Library Status | BLOCKED | | Depends on Packages 2, 3, and 4A. |
+| Package 5: Operational Quality and Release Readiness (reduced scope) | OPTIONAL | | Depends on the completed Packages 2-4B path; CI/uv.lock only if the project becomes shared/public. |
+| Ship | DONE | 2026-07-11 | Package 1 merged as PR #4. |
 
 ## Spec
 
@@ -410,10 +411,10 @@ library and make drift visible before it is repaired.
 - Non-eligible records, including legacy indexed rows and math-reconversion requests, remain in
   quarantine and cannot be published into the canonical library.
 
-### Package 4: Retrieval Contract for Real LLM Workflows
+### Package 4A: Retrieval Foundation
 
-**Goal**: Make lexical retrieval predictable, bounded, and citation-ready without adding an
-embedding service or making unsupported claims about PDF page mapping.
+**Goal**: Make lexical retrieval predictable, bounded, and citation-ready within one current
+index, without adding an embedding service or making unsupported claims about PDF page mapping.
 
 **Files to modify:**
 
@@ -435,33 +436,60 @@ embedding service or making unsupported claims about PDF page mapping.
 2. Weight title, citation key, and body text deliberately in BM25 and preserve deterministic
    ordering for score ties. Return the actual effective query mode and a clear `no_results` result
    rather than requiring an LLM to infer parser behavior.
-3. Make passage retrieval cursor-like: search returns the stable attachment key, index generation,
-   chunk index, and normalized extracted-body character range as a plain
-   `source_locator` object: `{attachment_key, generation_id, chunk_index, char_start, char_end}`
-   — no opaque encoding or signing. The caller is always the same trusted local MCP client, not an
-   external party, so there is no real adversary to defend the locator's contents against;
-   encoding it would add decode/validate complexity without a corresponding security gain.
-   `get_fulltext_chunk` accepts that object (or explicit attachment/chunk) and returns
-   `stale_locator` if the requested generation is no longer retained. It retrieves exactly one
-   bounded chunk (or a bounded adjacent-chunk window), rather than reading every chunk before
-   truncation. Include `has_more`/next chunk information.
-4. Correct chunk creation so stored offsets refer exactly to the stored normalized text after
+3. Correct chunk creation so stored offsets refer exactly to the stored normalized text after
    whitespace trimming; test leading/trailing whitespace, overlap, and replacement. This is the
    citation contract for now. Return page information only when a future, verified conversion
    mapping supplies it; otherwise omit it rather than guessing.
-5. Move aggregate reporting to SQL and expose `library_status` from Package 3. It must distinguish
-   indexed snapshot statistics from source-library health and report the index generation used.
-6. Keep all source content and evidence snippets marked as untrusted in results; test that search
+4. Keep all source content and evidence snippets marked as untrusted in results; test that search
    snippets, titles, and metadata with instruction-like text cannot alter the tool contract.
 
-**Depends on:** Packages 1–3
+**Depends on:** Package 1
 
 **Acceptance criteria:**
 
 - Long natural-language searches have a documented, bounded parser and usable `any_terms` fallback.
+- Returned search results expose the effective query mode and current attachment/chunk/character
+  citation fields; their generation binding is added in Package 4B.
+- Retrieval never loads an entire large document when the requested window is small.
+
+### Package 4B: Generation-Aware Retrieval and Library Status
+
+**Goal**: Bind passage citations to retained index generations and expose source-library health
+only after the artifact and audit layers can report it truthfully.
+
+**Files to modify:**
+
+- `src/zotero_pdf_text/artifacts.py`
+- `src/zotero_pdf_text/library.py`
+- `src/zotero_pdf_text/fts.py`
+- `src/zotero_pdf_text/mcp_contract.py`
+- `src/zotero_pdf_text/cli.py`
+- `README.md`
+- `docs/operations.md`
+- `docs/data-dictionary.md`
+- `tests/test_artifacts.py`
+- `tests/test_library.py`
+- `tests/test_fts.py`
+- `tests/test_mcp_server.py`
+- `tests/test_cli.py`
+
+**Steps:**
+
+1. Make passage retrieval cursor-like: search returns the stable attachment key, index generation,
+   chunk index, and normalized extracted-body character range as a plain
+   `source_locator` object: `{attachment_key, generation_id, chunk_index, char_start, char_end}`.
+   `get_fulltext_chunk` accepts that object (or explicit attachment/chunk), returns
+   `stale_locator` when the requested generation is no longer retained, retrieves only one bounded
+   chunk (or bounded adjacent window), and includes `has_more`/next-chunk information.
+2. Move aggregate reporting to SQL and expose Package 3's `library_status`. It must distinguish
+   indexed snapshot statistics from source-library health and report the generation used.
+
+**Depends on:** Packages 2, 3, and 4A
+
+**Acceptance criteria:**
+
 - Every returned passage can be re-requested through a generation-bound locator and has a
   reproducible source/hash/chunk/character citation or a clear stale-locator response.
-- Retrieval never loads an entire large document when the requested window is small.
 - Library status is not presented as a total-Zotero-library count unless an audit snapshot produced
   that comparison.
 
@@ -558,6 +586,10 @@ schema evolve.
 
 - The default FTS database remains an offline derived read model. Zotero remains authoritative for
   bibliographic metadata and linked PDFs.
+- Package 4A implemented explicit bounded `all_terms`, `any_terms`, and `phrase` search modes;
+  title/citation/body BM25 weights; deterministic per-record ranking; exact trimmed chunk offsets;
+  and explicit MCP/CLI no-result responses. Generation-bound locators and `library_status` remain
+  in Package 4B because they require Packages 2 and 3.
 - The plan intentionally does not mutate or relocate real user data during implementation. The
   migration command is the only new relocation workflow and is explicit, copy-first, and limited
   to derived output.
