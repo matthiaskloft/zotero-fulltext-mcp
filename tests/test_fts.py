@@ -7,12 +7,12 @@ from unittest.mock import patch
 
 from zotero_pdf_text.fts import (
     DEFAULT_CONTEXT_RECORD_LIMIT,
+    _chunk_text,
     build_fts_index,
     coverage_report,
     get_fulltext,
     get_item_context,
     search_fts,
-    _chunk_text,
 )
 
 

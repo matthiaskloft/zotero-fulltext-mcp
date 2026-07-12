@@ -21,6 +21,7 @@ from .fts import (
     MAX_QUERY_TERM_CHARS,
     MAX_QUERY_TERMS,
     SEARCH_MODES,
+    SearchMode,
     SearchResult,
     get_fulltext,
     get_item_context as get_item_context_fn,
@@ -108,8 +109,13 @@ def create_server(
     limiter = ReconvertRateLimiter()
 
     @mcp.tool()
-    def search_fulltext(query: str, limit: int = 10, search_mode: str = "all_terms") -> dict[str, object]:
-        """Search converted PDF text and return bounded, untrusted snippets."""
+    def search_fulltext(query: str, limit: int = 10, search_mode: SearchMode = "all_terms") -> dict[str, object]:
+        """Search converted PDF text and return bounded, untrusted snippets.
+
+        search_mode: "all_terms" (default) requires every normalized query term; "any_terms" is a
+        broader fallback that matches any term; "phrase" requires the normalized terms in order.
+        """
+
         def operation() -> dict[str, object]:
             validated_mode = _validate_search_mode(search_mode)
             results = search_fts(db_path, _validate_query(query), limit=_validate_limit(limit), search_mode=validated_mode)
@@ -375,7 +381,7 @@ def _validate_query(query: str) -> str:
     return query
 
 
-def _validate_search_mode(search_mode: str) -> str:
+def _validate_search_mode(search_mode: str) -> SearchMode:
     if not isinstance(search_mode, str) or search_mode not in SEARCH_MODES:
         modes = ", ".join(sorted(SEARCH_MODES))
         raise PublicMcpError("invalid_search_mode", f"search_mode must be one of: {modes}.")
