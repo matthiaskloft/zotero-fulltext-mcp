@@ -1,5 +1,6 @@
 import io
 import json
+import os
 import tempfile
 import unittest
 from contextlib import redirect_stdout
@@ -198,7 +199,11 @@ class InstallMcpCliTests(unittest.TestCase):
             mock_run.assert_called_once()
             call_args = mock_run.call_args[0][0]
             expected_db = str(root / "converted_text" / "index" / "zotero_text_index.sqlite")
-            expected_exe = str(root / "Scripts" / "zotero-fulltext-mcp.exe")
+            # _install_mcp derives the exe suffix from the actual running OS (os.name), not from
+            # the shape of the mocked sys.executable path, so the expectation must match whatever
+            # platform this test is actually running on.
+            exe_name = "zotero-fulltext-mcp.exe" if os.name == "nt" else "zotero-fulltext-mcp"
+            expected_exe = str(root / "Scripts" / exe_name)
             # Exact ordered argv, not just membership -- catches regressions like a dropped '--'
             # separator, which would make Claude parse '--db'/'--config' as its own options
             # instead of forwarding them to the server.
