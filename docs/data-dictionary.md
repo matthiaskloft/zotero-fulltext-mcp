@@ -147,6 +147,14 @@ uses `chunk_index: null` and null stored-chunk spans because it can combine mult
 Passage responses also include `chunk_count`; exact reads include `previous_chunk_index`,
 `next_chunk_index`, and `has_more`, while leading previews set those navigation fields to null.
 
+Every enabled MCP tool advertises a concrete success `outputSchema`. Successful calls return
+structured content conforming to that schema. Expected failures return a protocol-level tool result
+with `isError: true`, one path-free text message, and no success structured content. The message
+contains a stable public code followed by a safe explanation (for example,
+`invalid_context_key: Supply exactly one of parent_key and attachment_key.`). Disabled optional
+tools are absent from `list_tools`; their calls use MCP's ordinary unknown-tool behavior rather
+than a project-defined error code.
+
 ## Zotero Write Plan
 
 `zotero-write plan` writes JSONL with one row per candidate decision:

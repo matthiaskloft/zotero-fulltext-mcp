@@ -23,6 +23,9 @@ All notable changes to this project are documented here. Format loosely follows
 - `install-mcp --enable-reconvert` now rejects registration up front when the optional `[marker]`
   extra is not importable, instead of generating a registration that only fails once the server
   itself starts.
+- Enabled MCP tools now advertise concrete success output schemas. Expected failures are native
+  MCP `isError` results with stable, path-free public codes rather than success-shaped error
+  dictionaries; disabled optional tools remain absent from the advertised surface.
 
 ## [0.2.0] - 2026-07-12
 
