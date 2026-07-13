@@ -4,6 +4,7 @@ import importlib.util
 import json
 import tempfile
 import unittest
+from collections.abc import Callable
 from pathlib import Path
 from unittest.mock import patch
 
@@ -186,30 +187,35 @@ class McpServerTests(unittest.TestCase):
             _, sqlite_path, _ = _build_index(Path(tmp))
             server = create_server(sqlite_path, mcp_factory=FakeFastMCP)
 
-            invalid = server.tools["search_fulltext"]("term " * 21)
-            self.assertEqual(invalid["error"]["code"], "invalid_query")
-            too_long = server.tools["search_fulltext"]("x" * 1_001)
-            self.assertEqual(too_long["error"]["code"], "invalid_query")
-            punctuation_only = server.tools["search_fulltext"](" / ")
-            self.assertEqual(punctuation_only["error"]["code"], "invalid_query")
-            invalid_mode = server.tools["search_fulltext"]("topic", search_mode="unsupported")
-            self.assertEqual(invalid_mode["error"]["code"], "invalid_search_mode")
+            _assert_tool_error(self, lambda: server.tools["search_fulltext"]("term " * 21), "invalid_query")
+            _assert_tool_error(self, lambda: server.tools["search_fulltext"]("x" * 1_001), "invalid_query")
+            _assert_tool_error(self, lambda: server.tools["search_fulltext"](" / "), "invalid_query")
+            _assert_tool_error(
+                self,
+                lambda: server.tools["search_fulltext"]("topic", search_mode="unsupported"),
+                "invalid_search_mode",
+            )
             no_results = server.tools["search_fulltext"]("absent-term", search_mode="any_terms")
             self.assertTrue(no_results["no_results"])
             self.assertEqual(no_results["results"], [])
-            oversized = server.tools["get_fulltext_chunk"]("ATTACH1", max_chars=MAX_RETRIEVED_CHARS + 1)
-            self.assertEqual(oversized["error"]["code"], "invalid_max_chars")
-            out_of_range = server.tools["get_fulltext_chunk"]("ATTACH1", chunk_index=1)
-            self.assertEqual(out_of_range["error"]["code"], "chunk_not_found")
-            neither_context_key = server.tools["get_item_context"]()
-            self.assertEqual(neither_context_key["error"]["code"], "invalid_context_key")
-            both_context_keys = server.tools["get_item_context"](parent_key="PARENT1", attachment_key="ATTACH1")
-            self.assertEqual(both_context_keys["error"]["code"], "invalid_context_key")
+            _assert_tool_error(
+                self,
+                lambda: server.tools["get_fulltext_chunk"]("ATTACH1", max_chars=MAX_RETRIEVED_CHARS + 1),
+                "invalid_max_chars",
+            )
+            _assert_tool_error(self, lambda: server.tools["get_fulltext_chunk"]("ATTACH1", chunk_index=1), "chunk_not_found")
+            _assert_tool_error(self, lambda: server.tools["get_item_context"](), "invalid_context_key")
+            _assert_tool_error(
+                self,
+                lambda: server.tools["get_item_context"](parent_key="PARENT1", attachment_key="ATTACH1"),
+                "invalid_context_key",
+            )
 
             missing = create_server(Path(tmp) / "missing.sqlite", mcp_factory=FakeFastMCP)
-            unavailable = missing.tools["search_fulltext"]("topic")
-            self.assertEqual(unavailable["error"]["code"], "database_unavailable")
-            self.assertNotIn("missing.sqlite", json.dumps(unavailable))
+            with self.assertRaises(PublicMcpError) as unavailable:
+                missing.tools["search_fulltext"]("topic")
+            self.assertEqual(unavailable.exception.code, "database_unavailable")
+            self.assertNotIn("missing.sqlite", str(unavailable.exception))
 
     def test_passage_locator_distinguishes_truncated_exact_and_leading_preview(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -303,8 +309,7 @@ class McpServerTests(unittest.TestCase):
                 RECONVERT_TOOL_ANNOTATIONS,
             )
 
-            rejected = reconvert("ATTACH1", confirm="yes")
-            self.assertEqual(rejected["error"]["code"], "confirmation_required")
+            _assert_tool_error(self, lambda: reconvert("ATTACH1", confirm="yes"), "confirmation_required")
 
             success = ReconvertResult(
                 ok=True,
@@ -323,8 +328,7 @@ class McpServerTests(unittest.TestCase):
             self.assertTrue(result["ok"])
             self.assertNotIn(str(root), json.dumps(result))
 
-            limited = reconvert("ATTACH1", confirm="reconvert")
-            self.assertEqual(limited["error"]["code"], "reconversion_rate_limited")
+            _assert_tool_error(self, lambda: reconvert("ATTACH1", confirm="reconvert"), "reconversion_rate_limited")
 
     def test_reconversion_is_opt_in_and_requires_an_explicit_valid_config(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -475,8 +479,7 @@ class McpServerTests(unittest.TestCase):
             _, sqlite_path, _ = _build_index(Path(tmp))
             server = create_server(sqlite_path, enable_bibtex=True, mcp_factory=FakeFastMCP)
 
-            result = server.tools["export_bibtex_entries_by_key"](["", "  "])
-            self.assertEqual(result["error"]["code"], "invalid_citation_keys")
+            _assert_tool_error(self, lambda: server.tools["export_bibtex_entries_by_key"](["", "  "]), "invalid_citation_keys")
 
     def test_db_only_startup_does_not_load_or_validate_a_config(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -527,6 +530,12 @@ class ReconvertRateLimiterConcurrencyTests(unittest.TestCase):
 
         self.assertEqual(len(successes), 1)
         self.assertEqual(len(failures), 19)
+
+
+def _assert_tool_error(test: unittest.TestCase, operation: Callable[[], object], code: str) -> None:
+    with test.assertRaises(PublicMcpError) as raised:
+        operation()
+    test.assertEqual(raised.exception.code, code)
 
 
 def _build_index(root: Path) -> tuple[Path, Path, ProjectConfig]:

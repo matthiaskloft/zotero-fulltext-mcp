@@ -219,6 +219,13 @@ lossy math extraction while retaining the underlying provenance fields. Normal M
 expose no absolute source or Markdown paths. Starting the safe default server with a valid `--db`
 needs no Zotero config.
 
+Each enabled tool advertises a concrete MCP `outputSchema` for successful structured content.
+Expected failures use MCP `isError: true` rather than a success-shaped error dictionary. Their
+single text message contains a stable public code (for example, `invalid_query:` or
+`attachment_not_found:`) followed by a safe explanation; it intentionally contains no local paths,
+endpoints, exception representations, or traceback. A disabled optional tool is absent from the
+tool list and therefore uses the MCP client's ordinary unknown-tool behavior.
+
 A typical evidence workflow is: search, inspect `matched_fields`, retrieve the returned
 `source_locator.chunk_index`, then cite the human-readable title/creator/year/DOI (or citation key)
 while retaining the locator for traceability. The attachment key is a retrieval handle, not a
