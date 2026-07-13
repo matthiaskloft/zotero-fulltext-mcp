@@ -9,10 +9,10 @@
 |-------|--------|------|-------|
 | Spec | DONE | 2026-07-13 | Follow-up to the completed safe-read-surface work and the 2026-07-13 MCP instruction review. |
 | Plan | DONE | 2026-07-13 | Three sequential, independently shippable phases. |
-| Phase 1: Capability Guidance and Opt-In Mutation | COMMITTED | 2026-07-13 | Default is read-only; reconversion is opt-in, annotated, preflighted, and rollback-protected. |
+| Phase 1: Capability Guidance and Opt-In Mutation | MERGED | 2026-07-13 | [PR #8](https://github.com/matthiaskloft/zotero-fulltext-mcp/pull/8) merged; default is read-only, and reconversion is opt-in, annotated, preflighted, and rollback-protected. |
 | Phase 2: Evidence and Retrieval Contract | TODO | | |
 | Phase 3: Protocol-Native Schemas and Errors | TODO | | |
-| Ship | IN_PROGRESS | 2026-07-13 | Preparing Phase 1 for review. |
+| Ship | MERGED | 2026-07-13 | [PR #8](https://github.com/matthiaskloft/zotero-fulltext-mcp/pull/8) squash-merged. |
 
 ## Spec
 
