@@ -11,8 +11,17 @@ import time
 from collections.abc import Callable
 from dataclasses import asdict
 from pathlib import Path
-from typing import Annotated, Any, TypedDict
+from typing import Annotated, Any
 from urllib.parse import urlsplit, urlunsplit
+
+try:
+    # pydantic (pulled in by the optional "mcp" extra) requires TypedDict classes to carry
+    # __orig_bases__ for schema generation, which typing.TypedDict only provides on Python 3.12+.
+    # typing_extensions backports that for 3.11 and is already a transitive dependency wherever
+    # pydantic is installed; fall back to typing so this module still imports without the extra.
+    from typing_extensions import TypedDict
+except ImportError:
+    from typing import TypedDict
 
 from .bibtex import DEFAULT_BBT_ENDPOINT, DEFAULT_BBT_TRANSLATOR, export_bibtex_entries
 from .config import ProjectConfig, validate_config
@@ -242,17 +251,20 @@ def create_server(
         bibtex_endpoint = validate_bibtex_endpoint(bibtex_endpoint)
     if enable_reconvert:
         _validate_reconvert_setup(config, db_path)
-    if mcp_factory is None:
-        from mcp.server.fastmcp import FastMCP
-        from pydantic import WithJsonSchema
 
-        # Keep FastMCP from coercing invalid values before the public-error boundary while
-        # still advertising the concrete input shapes clients need for tool discovery.
-        # `from __future__ import annotations` makes the tool signatures below lazy string
-        # forward refs, so these names must live in this module's globals before FastMCP
-        # resolves them; guard the update so repeated create_server() calls stay idempotent
-        # instead of re-touching module state on every invocation.
-        if "QueryInput" not in globals():
+    # Keep FastMCP from coercing invalid values before the public-error boundary while still
+    # advertising the concrete input shapes clients need for tool discovery. `from __future__
+    # import annotations` makes the tool signatures below lazy string forward refs, so these
+    # names must live in this module's globals before anything resolves them. Populate them
+    # whenever pydantic is importable -- independent of which mcp_factory is passed in -- so
+    # tool registration never depends on prior create_server() calls or on the interpreter's
+    # postponed-annotation-evaluation behavior.
+    if "QueryInput" not in globals():
+        try:
+            from pydantic import WithJsonSchema
+        except ImportError:
+            WithJsonSchema = None
+        if WithJsonSchema is not None:
             globals().update(
                 QueryInput=Annotated[object, WithJsonSchema({"type": "string", "maxLength": MAX_QUERY_CHARS})],
                 LimitInput=Annotated[object, WithJsonSchema({"type": "integer", "minimum": 1, "maximum": MAX_SEARCH_RESULTS})],
@@ -270,6 +282,10 @@ def create_server(
                 ],
                 ConfirmationInput=Annotated[object, WithJsonSchema({"type": "string"})],
             )
+
+    if mcp_factory is None:
+        from mcp.server.fastmcp import FastMCP
+
         mcp_factory = FastMCP
 
     mcp = mcp_factory("zotero-fulltext", instructions=MCP_INSTRUCTIONS)
