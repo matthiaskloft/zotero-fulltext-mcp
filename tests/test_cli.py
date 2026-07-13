@@ -316,7 +316,9 @@ class InstallMcpCliTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
-            with patch("sys.executable", str(root / "Scripts" / "python.exe")), patch("sys.stdout") as mock_stdout:
+            with patch("sys.executable", str(root / "Scripts" / "python.exe")), patch(
+                "zotero_pdf_text.cli.marker_dependency_available", return_value=True
+            ), patch("sys.stdout") as mock_stdout:
                 exit_code = main(["install-mcp", "--config", str(config_path), "--enable-reconvert"])
             printed = "".join(call.args[0] for call in mock_stdout.write.call_args_list)
             self.assertEqual(exit_code, 0)
@@ -356,7 +358,9 @@ class InstallMcpCliTests(unittest.TestCase):
             )
             with patch("sys.executable", str(root / "Scripts" / "python.exe")), patch(
                 "zotero_pdf_text.cli.shutil.which", return_value="C:/fake/claude.cmd"
-            ), patch("zotero_pdf_text.cli.subprocess.run") as mock_run:
+            ), patch("zotero_pdf_text.cli.subprocess.run") as mock_run, patch(
+                "zotero_pdf_text.cli.marker_dependency_available", return_value=True
+            ):
                 mock_run.return_value.returncode = 0
                 exit_code = main(
                     ["install-mcp", "--config", str(config_path), "--enable-reconvert", "--apply"]
@@ -404,6 +408,25 @@ class InstallMcpCliTests(unittest.TestCase):
                 ),
                 2,
             )
+
+    def test_optional_reconversion_rejects_missing_marker_dependency(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config_path = root / "config.json"
+            (root / "zotero.sqlite").write_bytes(b"")
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "zotero_root": str(root),
+                        "zotero_data_directory": str(root),
+                        "linked_attachments": str(root),
+                        "output_root": str(root / "converted_text"),
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with patch("zotero_pdf_text.cli.marker_dependency_available", return_value=False):
+                self.assertEqual(main(["install-mcp", "--config", str(config_path), "--enable-reconvert"]), 2)
 
     def test_bibtex_endpoint_requires_integration_flag(self):
         with tempfile.TemporaryDirectory() as tmp:

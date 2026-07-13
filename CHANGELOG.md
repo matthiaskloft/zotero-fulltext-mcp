@@ -20,6 +20,9 @@ All notable changes to this project are documented here. Format loosely follows
   retrieval distinguishes complete and truncated stored chunks, exposes bounded chunk navigation,
   and returns deterministic reliability warnings for identity, attachment mapping, and math
   extraction concerns. Item context now requires exactly one parent or attachment key.
+- `install-mcp --enable-reconvert` now rejects registration up front when the optional `[marker]`
+  extra is not importable, instead of generating a registration that only fails once the server
+  itself starts.
 
 ## [0.2.0] - 2026-07-12
 
