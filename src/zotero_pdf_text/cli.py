@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import argparse
 import csv
+import importlib.util
 import json
 import os
 import shutil
 import subprocess
 import sys
+import tempfile
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from .bibtex import (
@@ -60,9 +63,36 @@ def _default_fts_db() -> Path:
 DEFAULT_FTS_DB = _default_fts_db()
 
 
+def _pipeline_lock_root(index_related_path: Path) -> Path:
+    """Best-effort output_root for locking, for commands that take an explicit index path
+    instead of --config.
+
+    Index files conventionally live at <output_root>/index/<file> (see docs/operations.md).
+    convert-new and reconvert-math derive lock_root from their loaded config.output_root
+    directly; build-index/append-index/build-fts have no config, only an explicit --output/
+    --index path, so they must derive the equivalent root the same way to lock the same file --
+    otherwise two commands writing into the same pipeline output can race past each other's
+    lock. Walk up past a literal "index" directory component when present; otherwise fall back
+    to the immediate parent (locking a narrower, but still safe, scope).
+    """
+    parent = index_related_path.parent
+    return parent.parent if parent.name == "index" else parent
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="zotero-pdf-text")
     subparsers = parser.add_subparsers(dest="command", required=True)
+    check_setup = subparsers.add_parser(
+        "check-setup",
+        help="Validate config paths and environment before running a conversion. Read-only.",
+    )
+    check_setup.add_argument("--config", type=Path, default=Path("config.json"), help="Path to project config JSON.")
+    check_setup.add_argument(
+        "--require-mcp",
+        action="store_true",
+        help="Fail if the mcp extra isn't installed. Informational-only by default.",
+    )
+    check_setup.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
     dry_run = subparsers.add_parser("dry-run", help="Map Zotero metadata to linked PDFs without conversion.")
     dry_run.add_argument("--config", type=Path, default=Path("config.json"), help="Path to project config JSON.")
     sample = subparsers.add_parser("convert-sample", help="Convert a small mapped_verified PDF sample to Markdown.")
@@ -405,6 +435,14 @@ def main(argv: list[str] | None = None) -> int:
     _configure_stdio()
     parser = build_parser()
     args = parser.parse_args(argv)
+    if args.command == "check-setup":
+        results = run_setup_checks(args.config, require_mcp=args.require_mcp)
+        if args.json:
+            print(json.dumps([asdict(result) for result in results], ensure_ascii=False, indent=2))
+        else:
+            _print_setup_check_results(results)
+        failed_required = [result for result in results if result.required and not result.ok]
+        return 1 if failed_required else 0
     if args.command == "dry-run":
         config = load_config(args.config)
         validate_config(config)
@@ -488,7 +526,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "build-index":
         try:
-            with pipeline_write_lock(args.output.parent, command="build-index"):
+            with pipeline_write_lock(_pipeline_lock_root(args.output), command="build-index"):
                 output = build_text_index(args.manifest, args.output)
         except PipelineLockedError as exc:
             print(str(exc), file=sys.stderr)
@@ -497,8 +535,23 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "append-index":
         fts_db = args.fts_db or (args.index.parent / f"{args.index.stem}.sqlite")
+        # append-index writes both --index and fts_db; a single _pipeline_lock_root(args.index)
+        # only protects the JSONL side. If an explicit --fts-db resolves to a different canonical
+        # root (e.g. a separate drive/share), locking just one leaves the other artifact
+        # unprotected against a concurrent command writing the same FTS file from its own root --
+        # refuse rather than silently guaranteeing less than the lock implies.
+        index_lock_root = _pipeline_lock_root(args.index)
+        fts_lock_root = _pipeline_lock_root(fts_db)
+        if index_lock_root != fts_lock_root:
+            print(
+                f"--index ({args.index}) and --fts-db ({fts_db}) resolve to different pipeline "
+                f"lock roots ({index_lock_root} vs {fts_lock_root}); place both under one "
+                "output_root so this command's lock actually covers everything it writes.",
+                file=sys.stderr,
+            )
+            return 2
         try:
-            with pipeline_write_lock(args.index.parent, command="append-index"):
+            with pipeline_write_lock(index_lock_root, command="append-index"):
                 before = len(load_indexed_keys(args.index))
                 append_text_index(args.manifest, args.index, args.index)
                 after = len(load_indexed_keys(args.index))
@@ -524,7 +577,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if status.running and (status.connector_ok or not args.require_connector) else 1
     if args.command == "build-fts":
         try:
-            with pipeline_write_lock(args.output.parent, command="build-fts"):
+            with pipeline_write_lock(_pipeline_lock_root(args.output), command="build-fts"):
                 summary = build_fts_index(
                     args.index_jsonl,
                     args.output,
@@ -779,6 +832,7 @@ def main(argv: list[str] | None = None) -> int:
             db_path=fts_db,
             jsonl_path=jsonl_path,
             fts_db_path=fts_db,
+            lock_root=config.output_root,
             timeout_seconds=args.timeout_seconds,
         )
         print(json.dumps(result.to_dict(), ensure_ascii=False, indent=2))
@@ -982,6 +1036,106 @@ def _print_coverage_report(report: dict[str, object]) -> None:
         print(field + ":")
         for key, count in sorted(dict(report[field]).items()):
             print(f"- {key}: {count}")
+
+
+@dataclass(frozen=True)
+class SetupCheckResult:
+    name: str
+    ok: bool
+    detail: str
+    required: bool
+
+
+def run_setup_checks(config_path: Path, *, require_mcp: bool = False) -> list[SetupCheckResult]:
+    """Validate config, paths, and environment without performing any conversion work.
+
+    Fails fast on the first missing piece a first-time user is likely to hit, rather than letting
+    a bad path or missing dependency surface as a confusing failure partway through a long
+    dry-run/conversion. Read-only: never writes to output_root beyond the writability probe in
+    `_check_output_root_writable`, which itself never leaves a stray file behind.
+    """
+    results: list[SetupCheckResult] = [
+        SetupCheckResult(
+            "python_version",
+            sys.version_info >= (3, 11),
+            f"Python {'.'.join(str(part) for part in sys.version_info[:3])} (requires >=3.11)",
+            required=True,
+        )
+    ]
+
+    try:
+        config = load_config(config_path)
+    # TypeError covers structurally-malformed-but-syntactically-valid JSON: a top-level array
+    # instead of an object, a non-dict entry in manually_accepted_mappings, a path field given as
+    # a number, etc. -- load_config indexes/constructs Path() without validating shape first.
+    except (FileNotFoundError, KeyError, ValueError, OSError, TypeError) as exc:
+        results.append(SetupCheckResult("config", False, f"Failed to load {config_path}: {exc}", required=True))
+        return results
+    results.append(SetupCheckResult("config", True, f"Loaded {config_path}", required=True))
+
+    # validate_config() covers everything below except output_root, which it doesn't check at
+    # all since it's a write target rather than a required-to-exist input.
+    for name, path in (
+        ("zotero_root", config.zotero_root),
+        ("zotero_data_directory", config.zotero_data_directory),
+        ("linked_attachments", config.linked_attachments),
+        ("zotero.sqlite", config.zotero_sqlite),
+    ):
+        results.append(SetupCheckResult(name, path.exists(), str(path), required=True))
+
+    output_ok, output_detail = _check_output_root_writable(config.output_root)
+    results.append(SetupCheckResult("output_root", output_ok, output_detail, required=True))
+
+    for extra_name, module_name in (("mcp", "mcp"), ("zotero-write", "pyzotero"), ("marker", "marker")):
+        available = importlib.util.find_spec(module_name) is not None
+        detail = "installed" if available else "not installed (optional extra)"
+        required = require_mcp and extra_name == "mcp"
+        results.append(SetupCheckResult(f"extra:{extra_name}", available, detail, required=required))
+
+    return results
+
+
+def _check_output_root_writable(output_root: Path) -> tuple[bool, str]:
+    """Probe writability by actually creating and removing a file, not just os.access.
+
+    os.access(path, os.W_OK) doesn't guarantee file creation will succeed -- Windows ACLs,
+    controlled-folder protection, quotas, and network filesystems can all permit the access-check
+    bit while still rejecting a real write. Never creates output_root itself if it doesn't exist
+    yet; the probe file is created in (and immediately removed from) the nearest existing
+    ancestor instead, so this stays read-only with respect to the directory tree.
+    """
+    if output_root.exists() and not output_root.is_dir():
+        return False, f"{output_root} exists but is not a directory"
+
+    target = output_root
+    while not target.exists():
+        if target.parent == target:
+            return False, f"{output_root} does not exist and no existing ancestor directory was found"
+        target = target.parent
+
+    try:
+        fd, tmp_name = tempfile.mkstemp(dir=target, prefix=".zotero_pdf_text_write_check_")
+    except OSError as exc:
+        return False, f"Cannot create files under {target}: {exc}"
+    os.close(fd)
+    # Unlike the fts.py/indexer.py atomic-write cleanup (where a stray temp file next to a
+    # successfully published index is harmless), a cleanup failure here is itself the finding:
+    # this check's whole point is to prove nothing gets left behind, so failing to remove the
+    # probe file must fail the check and report the leftover path -- not be silently suppressed.
+    try:
+        Path(tmp_name).unlink()
+    except OSError as exc:
+        return False, f"Created a write-check file under {target} but failed to remove it: {tmp_name} ({exc})"
+
+    if output_root.exists():
+        return True, f"{output_root} exists and is writable"
+    return True, f"{output_root} does not exist yet but is creatable under {target}"
+
+
+def _print_setup_check_results(results: list[SetupCheckResult]) -> None:
+    for result in results:
+        status = "OK" if result.ok else ("FAIL" if result.required else "WARN")
+        print(f"[{status}] {result.name}: {result.detail}")
 
 
 def _filter_new_mapping_rows(mapping_report: Path, indexed_keys: set[str]) -> list[dict[str, str]]:

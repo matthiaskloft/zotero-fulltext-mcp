@@ -9,6 +9,7 @@ from pathlib import Path
 from .converter import _with_front_matter
 from .fts import build_fts_index, get_item_context
 from .indexer import TextIndexRecord, _sha256, _strip_front_matter, replace_text_index_record
+from .lock import PipelineLockedError, pipeline_write_lock
 
 MARKER_TOOL = "marker"
 # Empirically ~70-90s/page for equation/figure-dense papers on a 6GB GPU (measured directly:
@@ -39,6 +40,7 @@ def reconvert_with_marker(
     db_path: Path,
     jsonl_path: Path,
     fts_db_path: Path,
+    lock_root: Path,
     timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS,
 ) -> ReconvertResult:
     context = get_item_context(db_path, attachment_key=attachment_key)
@@ -103,32 +105,55 @@ def reconvert_with_marker(
             "reconverted_at": reconverted_at,
         },
     )
-    markdown_path.write_text(new_markdown, encoding="utf-8", newline="\n")
 
-    new_text_for_index = _strip_front_matter(new_markdown)
-    new_record = TextIndexRecord(
-        zotero_parent_key=record["zotero_parent_key"],
-        zotero_attachment_key=record["zotero_attachment_key"],
-        title=record["title"],
-        creators=record["creators"],
-        year=record["year"],
-        doi=record["doi"],
-        citation_key=record["citation_key"],
-        source_path=record["source_path"],
-        markdown_path=str(markdown_path),
-        markdown_sha256=_sha256(markdown_path),
-        extraction_tool=MARKER_TOOL,
-        char_count=len(new_text_for_index),
-        word_count=len(new_text_for_index.split()),
-        page_count=record["page_count"],
-        classification=record["classification"],
-        identity_status=record["identity_status"],
-        identity_rule=record["identity_rule"],
-        has_math=has_math,
-        text=new_text_for_index,
-    )
-    replace_text_index_record(jsonl_path, attachment_key, new_record)
-    build_fts_index(jsonl_path, fts_db_path)
+    # Every other writer of jsonl_path/fts_db_path (build-index, append-index, convert-*) takes
+    # a lock; without one here, a reconvert-math run racing another write command could have its
+    # update silently discarded by "last atomic replace wins" -- no exception, no data corruption,
+    # just a lost update. `lock_root` must be the same canonical root the caller's other pipeline
+    # commands lock (e.g. convert-new's config.output_root) -- locking jsonl_path.parent here
+    # would use a different lock file than convert-new's, defeating mutual exclusion between them
+    # even though both write the same index files. The Markdown write and the JSONL/FTS update
+    # all happen inside the lock together, as one unit -- writing Markdown before acquiring the
+    # lock would leave it updated with the new extraction while the index still describes the
+    # old one if the lock turned out to be contested. Held only around these three writes, not
+    # the preceding GPU-bound marker extraction, so it doesn't unnecessarily block other commands
+    # for minutes.
+    try:
+        with pipeline_write_lock(lock_root, command="reconvert-math"):
+            markdown_path.write_text(new_markdown, encoding="utf-8", newline="\n")
+            new_text_for_index = _strip_front_matter(new_markdown)
+            new_record = TextIndexRecord(
+                zotero_parent_key=record["zotero_parent_key"],
+                zotero_attachment_key=record["zotero_attachment_key"],
+                title=record["title"],
+                creators=record["creators"],
+                year=record["year"],
+                doi=record["doi"],
+                citation_key=record["citation_key"],
+                source_path=record["source_path"],
+                markdown_path=str(markdown_path),
+                markdown_sha256=_sha256(markdown_path),
+                extraction_tool=MARKER_TOOL,
+                char_count=len(new_text_for_index),
+                word_count=len(new_text_for_index.split()),
+                page_count=record["page_count"],
+                classification=record["classification"],
+                identity_status=record["identity_status"],
+                identity_rule=record["identity_rule"],
+                has_math=has_math,
+                text=new_text_for_index,
+            )
+            replace_text_index_record(jsonl_path, attachment_key, new_record)
+            build_fts_index(jsonl_path, fts_db_path)
+    except PipelineLockedError as exc:
+        return _error_result(
+            attachment_key,
+            str(exc),
+            previous_extraction_tool=previous_extraction_tool,
+            previous_char_count=previous_char_count,
+            markdown_path=str(markdown_path),
+            source_path=str(source_path),
+        )
 
     return ReconvertResult(
         ok=True,
