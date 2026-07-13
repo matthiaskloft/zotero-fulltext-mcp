@@ -10,9 +10,9 @@
 | Spec | DONE | 2026-07-13 | Follow-up to the completed safe-read-surface work and the 2026-07-13 MCP instruction review. |
 | Plan | DONE | 2026-07-13 | Three sequential, independently shippable phases. |
 | Phase 1: Capability Guidance and Opt-In Mutation | MERGED | 2026-07-13 | [PR #8](https://github.com/matthiaskloft/zotero-fulltext-mcp/pull/8) merged; default is read-only, and reconversion is opt-in, annotated, preflighted, and rollback-protected. |
-| Phase 2: Evidence and Retrieval Contract | TODO | | |
+| Phase 2: Evidence and Retrieval Contract | IMPLEMENTED | 2026-07-13 | Added content-bound locators, matched-field evidence, exact-chunk navigation/truncation semantics, reliability warnings, and strict context-key validation; full suite passes. |
 | Phase 3: Protocol-Native Schemas and Errors | TODO | | |
-| Ship | MERGED | 2026-07-13 | [PR #8](https://github.com/matthiaskloft/zotero-fulltext-mcp/pull/8) squash-merged. |
+| Ship | IN_PROGRESS | 2026-07-13 | Preparing Phase 2 for review; Phase 1 was merged in [PR #8](https://github.com/matthiaskloft/zotero-fulltext-mcp/pull/8). |
 
 ## Spec
 
@@ -427,6 +427,15 @@ are known rather than rewritten twice.
   Marker output and image assets, preflights the sidecar/key, and rolls derived assets back on an
   ordinary commit failure so the newly opt-in mutation does not report failure after a partial
   write.
+- Phase 2 preserves body-first representative-chunk selection while deriving `matched_fields` by
+  comparing FTS5-highlighted values with their originals, so marker-like source content cannot
+  create false matches. Search and passage locators now bind to converted Markdown content and
+  exact retrieval distinguishes returned spans from stored spans; leading previews remain
+  explicitly non-cursor responses. Reliability warnings are conservative for unknown provenance
+  values, and both MCP and FTS boundaries require exactly one context key.
+- Phase 2 verification: `197 passed, 5 subtests passed` with the repository virtual environment.
+  No real local config was present beyond `config.example.json`, so the optional live-library
+  smoke test was not run and no researcher data was accessed.
 
 ## Review Feedback
 

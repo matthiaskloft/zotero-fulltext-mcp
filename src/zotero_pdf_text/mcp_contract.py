@@ -17,6 +17,7 @@ from urllib.parse import urlsplit, urlunsplit
 from .bibtex import DEFAULT_BBT_ENDPOINT, DEFAULT_BBT_TRANSLATOR, export_bibtex_entries
 from .config import ProjectConfig, validate_config
 from .fts import (
+    ChunkNotFoundError,
     DEFAULT_CONTEXT_RECORD_LIMIT,
     FullTextResult,
     MAX_QUERY_CHARS,
@@ -140,7 +141,9 @@ def create_server(
         search_mode: "all_terms" (default) requires every normalized query term; "any_terms" is a
         broader fallback that matches any term; "phrase" requires the normalized terms in order.
         Results are discovery candidates: retrieve the returned source_locator.chunk_index before
-        treating a hit as body-text evidence.
+        treating a hit as body-text evidence. matched_fields identifies why the record matched;
+        for metadata-only hits, the chunk locator is a navigation starting point rather than proof
+        that the query occurs in body text.
         """
 
         def operation() -> dict[str, object]:
@@ -186,16 +189,18 @@ def create_server(
         Supply exactly one key: attachment_key for one exact attachment, or parent_key for its
         indexed attachments.
         """
-        return _public_call(
-            lambda: serialize_item_context(
+        def operation() -> dict[str, object]:
+            validated_parent_key, validated_attachment_key = _validate_context_keys(parent_key, attachment_key)
+            return serialize_item_context(
                 get_item_context_fn(
                     db_path,
-                    parent_key=_validate_optional_key(parent_key),
-                    attachment_key=_validate_optional_key(attachment_key),
+                    parent_key=validated_parent_key,
+                    attachment_key=validated_attachment_key,
                     limit=MAX_CONTEXT_RECORDS,
                 )
             )
-        )
+
+        return _public_call(operation)
 
     if enable_reconvert:
         limiter = ReconvertRateLimiter()
@@ -324,7 +329,24 @@ def serialize_search_result(result: SearchResult) -> dict[str, object]:
         "citation_key": result.citation_key,
         "snippet": result.snippet,
         "score": result.score,
-        "source_locator": _source_locator(result.zotero_attachment_key, result.chunk_index, result.start_char, result.end_char),
+        "matched_fields": result.matched_fields,
+        "has_math": result.has_math,
+        "warnings": _reliability_warnings(
+            result.identity_status,
+            result.classification,
+            result.has_math,
+            result.extraction_tool,
+        ),
+        "source_locator": _source_locator(
+            result.zotero_attachment_key,
+            result.markdown_sha256,
+            result.chunk_index,
+            result.start_char,
+            result.end_char,
+            truncated=False,
+            stored_chunk_char_start=result.start_char,
+            stored_chunk_char_end=result.end_char,
+        ),
         "provenance": _provenance(result.zotero_attachment_key, result.extraction_tool, result.classification, result.identity_status),
     }
 
@@ -342,8 +364,28 @@ def serialize_fulltext_result(result: FullTextResult) -> dict[str, object]:
         "start_char": result.start_char,
         "end_char": result.end_char,
         "total_chars": result.total_chars,
+        "chunk_count": result.chunk_count,
+        "previous_chunk_index": result.previous_chunk_index,
+        "next_chunk_index": result.next_chunk_index,
+        "has_more": result.has_more,
         "text": result.text,
-        "source_locator": _source_locator(result.zotero_attachment_key, result.chunk_index, result.start_char, result.end_char),
+        "has_math": result.has_math,
+        "warnings": _reliability_warnings(
+            result.identity_status,
+            result.classification,
+            result.has_math,
+            result.extraction_tool,
+        ),
+        "source_locator": _source_locator(
+            result.zotero_attachment_key,
+            result.markdown_sha256,
+            result.chunk_index,
+            result.start_char,
+            result.end_char,
+            truncated=result.truncated,
+            stored_chunk_char_start=result.stored_chunk_char_start,
+            stored_chunk_char_end=result.stored_chunk_char_end,
+        ),
         "provenance": _provenance(result.zotero_attachment_key, result.extraction_tool, result.classification, result.identity_status),
     }
 
@@ -447,6 +489,8 @@ def _public_call(operation: Callable[[], dict[str, object]], *, integration: boo
         return _error(exc.code, exc.message)
     except FileNotFoundError:
         return _error("database_unavailable", "The local full-text index is unavailable.")
+    except ChunkNotFoundError:
+        return _error("chunk_not_found", "No stored chunk matches that index for the attachment.")
     except KeyError:
         return _error("attachment_not_found", "No indexed record matches that attachment key.")
     except sqlite3.DatabaseError:
@@ -517,6 +561,12 @@ def _validate_optional_key(value: str | None) -> str | None:
     return None if value is None else _validate_attachment_key(value)
 
 
+def _validate_context_keys(parent_key: str | None, attachment_key: str | None) -> tuple[str | None, str | None]:
+    if (parent_key is None) == (attachment_key is None):
+        raise PublicMcpError("invalid_context_key", "Supply exactly one of parent_key and attachment_key.")
+    return _validate_optional_key(parent_key), _validate_optional_key(attachment_key)
+
+
 def _validate_citation_keys(values: list[str]) -> list[str]:
     if not isinstance(values, list) or not values or len(values) > MAX_CITATION_KEYS:
         raise PublicMcpError("invalid_citation_keys", f"Provide between 1 and {MAX_CITATION_KEYS} citation keys.")
@@ -536,12 +586,42 @@ def _provenance(attachment_key: str, extraction_tool: str, classification: str, 
     }
 
 
-def _source_locator(attachment_key: str, chunk_index: int | None, start_char: int, end_char: int) -> dict[str, object]:
+def _reliability_warnings(
+    identity_status: str,
+    classification: str,
+    has_math: bool,
+    extraction_tool: str,
+) -> list[str]:
+    warnings = []
+    if identity_status not in {"verified", "manual_accepted", "fulltext_verified"}:
+        warnings.append("identity_unverified")
+    if classification != "mapped_verified":
+        warnings.append("attachment_match_unverified")
+    if has_math and extraction_tool != "marker":
+        warnings.append("math_extraction_may_be_lossy")
+    return warnings
+
+
+def _source_locator(
+    attachment_key: str,
+    content_sha256: str,
+    chunk_index: int | None,
+    start_char: int,
+    end_char: int,
+    *,
+    truncated: bool,
+    stored_chunk_char_start: int | None,
+    stored_chunk_char_end: int | None,
+) -> dict[str, object]:
     return {
         "attachment_key": attachment_key,
+        "content_sha256": content_sha256,
         "chunk_index": chunk_index,
         "char_start": start_char,
         "char_end": end_char,
+        "truncated": truncated,
+        "stored_chunk_char_start": stored_chunk_char_start,
+        "stored_chunk_char_end": stored_chunk_char_end,
     }
 
 

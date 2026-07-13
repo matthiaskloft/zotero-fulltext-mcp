@@ -46,7 +46,11 @@ as primary library records.
   Zotero URIs. Zotero must be running.
 - Full-text MCP: the default surface is bounded, read-only search, passage retrieval, and item
   context over converted Markdown. It never launches Zotero or exposes local paths; returned
-  library material is labelled untrusted. The optional math-OCR capability must be enabled at
+  library material is labelled untrusted. Search results identify the fields that matched, and
+  search/passage locators bind attachment/chunk/character identity to the converted Markdown
+  SHA-256. Exact passage reads expose bounded chunk navigation and distinguish the returned span
+  from a larger stored chunk; leading previews are explicitly not exact chunk cursors. The
+  optional math-OCR capability must be enabled at
   startup with an explicit valid config governing the selected database and with the Marker
   dependency installed. It requires an exact confirmation literal, overwrites one attachment's
   derived Markdown, image assets, and index record, and is rate-limited, but it never modifies
