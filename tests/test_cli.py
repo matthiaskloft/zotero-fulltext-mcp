@@ -10,7 +10,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from zotero_pdf_text.cli import _pipeline_lock_root, _shell_quote, build_parser, main
-from zotero_pdf_text.fts import SearchResult
+from zotero_pdf_text.fts import ChunkNotFoundError, SearchResult
 from zotero_pdf_text.math_ocr import ReconvertResult
 
 
@@ -575,6 +575,28 @@ class SearchCliTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         self.assertEqual(payload["results"][0]["markdown_sha256"], "abc123")
         self.assertEqual(payload["results"][0]["matched_fields"], ["title"])
+
+    def test_get_fulltext_reports_out_of_range_chunk_index_as_a_clean_error(self):
+        with patch(
+            "zotero_pdf_text.cli.get_fulltext",
+            side_effect=ChunkNotFoundError("Chunk 99 does not exist for attachment ATTACH1"),
+        ):
+            output = io.StringIO()
+            with redirect_stdout(output):
+                exit_code = main(
+                    [
+                        "get-fulltext",
+                        "--db",
+                        "unused.sqlite",
+                        "--attachment-key",
+                        "ATTACH1",
+                        "--chunk-index",
+                        "99",
+                    ]
+                )
+
+        self.assertEqual(exit_code, 2)
+        self.assertEqual(output.getvalue(), "")
 
 
 if __name__ == "__main__":
