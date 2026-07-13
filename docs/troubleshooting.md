@@ -39,6 +39,30 @@ If `search-fts` reports a missing database, build it:
   --output $data\index\zotero_text_index.sqlite
 ```
 
+## Fresh Build Cannot Import the Converter or PDF Dependencies
+
+Use the project environment configured as `$python`, not a system Python, a generic assistant
+runtime, or a repository-local `.venv`. Confirm it before starting a long rebuild:
+
+```powershell
+& $python -c "import zotero_pdf_text, fitz, pymupdf4llm; print('converter environment ready')"
+```
+
+If this reports `No module named zotero_pdf_text`, `$python` points to the wrong environment. If
+it reports a missing `fitz` or `pymupdf4llm`, install this project's runtime dependencies into the
+selected environment before retrying. Do not start a second conversion while diagnosing the
+environment: a pipeline lock prevents concurrent writers, but any partially created run directory
+still needs to be kept separate from the next fresh run.
+
+## Fresh Mapping Reports Many Unreadable Linked Files
+
+`dry-run` can warn about linked attachment paths that no longer exist locally, for example after a
+folder move or a library previously used on another computer. These paths are skipped; the mapper
+can still finish and write `mapping_report.csv`. Inspect its classification counts before conversion
+and continue only with `mapped_verified` rows. Do not edit the live Zotero database or bulk-change
+linked files merely to silence these warnings; repair paths through Zotero when the attachments are
+actually needed.
+
 ## `import-doi` Returns No Item Key
 
 `import-doi` posts to Zotero's local connector but does not hand back the new item's key, so
@@ -281,3 +305,24 @@ checkout or a different platform still hits the underlying issue.
    fail with `No module named 'pytest'` in a fresh MCP-only venv. A `test` extra
    now bundles it: install with `pip install -e .[mcp,test]` before running the
    suite. Expected result: `107 passed`.
+
+### TODO — Not Yet Fixed
+
+Snags hit while updating an existing install to the latest version (2026-07-13). Unlike the
+roadblocks above, these are still open:
+
+4. **TODO.** Editable installs go stale silently. `pip show zotero-fulltext-mcp` can report an
+   old version (e.g. `0.1.0`) even after the source repo has advanced past it (e.g. to `0.2.0`
+   per `pyproject.toml` / the latest git tag), because editable-install metadata is only
+   refreshed on reinstall, not on `git pull`. Neither `check-setup` nor `install-mcp` currently
+   compares the installed package version against the source repo's `pyproject.toml` version, so
+   nothing flags the drift — the fix (`pip install -U -e .[mcp]`) has to be discovered manually.
+   Consider adding a version-mismatch check to `check-setup` (or a dedicated flag) when running
+   from an editable install.
+
+5. **TODO.** `claude mcp list` reports a generic `Failed to connect` for the `zotero-fulltext`
+   server regardless of root cause — a broken/stale install and a missing FTS index (i.e. the
+   conversion pipeline was never run for the given `--db` path) look identical from that output.
+   The server's stdio entrypoint could fail fast with a clearer stderr message when `--db` points
+   to a nonexistent file or an empty index (e.g. "no FTS index found at <path> — run
+   `zotero-pdf-text convert` first"), so the failure is actionable instead of generic.
