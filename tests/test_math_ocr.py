@@ -121,6 +121,7 @@ class ReconvertWithMarkerTests(unittest.TestCase):
             root = Path(tmp)
             source_path, markdown_path, jsonl_path, sqlite_path = _build_fixture(root)
             original_jsonl = jsonl_path.read_text(encoding="utf-8")
+            original_markdown = markdown_path.read_text(encoding="utf-8")
 
             def _write_marker_output(args, **kwargs):
                 Path(args[4]).write_text("# Better body\n\nEquation: $x^2$", encoding="utf-8")
@@ -138,9 +139,12 @@ class ReconvertWithMarkerTests(unittest.TestCase):
 
             self.assertFalse(result.ok)
             self.assertIn("is held by host", result.error)
-            # The index was untouched -- reconvert-math backed off instead of racing past the
-            # lock and silently overwriting/losing convert-new's concurrent update.
+            # Both the index and the Markdown were untouched -- the Markdown write happens inside
+            # the lock alongside the JSONL/FTS update now, so a contested lock leaves no partial
+            # state (previously the Markdown write ran before the lock check and would have been
+            # updated here even though the index stayed stale).
             self.assertEqual(jsonl_path.read_text(encoding="utf-8"), original_jsonl)
+            self.assertEqual(markdown_path.read_text(encoding="utf-8"), original_markdown)
 
 
 def _build_fixture(root: Path) -> tuple[Path, Path, Path, Path]:

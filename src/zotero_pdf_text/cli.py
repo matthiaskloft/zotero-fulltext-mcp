@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import contextlib
 import csv
 import importlib.util
 import json
@@ -536,8 +535,23 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "append-index":
         fts_db = args.fts_db or (args.index.parent / f"{args.index.stem}.sqlite")
+        # append-index writes both --index and fts_db; a single _pipeline_lock_root(args.index)
+        # only protects the JSONL side. If an explicit --fts-db resolves to a different canonical
+        # root (e.g. a separate drive/share), locking just one leaves the other artifact
+        # unprotected against a concurrent command writing the same FTS file from its own root --
+        # refuse rather than silently guaranteeing less than the lock implies.
+        index_lock_root = _pipeline_lock_root(args.index)
+        fts_lock_root = _pipeline_lock_root(fts_db)
+        if index_lock_root != fts_lock_root:
+            print(
+                f"--index ({args.index}) and --fts-db ({fts_db}) resolve to different pipeline "
+                f"lock roots ({index_lock_root} vs {fts_lock_root}); place both under one "
+                "output_root so this command's lock actually covers everything it writes.",
+                file=sys.stderr,
+            )
+            return 2
         try:
-            with pipeline_write_lock(_pipeline_lock_root(args.index), command="append-index"):
+            with pipeline_write_lock(index_lock_root, command="append-index"):
                 before = len(load_indexed_keys(args.index))
                 append_text_index(args.manifest, args.index, args.index)
                 after = len(load_indexed_keys(args.index))
@@ -1103,13 +1117,15 @@ def _check_output_root_writable(output_root: Path) -> tuple[bool, str]:
         fd, tmp_name = tempfile.mkstemp(dir=target, prefix=".zotero_pdf_text_write_check_")
     except OSError as exc:
         return False, f"Cannot create files under {target}: {exc}"
+    os.close(fd)
+    # Unlike the fts.py/indexer.py atomic-write cleanup (where a stray temp file next to a
+    # successfully published index is harmless), a cleanup failure here is itself the finding:
+    # this check's whole point is to prove nothing gets left behind, so failing to remove the
+    # probe file must fail the check and report the leftover path -- not be silently suppressed.
     try:
-        os.close(fd)
-    finally:
-        # Suppress cleanup failures so they never shadow the successful-write result above --
-        # the probe file already proved writability by the time cleanup runs.
-        with contextlib.suppress(OSError):
-            Path(tmp_name).unlink(missing_ok=True)
+        Path(tmp_name).unlink()
+    except OSError as exc:
+        return False, f"Created a write-check file under {target} but failed to remove it: {tmp_name} ({exc})"
 
     if output_root.exists():
         return True, f"{output_root} exists and is writable"

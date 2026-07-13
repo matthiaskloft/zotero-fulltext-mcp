@@ -175,12 +175,15 @@ class CheckOutputRootWritableTests(unittest.TestCase):
             self.assertFalse(ok)
             self.assertIn("Cannot create files", detail)
 
-    def test_cleanup_failure_does_not_mask_a_successful_probe(self):
+    def test_cleanup_failure_fails_the_check_and_reports_the_leftover_path(self):
+        # Unlike the atomic-write helpers (where a stray temp file next to a successfully
+        # published index is harmless), this check's entire point is to prove nothing gets left
+        # behind -- a cleanup failure must fail the check, not be silently reported as success.
         with tempfile.TemporaryDirectory() as tmp:
             with patch("pathlib.Path.unlink", side_effect=OSError("cleanup failed")):
                 ok, detail = _check_output_root_writable(Path(tmp))
-            self.assertTrue(ok)
-            self.assertIn("writable", detail)
+            self.assertFalse(ok)
+            self.assertIn("failed to remove", detail)
 
 
 class CheckSetupCliTests(unittest.TestCase):
