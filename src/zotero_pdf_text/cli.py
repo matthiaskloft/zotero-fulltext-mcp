@@ -27,7 +27,7 @@ from .bibtex import (
 )
 from .config import load_config, resolve_config_path, validate_config
 from .converter import convert_sample, convert_verified, default_worker_count
-from .fts import build_fts_index, coverage_report, get_fulltext, search_fts
+from .fts import ChunkNotFoundError, build_fts_index, coverage_report, get_fulltext, search_fts
 from .ingestion import dry_run_ingest, ingest_approved
 from .indexer import append_text_index, build_text_index, load_indexed_keys
 from .lock import PipelineLockedError, pipeline_write_lock
@@ -615,12 +615,16 @@ def main(argv: list[str] | None = None) -> int:
             _print_search_results(results, search_mode=args.search_mode)
         return 0
     if args.command == "get-fulltext":
-        result = get_fulltext(
-            args.db,
-            attachment_key=args.attachment_key,
-            max_chars=args.max_chars,
-            chunk_index=args.chunk_index,
-        )
+        try:
+            result = get_fulltext(
+                args.db,
+                attachment_key=args.attachment_key,
+                max_chars=args.max_chars,
+                chunk_index=args.chunk_index,
+            )
+        except ChunkNotFoundError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
         if args.json:
             print(json.dumps(result.to_dict(), ensure_ascii=False, indent=2))
         else:

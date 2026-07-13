@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from zotero_pdf_text.fts import (
+    ChunkNotFoundError,
     DEFAULT_CONTEXT_RECORD_LIMIT,
     _chunk_text,
     build_fts_index,
@@ -35,12 +36,15 @@ class FtsTests(unittest.TestCase):
             self.assertEqual(results[0].citation_key, "smithConsensus2024")
             self.assertIn("cultural", results[0].snippet.casefold())
             self.assertIs(results[0].has_math, True)
+            self.assertEqual(results[0].markdown_sha256, "abc")
+            self.assertIn("text", results[0].matched_fields)
 
             fulltext = get_fulltext(sqlite_db, attachment_key="ATTACH1", max_chars=50)
             self.assertEqual(fulltext.zotero_parent_key, "PARENT1")
             self.assertEqual(fulltext.citation_key, "smithConsensus2024")
             self.assertLessEqual(len(fulltext.text), 50)
             self.assertIs(fulltext.has_math, True)
+            self.assertEqual(fulltext.markdown_sha256, "abc")
 
             fulltext_no_math = get_fulltext(sqlite_db, attachment_key="ATTACH2", max_chars=50)
             self.assertIs(fulltext_no_math.has_math, False)
@@ -335,6 +339,102 @@ class FtsTests(unittest.TestCase):
             self.assertEqual(results[0].chunk_index, 0)
             self.assertNotIn("[", results[0].snippet)
 
+    def test_search_reports_actual_matching_fields_without_marker_collisions(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            jsonl = root / "index.jsonl"
+            sqlite_db = root / "index.sqlite"
+            _write_jsonl(jsonl)
+            record = json.loads(jsonl.read_text(encoding="utf-8").splitlines()[0])
+            record.update(
+                {
+                    "title": "Alpha heading",
+                    "creators": "Beta Author",
+                    "citation_key": "gammaKey",
+                    "text": "Delta body with original control-like content \u0002noise\u0003.",
+                }
+            )
+            jsonl.write_text(json.dumps(record) + "\n", encoding="utf-8")
+            build_fts_index(jsonl, sqlite_db)
+
+            self.assertEqual(search_fts(sqlite_db, "alpha")[0].matched_fields, ["title"])
+            self.assertEqual(search_fts(sqlite_db, "beta")[0].matched_fields, ["creators"])
+            self.assertEqual(search_fts(sqlite_db, "delta")[0].matched_fields, ["text"])
+            self.assertEqual(search_fts(sqlite_db, "gammaKey")[0].matched_fields, ["citation_key"])
+            self.assertEqual(
+                search_fts(sqlite_db, "alpha beta delta gammaKey")[0].matched_fields,
+                ["title", "creators", "text", "citation_key"],
+            )
+
+    def test_exact_chunk_navigation_truncation_and_out_of_range_contract(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            jsonl = root / "index.jsonl"
+            sqlite_db = root / "index.sqlite"
+            _write_jsonl(jsonl)
+            record = json.loads(jsonl.read_text(encoding="utf-8").splitlines()[0])
+            record.update({"text": "abcdefghijABCDEFGHIJklmnopqrst", "char_count": 30})
+            jsonl.write_text(json.dumps(record) + "\n", encoding="utf-8")
+            build_fts_index(jsonl, sqlite_db, chunk_chars=10, overlap_chars=0)
+
+            first = get_fulltext(sqlite_db, attachment_key="ATTACH1", chunk_index=0)
+            middle = get_fulltext(sqlite_db, attachment_key="ATTACH1", chunk_index=1, max_chars=5)
+            last = get_fulltext(sqlite_db, attachment_key="ATTACH1", chunk_index=2)
+            preview = get_fulltext(sqlite_db, attachment_key="ATTACH1", max_chars=12)
+
+            self.assertEqual(first.chunk_count, 3)
+            self.assertEqual((first.previous_chunk_index, first.next_chunk_index, first.has_more), (None, 1, True))
+            self.assertEqual((middle.previous_chunk_index, middle.next_chunk_index, middle.has_more), (0, 2, True))
+            self.assertEqual((last.previous_chunk_index, last.next_chunk_index, last.has_more), (1, None, False))
+            self.assertEqual((middle.start_char, middle.end_char), (10, 15))
+            self.assertEqual((middle.stored_chunk_char_start, middle.stored_chunk_char_end), (10, 20))
+            self.assertTrue(middle.truncated)
+            self.assertEqual(
+                (preview.previous_chunk_index, preview.next_chunk_index, preview.has_more),
+                (None, None, None),
+            )
+            self.assertEqual((preview.stored_chunk_char_start, preview.stored_chunk_char_end), (None, None))
+            self.assertTrue(preview.truncated)
+
+            with self.assertRaises(ChunkNotFoundError):
+                get_fulltext(sqlite_db, attachment_key="ATTACH1", chunk_index=3)
+
+    def test_zero_chunk_record_supports_preview_but_not_exact_chunk(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            jsonl = root / "index.jsonl"
+            sqlite_db = root / "index.sqlite"
+            _write_jsonl(jsonl)
+            record = json.loads(jsonl.read_text(encoding="utf-8").splitlines()[0])
+            record.update({"text": "", "char_count": 0, "word_count": 0})
+            jsonl.write_text(json.dumps(record) + "\n", encoding="utf-8")
+            build_fts_index(jsonl, sqlite_db)
+
+            preview = get_fulltext(sqlite_db, attachment_key="ATTACH1")
+            self.assertEqual((preview.text, preview.chunk_count, preview.truncated), ("", 0, False))
+            with self.assertRaises(ChunkNotFoundError):
+                get_fulltext(sqlite_db, attachment_key="ATTACH1", chunk_index=0)
+
+    def test_content_hash_tracks_rebuilt_markdown_content(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            jsonl = root / "index.jsonl"
+            sqlite_db = root / "index.sqlite"
+            _write_jsonl(jsonl)
+            build_fts_index(jsonl, sqlite_db)
+            original = search_fts(sqlite_db, "cultural")[0].markdown_sha256
+            build_fts_index(jsonl, sqlite_db)
+            rebuilt_identical = search_fts(sqlite_db, "cultural")[0].markdown_sha256
+
+            records = [json.loads(line) for line in jsonl.read_text(encoding="utf-8").splitlines()]
+            records[0].update({"text": "Changed cultural evidence", "markdown_sha256": "changed"})
+            jsonl.write_text("".join(json.dumps(record) + "\n" for record in records), encoding="utf-8")
+            build_fts_index(jsonl, sqlite_db)
+
+            self.assertEqual(original, "abc")
+            self.assertEqual(rebuilt_identical, original)
+            self.assertEqual(search_fts(sqlite_db, "cultural")[0].markdown_sha256, "changed")
+
     def test_get_fulltext_bounds_the_chunk_query_for_large_documents(self):
         # Regression test: get_fulltext used to fetch every chunk row for a record before
         # truncating the assembled text to max_chars. A small window request against a very
@@ -472,6 +572,11 @@ class FtsTests(unittest.TestCase):
 
             with self.assertRaises(ValueError):
                 get_item_context(sqlite_db, parent_key="SHARED_PARENT", limit=0)
+
+            with self.assertRaises(ValueError):
+                get_item_context(sqlite_db)
+            with self.assertRaises(ValueError):
+                get_item_context(sqlite_db, parent_key="SHARED_PARENT", attachment_key="ATTACH0")
 
 
 def _write_jsonl(path: Path) -> None:

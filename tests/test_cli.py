@@ -10,6 +10,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from zotero_pdf_text.cli import _pipeline_lock_root, _shell_quote, build_parser, main
+from zotero_pdf_text.fts import ChunkNotFoundError, SearchResult
 from zotero_pdf_text.math_ocr import ReconvertResult
 
 
@@ -563,6 +564,62 @@ class SearchCliTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         search.assert_called_once_with(Path("unused.sqlite"), "topic", limit=10, search_mode="any_terms")
         self.assertEqual(json.loads(output.getvalue()), {"search_mode": "any_terms", "no_results": True, "results": []})
+
+    def test_json_search_result_includes_content_hash_and_matching_fields(self):
+        result = SearchResult(
+            zotero_parent_key="PARENT1",
+            zotero_attachment_key="ATTACH1",
+            title="Title match",
+            creators="Author",
+            year="2026",
+            doi="",
+            citation_key="key2026",
+            snippet="Title match",
+            score=-1.0,
+            chunk_index=0,
+            start_char=0,
+            end_char=10,
+            markdown_sha256="abc123",
+            matched_fields=["title"],
+            source_path="paper.pdf",
+            markdown_path="paper.md",
+            extraction_tool="marker",
+            classification="mapped_verified",
+            identity_status="verified",
+            identity_rule="doi_exact",
+            has_math=False,
+        )
+        with patch("zotero_pdf_text.cli.search_fts", return_value=[result]):
+            output = io.StringIO()
+            with redirect_stdout(output):
+                exit_code = main(["search-fts", "--db", "unused.sqlite", "--query", "title", "--json"])
+
+        payload = json.loads(output.getvalue())
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(payload["results"][0]["markdown_sha256"], "abc123")
+        self.assertEqual(payload["results"][0]["matched_fields"], ["title"])
+
+    def test_get_fulltext_reports_out_of_range_chunk_index_as_a_clean_error(self):
+        with patch(
+            "zotero_pdf_text.cli.get_fulltext",
+            side_effect=ChunkNotFoundError("Chunk 99 does not exist for attachment ATTACH1"),
+        ):
+            output = io.StringIO()
+            with redirect_stdout(output):
+                exit_code = main(
+                    [
+                        "get-fulltext",
+                        "--db",
+                        "unused.sqlite",
+                        "--attachment-key",
+                        "ATTACH1",
+                        "--chunk-index",
+                        "99",
+                    ]
+                )
+
+        self.assertEqual(exit_code, 2)
+        self.assertEqual(output.getvalue(), "")
 
 
 if __name__ == "__main__":
