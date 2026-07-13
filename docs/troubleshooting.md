@@ -5,6 +5,15 @@ own repo checkout and `converted_text` location. Commands assume `$python` is se
 venv (see `docs/operations.md`) — not `.\.venv\...` inside the project folder, which is never
 correct on any machine.
 
+## What Platform Support CI Actually Verifies
+
+The [CI workflow](../.github/workflows/ci.yml) runs the full pytest suite on Windows, macOS, and
+Linux for every push/PR, so that's the source of truth for whether the package installs and the
+conversion/indexing/search logic works on a given OS. It does **not** verify Zotero executable
+auto-detection or process-name checks (`ensure-zotero`) against a real Zotero installation on
+macOS/Linux, since CI has no Zotero installed. Those remain best-effort defaults on non-Windows
+platforms; pass `--zotero-exe` explicitly if `ensure-zotero` doesn't find your install.
+
 ## Zotero MCP Connection Refused
 
 Symptoms:
@@ -230,6 +239,10 @@ update), then re-link the PDF fresh via `link-pdf` if it had a real parent item,
 key with no stale server history.
 
 ## Installing / Registering On A New Machine — Known Roadblocks
+
+Run `zotero-pdf-text check-setup --config .\config.json` first — it catches a bad path, a
+missing `zotero.sqlite`, an unwritable `output_root`, or a missing extra in seconds, before any of
+the roadblocks below have a chance to surface as a confusing mid-command failure.
 
 Snags hit while installing the MCP server on a fresh Windows machine. All three
 are now fixed as of the roadblock-fix pass below; kept here in case an older

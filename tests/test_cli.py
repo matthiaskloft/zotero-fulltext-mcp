@@ -1,12 +1,13 @@
 import io
 import json
+import os
 import tempfile
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
-from zotero_pdf_text.cli import _shell_quote, build_parser, main
+from zotero_pdf_text.cli import _pipeline_lock_root, _shell_quote, build_parser, main
 from zotero_pdf_text.math_ocr import ReconvertResult
 
 
@@ -79,6 +80,20 @@ class ReconvertMathCliTests(unittest.TestCase):
                 exit_code = main(["reconvert-math", "--key", "ABCD1234"])
 
             self.assertEqual(exit_code, 1)
+
+
+class PipelineLockRootTests(unittest.TestCase):
+    def test_walks_up_past_index_directory(self):
+        # build-index/append-index/build-fts have no --config, only an explicit index path, but
+        # must lock the same root convert-new/reconvert-math derive from config.output_root --
+        # otherwise commands writing the same index files can race past each other's lock.
+        output_root = Path("C:/data/converted_text")
+        index_path = output_root / "index" / "zotero_text_index.jsonl"
+        self.assertEqual(_pipeline_lock_root(index_path), output_root)
+
+    def test_falls_back_to_immediate_parent_for_non_conventional_layout(self):
+        path = Path("C:/data/custom_index.jsonl")
+        self.assertEqual(_pipeline_lock_root(path), Path("C:/data"))
 
 
 class ShellQuoteTests(unittest.TestCase):
@@ -198,7 +213,14 @@ class InstallMcpCliTests(unittest.TestCase):
             mock_run.assert_called_once()
             call_args = mock_run.call_args[0][0]
             expected_db = str(root / "converted_text" / "index" / "zotero_text_index.sqlite")
-            expected_exe = str(root / "Scripts" / "zotero-fulltext-mcp.exe")
+            # _install_mcp derives the exe suffix from the actual running OS (os.name), not from
+            # the shape of the mocked sys.executable path, so the expectation must match whatever
+            # platform this test is actually running on.
+            exe_name = "zotero-fulltext-mcp.exe" if os.name == "nt" else "zotero-fulltext-mcp"
+            # _install_mcp resolves sys.executable's parent (Path.resolve()), which on macOS
+            # follows the /tmp -> /private/tmp (and /var -> /private/var) symlink -- resolve here
+            # too so the expectation matches on macOS runners, not just Windows/Linux.
+            expected_exe = str((root / "Scripts" / exe_name).resolve())
             # Exact ordered argv, not just membership -- catches regressions like a dropped '--'
             # separator, which would make Claude parse '--db'/'--config' as its own options
             # instead of forwarding them to the server.
@@ -334,6 +356,42 @@ class AppendIndexCliTests(unittest.TestCase):
             }
             self.assertEqual(keys, {"OLD1", "NEW1"})
             self.assertTrue((root / "index" / "zotero_text_index.sqlite").exists())
+
+    def test_rejects_index_and_fts_db_under_different_lock_roots(self):
+        # Regression test: append-index writes both --index and --fts-db. Locking only
+        # _pipeline_lock_root(args.index) would leave a --fts-db under a genuinely different
+        # output_root (e.g. a separate drive) unprotected by the lock -- a concurrent build-fts
+        # targeting that same FTS file could race past it. The command must refuse instead of
+        # silently guaranteeing less exclusion than the lock implies.
+        with tempfile.TemporaryDirectory() as tmp_a, tempfile.TemporaryDirectory() as tmp_b:
+            index_path = Path(tmp_a) / "index" / "zotero_text_index.jsonl"
+            index_path.parent.mkdir(parents=True)
+            index_path.write_text("", encoding="utf-8")
+            manifest_path = Path(tmp_a) / "manifest.csv"
+            manifest_path.write_text(
+                "status,output_path,zotero_attachment_key,zotero_parent_key,title,creators,year,doi,"
+                "citation_key,source_path,extraction_tool,page_count,classification,identity_status,"
+                "identity_rule,has_math\n",
+                encoding="utf-8",
+            )
+            fts_db_path = Path(tmp_b) / "search" / "zotero_text_index.sqlite"
+
+            buffer = io.StringIO()
+            with redirect_stdout(buffer):
+                exit_code = main(
+                    [
+                        "append-index",
+                        "--manifest",
+                        str(manifest_path),
+                        "--index",
+                        str(index_path),
+                        "--fts-db",
+                        str(fts_db_path),
+                    ]
+                )
+
+            self.assertEqual(exit_code, 2)
+            self.assertFalse(fts_db_path.exists())
 
 
 class SearchCliTests(unittest.TestCase):

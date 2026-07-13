@@ -15,6 +15,20 @@ The venv should live **outside** `$repo` (see README's "Install" section) — a 
 machine-specific absolute path and compiled dependencies, so keeping it inside a repo you might
 sync or re-clone elsewhere just creates dead weight.
 
+## Setup Check
+
+```powershell
+& $python -m zotero_pdf_text check-setup --config .\config.json
+```
+
+Read-only and fast: validates that the config loads, that `zotero_data_directory`,
+`linked_attachments`, and `zotero.sqlite` exist, that `output_root` exists (or is creatable) and
+writable, and reports Python version and which optional extras (`mcp`, `zotero-write`, `marker`)
+are installed. Exits non-zero if any required check fails. Optional extras are informational by
+default — pass `--require-mcp` to fail if `mcp` isn't installed. Add `--json` for machine-readable
+output. Run this first on a new machine or after editing `config.json`, before `dry-run` or any
+conversion command.
+
 ## Zotero Preflight
 
 ```powershell
@@ -85,6 +99,16 @@ then rebuilds SQLite FTS from the updated JSONL:
   --index $data\index\zotero_text_index.jsonl
 ```
 
+`append-index` writes its updated JSONL to a same-directory temp file first and only replaces the
+existing one via an atomic rename once the write succeeds. If the process crashes or is killed
+mid-write, the previous JSONL is untouched rather than truncated — re-run the same `append-index`
+command once the underlying issue is fixed; nothing needs manual recovery.
+
+If you pass an explicit `--fts-db` that lives under a different `output_root` than `--index` (an
+unusual split-storage setup), the command refuses to start rather than locking only the JSONL
+side and leaving the FTS database unprotected against a concurrent writer. Keep both under one
+`output_root`.
+
 ## Unverified PDF Review
 
 Use this when a dry run reports `mapped_unverified` rows. The command converts
@@ -148,6 +172,12 @@ values before picking a threshold rather than reusing 0.92 by default.
   --index-jsonl $data\index\zotero_text_index.jsonl `
   --output $data\index\zotero_text_index.sqlite
 ```
+
+Like `append-index`, `build-fts` builds into a same-directory temp file, runs a `PRAGMA
+integrity_check` against it, and only replaces `--output` via an atomic rename once that check
+passes. A crash, kill, or failed integrity check during rebuild leaves the previous SQLite
+database in place and still queryable — search keeps working against the last good index until a
+successful rebuild replaces it.
 
 Search:
 
@@ -295,11 +325,16 @@ for newly linked verified PDFs in one step.)
 ## Multi-Machine Write Lock
 
 If `converted_text` is a single index shared across more than one machine (e.g. via a synced
-cloud folder), every command
-that writes under it (`convert-sample`, `convert-verified`, `convert-new`, `verify-unverified`,
-`apply-verification`, `build-index`, `build-fts`) takes a lock file (`.pipeline.lock`, next to the
-files it writes) before starting and releases it on exit, so two machines can never rebuild the
-same SQLite/JSONL files at once — the same corruption class as syncing a live Zotero database.
+cloud folder), every command that writes under it (`convert-sample`, `convert-verified`,
+`convert-new`, `verify-unverified`, `apply-verification`, `build-index`, `append-index`,
+`build-fts`, `reconvert-math`/`reconvert_with_math_ocr`) takes the same lock file
+(`config.output_root\.pipeline.lock`) before starting and releases it on exit, so two machines
+(or two commands on the same machine) can never rebuild the same SQLite/JSONL files at once — the
+same corruption class as syncing a live Zotero database. `build-index`/`append-index`/`build-fts`
+take an explicit `--output`/`--index` path instead of `--config`; they derive the same canonical
+root from that path's conventional `<output_root>\index\<file>` layout rather than locking the
+narrower `index` subdirectory, so they still share the lock with `convert-new` and
+`reconvert-math` even though they never load a `ProjectConfig`.
 
 If a command refuses to start with a message naming another host, pid, and start time, check that
 the other machine isn't actually mid-run before doing anything. If that machine's process has

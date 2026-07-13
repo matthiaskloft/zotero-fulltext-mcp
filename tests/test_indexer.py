@@ -1,11 +1,19 @@
 import csv
 import json
+import os
 import tempfile
 import unittest
 from dataclasses import replace
 from pathlib import Path
+from unittest.mock import patch
 
-from zotero_pdf_text.indexer import TextIndexRecord, build_text_index, replace_text_index_record
+from zotero_pdf_text.indexer import (
+    TextIndexRecord,
+    _atomic_write_text,
+    append_text_index,
+    build_text_index,
+    replace_text_index_record,
+)
 
 
 class IndexerTests(unittest.TestCase):
@@ -32,6 +40,25 @@ class IndexerTests(unittest.TestCase):
             self.assertTrue(record["markdown_sha256"])
             self.assertTrue(output.with_suffix(".summary.md").exists())
             self.assertIs(record["has_math"], False)
+
+    def test_interrupted_build_preserves_previous_index(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            markdown = root / "paper.md"
+            markdown.write_text("---\ntitle: Test\n---\n# Heading\n\nBody text", encoding="utf-8")
+            manifest = root / "manifest.csv"
+            _write_manifest(manifest, markdown)
+            output = root / "index" / "zotero_text_index.jsonl"
+
+            build_text_index(manifest, output)
+            previous_content = output.read_text(encoding="utf-8")
+
+            with patch("zotero_pdf_text._atomic.os.replace", side_effect=OSError("boom")):
+                with self.assertRaises(OSError):
+                    build_text_index(manifest, output)
+
+            self.assertEqual(output.read_text(encoding="utf-8"), previous_content)
+            self.assertEqual(list(output.parent.glob(".zotero_text_index.jsonl.tmp-*")), [])
 
     def test_has_math_true_in_manifest_round_trips_to_jsonl(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -114,6 +141,127 @@ class ReplaceTextIndexRecordTests(unittest.TestCase):
             record = _make_record("ATTACH1")
             with self.assertRaises(FileNotFoundError):
                 replace_text_index_record(jsonl, "ATTACH1", record)
+
+    def test_interrupted_write_preserves_existing_index(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            jsonl = root / "index.jsonl"
+            first = _make_record("ATTACH1", text="Old text one")
+            second = _make_record("ATTACH2", text="Untouched text two")
+            with jsonl.open("w", encoding="utf-8", newline="\n") as handle:
+                handle.write(json.dumps(first.__dict__, ensure_ascii=False) + "\n")
+                handle.write(json.dumps(second.__dict__, ensure_ascii=False) + "\n")
+            previous_content = jsonl.read_text(encoding="utf-8")
+
+            updated = replace(first, extraction_tool="marker", text="New marker text")
+            with patch("zotero_pdf_text._atomic.os.replace", side_effect=OSError("boom")):
+                with self.assertRaises(OSError):
+                    replace_text_index_record(jsonl, "ATTACH1", updated)
+
+            self.assertEqual(jsonl.read_text(encoding="utf-8"), previous_content)
+            self.assertEqual(list(root.glob(".index.jsonl.tmp-*")), [])
+
+
+class AppendTextIndexTests(unittest.TestCase):
+    def test_interrupted_write_preserves_existing_index(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            jsonl = root / "index.jsonl"
+            existing = _make_record("ATTACH1", text="Existing text")
+            jsonl.write_text(json.dumps(existing.__dict__, ensure_ascii=False) + "\n", encoding="utf-8")
+            previous_content = jsonl.read_text(encoding="utf-8")
+
+            markdown = root / "paper2.md"
+            markdown.write_text("---\ntitle: Test\n---\nNew body text", encoding="utf-8")
+            manifest = root / "manifest.csv"
+            _write_manifest(manifest, markdown)
+
+            with patch("zotero_pdf_text._atomic.os.replace", side_effect=OSError("boom")):
+                with self.assertRaises(OSError):
+                    append_text_index(manifest, jsonl, jsonl)
+
+            self.assertEqual(jsonl.read_text(encoding="utf-8"), previous_content)
+            self.assertEqual(list(root.glob(".index.jsonl.tmp-*")), [])
+
+    def test_successful_append_adds_new_record_and_leaves_no_temp_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            jsonl = root / "index.jsonl"
+            existing = _make_record("ATTACH1", text="Existing text")
+            jsonl.write_text(json.dumps(existing.__dict__, ensure_ascii=False) + "\n", encoding="utf-8")
+
+            markdown = root / "paper2.md"
+            markdown.write_text("---\ntitle: Test\n---\nNew body text", encoding="utf-8")
+            manifest = root / "manifest.csv"
+            _write_manifest(manifest, markdown)
+
+            append_text_index(manifest, jsonl, jsonl)
+
+            lines = jsonl.read_text(encoding="utf-8").splitlines()
+            self.assertEqual(len(lines), 2)
+            keys = {json.loads(line)["zotero_attachment_key"] for line in lines}
+            self.assertEqual(keys, {"ATTACH1", "ATTACH"})
+            self.assertEqual(list(root.glob(".index.jsonl.tmp-*")), [])
+
+
+class AtomicWriteTextTests(unittest.TestCase):
+    def test_failure_preserves_original_file_and_cleans_up_temp(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "data.txt"
+            path.write_text("original", encoding="utf-8")
+
+            with patch("zotero_pdf_text._atomic.os.replace", side_effect=OSError("boom")):
+                with self.assertRaises(OSError):
+                    _atomic_write_text(path, "replacement")
+
+            self.assertEqual(path.read_text(encoding="utf-8"), "original")
+            self.assertEqual(list(Path(tmp).glob(".data.txt.tmp-*")), [])
+
+    def test_success_replaces_content(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "data.txt"
+            path.write_text("original", encoding="utf-8")
+
+            _atomic_write_text(path, "replacement")
+
+            self.assertEqual(path.read_text(encoding="utf-8"), "replacement")
+            self.assertEqual(list(Path(tmp).glob(".data.txt.tmp-*")), [])
+
+    def test_retries_past_transient_permission_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "data.txt"
+            path.write_text("original", encoding="utf-8")
+
+            real_replace = os.replace
+            calls = {"count": 0}
+
+            def flaky_replace(src, dst):
+                calls["count"] += 1
+                if calls["count"] < 3:
+                    raise PermissionError("simulated concurrent reader")
+                real_replace(src, dst)
+
+            with patch("zotero_pdf_text._atomic.os.replace", side_effect=flaky_replace), patch(
+                "zotero_pdf_text._atomic.time.sleep"
+            ):
+                _atomic_write_text(path, "replacement")
+
+            self.assertEqual(calls["count"], 3)
+            self.assertEqual(path.read_text(encoding="utf-8"), "replacement")
+
+    def test_cleanup_failure_does_not_mask_original_exception(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "data.txt"
+            path.write_text("original", encoding="utf-8")
+
+            with patch("zotero_pdf_text._atomic.os.replace", side_effect=OSError("replace failed")), patch(
+                "pathlib.Path.unlink", side_effect=OSError("cleanup also failed")
+            ):
+                with self.assertRaises(OSError) as ctx:
+                    _atomic_write_text(path, "replacement")
+
+            self.assertEqual(str(ctx.exception), "replace failed")
+            self.assertEqual(path.read_text(encoding="utf-8"), "original")
 
 
 def _make_record(attachment_key: str, *, text: str = "Body text") -> TextIndexRecord:

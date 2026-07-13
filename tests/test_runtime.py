@@ -20,8 +20,12 @@ class RuntimeTests(unittest.TestCase):
             state = {"running": False, "launched": False}
 
             def fake_run(args, **kwargs):
-                stdout = "zotero.exe 123" if state["running"] else "INFO: No tasks are running"
-                return subprocess.CompletedProcess(args, 0, stdout=stdout, stderr="")
+                # is_zotero_running branches on os.name: Windows checks stdout content (tasklist),
+                # POSIX checks the returncode (pgrep: 0 = found, non-zero = not found) -- this
+                # fake must model both so the test exercises correctly on any platform.
+                if state["running"]:
+                    return subprocess.CompletedProcess(args, 0, stdout="zotero.exe 123", stderr="")
+                return subprocess.CompletedProcess(args, 1, stdout="INFO: No tasks are running", stderr="")
 
             def fake_popen(args, **kwargs):
                 state["launched"] = True
@@ -46,7 +50,9 @@ class RuntimeTests(unittest.TestCase):
             missing = Path(tmp) / "zotero.exe"
 
             def fake_run(args, **kwargs):
-                return subprocess.CompletedProcess(args, 0, stdout="INFO: No tasks are running", stderr="")
+                # Non-zero returncode so the POSIX (pgrep) branch also reports "not running",
+                # matching the "not found" stdout used by the Windows (tasklist) branch.
+                return subprocess.CompletedProcess(args, 1, stdout="INFO: No tasks are running", stderr="")
 
             status = ensure_zotero_running(
                 zotero_exe=missing,

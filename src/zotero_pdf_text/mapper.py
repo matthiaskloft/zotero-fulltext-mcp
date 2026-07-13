@@ -450,7 +450,10 @@ def _candidate_paths(record: AttachmentRecord, linked_root: Path) -> list[tuple[
     if zotero_path.startswith("attachments:"):
         relative = zotero_path.split(":", 1)[1].replace("/", os.sep).replace("\\", os.sep)
         return [(linked_root / relative, "zotero_attachments_path")]
-    if re.match(r"^[A-Za-z]:[\\/]", zotero_path):
+    # zotero_path reflects whatever OS Zotero itself ran on when the attachment was linked, not
+    # the OS this tool happens to run on -- recognize both a Windows drive-letter path and a
+    # POSIX absolute path as "absolute_path" regardless of the current platform.
+    if re.match(r"^[A-Za-z]:[\\/]", zotero_path) or zotero_path.startswith("/"):
         return [(Path(zotero_path), "absolute_path")]
     return []
 

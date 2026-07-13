@@ -1,4 +1,5 @@
 import json
+import os
 import sqlite3
 import tempfile
 import unittest
@@ -60,6 +61,104 @@ class FtsTests(unittest.TestCase):
             self.assertEqual(coverage["records"], 2)
             self.assertEqual(coverage["by_extraction_tool"]["pymupdf4llm.to_markdown"], 2)
             self.assertEqual(coverage["by_has_math"], {True: 1, False: 1})
+
+    def test_interrupted_rebuild_preserves_previous_database(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            jsonl = root / "index.jsonl"
+            sqlite_db = root / "index.sqlite"
+            _write_jsonl(jsonl)
+            build_fts_index(jsonl, sqlite_db, chunk_chars=40, overlap_chars=5)
+            previous_bytes = sqlite_db.read_bytes()
+
+            with patch("zotero_pdf_text.fts._insert_chunk", side_effect=RuntimeError("boom")):
+                with self.assertRaises(RuntimeError):
+                    build_fts_index(jsonl, sqlite_db, chunk_chars=40, overlap_chars=5)
+
+            # The previous database is untouched, byte-for-byte, and still queryable.
+            self.assertEqual(sqlite_db.read_bytes(), previous_bytes)
+            results = search_fts(sqlite_db, "cultural consensus", limit=5)
+            self.assertEqual(len(results), 1)
+
+            # No leftover temp file from the failed build.
+            self.assertEqual(list(root.glob(".index.sqlite.tmp-*")), [])
+
+    def test_failed_integrity_check_preserves_previous_database(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            jsonl = root / "index.jsonl"
+            sqlite_db = root / "index.sqlite"
+            _write_jsonl(jsonl)
+            build_fts_index(jsonl, sqlite_db, chunk_chars=40, overlap_chars=5)
+            previous_bytes = sqlite_db.read_bytes()
+
+            with patch("zotero_pdf_text.fts._check_integrity", side_effect=RuntimeError("corrupt")):
+                with self.assertRaises(RuntimeError):
+                    build_fts_index(jsonl, sqlite_db, chunk_chars=40, overlap_chars=5)
+
+            self.assertEqual(sqlite_db.read_bytes(), previous_bytes)
+            self.assertEqual(list(root.glob(".index.sqlite.tmp-*")), [])
+
+    def test_replace_retries_past_transient_permission_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            jsonl = root / "index.jsonl"
+            sqlite_db = root / "index.sqlite"
+            _write_jsonl(jsonl)
+
+            real_replace = os.replace
+            calls = {"count": 0}
+
+            def flaky_replace(src, dst):
+                calls["count"] += 1
+                if calls["count"] < 3:
+                    raise PermissionError("simulated concurrent reader")
+                real_replace(src, dst)
+
+            with patch("zotero_pdf_text._atomic.os.replace", side_effect=flaky_replace), patch(
+                "zotero_pdf_text._atomic.time.sleep"
+            ):
+                summary = build_fts_index(jsonl, sqlite_db, chunk_chars=40, overlap_chars=5)
+
+            self.assertEqual(calls["count"], 3)
+            self.assertEqual(summary.records, 2)
+            self.assertEqual(list(root.glob(".index.sqlite.tmp-*")), [])
+
+    def test_replace_gives_up_after_exhausting_retries(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            jsonl = root / "index.jsonl"
+            sqlite_db = root / "index.sqlite"
+            _write_jsonl(jsonl)
+
+            with patch(
+                "zotero_pdf_text._atomic.os.replace", side_effect=PermissionError("always locked")
+            ), patch("zotero_pdf_text._atomic.time.sleep"):
+                with self.assertRaises(PermissionError):
+                    build_fts_index(jsonl, sqlite_db, chunk_chars=40, overlap_chars=5)
+
+            self.assertFalse(sqlite_db.exists())
+            self.assertEqual(list(root.glob(".index.sqlite.tmp-*")), [])
+
+    def test_successful_rebuild_fully_replaces_previous_database(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            jsonl = root / "index.jsonl"
+            sqlite_db = root / "index.sqlite"
+            _write_jsonl(jsonl)
+            build_fts_index(jsonl, sqlite_db, chunk_chars=40, overlap_chars=5)
+
+            records = [json.loads(line) for line in jsonl.read_text(encoding="utf-8").splitlines()]
+            records = records[:1]
+            jsonl.write_text("".join(json.dumps(record) + "\n" for record in records), encoding="utf-8")
+
+            summary = build_fts_index(jsonl, sqlite_db, chunk_chars=40, overlap_chars=5)
+
+            self.assertEqual(summary.records, 1)
+            self.assertEqual(list(root.glob(".index.sqlite.tmp-*")), [])
+            results = search_fts(sqlite_db, "cultural consensus", limit=5)
+            self.assertEqual(len(results), 1)
+            self.assertEqual(search_fts(sqlite_db, "response time models", limit=5), [])
 
     def test_search_rejects_empty_query(self):
         with tempfile.TemporaryDirectory() as tmp:
