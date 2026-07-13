@@ -38,6 +38,7 @@ from .mcp_contract import (
     RECONVERT_MCP_TOOL_NAME,
     RECONVERT_TOOL_TIMEOUT_SECONDS,
     configured_index_path,
+    marker_dependency_available,
 )
 from .runtime import DEFAULT_ZOTERO_EXE, ensure_zotero_running
 from .verifier import apply_verification, verify_unverified
@@ -883,6 +884,9 @@ def _install_mcp(args: argparse.Namespace) -> int:
             return 2
         if db_path.resolve(strict=False) != expected_db_path.resolve(strict=False):
             print("--enable-reconvert requires --db to be the index governed by the project config.", file=sys.stderr)
+            return 2
+        if not marker_dependency_available():
+            print("--enable-reconvert requires the optional marker dependency (pip install -e .[marker]).", file=sys.stderr)
             return 2
 
     venv_scripts_dir = Path(sys.executable).resolve().parent
