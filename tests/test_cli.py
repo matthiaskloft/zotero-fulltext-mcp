@@ -357,6 +357,42 @@ class AppendIndexCliTests(unittest.TestCase):
             self.assertEqual(keys, {"OLD1", "NEW1"})
             self.assertTrue((root / "index" / "zotero_text_index.sqlite").exists())
 
+    def test_rejects_index_and_fts_db_under_different_lock_roots(self):
+        # Regression test: append-index writes both --index and --fts-db. Locking only
+        # _pipeline_lock_root(args.index) would leave a --fts-db under a genuinely different
+        # output_root (e.g. a separate drive) unprotected by the lock -- a concurrent build-fts
+        # targeting that same FTS file could race past it. The command must refuse instead of
+        # silently guaranteeing less exclusion than the lock implies.
+        with tempfile.TemporaryDirectory() as tmp_a, tempfile.TemporaryDirectory() as tmp_b:
+            index_path = Path(tmp_a) / "index" / "zotero_text_index.jsonl"
+            index_path.parent.mkdir(parents=True)
+            index_path.write_text("", encoding="utf-8")
+            manifest_path = Path(tmp_a) / "manifest.csv"
+            manifest_path.write_text(
+                "status,output_path,zotero_attachment_key,zotero_parent_key,title,creators,year,doi,"
+                "citation_key,source_path,extraction_tool,page_count,classification,identity_status,"
+                "identity_rule,has_math\n",
+                encoding="utf-8",
+            )
+            fts_db_path = Path(tmp_b) / "search" / "zotero_text_index.sqlite"
+
+            buffer = io.StringIO()
+            with redirect_stdout(buffer):
+                exit_code = main(
+                    [
+                        "append-index",
+                        "--manifest",
+                        str(manifest_path),
+                        "--index",
+                        str(index_path),
+                        "--fts-db",
+                        str(fts_db_path),
+                    ]
+                )
+
+            self.assertEqual(exit_code, 2)
+            self.assertFalse(fts_db_path.exists())
+
 
 class SearchCliTests(unittest.TestCase):
     def test_parser_exposes_the_explicit_search_modes(self):

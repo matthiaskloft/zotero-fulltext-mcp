@@ -104,6 +104,11 @@ existing one via an atomic rename once the write succeeds. If the process crashe
 mid-write, the previous JSONL is untouched rather than truncated — re-run the same `append-index`
 command once the underlying issue is fixed; nothing needs manual recovery.
 
+If you pass an explicit `--fts-db` that lives under a different `output_root` than `--index` (an
+unusual split-storage setup), the command refuses to start rather than locking only the JSONL
+side and leaving the FTS database unprotected against a concurrent writer. Keep both under one
+`output_root`.
+
 ## Unverified PDF Review
 
 Use this when a dry run reports `mapped_unverified` rows. The command converts
