@@ -198,6 +198,12 @@ def search_fts(
         # window function can't use SQLite's top-N/ORDER BY LIMIT shortcut), so a common query
         # term can force a full scan of matching chunk rows. Acceptable for this tool's
         # single-user/personal-index scale; revisit if the index grows much larger.
+        #
+        # This ranking pass only needs a bounded, cheap signal for "did the text field match"
+        # (the char(2)/char(3) marker technique below, scoped to a 32-token snippet), not the
+        # full stored chunk text. The full highlight()-vs-original comparison used to detect
+        # matched_fields precisely is deferred to a second query scoped to just the rows that
+        # survive ranking and LIMIT, so it never runs against the full candidate set.
         rows = con.execute(
             """
             WITH matches AS (
@@ -211,12 +217,12 @@ def search_fts(
                     m.doi,
                     m.citation_key,
                     snippet(chunks_fts, 2, '[', ']', ' ... ', 32) AS snippet,
-                    highlight(chunks_fts, 0, char(2), char(3)) AS title_highlighted,
-                    highlight(chunks_fts, 1, char(2), char(3)) AS creators_highlighted,
-                    highlight(chunks_fts, 2, char(2), char(3)) AS text_highlighted,
-                    highlight(chunks_fts, 3, char(2), char(3)) AS citation_key_highlighted,
-                    c.text AS stored_text,
+                    -- Body-match detection only, using control characters that cannot appear in
+                    -- indexed document text (unlike '[' or ']', which are common in citations and
+                    -- math notation and would otherwise falsely signal a body-text match).
+                    snippet(chunks_fts, 2, char(2), char(3), '', 32) AS body_match_marker,
                     bm25(chunks_fts, 8.0, 1.0, 1.0, 6.0) AS score,
+                    c.chunk_id,
                     c.chunk_index,
                     c.start_char,
                     c.end_char,
@@ -235,7 +241,7 @@ def search_fts(
             ), ranked AS (
                 SELECT *, ROW_NUMBER() OVER (
                     PARTITION BY record_id
-                    ORDER BY CASE WHEN text_highlighted <> stored_text THEN 0 ELSE 1 END, score ASC, chunk_index ASC
+                    ORDER BY CASE WHEN instr(body_match_marker, char(2)) > 0 THEN 0 ELSE 1 END, score ASC, chunk_index ASC
                 ) AS record_rank
                 FROM matches
             )
@@ -246,16 +252,60 @@ def search_fts(
             """,
             (match_query, candidate_limit),
         ).fetchall()
+        selected_rows = rows[:limit]
+        matched_fields_by_chunk_id = _matched_fields_for_chunks(
+            con, match_query, [row["chunk_id"] for row in selected_rows]
+        )
     finally:
         con.close()
     results: list[SearchResult] = []
-    for row in rows[:limit]:
+    for row in selected_rows:
         row_dict = dict(row)
         row_dict.pop("record_id")
         row_dict.pop("record_rank")
-        # Comparing each highlighted value with its source detects FTS-inserted markers without
-        # mistaking marker-like control characters already present in scholarly text for a match.
-        matched_fields = [
+        row_dict.pop("body_match_marker")
+        row_dict["matched_fields"] = matched_fields_by_chunk_id[row_dict.pop("chunk_id")]
+        row_dict["has_math"] = bool(row_dict["has_math"])
+        results.append(SearchResult(**row_dict))
+    return results
+
+
+def _matched_fields_for_chunks(
+    con: sqlite3.Connection, match_query: str, chunk_ids: list[int]
+) -> dict[int, list[str]]:
+    """Compute precise matched_fields for a small, already-selected set of chunks.
+
+    Comparing each highlighted value with its source detects FTS-inserted markers without
+    mistaking marker-like control characters already present in scholarly text for a match. This
+    requires the full stored text of each field, so it is scoped to the caller's final result
+    rows (bounded by the search `limit`) rather than the full ranking candidate set.
+    """
+    if not chunk_ids:
+        return {}
+    placeholders = ",".join("?" for _ in chunk_ids)
+    rows = con.execute(
+        f"""
+        SELECT
+            c.chunk_id,
+            highlight(chunks_fts, 0, char(2), char(3)) AS title_highlighted,
+            highlight(chunks_fts, 1, char(2), char(3)) AS creators_highlighted,
+            highlight(chunks_fts, 2, char(2), char(3)) AS text_highlighted,
+            highlight(chunks_fts, 3, char(2), char(3)) AS citation_key_highlighted,
+            m.title,
+            m.creators,
+            c.text AS stored_text,
+            m.citation_key
+        FROM chunks_fts f
+        JOIN chunks c ON c.chunk_id = f.chunk_id
+        JOIN metadata m ON m.record_id = f.record_id
+        WHERE chunks_fts MATCH ? AND c.chunk_id IN ({placeholders})
+        """,
+        (match_query, *chunk_ids),
+    ).fetchall()
+    result: dict[int, list[str]] = {}
+    for row in rows:
+        row_dict = dict(row)
+        result[row_dict["chunk_id"]] = [
             field
             for field, original_field in (
                 ("title", "title"),
@@ -263,13 +313,9 @@ def search_fts(
                 ("text", "stored_text"),
                 ("citation_key", "citation_key"),
             )
-            if row_dict.pop(f"{field}_highlighted") != row_dict[original_field]
+            if row_dict[f"{field}_highlighted"] != row_dict[original_field]
         ]
-        row_dict.pop("stored_text")
-        row_dict["matched_fields"] = matched_fields
-        row_dict["has_math"] = bool(row_dict["has_math"])
-        results.append(SearchResult(**row_dict))
-    return results
+    return result
 
 
 def get_fulltext(
