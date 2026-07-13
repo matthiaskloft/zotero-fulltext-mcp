@@ -248,23 +248,28 @@ def create_server(
 
         # Keep FastMCP from coercing invalid values before the public-error boundary while
         # still advertising the concrete input shapes clients need for tool discovery.
-        globals().update(
-            QueryInput=Annotated[object, WithJsonSchema({"type": "string", "maxLength": MAX_QUERY_CHARS})],
-            LimitInput=Annotated[object, WithJsonSchema({"type": "integer", "minimum": 1, "maximum": MAX_SEARCH_RESULTS})],
-            SearchModeInput=Annotated[object, WithJsonSchema({"enum": sorted(SEARCH_MODES)})],
-            AttachmentKeyInput=Annotated[object, WithJsonSchema({"type": "string", "maxLength": MAX_CITATION_KEY_CHARS})],
-            MaxCharsInput=Annotated[object, WithJsonSchema({"type": "integer", "minimum": 1, "maximum": MAX_RETRIEVED_CHARS})],
-            ChunkIndexInput=Annotated[
-                object,
-                WithJsonSchema({"anyOf": [{"type": "integer", "minimum": 0, "maximum": MAX_CHUNK_INDEX}, {"type": "null"}]}),
-            ],
-            ContextKeyInput=Annotated[object, WithJsonSchema({"anyOf": [{"type": "string", "maxLength": MAX_CITATION_KEY_CHARS}, {"type": "null"}]})],
-            CitationKeysInput=Annotated[
-                object,
-                WithJsonSchema({"type": "array", "minItems": 1, "maxItems": MAX_CITATION_KEYS, "items": {"type": "string", "maxLength": MAX_CITATION_KEY_CHARS}}),
-            ],
-            ConfirmationInput=Annotated[object, WithJsonSchema({"type": "string"})],
-        )
+        # `from __future__ import annotations` makes the tool signatures below lazy string
+        # forward refs, so these names must live in this module's globals before FastMCP
+        # resolves them; guard the update so repeated create_server() calls stay idempotent
+        # instead of re-touching module state on every invocation.
+        if "QueryInput" not in globals():
+            globals().update(
+                QueryInput=Annotated[object, WithJsonSchema({"type": "string", "maxLength": MAX_QUERY_CHARS})],
+                LimitInput=Annotated[object, WithJsonSchema({"type": "integer", "minimum": 1, "maximum": MAX_SEARCH_RESULTS})],
+                SearchModeInput=Annotated[object, WithJsonSchema({"enum": sorted(SEARCH_MODES)})],
+                AttachmentKeyInput=Annotated[object, WithJsonSchema({"type": "string", "maxLength": MAX_CITATION_KEY_CHARS})],
+                MaxCharsInput=Annotated[object, WithJsonSchema({"type": "integer", "minimum": 1, "maximum": MAX_RETRIEVED_CHARS})],
+                ChunkIndexInput=Annotated[
+                    object,
+                    WithJsonSchema({"anyOf": [{"type": "integer", "minimum": 0, "maximum": MAX_CHUNK_INDEX}, {"type": "null"}]}),
+                ],
+                ContextKeyInput=Annotated[object, WithJsonSchema({"anyOf": [{"type": "string", "maxLength": MAX_CITATION_KEY_CHARS}, {"type": "null"}]})],
+                CitationKeysInput=Annotated[
+                    object,
+                    WithJsonSchema({"type": "array", "minItems": 1, "maxItems": MAX_CITATION_KEYS, "items": {"type": "string", "maxLength": MAX_CITATION_KEY_CHARS}}),
+                ],
+                ConfirmationInput=Annotated[object, WithJsonSchema({"type": "string"})],
+            )
         mcp_factory = FastMCP
 
     mcp = mcp_factory("zotero-fulltext", instructions=MCP_INSTRUCTIONS)
@@ -632,8 +637,8 @@ def _public_call(operation: Callable[[], Any], *, integration: bool = False) -> 
         if len(json.dumps(result, ensure_ascii=False).encode("utf-8")) > MAX_RESPONSE_BYTES:
             raise PublicMcpError("response_too_large", "The requested response exceeds the MCP response limit.")
         return result
-    except PublicMcpError as exc:
-        raise exc
+    except PublicMcpError:
+        raise
     except FileNotFoundError:
         raise PublicMcpError("database_unavailable", "The local full-text index is unavailable.") from None
     except ChunkNotFoundError:
