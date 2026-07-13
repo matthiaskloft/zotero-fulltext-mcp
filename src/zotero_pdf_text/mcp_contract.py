@@ -11,7 +11,7 @@ import time
 from collections.abc import Callable
 from dataclasses import asdict
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any, TypedDict
 from urllib.parse import urlsplit, urlunsplit
 
 from .bibtex import DEFAULT_BBT_ENDPOINT, DEFAULT_BBT_TRANSLATOR, export_bibtex_entries
@@ -77,11 +77,126 @@ RECONVERT_TOOL_ANNOTATIONS = {
 }
 
 
+class Provenance(TypedDict):
+    content_trust: str
+    source_kind: str
+    attachment_key: str
+    extraction_tool: str
+    classification: str
+    identity_status: str
+
+
+class BibliographyProvenance(TypedDict):
+    content_trust: str
+    source_kind: str
+
+
+class ReconvertProvenance(TypedDict):
+    content_trust: str
+    source_kind: str
+    attachment_key: str
+
+
+class SourceLocator(TypedDict):
+    attachment_key: str
+    content_sha256: str
+    chunk_index: int | None
+    char_start: int
+    char_end: int
+    truncated: bool
+    stored_chunk_char_start: int | None
+    stored_chunk_char_end: int | None
+
+
+class SearchRecord(TypedDict):
+    attachment_key: str
+    parent_key: str
+    title: str
+    creators: str
+    year: str
+    doi: str
+    citation_key: str
+    snippet: str
+    score: float
+    matched_fields: list[str]
+    has_math: bool
+    warnings: list[str]
+    source_locator: SourceLocator
+    provenance: Provenance
+
+
+class SearchResponse(TypedDict):
+    search_mode: SearchMode
+    no_results: bool
+    results: list[SearchRecord]
+
+
+class PassageResponse(TypedDict):
+    attachment_key: str
+    parent_key: str
+    title: str
+    creators: str
+    year: str
+    doi: str
+    citation_key: str
+    chunk_index: int | None
+    start_char: int
+    end_char: int
+    total_chars: int
+    chunk_count: int
+    previous_chunk_index: int | None
+    next_chunk_index: int | None
+    has_more: bool | None
+    text: str
+    has_math: bool
+    warnings: list[str]
+    source_locator: SourceLocator
+    provenance: Provenance
+
+
+class ContextRecord(TypedDict):
+    attachment_key: str
+    parent_key: str
+    title: str
+    creators: str
+    year: str
+    doi: str
+    citation_key: str
+    markdown_sha256: str
+    char_count: int
+    word_count: int
+    page_count: str
+    has_math: bool
+    provenance: Provenance
+
+
+class ContextResponse(TypedDict):
+    records: list[ContextRecord]
+
+
+class BibtexResponse(TypedDict):
+    citation_keys: list[str]
+    translator: str
+    entry: str
+    provenance: BibliographyProvenance
+
+
+class ReconvertResponse(TypedDict):
+    ok: bool
+    attachment_key: str
+    previous_extraction_tool: str
+    new_extraction_tool: str
+    previous_char_count: int
+    new_char_count: int
+    reconverted_at: str
+    provenance: ReconvertProvenance
+
+
 class PublicMcpError(Exception):
     """An expected failure that can be returned without exposing local diagnostics."""
 
     def __init__(self, code: str, message: str) -> None:
-        super().__init__(message)
+        super().__init__(f"{code}: {message}")
         self.code = code
         self.message = message
 
@@ -129,13 +244,37 @@ def create_server(
         _validate_reconvert_setup(config, db_path)
     if mcp_factory is None:
         from mcp.server.fastmcp import FastMCP
+        from pydantic import WithJsonSchema
 
+        # Keep FastMCP from coercing invalid values before the public-error boundary while
+        # still advertising the concrete input shapes clients need for tool discovery.
+        globals().update(
+            QueryInput=Annotated[object, WithJsonSchema({"type": "string", "maxLength": MAX_QUERY_CHARS})],
+            LimitInput=Annotated[object, WithJsonSchema({"type": "integer", "minimum": 1, "maximum": MAX_SEARCH_RESULTS})],
+            SearchModeInput=Annotated[object, WithJsonSchema({"enum": sorted(SEARCH_MODES)})],
+            AttachmentKeyInput=Annotated[object, WithJsonSchema({"type": "string", "maxLength": MAX_CITATION_KEY_CHARS})],
+            MaxCharsInput=Annotated[object, WithJsonSchema({"type": "integer", "minimum": 1, "maximum": MAX_RETRIEVED_CHARS})],
+            ChunkIndexInput=Annotated[
+                object,
+                WithJsonSchema({"anyOf": [{"type": "integer", "minimum": 0, "maximum": MAX_CHUNK_INDEX}, {"type": "null"}]}),
+            ],
+            ContextKeyInput=Annotated[object, WithJsonSchema({"anyOf": [{"type": "string", "maxLength": MAX_CITATION_KEY_CHARS}, {"type": "null"}]})],
+            CitationKeysInput=Annotated[
+                object,
+                WithJsonSchema({"type": "array", "minItems": 1, "maxItems": MAX_CITATION_KEYS, "items": {"type": "string", "maxLength": MAX_CITATION_KEY_CHARS}}),
+            ],
+            ConfirmationInput=Annotated[object, WithJsonSchema({"type": "string"})],
+        )
         mcp_factory = FastMCP
 
     mcp = mcp_factory("zotero-fulltext", instructions=MCP_INSTRUCTIONS)
 
     @mcp.tool(annotations=READ_ONLY_TOOL_ANNOTATIONS)
-    def search_fulltext(query: str, limit: int = 10, search_mode: SearchMode = "all_terms") -> dict[str, object]:
+    def search_fulltext(
+        query: QueryInput,
+        limit: LimitInput = 10,
+        search_mode: SearchModeInput = "all_terms",
+    ) -> SearchResponse:
         """Search title, creators, citation key, and converted body text.
 
         search_mode: "all_terms" (default) requires every normalized query term; "any_terms" is a
@@ -146,7 +285,7 @@ def create_server(
         that the query occurs in body text.
         """
 
-        def operation() -> dict[str, object]:
+        def operation() -> SearchResponse:
             validated_mode = _validate_search_mode(search_mode)
             results = search_fts(db_path, _validate_query(query), limit=_validate_limit(limit), search_mode=validated_mode)
             return {
@@ -159,10 +298,10 @@ def create_server(
 
     @mcp.tool(annotations=READ_ONLY_TOOL_ANNOTATIONS)
     def get_fulltext_chunk(
-        attachment_key: str,
-        max_chars: int = MAX_RETRIEVED_CHARS,
-        chunk_index: int | None = None,
-    ) -> dict[str, object]:
+        attachment_key: AttachmentKeyInput,
+        max_chars: MaxCharsInput = MAX_RETRIEVED_CHARS,
+        chunk_index: ChunkIndexInput = None,
+    ) -> PassageResponse:
         """Return a bounded, untrusted passage for one attachment.
 
         Pass a search result's source_locator.chunk_index to retrieve its stored passage. Omitting
@@ -181,15 +320,15 @@ def create_server(
 
     @mcp.tool(annotations=READ_ONLY_TOOL_ANNOTATIONS)
     def get_item_context(
-        parent_key: str | None = None,
-        attachment_key: str | None = None,
-    ) -> dict[str, object]:
+        parent_key: ContextKeyInput = None,
+        attachment_key: ContextKeyInput = None,
+    ) -> ContextResponse:
         """Return path-free sidecar metadata and provenance for one supplied key.
 
         Supply exactly one key: attachment_key for one exact attachment, or parent_key for its
         indexed attachments.
         """
-        def operation() -> dict[str, object]:
+        def operation() -> ContextResponse:
             validated_parent_key, validated_attachment_key = _validate_context_keys(parent_key, attachment_key)
             return serialize_item_context(
                 get_item_context_fn(
@@ -206,7 +345,10 @@ def create_server(
         limiter = ReconvertRateLimiter()
 
         @mcp.tool(annotations=RECONVERT_TOOL_ANNOTATIONS)
-        def reconvert_with_math_ocr(attachment_key: str, confirm: str = "") -> dict[str, object]:
+        def reconvert_with_math_ocr(
+            attachment_key: AttachmentKeyInput,
+            confirm: ConfirmationInput = "",
+        ) -> ReconvertResponse:
             """Overwrite one attachment's converted Markdown, extracted images, and index entry.
 
             This is blocking and GPU-heavy, but never writes Zotero. Call it only after the user
@@ -226,7 +368,9 @@ def create_server(
     if enable_bibtex:
 
         @mcp.tool(annotations=READ_ONLY_TOOL_ANNOTATIONS)
-        def export_bibtex_entries_by_key(citation_keys: list[str]) -> dict[str, object]:
+        def export_bibtex_entries_by_key(
+            citation_keys: CitationKeysInput,
+        ) -> BibtexResponse:
             """Read bounded, untrusted BibLaTeX entries from the local Better BibTeX integration.
 
             Use citation keys returned by search or item context. The integration is optional and
@@ -318,7 +462,7 @@ def validate_bibtex_endpoint(value: str) -> str:
     return urlunsplit(("http", f"{host_part}:23119", parsed.path or "/", parsed.query, ""))
 
 
-def serialize_search_result(result: SearchResult) -> dict[str, object]:
+def serialize_search_result(result: SearchResult) -> SearchRecord:
     return {
         "attachment_key": result.zotero_attachment_key,
         "parent_key": result.zotero_parent_key,
@@ -351,7 +495,7 @@ def serialize_search_result(result: SearchResult) -> dict[str, object]:
     }
 
 
-def serialize_fulltext_result(result: FullTextResult) -> dict[str, object]:
+def serialize_fulltext_result(result: FullTextResult) -> PassageResponse:
     return {
         "attachment_key": result.zotero_attachment_key,
         "parent_key": result.zotero_parent_key,
@@ -390,14 +534,14 @@ def serialize_fulltext_result(result: FullTextResult) -> dict[str, object]:
     }
 
 
-def serialize_item_context(context: dict[str, object]) -> dict[str, object]:
+def serialize_item_context(context: dict[str, object]) -> ContextResponse:
     records = context.get("records", [])
     if not isinstance(records, list):
         raise PublicMcpError("index_unavailable", "The local full-text index returned an invalid response.")
     return {"records": [serialize_context_record(record) for record in records]}
 
 
-def serialize_context_record(record: object) -> dict[str, object]:
+def serialize_context_record(record: object) -> ContextRecord:
     if not isinstance(record, dict):
         raise PublicMcpError("index_unavailable", "The local full-text index returned an invalid response.")
     attachment_key = str(record.get("zotero_attachment_key", ""))
@@ -423,7 +567,7 @@ def serialize_context_record(record: object) -> dict[str, object]:
     }
 
 
-def serialize_bibtex_export(export: object) -> dict[str, object]:
+def serialize_bibtex_export(export: object) -> BibtexResponse:
     data = asdict(export)
     entry = str(data["entry"])
     if len(entry.encode("utf-8")) > MAX_BIBTEX_RESPONSE_BYTES:
@@ -437,13 +581,13 @@ def serialize_bibtex_export(export: object) -> dict[str, object]:
 
 
 def _reconvert_with_math_ocr(
-    attachment_key: str,
+    attachment_key: object,
     *,
-    confirm: str,
+    confirm: object,
     config: ProjectConfig | None,
     db_path: Path,
     limiter: ReconvertRateLimiter,
-) -> dict[str, object]:
+) -> ReconvertResponse:
     attachment_key = _validate_attachment_key(attachment_key)
     if confirm != "reconvert":
         raise PublicMcpError("confirmation_required", 'Set confirm to the exact literal "reconvert" to start math OCR.')
@@ -458,13 +602,16 @@ def _reconvert_with_math_ocr(
     limiter.acquire()
     from .math_ocr import reconvert_with_marker
 
-    result = reconvert_with_marker(
-        attachment_key,
-        db_path=db_path,
-        jsonl_path=jsonl_path,
-        fts_db_path=db_path,
-        lock_root=config.output_root,
-    )
+    try:
+        result = reconvert_with_marker(
+            attachment_key,
+            db_path=db_path,
+            jsonl_path=jsonl_path,
+            fts_db_path=db_path,
+            lock_root=config.output_root,
+        )
+    except RuntimeError:
+        raise PublicMcpError("reconversion_failed", "Math reconversion did not complete successfully.") from None
     if not result.ok:
         raise PublicMcpError("reconversion_failed", "Math reconversion did not complete successfully.")
     return {
@@ -479,39 +626,35 @@ def _reconvert_with_math_ocr(
     }
 
 
-def _public_call(operation: Callable[[], dict[str, object]], *, integration: bool = False) -> dict[str, object]:
+def _public_call(operation: Callable[[], Any], *, integration: bool = False) -> Any:
     try:
         result = operation()
         if len(json.dumps(result, ensure_ascii=False).encode("utf-8")) > MAX_RESPONSE_BYTES:
-            return _error("response_too_large", "The requested response exceeds the MCP response limit.")
+            raise PublicMcpError("response_too_large", "The requested response exceeds the MCP response limit.")
         return result
     except PublicMcpError as exc:
-        return _error(exc.code, exc.message)
+        raise exc
     except FileNotFoundError:
-        return _error("database_unavailable", "The local full-text index is unavailable.")
+        raise PublicMcpError("database_unavailable", "The local full-text index is unavailable.") from None
     except ChunkNotFoundError:
-        return _error("chunk_not_found", "No stored chunk matches that index for the attachment.")
+        raise PublicMcpError("chunk_not_found", "No stored chunk matches that index for the attachment.") from None
     except KeyError:
-        return _error("attachment_not_found", "No indexed record matches that attachment key.")
+        raise PublicMcpError("attachment_not_found", "No indexed record matches that attachment key.") from None
     except sqlite3.DatabaseError:
-        return _error("index_unavailable", "The local full-text index cannot be read.")
+        raise PublicMcpError("index_unavailable", "The local full-text index cannot be read.") from None
     except OSError:
-        return _error("database_unavailable", "The local full-text index is unavailable.")
+        raise PublicMcpError("database_unavailable", "The local full-text index is unavailable.") from None
     except ValueError:
-        return _error("invalid_input", "The request contains an invalid value.")
+        raise PublicMcpError("invalid_input", "The request contains an invalid value.") from None
     except RuntimeError:
         if integration:
-            return _error("integration_unavailable", "The local Better BibTeX integration is unavailable.")
-        return _error("operation_unavailable", "The requested local operation is unavailable.")
+            raise PublicMcpError("integration_unavailable", "The local Better BibTeX integration is unavailable.") from None
+        raise PublicMcpError("operation_unavailable", "The requested local operation is unavailable.") from None
     except Exception:
-        return _error("internal_error", "The request could not be completed.")
+        raise PublicMcpError("internal_error", "The request could not be completed.") from None
 
 
-def _error(code: str, message: str) -> dict[str, object]:
-    return {"ok": False, "error": {"code": code, "message": message}}
-
-
-def _validate_query(query: str) -> str:
+def _validate_query(query: object) -> str:
     if not isinstance(query, str) or not query.strip() or len(query) > MAX_QUERY_CHARS:
         raise PublicMcpError("invalid_query", f"Query must contain 1 to {MAX_QUERY_CHARS} characters.")
     terms = re.findall(r"[\w]+", query, flags=re.UNICODE)
@@ -524,26 +667,26 @@ def _validate_query(query: str) -> str:
     return query
 
 
-def _validate_search_mode(search_mode: str) -> SearchMode:
+def _validate_search_mode(search_mode: object) -> SearchMode:
     if not isinstance(search_mode, str) or search_mode not in SEARCH_MODES:
         modes = ", ".join(sorted(SEARCH_MODES))
         raise PublicMcpError("invalid_search_mode", f"search_mode must be one of: {modes}.")
     return search_mode
 
 
-def _validate_limit(limit: int) -> int:
+def _validate_limit(limit: object) -> int:
     if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= MAX_SEARCH_RESULTS:
         raise PublicMcpError("invalid_limit", f"limit must be between 1 and {MAX_SEARCH_RESULTS}.")
     return limit
 
 
-def _validate_max_chars(max_chars: int) -> int:
+def _validate_max_chars(max_chars: object) -> int:
     if isinstance(max_chars, bool) or not isinstance(max_chars, int) or not 1 <= max_chars <= MAX_RETRIEVED_CHARS:
         raise PublicMcpError("invalid_max_chars", f"max_chars must be between 1 and {MAX_RETRIEVED_CHARS}.")
     return max_chars
 
 
-def _validate_chunk_index(chunk_index: int | None) -> int | None:
+def _validate_chunk_index(chunk_index: object | None) -> int | None:
     if chunk_index is None:
         return None
     if isinstance(chunk_index, bool) or not isinstance(chunk_index, int) or not 0 <= chunk_index <= MAX_CHUNK_INDEX:
@@ -551,23 +694,23 @@ def _validate_chunk_index(chunk_index: int | None) -> int | None:
     return chunk_index
 
 
-def _validate_attachment_key(value: str) -> str:
+def _validate_attachment_key(value: object) -> str:
     if not isinstance(value, str) or not value.strip() or len(value) > MAX_CITATION_KEY_CHARS:
         raise PublicMcpError("invalid_attachment_key", "attachment_key must be a non-empty bounded string.")
     return value.strip()
 
 
-def _validate_optional_key(value: str | None) -> str | None:
+def _validate_optional_key(value: object | None) -> str | None:
     return None if value is None else _validate_attachment_key(value)
 
 
-def _validate_context_keys(parent_key: str | None, attachment_key: str | None) -> tuple[str | None, str | None]:
+def _validate_context_keys(parent_key: object | None, attachment_key: object | None) -> tuple[str | None, str | None]:
     if (parent_key is None) == (attachment_key is None):
         raise PublicMcpError("invalid_context_key", "Supply exactly one of parent_key and attachment_key.")
     return _validate_optional_key(parent_key), _validate_optional_key(attachment_key)
 
 
-def _validate_citation_keys(values: list[str]) -> list[str]:
+def _validate_citation_keys(values: object) -> list[str]:
     if not isinstance(values, list) or not values or len(values) > MAX_CITATION_KEYS:
         raise PublicMcpError("invalid_citation_keys", f"Provide between 1 and {MAX_CITATION_KEYS} citation keys.")
     if any(not isinstance(value, str) or not value.strip() or len(value) > MAX_CITATION_KEY_CHARS for value in values):
@@ -575,7 +718,7 @@ def _validate_citation_keys(values: list[str]) -> list[str]:
     return values
 
 
-def _provenance(attachment_key: str, extraction_tool: str, classification: str, identity_status: str) -> dict[str, str]:
+def _provenance(attachment_key: str, extraction_tool: str, classification: str, identity_status: str) -> Provenance:
     return {
         "content_trust": "untrusted_source",
         "source_kind": "converted_pdf",
@@ -612,7 +755,7 @@ def _source_locator(
     truncated: bool,
     stored_chunk_char_start: int | None,
     stored_chunk_char_end: int | None,
-) -> dict[str, object]:
+) -> SourceLocator:
     return {
         "attachment_key": attachment_key,
         "content_sha256": content_sha256,
