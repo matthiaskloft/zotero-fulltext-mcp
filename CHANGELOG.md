@@ -5,6 +5,18 @@ All notable changes to this project are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Changed
+
+- The default MCP surface is now entirely read-only. Single-attachment math OCR is registered only
+  with `--enable-reconvert` plus an explicit valid config; its confirmation literal remains defense
+  in depth rather than a substitute for user approval. Reconversion preflights its JSONL sidecar
+  and rolls back derived Markdown/image/index state if a later commit step fails.
+- MCP server/tool instructions now explain offline/stale scope, untrusted-content handling,
+  search-to-passage workflow, bibliographic attribution, and the absence of PDF page locators.
+- MCP tools now advertise read-only, destructive, and closed-world safety hints to compatible
+  clients, with reconversion explicitly marked non-idempotent. The optional MCP dependency is
+  constrained to the tested v1 API (`mcp>=1.28,<2`) pending a separate v2 migration.
+
 ## [0.2.0] - 2026-07-12
 
 First tagged release. Covers everything merged since the initial import, aimed at making the

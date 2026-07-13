@@ -46,10 +46,10 @@ this repo. Treat it accordingly:
 
 - Never move, delete, rename, or bulk-rewrite files under these paths unless a task explicitly
   asks for that operation.
-- Keep Zotero database access read-only. The one exception in this codebase,
-  `reconvert_with_math_ocr`, intentionally writes to the converted-text output (markdown +
-  index) and is documented as such — don't add other write paths without equally clear
-  documentation and user awareness.
+- Keep Zotero database access read-only. The opt-in `reconvert_with_math_ocr` MCP capability
+  intentionally writes only to converted-text output (Markdown + extracted images + index), requires explicit
+  startup enablement/config, and is documented as such — don't add other write paths without
+  equally clear capability separation, documentation, and user awareness.
 - Never hardcode a real absolute path (a personal home directory, a specific hostname, a real
   library size or paper count) into source, docstrings, or the MCP server's `instructions`
   string — those are read by everyone who installs this project, not just the original author.
