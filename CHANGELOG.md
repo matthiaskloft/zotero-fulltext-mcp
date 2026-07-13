@@ -16,6 +16,10 @@ All notable changes to this project are documented here. Format loosely follows
 - MCP tools now advertise read-only, destructive, and closed-world safety hints to compatible
   clients, with reconversion explicitly marked non-idempotent. The optional MCP dependency is
   constrained to the tested v1 API (`mcp>=1.28,<2`) pending a separate v2 migration.
+- Search now reports the fields that actually matched and content-bound locator hashes. Passage
+  retrieval distinguishes complete and truncated stored chunks, exposes bounded chunk navigation,
+  and returns deterministic reliability warnings for identity, attachment mapping, and math
+  extraction concerns. Item context now requires exactly one parent or attachment key.
 
 ## [0.2.0] - 2026-07-12
 

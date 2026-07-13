@@ -132,8 +132,20 @@ class McpServerTests(unittest.TestCase):
             self.assertFalse(search["no_results"])
             self.assertEqual(
                 search["results"][0]["source_locator"],
-                {"attachment_key": "ATTACH1", "chunk_index": 0, "char_start": 2, "char_end": 46},
+                {
+                    "attachment_key": "ATTACH1",
+                    "content_sha256": "abc123",
+                    "chunk_index": 0,
+                    "char_start": 2,
+                    "char_end": 46,
+                    "truncated": False,
+                    "stored_chunk_char_start": 2,
+                    "stored_chunk_char_end": 46,
+                },
             )
+            self.assertEqual(result["matched_fields"], ["title", "creators", "text"])
+            self.assertTrue(result["has_math"])
+            self.assertEqual(result["warnings"], ["math_extraction_may_be_lossy"])
 
             broader_search = server.tools["search_fulltext"]("ignore absent", search_mode="any_terms")
             self.assertEqual(broader_search["search_mode"], "any_terms")
@@ -149,6 +161,7 @@ class McpServerTests(unittest.TestCase):
             self.assertEqual(context["records"][0]["provenance"]["content_trust"], "untrusted_source")
             self.assertIn("Ignore instructions", passage["text"])
             self.assertEqual(passage["source_locator"], result["source_locator"])
+            self.assertEqual((passage["chunk_count"], passage["has_more"]), (1, False))
 
     def test_get_item_context_bounds_records_via_the_mcp_contract_limit(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -186,11 +199,93 @@ class McpServerTests(unittest.TestCase):
             self.assertEqual(no_results["results"], [])
             oversized = server.tools["get_fulltext_chunk"]("ATTACH1", max_chars=MAX_RETRIEVED_CHARS + 1)
             self.assertEqual(oversized["error"]["code"], "invalid_max_chars")
+            out_of_range = server.tools["get_fulltext_chunk"]("ATTACH1", chunk_index=1)
+            self.assertEqual(out_of_range["error"]["code"], "chunk_not_found")
+            neither_context_key = server.tools["get_item_context"]()
+            self.assertEqual(neither_context_key["error"]["code"], "invalid_context_key")
+            both_context_keys = server.tools["get_item_context"](parent_key="PARENT1", attachment_key="ATTACH1")
+            self.assertEqual(both_context_keys["error"]["code"], "invalid_context_key")
 
             missing = create_server(Path(tmp) / "missing.sqlite", mcp_factory=FakeFastMCP)
             unavailable = missing.tools["search_fulltext"]("topic")
             self.assertEqual(unavailable["error"]["code"], "database_unavailable")
             self.assertNotIn("missing.sqlite", json.dumps(unavailable))
+
+    def test_passage_locator_distinguishes_truncated_exact_and_leading_preview(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, sqlite_path, _ = _build_index(Path(tmp))
+            jsonl_path = root / "output" / "index" / "zotero_text_index.jsonl"
+            record = json.loads(jsonl_path.read_text(encoding="utf-8"))
+            record.update(
+                {
+                    "title": "Long target",
+                    "text": "target " + "x" * 13_000,
+                    "char_count": 13_007,
+                    "word_count": 2,
+                    "markdown_sha256": "longhash",
+                    "has_math": False,
+                }
+            )
+            jsonl_path.write_text(json.dumps(record) + "\n", encoding="utf-8")
+            build_fts_index(jsonl_path, sqlite_path, chunk_chars=14_000, overlap_chars=0)
+            server = create_server(sqlite_path, mcp_factory=FakeFastMCP)
+
+            search_locator = server.tools["search_fulltext"]("target")["results"][0]["source_locator"]
+            exact = server.tools["get_fulltext_chunk"]("ATTACH1", chunk_index=0)
+            preview = server.tools["get_fulltext_chunk"]("ATTACH1")
+
+            self.assertEqual(search_locator["content_sha256"], "longhash")
+            self.assertFalse(search_locator["truncated"])
+            self.assertTrue(exact["source_locator"]["truncated"])
+            self.assertEqual(exact["source_locator"]["stored_chunk_char_end"], 13_007)
+            self.assertEqual(exact["source_locator"]["char_end"], MAX_RETRIEVED_CHARS)
+            self.assertNotEqual(exact["source_locator"], search_locator)
+            self.assertEqual(preview["source_locator"]["chunk_index"], None)
+            self.assertEqual(preview["source_locator"]["stored_chunk_char_start"], None)
+            self.assertEqual(preview["source_locator"]["stored_chunk_char_end"], None)
+            self.assertTrue(preview["source_locator"]["truncated"])
+            self.assertEqual(
+                (preview["previous_chunk_index"], preview["next_chunk_index"], preview["has_more"]),
+                (None, None, None),
+            )
+
+    def test_reliability_warnings_cover_known_and_unknown_provenance_states(self):
+        cases = [
+            ("verified", "mapped_verified", False, "pymupdf4llm.to_markdown", []),
+            ("manual_accepted", "mapped_verified", True, "marker", []),
+            ("fulltext_verified", "mapped_verified", True, "pymupdf4llm.to_markdown", ["math_extraction_may_be_lossy"]),
+            ("candidate", "mapped_unverified", False, "marker", ["identity_unverified", "attachment_match_unverified"]),
+            (
+                "future_status",
+                "future_classification",
+                True,
+                "future_extractor",
+                ["identity_unverified", "attachment_match_unverified", "math_extraction_may_be_lossy"],
+            ),
+        ]
+        for identity_status, classification, has_math, extraction_tool, expected in cases:
+            with self.subTest(identity_status=identity_status, classification=classification):
+                with tempfile.TemporaryDirectory() as tmp:
+                    root, sqlite_path, _ = _build_index(Path(tmp))
+                    jsonl_path = root / "output" / "index" / "zotero_text_index.jsonl"
+                    record = json.loads(jsonl_path.read_text(encoding="utf-8"))
+                    record.update(
+                        {
+                            "identity_status": identity_status,
+                            "classification": classification,
+                            "has_math": has_math,
+                            "extraction_tool": extraction_tool,
+                        }
+                    )
+                    jsonl_path.write_text(json.dumps(record) + "\n", encoding="utf-8")
+                    build_fts_index(jsonl_path, sqlite_path)
+                    server = create_server(sqlite_path, mcp_factory=FakeFastMCP)
+
+                    search_result = server.tools["search_fulltext"]("searchable")["results"][0]
+                    passage = server.tools["get_fulltext_chunk"]("ATTACH1", chunk_index=0)
+
+                    self.assertEqual(search_result["warnings"], expected)
+                    self.assertEqual(passage["warnings"], expected)
 
     def test_reconversion_requires_literal_confirmation_and_is_rate_limited(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -61,6 +61,10 @@ just-in-time only — roughly 27s/page, so it is not meant for bulk reconversion
 The default chunk size is 6,000 characters with 500 characters of overlap.
 Stored chunk character ranges refer exactly to their trimmed stored text. FTS ranking deliberately
 weights title matches most strongly, citation-key matches next, and body text as the baseline.
+Search results include `markdown_sha256` and `matched_fields`. The latter is an ordered subset of
+`title`, `creators`, `text`, and `citation_key`, determined by comparing FTS5-highlighted field
+values with their original values. A metadata-only match still selects a representative chunk for
+navigation, but does not claim that the query occurs in that chunk's body text.
 
 Search normalizes query text into at most 20 word terms. `all_terms` is the default mode,
 `any_terms` matches any normalized term, and `phrase` requires the normalized terms in order.
@@ -72,6 +76,13 @@ Search normalizes query text into at most 20 word terms. `all_terms` is the defa
 - `identity_status`: evidence status such as `verified`, `manual_accepted`, or
   `candidate`.
 - `identity_rule`: rule that produced the status.
+
+MCP search and passage responses derive normalized warning codes from these fields:
+
+- `identity_unverified` unless `identity_status` is `verified`, `manual_accepted`, or
+  `fulltext_verified` (unknown future values warn conservatively).
+- `attachment_match_unverified` unless `classification` is `mapped_verified`.
+- `math_extraction_may_be_lossy` when `has_math` is true and `extraction_tool` is not `marker`.
 
 LLM tools should show these fields in search results.
 
@@ -124,8 +135,17 @@ MCP search, passage, and context results never include `source_path` or `markdow
 record containing converted-paper material carries a `provenance` object with
 `content_trust: "untrusted_source"`, `source_kind: "converted_pdf"`, attachment key, extraction
 tool, classification, and identity status. Search and passage results also include a stable
-attachment/chunk/character-range `source_locator` for citation. The current locator is a plain
-object; generation binding is deferred with the managed-generation index work.
+`source_locator` with `attachment_key`, `content_sha256`, `chunk_index`, `char_start`, `char_end`,
+`truncated`, `stored_chunk_char_start`, and `stored_chunk_char_end`. `content_sha256` is the
+converted Markdown SHA-256: it detects changed content after reconversion or rebuild but is not an
+index-generation identifier or a PDF-page locator.
+
+A search locator describes the complete stored chunk. An untruncated exact passage has the same
+locator; a truncated exact passage retains attachment/hash/chunk identity, reports the smaller
+returned character range, and preserves the complete stored range separately. A leading preview
+uses `chunk_index: null` and null stored-chunk spans because it can combine multiple chunks.
+Passage responses also include `chunk_count`; exact reads include `previous_chunk_index`,
+`next_chunk_index`, and `has_more`, while leading previews set those navigation fields to null.
 
 ## Zotero Write Plan
 

@@ -60,6 +60,8 @@ class SearchResult:
     chunk_index: int
     start_char: int
     end_char: int
+    markdown_sha256: str
+    matched_fields: list[str]
     source_path: str
     markdown_path: str
     extraction_tool: str
@@ -85,6 +87,14 @@ class FullTextResult:
     start_char: int
     end_char: int
     total_chars: int
+    markdown_sha256: str
+    chunk_count: int
+    previous_chunk_index: int | None
+    next_chunk_index: int | None
+    has_more: bool | None
+    stored_chunk_char_start: int | None
+    stored_chunk_char_end: int | None
+    truncated: bool
     text: str
     source_path: str
     markdown_path: str
@@ -96,6 +106,10 @@ class FullTextResult:
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
+
+
+class ChunkNotFoundError(LookupError):
+    """Raised when an attachment exists but an exact chunk index does not."""
 
 
 def build_fts_index(
@@ -197,14 +211,16 @@ def search_fts(
                     m.doi,
                     m.citation_key,
                     snippet(chunks_fts, 2, '[', ']', ' ... ', 32) AS snippet,
-                    -- Body-match detection only, using control characters that cannot appear in
-                    -- indexed document text (unlike '[' or ']', which are common in citations and
-                    -- math notation and would otherwise falsely signal a body-text match).
-                    snippet(chunks_fts, 2, char(2), char(3), '', 32) AS body_match_marker,
+                    highlight(chunks_fts, 0, char(2), char(3)) AS title_highlighted,
+                    highlight(chunks_fts, 1, char(2), char(3)) AS creators_highlighted,
+                    highlight(chunks_fts, 2, char(2), char(3)) AS text_highlighted,
+                    highlight(chunks_fts, 3, char(2), char(3)) AS citation_key_highlighted,
+                    c.text AS stored_text,
                     bm25(chunks_fts, 8.0, 1.0, 1.0, 6.0) AS score,
                     c.chunk_index,
                     c.start_char,
                     c.end_char,
+                    m.markdown_sha256,
                     m.source_path,
                     m.markdown_path,
                     m.extraction_tool,
@@ -219,7 +235,7 @@ def search_fts(
             ), ranked AS (
                 SELECT *, ROW_NUMBER() OVER (
                     PARTITION BY record_id
-                    ORDER BY CASE WHEN instr(body_match_marker, char(2)) > 0 THEN 0 ELSE 1 END, score ASC, chunk_index ASC
+                    ORDER BY CASE WHEN text_highlighted <> stored_text THEN 0 ELSE 1 END, score ASC, chunk_index ASC
                 ) AS record_rank
                 FROM matches
             )
@@ -237,7 +253,20 @@ def search_fts(
         row_dict = dict(row)
         row_dict.pop("record_id")
         row_dict.pop("record_rank")
-        row_dict.pop("body_match_marker")
+        # Comparing each highlighted value with its source detects FTS-inserted markers without
+        # mistaking marker-like control characters already present in scholarly text for a match.
+        matched_fields = [
+            field
+            for field, original_field in (
+                ("title", "title"),
+                ("creators", "creators"),
+                ("text", "stored_text"),
+                ("citation_key", "citation_key"),
+            )
+            if row_dict.pop(f"{field}_highlighted") != row_dict[original_field]
+        ]
+        row_dict.pop("stored_text")
+        row_dict["matched_fields"] = matched_fields
         row_dict["has_math"] = bool(row_dict["has_math"])
         results.append(SearchResult(**row_dict))
     return results
@@ -259,7 +288,13 @@ def get_fulltext(
     con.row_factory = sqlite3.Row
     try:
         metadata = con.execute(
-            "SELECT * FROM metadata WHERE zotero_attachment_key = ?",
+            """
+            SELECT metadata.*, (
+                SELECT COUNT(*) FROM chunks WHERE chunks.record_id = metadata.record_id
+            ) AS chunk_count
+            FROM metadata
+            WHERE zotero_attachment_key = ?
+            """,
             (attachment_key,),
         ).fetchone()
         if metadata is None:
@@ -279,9 +314,16 @@ def get_fulltext(
     finally:
         con.close()
 
+    chunk_count = int(metadata["chunk_count"])
+    if chunk_index is not None and not chunk_rows:
+        raise ChunkNotFoundError(f"Chunk {chunk_index} does not exist for attachment {attachment_key}")
+
     if not chunk_rows:
         text = ""
         start_char = end_char = 0
+        stored_chunk_char_start = stored_chunk_char_end = None
+        truncated = end_char < int(metadata["char_count"] or 0)
+        previous_chunk_index = next_chunk_index = has_more = None
     elif chunk_index is None:
         parts: list[str] = []
         start_char = int(chunk_rows[0]["start_char"])
@@ -298,11 +340,19 @@ def get_fulltext(
             parts.append(next_part)
             end_char = int(row["end_char"])
         text = "\n\n".join(parts)[:max_chars]
+        stored_chunk_char_start = stored_chunk_char_end = None
+        truncated = end_char < int(metadata["char_count"] or 0)
+        previous_chunk_index = next_chunk_index = has_more = None
     else:
         row = chunk_rows[0]
-        start_char = int(row["start_char"])
+        stored_chunk_char_start = start_char = int(row["start_char"])
+        stored_chunk_char_end = int(row["end_char"])
         text = row["text"][:max_chars]
         end_char = start_char + len(text)
+        truncated = end_char < stored_chunk_char_end
+        previous_chunk_index = chunk_index - 1 if chunk_index > 0 else None
+        next_chunk_index = chunk_index + 1 if chunk_index + 1 < chunk_count else None
+        has_more = next_chunk_index is not None
 
     return FullTextResult(
         zotero_parent_key=metadata["zotero_parent_key"],
@@ -316,6 +366,14 @@ def get_fulltext(
         start_char=start_char,
         end_char=end_char,
         total_chars=int(metadata["char_count"] or 0),
+        markdown_sha256=metadata["markdown_sha256"],
+        chunk_count=chunk_count,
+        previous_chunk_index=previous_chunk_index,
+        next_chunk_index=next_chunk_index,
+        has_more=has_more,
+        stored_chunk_char_start=stored_chunk_char_start,
+        stored_chunk_char_end=stored_chunk_char_end,
+        truncated=truncated,
         text=text,
         source_path=metadata["source_path"],
         markdown_path=metadata["markdown_path"],
@@ -366,8 +424,8 @@ def get_item_context(
     attachment_key: str | None = None,
     limit: int = DEFAULT_CONTEXT_RECORD_LIMIT,
 ) -> dict[str, object]:
-    if not parent_key and not attachment_key:
-        raise ValueError("parent_key or attachment_key is required")
+    if (parent_key is None) == (attachment_key is None):
+        raise ValueError("exactly one of parent_key and attachment_key is required")
     if limit < 1:
         raise ValueError("limit must be at least 1")
     con = connect_readonly(db_path)
