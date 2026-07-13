@@ -1,6 +1,8 @@
 import io
 import json
 import os
+import subprocess
+import sys
 import tempfile
 import unittest
 from contextlib import redirect_stdout
@@ -109,6 +111,21 @@ class ShellQuoteTests(unittest.TestCase):
 
 
 class InstallMcpCliTests(unittest.TestCase):
+    def test_cli_import_and_parser_do_not_require_mcp_dependency(self):
+        code = (
+            "import builtins\n"
+            "real_import = builtins.__import__\n"
+            "def blocked(name, *args, **kwargs):\n"
+            "    if name == 'mcp' or name.startswith('mcp.'):\n"
+            "        raise ImportError('blocked for test')\n"
+            "    return real_import(name, *args, **kwargs)\n"
+            "builtins.__import__ = blocked\n"
+            "from zotero_pdf_text.cli import build_parser\n"
+            "build_parser()\n"
+        )
+        completed = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=False)
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+
     def test_parser_defaults(self):
         args = build_parser().parse_args(["install-mcp"])
         self.assertEqual(args.command, "install-mcp")
@@ -116,6 +133,7 @@ class InstallMcpCliTests(unittest.TestCase):
         self.assertIsNone(args.config)
         self.assertIsNone(args.db)
         self.assertFalse(args.enable_bibtex)
+        self.assertFalse(args.enable_reconvert)
         self.assertIsNone(args.bibtex_endpoint)
         self.assertFalse(args.apply)
 
@@ -151,6 +169,8 @@ class InstallMcpCliTests(unittest.TestCase):
             self.assertIn("[mcp_servers.zotero_fulltext]", printed)
             self.assertIn(str(config_path), printed)
             self.assertIn("--config", printed)
+            self.assertNotIn("--enable-reconvert", printed)
+            self.assertNotIn("reconvert_with_math_ocr", printed)
 
     def test_codex_toml_block_round_trips_windows_style_paths(self):
         # Regression test: the codex_block used to build its `args` list with Python's repr(),
@@ -276,6 +296,113 @@ class InstallMcpCliTests(unittest.TestCase):
             self.assertEqual(exit_code, 0)
             self.assertIn("--enable-bibtex", printed)
             self.assertIn("export_bibtex_entries_by_key", printed)
+
+    def test_optional_reconversion_registration_forwards_flag_and_tool(self):
+        import tomllib
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config_path = root / "config.json"
+            (root / "zotero.sqlite").write_bytes(b"")
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "zotero_root": str(root),
+                        "zotero_data_directory": str(root),
+                        "linked_attachments": str(root),
+                        "output_root": str(root / "converted_text"),
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with patch("sys.executable", str(root / "Scripts" / "python.exe")), patch("sys.stdout") as mock_stdout:
+                exit_code = main(["install-mcp", "--config", str(config_path), "--enable-reconvert"])
+            printed = "".join(call.args[0] for call in mock_stdout.write.call_args_list)
+            self.assertEqual(exit_code, 0)
+            self.assertIn("--enable-reconvert", printed)
+            self.assertIn("reconvert_with_math_ocr", printed)
+
+            toml_start = printed.index("[mcp_servers.zotero_fulltext]")
+            server = tomllib.loads(printed[toml_start:])["mcp_servers"]["zotero_fulltext"]
+            self.assertEqual(server["args"][-1], "--enable-reconvert")
+            self.assertEqual(server["tool_timeout_sec"], 6000)
+            self.assertEqual(
+                server["enabled_tools"],
+                [
+                    "search_fulltext",
+                    "get_fulltext_chunk",
+                    "get_item_context",
+                    "reconvert_with_math_ocr",
+                ],
+            )
+
+    def test_optional_reconversion_apply_forwards_exact_claude_arguments(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "zotero.sqlite").write_bytes(b"")
+            output_root = root / "converted_text"
+            config_path = root / "config.json"
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "zotero_root": str(root),
+                        "zotero_data_directory": str(root),
+                        "linked_attachments": str(root),
+                        "output_root": str(output_root),
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with patch("sys.executable", str(root / "Scripts" / "python.exe")), patch(
+                "zotero_pdf_text.cli.shutil.which", return_value="C:/fake/claude.cmd"
+            ), patch("zotero_pdf_text.cli.subprocess.run") as mock_run:
+                mock_run.return_value.returncode = 0
+                exit_code = main(
+                    ["install-mcp", "--config", str(config_path), "--enable-reconvert", "--apply"]
+                )
+            self.assertEqual(exit_code, 0)
+            exe_name = "zotero-fulltext-mcp.exe" if os.name == "nt" else "zotero-fulltext-mcp"
+            expected_exe = str((root / "Scripts" / exe_name).resolve())
+            expected_db = str(output_root / "index" / "zotero_text_index.sqlite")
+            self.assertEqual(
+                mock_run.call_args[0][0],
+                [
+                    "C:/fake/claude.cmd",
+                    "mcp", "add", "--scope", "user", "zotero-fulltext",
+                    expected_exe,
+                    "--", "--db", expected_db, "--config", str(config_path), "--enable-reconvert",
+                ],
+            )
+
+    def test_optional_reconversion_rejects_invalid_config_and_database_mismatch(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config_path = root / "config.json"
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "zotero_root": str(root),
+                        "zotero_data_directory": str(root),
+                        "linked_attachments": str(root),
+                        "output_root": str(root / "converted_text"),
+                    }
+                ),
+                encoding="utf-8",
+            )
+            self.assertEqual(main(["install-mcp", "--config", str(config_path), "--enable-reconvert"]), 2)
+
+            (root / "zotero.sqlite").write_bytes(b"")
+            self.assertEqual(
+                main(
+                    [
+                        "install-mcp",
+                        "--config", str(config_path),
+                        "--db", str(root / "different.sqlite"),
+                        "--enable-reconvert",
+                    ]
+                ),
+                2,
+            )
 
     def test_bibtex_endpoint_requires_integration_flag(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -5,7 +5,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from zotero_pdf_text.fts import build_fts_index
+from zotero_pdf_text._atomic import replace_with_retry as atomic_replace_with_retry
+from zotero_pdf_text.fts import build_fts_index, search_fts
 from zotero_pdf_text.lock import pipeline_write_lock
 from zotero_pdf_text.math_ocr import reconvert_with_marker
 
@@ -92,6 +93,147 @@ class ReconvertWithMarkerTests(unittest.TestCase):
             self.assertIn("marker-pdf extraction failed", result.error)
             self.assertEqual(markdown_path.read_text(encoding="utf-8"), original_markdown)
             self.assertEqual(jsonl_path.read_text(encoding="utf-8"), original_jsonl)
+
+    def test_missing_text_sidecar_fails_before_starting_marker(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _, _, jsonl_path, sqlite_path = _build_fixture(root)
+            jsonl_path.unlink()
+
+            with patch("zotero_pdf_text.math_ocr.subprocess.run") as mock_run:
+                result = reconvert_with_marker(
+                    "ATTACH1",
+                    db_path=sqlite_path,
+                    jsonl_path=jsonl_path,
+                    fts_db_path=sqlite_path,
+                    lock_root=root,
+                )
+
+            self.assertFalse(result.ok)
+            self.assertIn("No text-sidecar record found", result.error)
+            mock_run.assert_not_called()
+
+    def test_commit_failure_rolls_back_markdown_jsonl_and_search_index(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _, markdown_path, jsonl_path, sqlite_path = _build_fixture(root)
+            original_markdown = markdown_path.read_bytes()
+            original_jsonl = jsonl_path.read_bytes()
+            images_dir = markdown_path.parent.parent / "images" / markdown_path.stem
+            images_dir.mkdir(parents=True)
+            (images_dir / "existing.png").write_bytes(b"old-image")
+            build_calls = 0
+
+            def _write_marker_output(args, **kwargs):
+                Path(args[4]).write_text("# Better body\n\nEquation: $x^2$", encoding="utf-8")
+                staged_images = Path(args[6])
+                staged_images.mkdir(parents=True, exist_ok=True)
+                (staged_images / "replacement.png").write_bytes(b"new-image")
+
+            def _fail_first_build(*args, **kwargs):
+                nonlocal build_calls
+                build_calls += 1
+                summary = build_fts_index(*args, **kwargs)
+                if build_calls == 1:
+                    raise RuntimeError("simulated FTS commit failure")
+                return summary
+
+            with patch("zotero_pdf_text.math_ocr.subprocess.run", side_effect=_write_marker_output), patch(
+                "zotero_pdf_text.math_ocr.build_fts_index", side_effect=_fail_first_build
+            ):
+                with self.assertRaisesRegex(RuntimeError, "simulated FTS commit failure"):
+                    reconvert_with_marker(
+                        "ATTACH1",
+                        db_path=sqlite_path,
+                        jsonl_path=jsonl_path,
+                        fts_db_path=sqlite_path,
+                        lock_root=root,
+                    )
+
+            self.assertEqual(markdown_path.read_bytes(), original_markdown)
+            self.assertEqual(jsonl_path.read_bytes(), original_jsonl)
+            self.assertEqual(build_calls, 2)
+            self.assertEqual((images_dir / "existing.png").read_bytes(), b"old-image")
+            self.assertFalse((images_dir / "replacement.png").exists())
+            self.assertTrue(search_fts(sqlite_path, "Garbled"))
+            self.assertFalse(search_fts(sqlite_path, "Better"))
+
+    def test_sidecar_key_race_returns_clean_failure_without_committing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _, markdown_path, jsonl_path, sqlite_path = _build_fixture(root)
+            original_markdown = markdown_path.read_bytes()
+            original_jsonl = jsonl_path.read_bytes()
+
+            def _write_marker_output(args, **kwargs):
+                Path(args[4]).write_text("# Better body", encoding="utf-8")
+
+            with patch("zotero_pdf_text.math_ocr.subprocess.run", side_effect=_write_marker_output), patch(
+                "zotero_pdf_text.math_ocr.load_indexed_keys",
+                side_effect=[{"ATTACH1"}, set()],
+            ):
+                result = reconvert_with_marker(
+                    "ATTACH1",
+                    db_path=sqlite_path,
+                    jsonl_path=jsonl_path,
+                    fts_db_path=sqlite_path,
+                    lock_root=root,
+                )
+
+            self.assertFalse(result.ok)
+            self.assertIn("No text-sidecar record found", result.error)
+            self.assertEqual(markdown_path.read_bytes(), original_markdown)
+            self.assertEqual(jsonl_path.read_bytes(), original_jsonl)
+            self.assertTrue(search_fts(sqlite_path, "Garbled"))
+            self.assertFalse(search_fts(sqlite_path, "Better"))
+
+    def test_image_restore_failure_preserves_the_prior_image_backup(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _, markdown_path, jsonl_path, sqlite_path = _build_fixture(root)
+            images_dir = markdown_path.parent.parent / "images" / markdown_path.stem
+            images_dir.mkdir(parents=True)
+            (images_dir / "existing.png").write_bytes(b"old-image")
+            original_markdown = markdown_path.read_bytes()
+            original_jsonl = jsonl_path.read_bytes()
+            build_calls = 0
+
+            def _write_marker_output(args, **kwargs):
+                Path(args[4]).write_text("# Better body", encoding="utf-8")
+                staged_images = Path(args[6])
+                staged_images.mkdir(parents=True, exist_ok=True)
+                (staged_images / "replacement.png").write_bytes(b"new-image")
+
+            def _fail_first_build(*args, **kwargs):
+                nonlocal build_calls
+                build_calls += 1
+                summary = build_fts_index(*args, **kwargs)
+                if build_calls == 1:
+                    raise RuntimeError("simulated FTS commit failure")
+                return summary
+
+            def _fail_prior_image_restore(source: Path, destination: Path, **kwargs):
+                if source.name == "previous-images":
+                    raise PermissionError("simulated image lock")
+                return atomic_replace_with_retry(source, destination, **kwargs)
+
+            with patch("zotero_pdf_text.math_ocr.subprocess.run", side_effect=_write_marker_output), patch(
+                "zotero_pdf_text.math_ocr.build_fts_index", side_effect=_fail_first_build
+            ), patch("zotero_pdf_text.math_ocr.replace_with_retry", side_effect=_fail_prior_image_restore):
+                with self.assertRaisesRegex(RuntimeError, "could not restore prior image assets"):
+                    reconvert_with_marker(
+                        "ATTACH1",
+                        db_path=sqlite_path,
+                        jsonl_path=jsonl_path,
+                        fts_db_path=sqlite_path,
+                        lock_root=root,
+                    )
+
+            self.assertEqual(markdown_path.read_bytes(), original_markdown)
+            self.assertEqual(jsonl_path.read_bytes(), original_jsonl)
+            backups = list(images_dir.parent.glob(".0001_paper.marker-*/previous-images/existing.png"))
+            self.assertEqual(len(backups), 1)
+            self.assertEqual(backups[0].read_bytes(), b"old-image")
 
     def test_missing_source_pdf_returns_error(self):
         with tempfile.TemporaryDirectory() as tmp:

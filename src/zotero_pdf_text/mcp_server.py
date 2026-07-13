@@ -24,9 +24,14 @@ def main(argv: list[str] | None = None) -> int:
         "--config",
         type=Path,
         default=None,
-        help="Optional project config. Required only for reconvert_with_math_ocr or when --db is omitted.",
+        help="Optional project config. Required with --enable-reconvert or when --db is omitted.",
     )
     parser.add_argument("--enable-bibtex", action="store_true", help="Expose the local Better BibTeX export integration.")
+    parser.add_argument(
+        "--enable-reconvert",
+        action="store_true",
+        help="Expose single-attachment math OCR; requires an explicit valid --config governing --db.",
+    )
     parser.add_argument(
         "--bibtex-endpoint",
         default=None,
@@ -34,6 +39,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
+    if args.enable_reconvert and args.config is None:
+        raise SystemExit(
+            _startup_error(
+                "config_required",
+                "--enable-reconvert requires an explicit valid --config.",
+            )
+        )
     config = None
     if args.config is not None:
         config = _load_server_config(args.config)
@@ -52,6 +64,7 @@ def main(argv: list[str] | None = None) -> int:
             db_path,
             config=config,
             enable_bibtex=args.enable_bibtex,
+            enable_reconvert=args.enable_reconvert,
             **({"bibtex_endpoint": args.bibtex_endpoint} if args.bibtex_endpoint else {}),
         )
     except PublicMcpError as exc:
@@ -72,7 +85,7 @@ def main(argv: list[str] | None = None) -> int:
 def _load_server_config(path: Path):
     try:
         return load_config(path)
-    except (FileNotFoundError, KeyError, ValueError, OSError) as exc:
+    except (FileNotFoundError, KeyError, TypeError, ValueError, OSError) as exc:
         raise SystemExit(_startup_error("config_unavailable", "A readable project config is required for this startup mode.")) from exc
 
 
