@@ -44,15 +44,23 @@ as primary library records.
 
 - Zotero MCP: live metadata, collections, tags, child attachments, notes, and
   Zotero URIs. Zotero must be running.
-- Full-text MCP: bounded search, passage retrieval, and item context over converted Markdown.
-  It never launches Zotero or exposes local paths; returned library material is labelled
-  untrusted. Its one maintenance exception, math OCR, requires an exact confirmation literal and
-  is rate-limited, but it still never modifies Zotero.
+- Full-text MCP: the default surface is bounded, read-only search, passage retrieval, and item
+  context over converted Markdown. It never launches Zotero or exposes local paths; returned
+  library material is labelled untrusted. The optional math-OCR capability must be enabled at
+  startup with an explicit valid config governing the selected database and with the Marker
+  dependency installed. It requires an exact confirmation literal, overwrites one attachment's
+  derived Markdown, image assets, and index record, and is rate-limited, but it never modifies
+  Zotero.
 - Full-text CLI: maintenance and operational commands, including Zotero process startup and
   unguarded `reconvert-math`, remain explicit local workflows.
 - Better BibTeX CLI/MCP bridge: the CLI returns or appends full `.bib` entries by citation key.
   The MCP export bridge is disabled by default and, when explicitly enabled, can only call the
   configured credential-free loopback endpoint on Zotero's local port.
+
+MCP tool annotations describe this split to compatible clients: index reads and the loopback
+BibTeX bridge are read-only, non-destructive, closed-world operations; math reconversion is a
+non-idempotent destructive update to derived content. These annotations are presentation/risk
+hints, while startup-time capability registration is the enforcement boundary.
 - Ingestion queue: dry-run dedupe for LLM literature-search imports.
 - Zotero write CLI: approval-gated write plans that generate local Zotero
   JavaScript for creating items, linking local PDFs, updating exact-key metadata,

@@ -32,7 +32,13 @@ from .ingestion import dry_run_ingest, ingest_approved
 from .indexer import append_text_index, build_text_index, load_indexed_keys
 from .lock import PipelineLockedError, pipeline_write_lock
 from .mapper import run_dry_run
-from .mcp_contract import BIBTEX_MCP_TOOL_NAME, DEFAULT_MCP_TOOL_NAMES
+from .mcp_contract import (
+    BIBTEX_MCP_TOOL_NAME,
+    DEFAULT_MCP_TOOL_NAMES,
+    RECONVERT_MCP_TOOL_NAME,
+    RECONVERT_TOOL_TIMEOUT_SECONDS,
+    configured_index_path,
+)
 from .runtime import DEFAULT_ZOTERO_EXE, ensure_zotero_running
 from .verifier import apply_verification, verify_unverified
 from .zotero_write import (
@@ -418,6 +424,11 @@ def build_parser() -> argparse.ArgumentParser:
     install_mcp.add_argument("--config", type=Path, default=None, help="Path to project config JSON. Default: resolved for this machine.")
     install_mcp.add_argument("--db", type=Path, default=None, help="SQLite FTS database path. Default: <output_root>/index/zotero_text_index.sqlite.")
     install_mcp.add_argument("--enable-bibtex", action="store_true", help="Enable the optional local Better BibTeX MCP integration.")
+    install_mcp.add_argument(
+        "--enable-reconvert",
+        action="store_true",
+        help="Enable single-attachment math OCR in MCP; the generated registration includes the explicit config.",
+    )
     install_mcp.add_argument(
         "--bibtex-endpoint",
         default=None,
@@ -862,7 +873,17 @@ def _install_mcp(args: argparse.Namespace) -> int:
         print("Set ZOTERO_PDF_TEXT_CONFIG, pass --config, or create config.json for this machine.", file=sys.stderr)
         return 2
     config = load_config(config_path)
-    db_path = args.db if args.db is not None else (config.output_root / "index" / "zotero_text_index.sqlite")
+    expected_db_path = configured_index_path(config)
+    db_path = args.db if args.db is not None else expected_db_path
+    if args.enable_reconvert:
+        try:
+            validate_config(config)
+        except (OSError, TypeError, ValueError):
+            print("--enable-reconvert requires a valid project config.", file=sys.stderr)
+            return 2
+        if db_path.resolve(strict=False) != expected_db_path.resolve(strict=False):
+            print("--enable-reconvert requires --db to be the index governed by the project config.", file=sys.stderr)
+            return 2
 
     venv_scripts_dir = Path(sys.executable).resolve().parent
     exe_name = "zotero-fulltext-mcp.exe" if os.name == "nt" else "zotero-fulltext-mcp"
@@ -874,6 +895,8 @@ def _install_mcp(args: argparse.Namespace) -> int:
     server_args = ["--db", str(db_path), "--config", str(config_path)]
     if args.enable_bibtex:
         server_args.append("--enable-bibtex")
+    if args.enable_reconvert:
+        server_args.append("--enable-reconvert")
     if args.bibtex_endpoint:
         if not args.enable_bibtex:
             print("--bibtex-endpoint requires --enable-bibtex.", file=sys.stderr)
@@ -886,6 +909,8 @@ def _install_mcp(args: argparse.Namespace) -> int:
     enabled_tools = list(DEFAULT_MCP_TOOL_NAMES)
     if args.enable_bibtex:
         enabled_tools.append(BIBTEX_MCP_TOOL_NAME)
+    if args.enable_reconvert:
+        enabled_tools.append(RECONVERT_MCP_TOOL_NAME)
     # Use json.dumps for every embedded string, not Python repr(): repr() renders a backslash
     # as two characters, but TOML single-quoted (literal) strings treat backslashes literally,
     # so repr() output silently doubles every backslash in a Windows path once TOML parses it.
@@ -898,7 +923,7 @@ def _install_mcp(args: argparse.Namespace) -> int:
         f"args = [{toml_args}]\n"
         "enabled = true\n"
         "startup_timeout_sec = 30\n"
-        "tool_timeout_sec = 120\n"
+        f"tool_timeout_sec = {RECONVERT_TOOL_TIMEOUT_SECONDS if args.enable_reconvert else 120}\n"
         f"enabled_tools = [{toml_tools}]"
     )
 

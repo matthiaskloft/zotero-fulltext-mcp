@@ -23,7 +23,7 @@ zotero-fulltext-mcp = "zotero_pdf_text.mcp_server:main"
 
 [project.optional-dependencies]
 mcp = [
-  "mcp>=1.9",
+  "mcp>=1.28,<2",
 ]
 zotero-write = [
   "pyzotero>=1.6",
