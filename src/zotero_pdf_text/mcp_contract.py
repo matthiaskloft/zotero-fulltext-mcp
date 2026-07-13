@@ -270,14 +270,14 @@ def _validate_reconvert_setup(config: ProjectConfig | None, db_path: Path) -> No
             "sidecar_index_unavailable",
             "Math reconversion requires the configured text sidecar index.",
         )
-    if not _marker_dependency_available():
+    if not marker_dependency_available():
         raise PublicMcpError(
             "marker_dependency_missing",
             "Math reconversion requires the optional marker dependency.",
         )
 
 
-def _marker_dependency_available() -> bool:
+def marker_dependency_available() -> bool:
     try:
         importlib.metadata.version("marker-pdf")
         return all(

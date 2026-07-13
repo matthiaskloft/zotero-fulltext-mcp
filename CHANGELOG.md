@@ -16,6 +16,9 @@ All notable changes to this project are documented here. Format loosely follows
 - MCP tools now advertise read-only, destructive, and closed-world safety hints to compatible
   clients, with reconversion explicitly marked non-idempotent. The optional MCP dependency is
   constrained to the tested v1 API (`mcp>=1.28,<2`) pending a separate v2 migration.
+- `install-mcp --enable-reconvert` now rejects registration up front when the optional `[marker]`
+  extra is not importable, instead of generating a registration that only fails once the server
+  itself starts.
 
 ## [0.2.0] - 2026-07-12
 

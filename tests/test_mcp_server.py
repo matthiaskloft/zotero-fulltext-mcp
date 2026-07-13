@@ -93,7 +93,7 @@ class McpServerTests(unittest.TestCase):
     def test_real_fastmcp_exposes_optional_tool_annotations_and_descriptions(self):
         with tempfile.TemporaryDirectory() as tmp:
             _, sqlite_path, config = _build_index(Path(tmp))
-            with patch("zotero_pdf_text.mcp_contract._marker_dependency_available", return_value=True):
+            with patch("zotero_pdf_text.mcp_contract.marker_dependency_available", return_value=True):
                 server = create_server(sqlite_path, config=config, enable_bibtex=True, enable_reconvert=True)
 
             tools = {tool.name: tool for tool in server._tool_manager.list_tools()}
@@ -195,7 +195,7 @@ class McpServerTests(unittest.TestCase):
     def test_reconversion_requires_literal_confirmation_and_is_rate_limited(self):
         with tempfile.TemporaryDirectory() as tmp:
             root, sqlite_path, config = _build_index(Path(tmp))
-            with patch("zotero_pdf_text.mcp_contract._marker_dependency_available", return_value=True):
+            with patch("zotero_pdf_text.mcp_contract.marker_dependency_available", return_value=True):
                 server = create_server(
                     sqlite_path,
                     config=config,
@@ -264,7 +264,7 @@ class McpServerTests(unittest.TestCase):
                 )
             self.assertEqual(mismatch.exception.code, "database_config_mismatch")
 
-            with patch("zotero_pdf_text.mcp_contract._marker_dependency_available", return_value=False):
+            with patch("zotero_pdf_text.mcp_contract.marker_dependency_available", return_value=False):
                 with self.assertRaises(PublicMcpError) as missing_marker:
                     create_server(
                         sqlite_path,
@@ -315,7 +315,7 @@ class McpServerTests(unittest.TestCase):
             _write_config(config_path, config)
             other_db = root / "other.sqlite"
             other_db.write_bytes(sqlite_path.read_bytes())
-            with patch("zotero_pdf_text.mcp_contract._marker_dependency_available", return_value=True):
+            with patch("zotero_pdf_text.mcp_contract.marker_dependency_available", return_value=True):
                 with self.assertRaises(SystemExit) as raised:
                     main(["--db", str(other_db), "--config", str(config_path), "--enable-reconvert"])
             error = json.loads(str(raised.exception))
