@@ -71,6 +71,46 @@ class ConverterTests(unittest.TestCase):
             self.assertEqual(calls[0][calls[0].index("--image-dir") + 1], str(expected_images_dir))
             self.assertEqual(calls[0][calls[0].index("--tool") + 1], "pymupdf4llm.to_markdown")
 
+    def test_convert_sample_scales_timeout_for_long_documents(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            report = root / "mapping_report.csv"
+            pdf = root / "paper.pdf"
+            pdf.write_bytes(b"%PDF")
+            _write_mapping_report(report, pdf, page_count="500")
+            config = ProjectConfig(root, root, root, root / "output")
+
+            calls: list[dict] = []
+
+            def _capture_and_write(args, **kwargs):
+                calls.append(kwargs)
+                _write_raw_markdown(args, **kwargs)
+
+            with patch("zotero_pdf_text.converter.subprocess.run", side_effect=_capture_and_write):
+                convert_sample(config, report, limit=1, timeout_seconds=600)
+
+            self.assertEqual(calls[0]["timeout"], 2000)
+
+    def test_convert_sample_keeps_base_timeout_for_short_documents(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            report = root / "mapping_report.csv"
+            pdf = root / "paper.pdf"
+            pdf.write_bytes(b"%PDF")
+            _write_mapping_report(report, pdf, page_count="10")
+            config = ProjectConfig(root, root, root, root / "output")
+
+            calls: list[dict] = []
+
+            def _capture_and_write(args, **kwargs):
+                calls.append(kwargs)
+                _write_raw_markdown(args, **kwargs)
+
+            with patch("zotero_pdf_text.converter.subprocess.run", side_effect=_capture_and_write):
+                convert_sample(config, report, limit=1, timeout_seconds=600)
+
+            self.assertEqual(calls[0]["timeout"], 600)
+
     def test_convert_sample_uses_fallback_after_primary_failure(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -216,7 +256,9 @@ class ConverterTests(unittest.TestCase):
             self.assertIn("CalledProcessError", rows[0]["error"])
 
 
-def _write_mapping_report(path: Path, pdf: Path, *, citation_key: str = "smithTitle2024", title: str = "Title") -> None:
+def _write_mapping_report(
+    path: Path, pdf: Path, *, citation_key: str = "smithTitle2024", title: str = "Title", page_count: str = "3"
+) -> None:
     fieldnames = [
         "classification",
         "source_path",
@@ -249,7 +291,7 @@ def _write_mapping_report(path: Path, pdf: Path, *, citation_key: str = "smithTi
                 "year": "2024",
                 "doi": "10.1000/test",
                 "citation_key": citation_key,
-                "page_count": "3",
+                "page_count": page_count,
             "identity_status": "verified",
             "identity_rule": "doi_exact",
         },

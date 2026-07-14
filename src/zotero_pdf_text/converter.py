@@ -23,6 +23,7 @@ except Exception:  # pragma: no cover - exercised only if dependency is missing
 PRIMARY_EXTRACTION_TOOL = "pymupdf4llm.to_markdown"
 FALLBACK_EXTRACTION_TOOL = "pymupdf.get_text"
 EXTRACTION_TOOL = PRIMARY_EXTRACTION_TOOL
+SECONDS_PER_PAGE_TIMEOUT = 4
 
 
 @dataclass
@@ -262,7 +263,8 @@ def _convert_row(
             )
         if force:
             shutil.rmtree(images_dir, ignore_errors=True)
-        extraction_tool, fallback_note = _extract_markdown(source_path, raw_output_path, images_dir, timeout_seconds)
+        effective_timeout = _effective_timeout(row, timeout_seconds)
+        extraction_tool, fallback_note = _extract_markdown(source_path, raw_output_path, images_dir, effective_timeout)
         markdown = raw_output_path.read_text(encoding="utf-8")
         has_math = _read_math_sidecar(math_sidecar_path)
         output_path.write_text(
@@ -280,6 +282,14 @@ def _convert_row(
     finally:
         raw_output_path.unlink(missing_ok=True)
         math_sidecar_path.unlink(missing_ok=True)
+
+
+def _effective_timeout(row: dict[str, str], timeout_seconds: int) -> int:
+    try:
+        page_count = int(row.get("page_count") or 0)
+    except ValueError:
+        page_count = 0
+    return max(timeout_seconds, page_count * SECONDS_PER_PAGE_TIMEOUT)
 
 
 def _read_math_sidecar(sidecar_path: Path) -> bool:

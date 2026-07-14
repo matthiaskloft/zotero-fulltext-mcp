@@ -36,6 +36,7 @@ from .mcp_contract import (
     BIBTEX_MCP_TOOL_NAME,
     DEFAULT_MCP_TOOL_NAMES,
     RECONVERT_MCP_TOOL_NAME,
+    RECONVERT_STARTUP_TIMEOUT_SECONDS,
     RECONVERT_TOOL_TIMEOUT_SECONDS,
     configured_index_path,
     marker_dependency_available,
@@ -930,7 +931,7 @@ def _install_mcp(args: argparse.Namespace) -> int:
         f"command = {json.dumps(str(server_exe))}\n"
         f"args = [{toml_args}]\n"
         "enabled = true\n"
-        "startup_timeout_sec = 30\n"
+        f"startup_timeout_sec = {RECONVERT_STARTUP_TIMEOUT_SECONDS if args.enable_reconvert else 30}\n"
         f"tool_timeout_sec = {RECONVERT_TOOL_TIMEOUT_SECONDS if args.enable_reconvert else 120}\n"
         f"enabled_tools = [{toml_tools}]"
     )
@@ -941,6 +942,16 @@ def _install_mcp(args: argparse.Namespace) -> int:
     print()
     print("# Claude Code registration:")
     print(claude_cmd)
+    if args.enable_reconvert:
+        print()
+        print(
+            "# --enable-reconvert pulls in marker-pdf's torch/transformers dependencies, which "
+            f"cold-import in ~{RECONVERT_STARTUP_TIMEOUT_SECONDS}s on a typical machine -- longer than "
+            "Claude Code's default 30s MCP connection timeout. Before using this server, set (once, "
+            "persistently, e.g. via `setx MCP_TIMEOUT " f"{RECONVERT_STARTUP_TIMEOUT_SECONDS * 1000}` "
+            "on Windows or the shell-profile equivalent) so Claude Code waits long enough to connect:"
+        )
+        print(f"MCP_TIMEOUT={RECONVERT_STARTUP_TIMEOUT_SECONDS * 1000}")
     print()
     print("# Codex registration -- paste into your config.toml (this command does not edit it for you):")
     print(codex_block)
