@@ -111,6 +111,26 @@ class ConverterTests(unittest.TestCase):
 
             self.assertEqual(calls[0]["timeout"], 600)
 
+    def test_timeout_error_reports_scaled_duration_not_base_timeout(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            report = root / "mapping_report.csv"
+            pdf = root / "paper.pdf"
+            pdf.write_bytes(b"%PDF")
+            _write_mapping_report(report, pdf, page_count="500")
+            config = ProjectConfig(root, root, root, root / "output")
+
+            def _raise_timeout(args, **kwargs):
+                raise subprocess.TimeoutExpired(cmd=args, timeout=kwargs.get("timeout"))
+
+            with patch("zotero_pdf_text.converter.subprocess.run", side_effect=_raise_timeout):
+                run_dir = convert_sample(config, report, limit=1, timeout_seconds=600)
+
+            with (run_dir / "manifest.csv").open("r", encoding="utf-8-sig", newline="") as handle:
+                rows = list(csv.DictReader(handle))
+            self.assertEqual(rows[0]["status"], "error")
+            self.assertIn("exceeded 2000 seconds", rows[0]["error"])
+
     def test_convert_sample_uses_fallback_after_primary_failure(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

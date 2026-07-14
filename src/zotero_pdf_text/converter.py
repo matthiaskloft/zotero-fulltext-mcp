@@ -246,6 +246,7 @@ def _convert_row(
     raw_output_path = output_path.with_name(f"{output_path.stem}.raw.tmp")
     images_dir = images_root / output_path.stem
     math_sidecar_path = raw_output_path.with_suffix(".math.json")
+    effective_timeout = _effective_timeout(row, timeout_seconds)
     try:
         if output_path.exists() and not force:
             extraction_tool = _existing_extraction_tool(output_path)
@@ -263,7 +264,6 @@ def _convert_row(
             )
         if force:
             shutil.rmtree(images_dir, ignore_errors=True)
-        effective_timeout = _effective_timeout(row, timeout_seconds)
         extraction_tool, fallback_note = _extract_markdown(source_path, raw_output_path, images_dir, effective_timeout)
         markdown = raw_output_path.read_text(encoding="utf-8")
         has_math = _read_math_sidecar(math_sidecar_path)
@@ -272,7 +272,7 @@ def _convert_row(
         )
         return _result(row, output_path, "converted", extraction_tool=extraction_tool, has_math=has_math, error=fallback_note)
     except subprocess.TimeoutExpired:
-        return _result(row, output_path, "error", f"TimeoutExpired: exceeded {timeout_seconds} seconds")
+        return _result(row, output_path, "error", f"TimeoutExpired: exceeded {effective_timeout} seconds")
     except subprocess.CalledProcessError as exc:
         stderr = (exc.stderr or "").strip()
         message = stderr[-1000:] if stderr else str(exc)
