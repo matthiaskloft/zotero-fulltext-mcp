@@ -11,8 +11,8 @@
 | Plan | DONE | 2026-07-13 | Three sequential, independently shippable phases. |
 | Phase 1: Capability Guidance and Opt-In Mutation | MERGED | 2026-07-13 | [PR #8](https://github.com/matthiaskloft/zotero-fulltext-mcp/pull/8) merged; default is read-only, and reconversion is opt-in, annotated, preflighted, and rollback-protected. |
 | Phase 2: Evidence and Retrieval Contract | MERGED | 2026-07-13 | [PR #10](https://github.com/matthiaskloft/zotero-fulltext-mcp/pull/10) merged; added content-bound locators, matched-field evidence, exact-chunk navigation/truncation semantics, reliability warnings, and strict context-key validation. |
-| Phase 3: Protocol-Native Schemas and Errors | COMMITTED | 2026-07-13 | Added typed success schemas, concrete input-schema guidance without SDK coercion, and redacted native MCP tool errors; protocol and full suites pass. |
-| Ship | IN_PROGRESS | 2026-07-13 | Preparing Phase 3 for review. |
+| Phase 3: Protocol-Native Schemas and Errors | MERGED | 2026-07-14 | [PR #11](https://github.com/matthiaskloft/zotero-fulltext-mcp/pull/11) merged; added typed success schemas, concrete input-schema guidance without SDK coercion, and redacted native MCP tool errors; protocol and full suites pass. |
+| Ship | DONE | 2026-07-14 | All three phases merged to `master`. |
 
 ## Spec
 
