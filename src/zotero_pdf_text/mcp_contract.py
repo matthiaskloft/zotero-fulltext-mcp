@@ -51,6 +51,10 @@ MAX_RESPONSE_BYTES = 500_000
 MAX_BIBTEX_RESPONSE_BYTES = 500_000
 RECONVERT_COOLDOWN_SECONDS = 300
 RECONVERT_TOOL_TIMEOUT_SECONDS = 6000
+# marker-pdf pulls in torch/transformers, which cold-import in ~110s on a typical machine --
+# comfortably past clients' default ~30s MCP connection timeout, causing spurious "failed to
+# connect" errors on the first launch after enabling reconvert.
+RECONVERT_STARTUP_TIMEOUT_SECONDS = 180
 
 MCP_INSTRUCTIONS = (
     "This server retrieves evidence from a local, potentially stale index of converted Zotero PDFs; "
