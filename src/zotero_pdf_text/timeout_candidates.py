@@ -159,6 +159,12 @@ def _load_skip_list(skip_list_path: Path) -> dict[str, object]:
 
 
 def _load_master_records(master_jsonl_path: Path) -> dict[str, dict[str, object]]:
+    """Read the master candidates file, skipping any malformed line rather than aborting the read.
+
+    This file is documented as user-editable (see docs/data-dictionary.md), and it is rewritten by
+    every conversion run -- a single truncated/hand-edited line must not permanently break every
+    future run's append_master_candidates call or the read-only list_timeout_candidates MCP tool.
+    """
     records: dict[str, dict[str, object]] = {}
     if not master_jsonl_path.exists():
         return records
@@ -167,7 +173,12 @@ def _load_master_records(master_jsonl_path: Path) -> dict[str, dict[str, object]
             line = line.strip()
             if not line:
                 continue
-            record = json.loads(line)
+            try:
+                record = json.loads(line)
+            except ValueError:
+                continue
+            if not isinstance(record, dict):
+                continue
             key = record.get("zotero_attachment_key", "")
             if key:
                 records[key] = record

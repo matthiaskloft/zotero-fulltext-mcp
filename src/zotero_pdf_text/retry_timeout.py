@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import re
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
@@ -26,6 +27,12 @@ MAX_RETRY_TIMEOUT_SECONDS = 86400
 
 CANDIDATES_RELATIVE_PATH = Path("index") / "timeout_candidates.jsonl"
 SKIP_LIST_RELATIVE_PATH = Path("timeout_skip_list.json")
+
+# Real Zotero keys are always alphanumeric. This attachment_key is interpolated directly into
+# filesystem paths below (output_root / "retry_timeout" / f"{timestamp}_{attachment_key}"), and the
+# master timeout_candidates.jsonl file it's looked up from is documented as user-editable -- reject
+# anything else up front rather than letting a corrupted/hand-edited key escape output_root.
+_ATTACHMENT_KEY_PATTERN = re.compile(r"[A-Za-z0-9]+")
 
 
 @dataclass
@@ -56,6 +63,8 @@ def skip_timeout_candidate(
     Never touches Markdown, the sidecar index, or Zotero -- only the persisted skip list and the
     candidate's own status.
     """
+    if not _ATTACHMENT_KEY_PATTERN.fullmatch(attachment_key):
+        return _error_result("skip", attachment_key, "attachment_key must contain only letters and digits.")
     candidates_jsonl = config.output_root / CANDIDATES_RELATIVE_PATH
     skip_list_path = config.output_root / SKIP_LIST_RELATIVE_PATH
     try:
@@ -82,6 +91,8 @@ def skip_timeout_candidate(
             )
     except PipelineLockedError as exc:
         return _error_result("skip", attachment_key, str(exc), previous_status=previous_status)
+    except OSError as exc:
+        return _error_result("skip", attachment_key, f"{type(exc).__name__}: {exc}", previous_status=previous_status)
 
     return RetryTimeoutResult(
         ok=True,
@@ -114,6 +125,8 @@ def retry_timeout_candidate(
     the candidate's status untouched; the candidate's own occurrence_count/last_detected_at are
     refreshed automatically by the nested convert_verified() call if it times out again.
     """
+    if not _ATTACHMENT_KEY_PATTERN.fullmatch(attachment_key):
+        return _error_result("retry", attachment_key, "attachment_key must contain only letters and digits.")
     if timeout_seconds is not None and multiplier is not None:
         return _error_result("retry", attachment_key, "Supply at most one of timeout_seconds and multiplier.")
 
@@ -126,16 +139,20 @@ def retry_timeout_candidate(
 
     attempted_timeout_seconds = int(candidate.get("attempted_timeout_seconds") or 0)
     if timeout_seconds is not None:
-        if timeout_seconds > MAX_RETRY_TIMEOUT_SECONDS:
+        if timeout_seconds < 1 or timeout_seconds > MAX_RETRY_TIMEOUT_SECONDS:
             return _error_result(
                 "retry",
                 attachment_key,
-                f"timeout_seconds must be at most {MAX_RETRY_TIMEOUT_SECONDS}.",
+                f"timeout_seconds must be between 1 and {MAX_RETRY_TIMEOUT_SECONDS}.",
                 previous_status=previous_status,
             )
         next_timeout = timeout_seconds
     elif multiplier is not None:
-        next_timeout = min(int(attempted_timeout_seconds * multiplier), MAX_RETRY_TIMEOUT_SECONDS)
+        if multiplier <= 0:
+            return _error_result(
+                "retry", attachment_key, "multiplier must be a positive number.", previous_status=previous_status
+            )
+        next_timeout = max(1, min(int(attempted_timeout_seconds * multiplier), MAX_RETRY_TIMEOUT_SECONDS))
     else:
         next_timeout = min(int(candidate.get("suggested_next_timeout_seconds") or attempted_timeout_seconds), MAX_RETRY_TIMEOUT_SECONDS)
 
@@ -195,6 +212,14 @@ def retry_timeout_candidate(
             )
     except PipelineLockedError as exc:
         return _error_result("retry", attachment_key, str(exc), previous_status=previous_status, timeout_seconds_used=next_timeout)
+    except Exception as exc:
+        # Broad on purpose: this wraps conversion, manifest parsing, and index promotion in one
+        # locked block, and none of those failure modes (missing manifest, unexpected manifest
+        # shape, FTS/index I/O errors) should escape as a raw traceback instead of the structured
+        # error result the rest of this module produces.
+        return _error_result(
+            "retry", attachment_key, f"{type(exc).__name__}: {exc}", previous_status=previous_status, timeout_seconds_used=next_timeout
+        )
 
     return RetryTimeoutResult(
         ok=True,

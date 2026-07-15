@@ -224,6 +224,18 @@ class McpServerTests(unittest.TestCase):
             self.assertEqual(unavailable.exception.code, "database_unavailable")
             self.assertNotIn("missing.sqlite", str(unavailable.exception))
 
+    def test_attachment_key_rejects_non_alphanumeric_characters(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _, sqlite_path, _ = _build_index(Path(tmp))
+            server = create_server(sqlite_path, mcp_factory=FakeFastMCP)
+
+            _assert_tool_error(
+                self, lambda: server.tools["get_fulltext_chunk"]("../escape"), "invalid_attachment_key"
+            )
+            _assert_tool_error(
+                self, lambda: server.tools["get_item_context"](attachment_key="ATTACH/1"), "invalid_attachment_key"
+            )
+
     def test_passage_locator_distinguishes_truncated_exact_and_leading_preview(self):
         with tempfile.TemporaryDirectory() as tmp:
             root, sqlite_path, _ = _build_index(Path(tmp))

@@ -75,6 +75,17 @@ class SkipTimeoutCandidateTests(unittest.TestCase):
             self.assertFalse(result.ok)
             self.assertIn("No timeout candidate found", result.error)
 
+    def test_skip_rejects_invalid_attachment_key(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            output_root = root / "output"
+            config = ProjectConfig(root, root, root, output_root)
+
+            result = skip_timeout_candidate("../escape", config=config, reason="too slow")
+
+            self.assertFalse(result.ok)
+            self.assertIn("letters and digits", result.error)
+
 
 class RetryTimeoutCandidateTests(unittest.TestCase):
     def test_retry_success_appends_when_not_previously_indexed(self):
@@ -213,6 +224,123 @@ class RetryTimeoutCandidateTests(unittest.TestCase):
 
             self.assertFalse(result.ok)
             self.assertIn(str(MAX_RETRY_TIMEOUT_SECONDS), result.error)
+
+    def test_explicit_timeout_seconds_below_one_is_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            output_root = root / "output"
+            pdf = root / "paper.pdf"
+            pdf.write_bytes(b"%PDF")
+            _seed_candidate(output_root, pdf)
+            config = ProjectConfig(root, root, root, output_root)
+
+            result = retry_timeout_candidate(
+                "ATTACH",
+                config=config,
+                jsonl_path=output_root / "index" / "zotero_text_index.jsonl",
+                fts_db_path=output_root / "index" / "zotero_text_index.sqlite",
+                timeout_seconds=0,
+            )
+
+            self.assertFalse(result.ok)
+            self.assertIn("between 1 and", result.error)
+
+    def test_zero_multiplier_is_rejected_not_crashed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            output_root = root / "output"
+            pdf = root / "paper.pdf"
+            pdf.write_bytes(b"%PDF")
+            _seed_candidate(output_root, pdf, attempted_timeout_seconds=1000)
+            config = ProjectConfig(root, root, root, output_root)
+
+            result = retry_timeout_candidate(
+                "ATTACH",
+                config=config,
+                jsonl_path=output_root / "index" / "zotero_text_index.jsonl",
+                fts_db_path=output_root / "index" / "zotero_text_index.sqlite",
+                multiplier=0,
+            )
+
+            self.assertFalse(result.ok)
+            self.assertIn("multiplier must be a positive number", result.error)
+
+    def test_negative_multiplier_is_rejected_not_crashed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            output_root = root / "output"
+            pdf = root / "paper.pdf"
+            pdf.write_bytes(b"%PDF")
+            _seed_candidate(output_root, pdf, attempted_timeout_seconds=1000)
+            config = ProjectConfig(root, root, root, output_root)
+
+            result = retry_timeout_candidate(
+                "ATTACH",
+                config=config,
+                jsonl_path=output_root / "index" / "zotero_text_index.jsonl",
+                fts_db_path=output_root / "index" / "zotero_text_index.sqlite",
+                multiplier=-2.0,
+            )
+
+            self.assertFalse(result.ok)
+            self.assertIn("multiplier must be a positive number", result.error)
+
+    def test_tiny_multiplier_floors_to_one_second_instead_of_zero(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            output_root = root / "output"
+            pdf = root / "paper.pdf"
+            pdf.write_bytes(b"%PDF")
+            _seed_candidate(output_root, pdf, attempted_timeout_seconds=10)
+            config = ProjectConfig(root, root, root, output_root)
+
+            with patch("zotero_pdf_text.converter.subprocess.run", side_effect=_write_raw_markdown):
+                result = retry_timeout_candidate(
+                    "ATTACH",
+                    config=config,
+                    jsonl_path=output_root / "index" / "zotero_text_index.jsonl",
+                    fts_db_path=output_root / "index" / "zotero_text_index.sqlite",
+                    multiplier=0.001,
+                )
+
+            self.assertTrue(result.ok, result.error)
+            self.assertEqual(result.timeout_seconds_used, 1)
+
+    def test_invalid_attachment_key_is_rejected_not_interpolated_into_paths(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            output_root = root / "output"
+            config = ProjectConfig(root, root, root, output_root)
+
+            result = retry_timeout_candidate(
+                "../escape",
+                config=config,
+                jsonl_path=output_root / "index" / "zotero_text_index.jsonl",
+                fts_db_path=output_root / "index" / "zotero_text_index.sqlite",
+            )
+
+            self.assertFalse(result.ok)
+            self.assertIn("letters and digits", result.error)
+
+    def test_unexpected_exception_during_retry_returns_structured_result(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            output_root = root / "output"
+            pdf = root / "paper.pdf"
+            pdf.write_bytes(b"%PDF")
+            _seed_candidate(output_root, pdf)
+            config = ProjectConfig(root, root, root, output_root)
+
+            with patch("zotero_pdf_text.retry_timeout.convert_verified", side_effect=RuntimeError("boom")):
+                result = retry_timeout_candidate(
+                    "ATTACH",
+                    config=config,
+                    jsonl_path=output_root / "index" / "zotero_text_index.jsonl",
+                    fts_db_path=output_root / "index" / "zotero_text_index.sqlite",
+                )
+
+            self.assertFalse(result.ok)
+            self.assertIn("boom", result.error)
 
     def test_timeout_seconds_and_multiplier_together_is_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -108,6 +108,28 @@ class AppendMasterCandidatesTests(unittest.TestCase):
             append_master_candidates(master_path, [])
             self.assertFalse(master_path.exists())
 
+    def test_corrupt_line_in_master_file_is_skipped_not_fatal(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            master_path = Path(tmp) / "index" / "timeout_candidates.jsonl"
+            append_master_candidates(master_path, [_candidate("GOOD")])
+            with master_path.open("a", encoding="utf-8") as handle:
+                handle.write("{not valid json\n")
+
+            # a bad line must not prevent reading the good ones, and must not raise
+            append_master_candidates(master_path, [_candidate("GOOD"), _candidate("SECOND")])
+            records = [json.loads(line) for line in master_path.read_text(encoding="utf-8").splitlines()]
+            self.assertEqual({r["zotero_attachment_key"] for r in records}, {"GOOD", "SECOND"})
+
+    def test_non_dict_json_line_in_master_file_is_skipped(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            master_path = Path(tmp) / "index" / "timeout_candidates.jsonl"
+            master_path.parent.mkdir(parents=True, exist_ok=True)
+            master_path.write_text('["just a list, not a record"]\n', encoding="utf-8")
+
+            append_master_candidates(master_path, [_candidate("GOOD")])
+            records = [json.loads(line) for line in master_path.read_text(encoding="utf-8").splitlines()]
+            self.assertEqual([r["zotero_attachment_key"] for r in records], ["GOOD"])
+
 
 class FindAndListCandidatesTests(unittest.TestCase):
     def test_find_candidate_raises_for_unknown_key(self):

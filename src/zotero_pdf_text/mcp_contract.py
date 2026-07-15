@@ -1003,10 +1003,20 @@ def _validate_chunk_index(chunk_index: object | None) -> int | None:
     return chunk_index
 
 
+_ATTACHMENT_KEY_PATTERN = re.compile(r"[A-Za-z0-9]+")
+
+
 def _validate_attachment_key(value: object) -> str:
     if not isinstance(value, str) or not value.strip() or len(value) > MAX_CITATION_KEY_CHARS:
         raise PublicMcpError("invalid_attachment_key", "attachment_key must be a non-empty bounded string.")
-    return value.strip()
+    stripped = value.strip()
+    # Real Zotero keys are always alphanumeric. Retry-timeout interpolates this value directly
+    # into filesystem paths (output_root / "retry_timeout" / f"{timestamp}_{attachment_key}"), so
+    # this allowlist also closes a path-traversal gap for a corrupted/hand-edited candidate record
+    # (the master timeout_candidates.jsonl file is documented as user-editable).
+    if not _ATTACHMENT_KEY_PATTERN.fullmatch(stripped):
+        raise PublicMcpError("invalid_attachment_key", "attachment_key must contain only letters and digits.")
+    return stripped
 
 
 def _validate_optional_key(value: object | None) -> str | None:
