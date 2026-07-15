@@ -5,13 +5,12 @@ import hashlib
 import json
 import logging
 import os
-import re
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
 
 from .config import ProjectConfig
-from .identity import classify_identity, normalize_doi, normalize_text, safe_folder_id
+from .identity import classify_identity, normalize_doi, normalize_text, resolve_attachment_paths, safe_folder_id
 from .pdf_probe import extract_early_text
 from .zotero_db import AttachmentRecord, load_attachment_records, snapshot_database
 
@@ -446,16 +445,15 @@ def _filename_title_score(filename: str, title: str) -> int:
 
 
 def _candidate_paths(record: AttachmentRecord, linked_root: Path) -> list[tuple[Path, str]]:
+    # Path resolution itself is shared with zotero_db.py's stale-attachment check via
+    # identity.resolve_attachment_paths; this just tags the resolved path with the mapping
+    # method the rest of build_mapping_rows already keys on.
     zotero_path = record.zotero_path or ""
-    if zotero_path.startswith("attachments:"):
-        relative = zotero_path.split(":", 1)[1].replace("/", os.sep).replace("\\", os.sep)
-        return [(linked_root / relative, "zotero_attachments_path")]
-    # zotero_path reflects whatever OS Zotero itself ran on when the attachment was linked, not
-    # the OS this tool happens to run on -- recognize both a Windows drive-letter path and a
-    # POSIX absolute path as "absolute_path" regardless of the current platform.
-    if re.match(r"^[A-Za-z]:[\\/]", zotero_path) or zotero_path.startswith("/"):
-        return [(Path(zotero_path), "absolute_path")]
-    return []
+    paths = resolve_attachment_paths(zotero_path, linked_root)
+    if not paths:
+        return []
+    method = "zotero_attachments_path" if zotero_path.startswith("attachments:") else "absolute_path"
+    return [(paths[0], method)]
 
 
 def _record_basename(record: AttachmentRecord) -> str:

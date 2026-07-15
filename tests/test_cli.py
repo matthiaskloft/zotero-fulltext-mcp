@@ -251,6 +251,139 @@ class VerifyUnverifiedCliTests(unittest.TestCase):
             self.assertEqual(captured["index_jsonl"], root / "custom_index.jsonl")
 
 
+class FindOrphanParentsCliTests(unittest.TestCase):
+    def test_parser_defaults(self):
+        args = build_parser().parse_args(["find-orphan-parents", "--mapping-report", "report.csv"])
+        self.assertEqual(args.command, "find-orphan-parents")
+        self.assertEqual(args.mapping_report, Path("report.csv"))
+        self.assertEqual(args.config, Path("config.json"))
+        self.assertIsNone(args.output_dir)
+        self.assertIsNone(args.limit)
+
+    def test_dispatch_calls_run_orphan_discovery(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            from zotero_pdf_text.config import ProjectConfig
+
+            with patch("zotero_pdf_text.cli.load_config") as mock_load_config, patch(
+                "zotero_pdf_text.cli.validate_config"
+            ), patch(
+                "zotero_pdf_text.orphan_discovery.run_orphan_discovery", return_value=root / "output" / "orphan_discovery" / "run1"
+            ) as mock_run:
+                mock_load_config.return_value = ProjectConfig(root, root, root, root / "output")
+                exit_code = main(["find-orphan-parents", "--mapping-report", str(root / "report.csv"), "--limit", "5"])
+
+            self.assertEqual(exit_code, 0)
+            mock_run.assert_called_once()
+            _, kwargs = mock_run.call_args
+            self.assertEqual(kwargs["limit"], 5)
+
+
+class OrphanCandidateCliTests(unittest.TestCase):
+    def test_parser_requires_exactly_one_of_skip_or_mark_resolved(self):
+        with self.assertRaises(SystemExit):
+            build_parser().parse_args(
+                ["orphan-candidate", "--orphan-sha256", "SHA1", "--parent-key", "PARENT1"]
+            )
+        with self.assertRaises(SystemExit):
+            build_parser().parse_args(
+                ["orphan-candidate", "--orphan-sha256", "SHA1", "--parent-key", "PARENT1", "--skip", "--mark-resolved"]
+            )
+
+    def test_skip_dispatch_calls_skip_orphan_candidate(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            from zotero_pdf_text.config import ProjectConfig
+            from zotero_pdf_text.orphan_discovery import OrphanResolutionResult
+
+            success = OrphanResolutionResult(
+                ok=True,
+                action="skip",
+                orphan_sha256="SHA1",
+                candidate_parent_key="PARENT1",
+                previous_status="pending",
+                new_status="skipped",
+                error="",
+                resolved_at="2026-07-15T00:00:00",
+            )
+            with patch("zotero_pdf_text.cli.load_config") as mock_load_config, patch(
+                "zotero_pdf_text.cli.validate_config"
+            ), patch("zotero_pdf_text.orphan_discovery.skip_orphan_candidate", return_value=success) as mock_skip:
+                mock_load_config.return_value = ProjectConfig(root, root, root, root / "output")
+                exit_code = main(
+                    [
+                        "orphan-candidate",
+                        "--orphan-sha256",
+                        "SHA1",
+                        "--parent-key",
+                        "PARENT1",
+                        "--skip",
+                        "--reason",
+                        "not a match",
+                    ]
+                )
+
+            self.assertEqual(exit_code, 0)
+            mock_skip.assert_called_once()
+            _, kwargs = mock_skip.call_args
+            self.assertEqual(kwargs["reason"], "not a match")
+
+    def test_mark_resolved_dispatch_calls_mark_orphan_candidate_resolved(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            from zotero_pdf_text.config import ProjectConfig
+            from zotero_pdf_text.orphan_discovery import OrphanResolutionResult
+
+            success = OrphanResolutionResult(
+                ok=True,
+                action="mark-resolved",
+                orphan_sha256="SHA1",
+                candidate_parent_key="PARENT1",
+                previous_status="pending",
+                new_status="resolved",
+                error="",
+                resolved_at="2026-07-15T00:00:00",
+            )
+            with patch("zotero_pdf_text.cli.load_config") as mock_load_config, patch(
+                "zotero_pdf_text.cli.validate_config"
+            ), patch(
+                "zotero_pdf_text.orphan_discovery.mark_orphan_candidate_resolved", return_value=success
+            ) as mock_resolve:
+                mock_load_config.return_value = ProjectConfig(root, root, root, root / "output")
+                exit_code = main(
+                    ["orphan-candidate", "--orphan-sha256", "SHA1", "--parent-key", "PARENT1", "--mark-resolved"]
+                )
+
+            self.assertEqual(exit_code, 0)
+            mock_resolve.assert_called_once()
+
+    def test_failed_resolution_returns_nonzero_exit_code(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            from zotero_pdf_text.config import ProjectConfig
+            from zotero_pdf_text.orphan_discovery import OrphanResolutionResult
+
+            failure = OrphanResolutionResult(
+                ok=False,
+                action="skip",
+                orphan_sha256="SHA1",
+                candidate_parent_key="PARENT1",
+                previous_status="",
+                new_status="",
+                error="No orphan candidate found for match key SHA1:PARENT1",
+                resolved_at="",
+            )
+            with patch("zotero_pdf_text.cli.load_config") as mock_load_config, patch(
+                "zotero_pdf_text.cli.validate_config"
+            ), patch("zotero_pdf_text.orphan_discovery.skip_orphan_candidate", return_value=failure):
+                mock_load_config.return_value = ProjectConfig(root, root, root, root / "output")
+                exit_code = main(
+                    ["orphan-candidate", "--orphan-sha256", "SHA1", "--parent-key", "PARENT1", "--skip"]
+                )
+
+            self.assertEqual(exit_code, 1)
+
+
 class PipelineLockRootTests(unittest.TestCase):
     def test_walks_up_past_index_directory(self):
         # build-index/append-index/build-fts have no --config, only an explicit index path, but
@@ -502,6 +635,7 @@ class InstallMcpCliTests(unittest.TestCase):
                     "get_fulltext_chunk",
                     "get_item_context",
                     "list_timeout_candidates",
+                    "list_orphan_candidates",
                     "reconvert_with_math_ocr",
                 ],
             )

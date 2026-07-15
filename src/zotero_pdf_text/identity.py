@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import os
 import re
 import unicodedata
 from dataclasses import dataclass
+from pathlib import Path
 
 try:
     from rapidfuzz import fuzz
@@ -82,6 +84,27 @@ def extract_year(value: str | None) -> str:
 def extract_dois(text: str) -> list[str]:
     found = {normalize_doi(match.group(0)) for match in DOI_RE.finditer(text or "")}
     return sorted(doi for doi in found if doi)
+
+
+def resolve_attachment_paths(zotero_path: str | None, linked_root: Path) -> list[Path]:
+    """Resolve a Zotero attachment's raw stored `path` to the filesystem location(s) it names.
+
+    Shared by `mapper.py` (matching PDFs found on disk to Zotero attachment rows) and
+    `zotero_db.py` (checking whether an attachment row's path still resolves to a real file), so
+    both apply the exact same convention for Zotero's `attachments:`-relative paths (resolved
+    against `linked_root`, i.e. `config.linked_attachments`) and absolute paths. `zotero_path`
+    reflects whatever OS Zotero itself ran on when the attachment was linked, not the OS this tool
+    happens to run on -- both a Windows drive-letter path and a POSIX absolute path are recognized
+    regardless of the current platform. Returns an empty list for `storage:`-relative paths or
+    anything else this tool does not attempt to resolve on disk.
+    """
+    zotero_path = zotero_path or ""
+    if zotero_path.startswith("attachments:"):
+        relative = zotero_path.split(":", 1)[1].replace("/", os.sep).replace("\\", os.sep)
+        return [linked_root / relative]
+    if re.match(r"^[A-Za-z]:[\\/]", zotero_path) or zotero_path.startswith("/"):
+        return [Path(zotero_path)]
+    return []
 
 
 def safe_folder_id(logical_id: str) -> str:
