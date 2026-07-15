@@ -188,6 +188,69 @@ class RetryTimeoutCliTests(unittest.TestCase):
             self.assertEqual(exit_code, 2)
 
 
+class VerifyUnverifiedCliTests(unittest.TestCase):
+    def test_parser_defaults_index_jsonl_to_none(self):
+        args = build_parser().parse_args(
+            ["verify-unverified", "--mapping-report", "mapping_report.csv"]
+        )
+        self.assertEqual(args.command, "verify-unverified")
+        self.assertIsNone(args.index_jsonl)
+
+    def test_parser_accepts_explicit_index_jsonl(self):
+        args = build_parser().parse_args(
+            [
+                "verify-unverified",
+                "--mapping-report",
+                "mapping_report.csv",
+                "--index-jsonl",
+                "custom_index.jsonl",
+            ]
+        )
+        self.assertEqual(args.index_jsonl, Path("custom_index.jsonl"))
+
+    def test_dispatch_forwards_index_jsonl_to_verify_unverified(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config_path = root / "config.json"
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "zotero_root": str(root),
+                        "zotero_data_directory": str(root),
+                        "linked_attachments": str(root),
+                        "output_root": str(root / "output"),
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (root / "zotero.sqlite").write_bytes(b"")
+            mapping_report = root / "mapping_report.csv"
+            mapping_report.write_text("classification\n", encoding="utf-8")
+            captured = {}
+
+            def _fake_verify_unverified(config, mapping_report_arg, **kwargs):
+                captured.update(kwargs)
+                run_dir = root / "output" / "unverified_review" / "run"
+                run_dir.mkdir(parents=True, exist_ok=True)
+                return run_dir
+
+            with patch("zotero_pdf_text.cli.verify_unverified", side_effect=_fake_verify_unverified):
+                exit_code = main(
+                    [
+                        "verify-unverified",
+                        "--config",
+                        str(config_path),
+                        "--mapping-report",
+                        str(mapping_report),
+                        "--index-jsonl",
+                        str(root / "custom_index.jsonl"),
+                    ]
+                )
+
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(captured["index_jsonl"], root / "custom_index.jsonl")
+
+
 class PipelineLockRootTests(unittest.TestCase):
     def test_walks_up_past_index_directory(self):
         # build-index/append-index/build-fts have no --config, only an explicit index path, but

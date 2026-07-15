@@ -122,6 +122,16 @@ agent batches.
   --mapping-report $data\runs\20260602_145352\mapping_report.csv
 ```
 
+Before converting, this command checks the sidecar full-text index (default
+`$data\index\zotero_text_index.jsonl`, override with `--index-jsonl`) and skips any attachment key
+already present there — whether it originally landed as `mapped_verified` or was promoted later via
+`apply-verification`, it's already resolved, so it is never reconverted or rescored again.
+Otherwise every `dry-run`/`verify-unverified` cycle would re-run full-text review on the same
+already-resolved rows forever, since `mapper.py`'s classification is re-derived from filename/path
+signals alone and has no memory of past promotions. This check is fail-open, same as
+`timeout_skip_list.json`: a missing or corrupt index just means nothing is skipped, not a
+conversion failure.
+
 Outputs are written under
 `converted_text\unverified_review\<timestamp>`:
 
@@ -164,6 +174,58 @@ Note: agent-assigned confidence is a coarser, more conservative scale than the d
 rule engine's (which reserves 0.93+ for its own accepts) — a `min-confidence` tuned for
 deterministic rows can silently exclude genuine agent accepts. Check the agent output's confidence
 values before picking a threshold rather than reusing 0.92 by default.
+
+## Timeout Candidates
+
+Every conversion command (`convert-verified`, `convert-sample`, `verify-unverified`, etc.) records
+a "timeout candidate" whenever the primary extractor (`pymupdf4llm.to_markdown`) genuinely times
+out on a PDF, whether or not the plain-text fallback then succeeds. Candidates accumulate in a
+persistent master file at `$data\index\timeout_candidates.jsonl`, deduped by
+`zotero_attachment_key` with a `status` of `pending`, `skipped`, or `resolved` and an
+`occurrence_count` that increments on repeat timeouts. A later automatic conversion run never
+reopens a `skipped`/`resolved` entry.
+
+There is no dedicated CLI command to list pending candidates — read
+`$data\index\timeout_candidates.jsonl` directly (filter for `"status": "pending"`), or use the
+always-on MCP tool `list_timeout_candidates`, or check `timeout_candidates.csv` next to any
+individual run's `manifest.csv` for that run's candidates only.
+
+Resolve a pending candidate one of two ways. Permanently skip the primary extractor for it (no
+code change needed):
+
+```powershell
+& $python -m zotero_pdf_text retry-timeout `
+  --config .\config.json `
+  --key <attachment_key> `
+  --skip `
+  --reason "confirmed to exceed even the scaled timeout cap"
+```
+
+This records the decision in `$data\timeout_skip_list.json`; future conversions of that attachment
+go straight to the plain-text fallback. Or retry with a longer budget:
+
+```powershell
+& $python -m zotero_pdf_text retry-timeout `
+  --config .\config.json `
+  --key <attachment_key> `
+  --retry
+```
+
+This defaults to the candidate's `suggested_next_timeout_seconds` (2x the last attempted budget,
+capped at 6h); override with `--timeout-seconds` or `--multiplier` (hard-capped at 24h even by
+explicit request). A successful retry converts into a fresh, isolated run directory — the
+originally converted Markdown is never overwritten — and only then promotes the result into
+`zotero_text_index.jsonl`/`.sqlite`, marking the candidate `resolved`. A failed retry leaves the
+index and the candidate's status untouched.
+
+Both the skip list and the master candidates file are fail-open: a missing or corrupt file just
+means no entries are skipped/reported, same as the drawing-density scan used to scale timeouts in
+the first place.
+
+The MCP server exposes the same skip/retry workflow via `skip_timeout_extraction`/
+`retry_timeout_extraction`, opt-in via `--enable-retry-timeout` on `install-mcp`/`mcp_server`, each
+gated behind its own literal `confirm` string. See `README.md`'s "Tool contract" section and
+`docs/data-dictionary.md`'s "Timeout Candidates" section for the full schema.
 
 ## SQLite FTS
 
@@ -360,7 +422,7 @@ for newly linked verified PDFs in one step.)
 If `converted_text` is a single index shared across more than one machine (e.g. via a synced
 cloud folder), every command that writes under it (`convert-sample`, `convert-verified`,
 `convert-new`, `verify-unverified`, `apply-verification`, `build-index`, `append-index`,
-`build-fts`, `reconvert-math`/`reconvert_with_math_ocr`) takes the same lock file
+`build-fts`, `reconvert-math`/`reconvert_with_math_ocr`, `retry-timeout`) takes the same lock file
 (`config.output_root\.pipeline.lock`) before starting and releases it on exit, so two machines
 (or two commands on the same machine) can never rebuild the same SQLite/JSONL files at once — the
 same corruption class as syncing a live Zotero database. `build-index`/`append-index`/`build-fts`

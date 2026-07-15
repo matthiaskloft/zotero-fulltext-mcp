@@ -12,6 +12,45 @@ except Exception:  # pragma: no cover - exercised when dependency is absent
 
 DOI_RE = re.compile(r"\b10\.\d{4,9}/[-._;()/:A-Z0-9]+\b", re.IGNORECASE)
 YEAR_RE = re.compile(r"\b(19|20)\d{2}\b")
+MARKDOWN_IMAGE_RE = re.compile(r"!\[[^\]]*\]\([^)]*\)")
+
+# A paper's own DOI stamp, author byline, and abstract normally land within the first page or two
+# of converted Markdown. Reference lists and cited works can run for many more pages after that,
+# so scanning the *whole* document for DOI/author/year evidence lets a document that merely cites a
+# different-DOI work, or a bibliography entry sharing an author's surname, masquerade as identity
+# evidence about the document itself. Bounding the scan to a leading window keeps this evidence
+# self-referential. Title matching is intentionally NOT bounded: `title_score` uses partial-ratio
+# fuzzy matching, and a title can legitimately appear after a long author list or abstract.
+EVIDENCE_WINDOW_CHARS = 6000
+
+
+def strip_front_matter(markdown: str) -> str:
+    """Remove a leading YAML front-matter block (between ``---`` fences), if present."""
+    if not markdown.startswith("---\n"):
+        return markdown.strip()
+    end = markdown.find("\n---\n", 4)
+    if end == -1:
+        return markdown.strip()
+    return markdown[end + len("\n---\n") :].strip()
+
+
+def _evidence_window(text: str) -> str:
+    return text[:EVIDENCE_WINDOW_CHARS]
+
+
+def strip_markdown_images(text: str) -> str:
+    """Remove Markdown image syntax (``![alt](path)``) before text is used as evidence.
+
+    `pymupdf4llm.to_markdown` embeds image references like `![](.../A-Descriptive-Filename.png)`
+    inline in the body text. `normalize_text` strips all non-alphanumeric characters, so an image
+    filename that happens to echo a candidate's title reads as plain body prose to `title_score`
+    (and would otherwise leak into DOI/author/year matching too) -- flattening a false-positive
+    match into what looks like real full-text evidence. Stripping the image syntax first keeps
+    only prose that was actually written by the article.
+    """
+    if not text:
+        return ""
+    return MARKDOWN_IMAGE_RE.sub(" ", text)
 
 
 def normalize_text(value: str | None) -> str:
@@ -85,24 +124,31 @@ def classify_identity(
     item_type: str | None,
     text: str,
 ) -> IdentityEvidence:
+    text = strip_markdown_images(text)
+    evidence_text = _evidence_window(text)
     expected_doi = normalize_doi(doi)
-    observed = extract_dois(text)
+    observed = extract_dois(evidence_text)
     observed_set = set(observed)
     score = title_score(title, text)
-    normalized_body = normalize_text(text)
-    author_hit = any(normalize_text(name) in normalized_body for name in author_surnames if name)
-    year_hit = bool(year and year in text)
+    normalized_evidence = normalize_text(evidence_text)
+    author_hit = any(normalize_text(name) in normalized_evidence for name in author_surnames if name)
+    year_hit = bool(year and year in evidence_text)
 
     if expected_doi and expected_doi in observed_set:
         return IdentityEvidence("verified", "doi_exact", score, author_hit, year_hit, observed)
+
+    # A confidently-parsed DOI that conflicts with the expected one is strong disqualifying
+    # evidence on its own -- e.g. two different books can share enough generic topic vocabulary
+    # to push the title score past the title_author_or_year accept threshold below. This check
+    # must therefore run before that accept rule (a conflicting DOI must never be silently
+    # overridden by a merely-good title score) and must not be gated on a low title score.
+    if expected_doi and observed and expected_doi not in observed_set:
+        return IdentityEvidence("possible_mismatch", "conflicting_doi_low_title", score, author_hit, year_hit, observed)
 
     if score >= 86 and (author_hit or year_hit):
         return IdentityEvidence("verified", "title_author_or_year", score, author_hit, year_hit, observed)
 
     strict_types = {"journalArticle", "conferencePaper", "preprint", "report"}
-    if expected_doi and observed and expected_doi not in observed_set and score < 50:
-        return IdentityEvidence("possible_mismatch", "conflicting_doi_low_title", score, author_hit, year_hit, observed)
-
     if (item_type or "") in strict_types and title and score < 35 and not author_hit and not year_hit:
         return IdentityEvidence("unverified", "weak_text_evidence", score, author_hit, year_hit, observed)
 

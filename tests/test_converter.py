@@ -368,6 +368,108 @@ class ConverterTests(unittest.TestCase):
             self.assertEqual(len(rows), 1)
             self.assertEqual(rows[0]["classification"], "mapped_unverified")
 
+    def test_convert_unverified_skips_attachments_already_in_sidecar_index(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            report = root / "mapping_report.csv"
+            pdf_indexed = root / "indexed.pdf"
+            pdf_new = root / "new.pdf"
+            pdf_indexed.write_bytes(b"%PDF")
+            pdf_new.write_bytes(b"%PDF")
+            _write_unverified_mapping_report(
+                report,
+                [("ALREADY_INDEXED", pdf_indexed), ("NEW_ATTACH", pdf_new)],
+            )
+            output_root = root / "output"
+            index_jsonl = output_root / "index" / "zotero_text_index.jsonl"
+            index_jsonl.parent.mkdir(parents=True, exist_ok=True)
+            index_jsonl.write_text(
+                json.dumps({"zotero_attachment_key": "ALREADY_INDEXED"}) + "\n", encoding="utf-8"
+            )
+            config = ProjectConfig(root, root, root, output_root)
+
+            with patch("zotero_pdf_text.converter.subprocess.run", side_effect=_write_raw_markdown):
+                run_dir = convert_unverified(config, report, workers=1)
+
+            with (run_dir / "manifest.csv").open("r", encoding="utf-8-sig", newline="") as handle:
+                rows = list(csv.DictReader(handle))
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0]["zotero_attachment_key"], "NEW_ATTACH")
+
+    def test_convert_unverified_accepts_explicit_index_jsonl_override(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            report = root / "mapping_report.csv"
+            pdf_indexed = root / "indexed.pdf"
+            pdf_new = root / "new.pdf"
+            pdf_indexed.write_bytes(b"%PDF")
+            pdf_new.write_bytes(b"%PDF")
+            _write_unverified_mapping_report(
+                report,
+                [("ALREADY_INDEXED", pdf_indexed), ("NEW_ATTACH", pdf_new)],
+            )
+            output_root = root / "output"
+            custom_index = root / "custom_index.jsonl"
+            custom_index.write_text(
+                json.dumps({"zotero_attachment_key": "ALREADY_INDEXED"}) + "\n", encoding="utf-8"
+            )
+            config = ProjectConfig(root, root, root, output_root)
+
+            with patch("zotero_pdf_text.converter.subprocess.run", side_effect=_write_raw_markdown):
+                run_dir = convert_unverified(config, report, workers=1, index_jsonl=custom_index)
+
+            with (run_dir / "manifest.csv").open("r", encoding="utf-8-sig", newline="") as handle:
+                rows = list(csv.DictReader(handle))
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0]["zotero_attachment_key"], "NEW_ATTACH")
+
+    def test_convert_unverified_fails_open_on_missing_or_corrupt_index(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            report = root / "mapping_report.csv"
+            pdf = root / "paper.pdf"
+            pdf.write_bytes(b"%PDF")
+            _write_unverified_mapping_report(report, [("ATTACH", pdf)])
+            output_root = root / "output"
+            index_jsonl = output_root / "index" / "zotero_text_index.jsonl"
+            index_jsonl.parent.mkdir(parents=True, exist_ok=True)
+            index_jsonl.write_text("{not valid json", encoding="utf-8")
+            config = ProjectConfig(root, root, root, output_root)
+
+            with patch("zotero_pdf_text.converter.subprocess.run", side_effect=_write_raw_markdown):
+                run_dir = convert_unverified(config, report, workers=1)
+
+            with (run_dir / "manifest.csv").open("r", encoding="utf-8-sig", newline="") as handle:
+                rows = list(csv.DictReader(handle))
+            # a corrupt index just means nothing is skipped, not a conversion failure
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0]["zotero_attachment_key"], "ATTACH")
+
+    def test_convert_unverified_fails_open_on_valid_non_object_json_line(self):
+        # A syntactically valid JSON line that isn't an object (e.g. "[]" or "null") must not
+        # crash load_indexed_keys with AttributeError from calling .get() on a non-dict value --
+        # it should be skipped like any other line with no zotero_attachment_key, not treated as a
+        # fatal error that aborts the whole run.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            report = root / "mapping_report.csv"
+            pdf = root / "paper.pdf"
+            pdf.write_bytes(b"%PDF")
+            _write_unverified_mapping_report(report, [("ATTACH", pdf)])
+            output_root = root / "output"
+            index_jsonl = output_root / "index" / "zotero_text_index.jsonl"
+            index_jsonl.parent.mkdir(parents=True, exist_ok=True)
+            index_jsonl.write_text("[]\nnull\n42\n", encoding="utf-8")
+            config = ProjectConfig(root, root, root, output_root)
+
+            with patch("zotero_pdf_text.converter.subprocess.run", side_effect=_write_raw_markdown):
+                run_dir = convert_unverified(config, report, workers=1)
+
+            with (run_dir / "manifest.csv").open("r", encoding="utf-8-sig", newline="") as handle:
+                rows = list(csv.DictReader(handle))
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0]["zotero_attachment_key"], "ATTACH")
+
     def test_has_math_flows_from_sidecar_into_front_matter_and_manifest(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -504,6 +606,46 @@ def _write_mapping_report(
             "identity_status": "verified",
             "identity_rule": "doi_exact",
         },
+    ]
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def _write_unverified_mapping_report(path: Path, attachments: list[tuple[str, Path]]) -> None:
+    fieldnames = [
+        "classification",
+        "source_path",
+        "safe_folder_id",
+        "zotero_parent_key",
+        "zotero_attachment_key",
+        "title",
+        "creators",
+        "year",
+        "doi",
+        "citation_key",
+        "page_count",
+        "identity_status",
+        "identity_rule",
+    ]
+    rows = [
+        {
+            "classification": "mapped_unverified",
+            "source_path": str(pdf),
+            "safe_folder_id": f"zotero_{attachment_key}",
+            "zotero_parent_key": f"PARENT_{attachment_key}",
+            "zotero_attachment_key": attachment_key,
+            "title": "Title",
+            "creators": "Jane Smith",
+            "year": "2024",
+            "doi": "10.1000/test",
+            "citation_key": f"smith{attachment_key}2024",
+            "page_count": "3",
+            "identity_status": "unverified",
+            "identity_rule": "insufficient_evidence",
+        }
+        for attachment_key, pdf in attachments
     ]
     with path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
