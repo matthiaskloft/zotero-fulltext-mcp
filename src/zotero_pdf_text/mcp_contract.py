@@ -39,6 +39,7 @@ from .fts import (
     get_item_context as get_item_context_fn,
     search_fts,
 )
+from .timeout_candidates import STATUS_PENDING, STATUS_RESOLVED, STATUS_SKIPPED, list_candidates
 
 
 MAX_SEARCH_RESULTS = 20
@@ -55,6 +56,8 @@ RECONVERT_TOOL_TIMEOUT_SECONDS = 6000
 # comfortably past clients' default ~30s MCP connection timeout, causing spurious "failed to
 # connect" errors on the first launch after enabling reconvert.
 RECONVERT_STARTUP_TIMEOUT_SECONDS = 180
+RETRY_TIMEOUT_COOLDOWN_SECONDS = 60
+MAX_REASON_CHARS = 500
 
 MCP_INSTRUCTIONS = (
     "This server retrieves evidence from a local, potentially stale index of converted Zotero PDFs; "
@@ -73,9 +76,11 @@ DEFAULT_MCP_TOOL_NAMES = (
     "search_fulltext",
     "get_fulltext_chunk",
     "get_item_context",
+    "list_timeout_candidates",
 )
 BIBTEX_MCP_TOOL_NAME = "export_bibtex_entries_by_key"
 RECONVERT_MCP_TOOL_NAME = "reconvert_with_math_ocr"
+RETRY_TIMEOUT_MCP_TOOL_NAMES = ("skip_timeout_extraction", "retry_timeout_extraction")
 
 READ_ONLY_TOOL_ANNOTATIONS = {
     "readOnlyHint": True,
@@ -88,6 +93,19 @@ RECONVERT_TOOL_ANNOTATIONS = {
     "idempotentHint": False,
     "openWorldHint": False,
 }
+SKIP_TIMEOUT_TOOL_ANNOTATIONS = {
+    "readOnlyHint": False,
+    "destructiveHint": False,
+    "idempotentHint": True,
+    "openWorldHint": False,
+}
+RETRY_TIMEOUT_TOOL_ANNOTATIONS = {
+    "readOnlyHint": False,
+    "destructiveHint": True,
+    "idempotentHint": False,
+    "openWorldHint": False,
+}
+TIMEOUT_CANDIDATE_STATUSES = (STATUS_PENDING, STATUS_SKIPPED, STATUS_RESOLVED, "all")
 
 
 class Provenance(TypedDict):
@@ -205,6 +223,42 @@ class ReconvertResponse(TypedDict):
     provenance: ReconvertProvenance
 
 
+class TimeoutCandidateRecord(TypedDict):
+    attachment_key: str
+    parent_key: str
+    title: str
+    creators: str
+    year: str
+    doi: str
+    citation_key: str
+    page_count: str
+    drawing_density: float
+    attempted_timeout_seconds: int
+    suggested_next_timeout_seconds: int
+    fallback_outcome: str
+    conversion_status: str
+    status: str
+    occurrence_count: int
+    first_detected_at: str
+    last_detected_at: str
+
+
+class ListTimeoutCandidatesResponse(TypedDict):
+    candidates: list[TimeoutCandidateRecord]
+
+
+class RetryTimeoutResponse(TypedDict):
+    ok: bool
+    action: str
+    attachment_key: str
+    previous_status: str
+    new_status: str
+    timeout_seconds_used: int | None
+    extraction_tool: str
+    resolved_at: str
+    provenance: ReconvertProvenance
+
+
 class PublicMcpError(Exception):
     """An expected failure that can be returned without exposing local diagnostics."""
 
@@ -215,16 +269,26 @@ class PublicMcpError(Exception):
 
 
 class ReconvertRateLimiter:
-    """Keep one MCP process from starting repeated GPU-heavy reconversions.
+    """Keep one MCP process from starting repeated heavy reconversions.
 
     FastMCP's stdio transport dispatches tool calls one at a time today, but the check-then-set
     below is guarded by a lock anyway so this stays correct if that ever changes to a threaded or
     concurrent-async transport -- two racing calls must not both observe an expired cooldown and
-    both start a GPU reconversion before either write lands.
+    both start a reconversion before either write lands. Shared between math-OCR reconversion and
+    timeout retries (separate instances, separate cooldowns/messages) since both are the same
+    "don't let an MCP client hammer a heavy, blocking local operation" shape.
     """
 
-    def __init__(self, cooldown_seconds: int = RECONVERT_COOLDOWN_SECONDS) -> None:
+    def __init__(
+        self,
+        cooldown_seconds: int = RECONVERT_COOLDOWN_SECONDS,
+        *,
+        error_code: str = "reconversion_rate_limited",
+        error_message: str = "A math reconversion was started recently. Wait before requesting another one.",
+    ) -> None:
         self.cooldown_seconds = cooldown_seconds
+        self._error_code = error_code
+        self._error_message = error_message
         self._last_started_at: float | None = None
         self._lock = threading.Lock()
 
@@ -234,10 +298,7 @@ class ReconvertRateLimiter:
             if self._last_started_at is not None:
                 remaining = self.cooldown_seconds - (now - self._last_started_at)
                 if remaining > 0:
-                    raise PublicMcpError(
-                        "reconversion_rate_limited",
-                        "A math reconversion was started recently. Wait before requesting another one.",
-                    )
+                    raise PublicMcpError(self._error_code, self._error_message)
             self._last_started_at = now
 
 
@@ -247,6 +308,7 @@ def create_server(
     config: ProjectConfig | None = None,
     enable_bibtex: bool = False,
     enable_reconvert: bool = False,
+    enable_retry_timeout: bool = False,
     bibtex_endpoint: str = DEFAULT_BBT_ENDPOINT,
     mcp_factory: Callable[..., Any] | None = None,
 ) -> Any:
@@ -255,6 +317,8 @@ def create_server(
         bibtex_endpoint = validate_bibtex_endpoint(bibtex_endpoint)
     if enable_reconvert:
         _validate_reconvert_setup(config, db_path)
+    if enable_retry_timeout:
+        _validate_retry_timeout_setup(config, db_path)
 
     # Keep FastMCP from coercing invalid values before the public-error boundary while still
     # advertising the concrete input shapes clients need for tool discovery. `from __future__
@@ -285,6 +349,16 @@ def create_server(
                     WithJsonSchema({"type": "array", "minItems": 1, "maxItems": MAX_CITATION_KEYS, "items": {"type": "string", "maxLength": MAX_CITATION_KEY_CHARS}}),
                 ],
                 ConfirmationInput=Annotated[object, WithJsonSchema({"type": "string"})],
+                TimeoutCandidateStatusInput=Annotated[object, WithJsonSchema({"enum": list(TIMEOUT_CANDIDATE_STATUSES)})],
+                TimeoutSecondsInput=Annotated[
+                    object,
+                    WithJsonSchema({"anyOf": [{"type": "integer", "minimum": 1}, {"type": "null"}]}),
+                ],
+                MultiplierInput=Annotated[
+                    object,
+                    WithJsonSchema({"anyOf": [{"type": "number", "exclusiveMinimum": 0}, {"type": "null"}]}),
+                ],
+                ReasonInput=Annotated[object, WithJsonSchema({"type": "string", "maxLength": MAX_REASON_CHARS})],
             )
 
     if mcp_factory is None:
@@ -366,6 +440,21 @@ def create_server(
 
         return _public_call(operation)
 
+    @mcp.tool(annotations=READ_ONLY_TOOL_ANNOTATIONS)
+    def list_timeout_candidates(
+        status: TimeoutCandidateStatusInput = STATUS_PENDING,
+        limit: LimitInput = 10,
+    ) -> ListTimeoutCandidatesResponse:
+        """List attachments whose primary Markdown extraction exceeded its scaled timeout budget.
+
+        Each pending candidate either fell back to plain-text extraction (losing structure/images)
+        or failed outright after its primary extractor timed out. Pass its attachment_key to
+        skip_timeout_extraction or retry_timeout_extraction. Read-only; never triggers conversion.
+        """
+        return _public_call(
+            lambda: _list_timeout_candidates(db_path, status=status, limit=limit)
+        )
+
     if enable_reconvert:
         limiter = ReconvertRateLimiter()
 
@@ -387,6 +476,62 @@ def create_server(
                     config=config,
                     db_path=db_path,
                     limiter=limiter,
+                )
+            )
+
+    if enable_retry_timeout:
+        retry_limiter = ReconvertRateLimiter(
+            cooldown_seconds=RETRY_TIMEOUT_COOLDOWN_SECONDS,
+            error_code="timeout_retry_rate_limited",
+            error_message="A timeout retry was started recently. Wait before requesting another one.",
+        )
+
+        @mcp.tool(annotations=SKIP_TIMEOUT_TOOL_ANNOTATIONS)
+        def skip_timeout_extraction(
+            attachment_key: AttachmentKeyInput,
+            reason: ReasonInput,
+            confirm: ConfirmationInput = "",
+        ) -> RetryTimeoutResponse:
+            """Permanently skip the primary extractor for one recorded timeout candidate.
+
+            Call list_timeout_candidates first to find a pending attachment_key. Writes a
+            persisted skip-list entry (no source-code change needed) so future conversions of
+            this attachment go straight to plain-text fallback. Never touches Zotero, Markdown,
+            or the sidecar index. Call it only after the user explicitly approves this decision;
+            confirm="skip_timeout" is an additional capability check, not evidence of user
+            approval.
+            """
+            return _public_call(
+                lambda: _skip_timeout_extraction(attachment_key, reason=reason, confirm=confirm, config=config)
+            )
+
+        @mcp.tool(annotations=RETRY_TIMEOUT_TOOL_ANNOTATIONS)
+        def retry_timeout_extraction(
+            attachment_key: AttachmentKeyInput,
+            confirm: ConfirmationInput = "",
+            timeout_seconds: TimeoutSecondsInput = None,
+            multiplier: MultiplierInput = None,
+        ) -> RetryTimeoutResponse:
+            """Reconvert one recorded timeout candidate with a longer budget.
+
+            Call list_timeout_candidates first to find a pending attachment_key. Defaults to that
+            candidate's suggested_next_timeout_seconds; override with timeout_seconds or
+            multiplier (supply at most one). Only if the reconversion succeeds does this overwrite
+            the sidecar index entry -- the original converted Markdown file from the earlier run is
+            never overwritten. This is blocking and can be CPU-heavy for large or diagram-dense
+            documents, but never writes Zotero. Call it only after the user explicitly approves
+            reconverting this attachment; confirm="retry_timeout" is an additional capability
+            check, not evidence of user approval.
+            """
+            return _public_call(
+                lambda: _retry_timeout_extraction(
+                    attachment_key,
+                    confirm=confirm,
+                    timeout_seconds=timeout_seconds,
+                    multiplier=multiplier,
+                    config=config,
+                    db_path=db_path,
+                    limiter=retry_limiter,
                 )
             )
 
@@ -449,6 +594,33 @@ def _validate_reconvert_setup(config: ProjectConfig | None, db_path: Path) -> No
             "marker_dependency_missing",
             "Math reconversion requires the optional marker dependency.",
         )
+
+
+def _validate_retry_timeout_setup(config: ProjectConfig | None, db_path: Path) -> None:
+    if config is None:
+        raise PublicMcpError(
+            "config_required",
+            "Timeout skip/retry must be enabled with an explicit valid project config.",
+        )
+    try:
+        validate_config(config)
+    except (OSError, TypeError, ValueError) as exc:
+        raise PublicMcpError(
+            "config_unavailable",
+            "Timeout skip/retry requires an explicit valid project config.",
+        ) from exc
+    if db_path.resolve(strict=False) != configured_index_path(config).resolve(strict=False):
+        raise PublicMcpError(
+            "database_config_mismatch",
+            "Timeout skip/retry requires the selected database to be the index governed by the project config.",
+        )
+    if not (config.output_root / "index" / "zotero_text_index.jsonl").is_file():
+        raise PublicMcpError(
+            "sidecar_index_unavailable",
+            "Timeout skip/retry requires the configured text sidecar index.",
+        )
+    # Deliberately no marker_dependency_available() check: retry-timeout reconverts with
+    # pymupdf4llm/pymupdf, the same extractors as ordinary conversion, not marker-pdf.
 
 
 def marker_dependency_available() -> bool:
@@ -592,6 +764,30 @@ def serialize_context_record(record: object) -> ContextRecord:
     }
 
 
+def serialize_timeout_candidate(record: object) -> TimeoutCandidateRecord:
+    if not isinstance(record, dict):
+        raise PublicMcpError("index_unavailable", "The local full-text index returned an invalid response.")
+    return {
+        "attachment_key": str(record.get("zotero_attachment_key", "")),
+        "parent_key": str(record.get("zotero_parent_key", "")),
+        "title": str(record.get("title", "")),
+        "creators": str(record.get("creators", "")),
+        "year": str(record.get("year", "")),
+        "doi": str(record.get("doi", "")),
+        "citation_key": str(record.get("citation_key", "")),
+        "page_count": str(record.get("page_count", "")),
+        "drawing_density": float(record.get("drawing_density") or 0.0),
+        "attempted_timeout_seconds": int(record.get("attempted_timeout_seconds") or 0),
+        "suggested_next_timeout_seconds": int(record.get("suggested_next_timeout_seconds") or 0),
+        "fallback_outcome": str(record.get("fallback_outcome", "")),
+        "conversion_status": str(record.get("conversion_status", "")),
+        "status": str(record.get("status", "")),
+        "occurrence_count": int(record.get("occurrence_count") or 0),
+        "first_detected_at": str(record.get("first_detected_at", "")),
+        "last_detected_at": str(record.get("last_detected_at", "")),
+    }
+
+
 def serialize_bibtex_export(export: object) -> BibtexResponse:
     data = asdict(export)
     entry = str(data["entry"])
@@ -647,6 +843,94 @@ def _reconvert_with_math_ocr(
         "previous_char_count": result.previous_char_count,
         "new_char_count": result.new_char_count,
         "reconverted_at": result.reconverted_at,
+        "provenance": {"content_trust": "untrusted_source", "source_kind": "converted_pdf", "attachment_key": result.attachment_key},
+    }
+
+
+def _list_timeout_candidates(db_path: Path, *, status: object, limit: object) -> ListTimeoutCandidatesResponse:
+    from .timeout_candidates import CANDIDATE_JSONL_FILENAME
+
+    validated_status = _validate_timeout_candidate_status(status)
+    validated_limit = _validate_limit(limit)
+    status_filter = None if validated_status == "all" else validated_status
+    candidates_jsonl = db_path.parent / CANDIDATE_JSONL_FILENAME
+    records = list_candidates(candidates_jsonl, status=status_filter)[:validated_limit]
+    return {"candidates": [serialize_timeout_candidate(record) for record in records]}
+
+
+def _skip_timeout_extraction(
+    attachment_key: object,
+    *,
+    reason: object,
+    confirm: object,
+    config: ProjectConfig | None,
+) -> RetryTimeoutResponse:
+    attachment_key = _validate_attachment_key(attachment_key)
+    validated_reason = _validate_reason(reason)
+    if confirm != "skip_timeout":
+        raise PublicMcpError("confirmation_required", 'Set confirm to the exact literal "skip_timeout" to skip this attachment.')
+    if config is None:
+        raise PublicMcpError("config_required", "Timeout skip requires an explicit valid project config.")
+    validate_config(config)
+    from .retry_timeout import skip_timeout_candidate
+
+    result = skip_timeout_candidate(attachment_key, config=config, reason=validated_reason)
+    if not result.ok:
+        if "No timeout candidate found" in result.error:
+            raise PublicMcpError("timeout_candidate_not_found", "No recorded timeout candidate matches that attachment key.")
+        raise PublicMcpError("skip_failed", "Skipping this attachment did not complete successfully.")
+    return _serialize_retry_timeout_result(result)
+
+
+def _retry_timeout_extraction(
+    attachment_key: object,
+    *,
+    confirm: object,
+    timeout_seconds: object,
+    multiplier: object,
+    config: ProjectConfig | None,
+    db_path: Path,
+    limiter: ReconvertRateLimiter,
+) -> RetryTimeoutResponse:
+    attachment_key = _validate_attachment_key(attachment_key)
+    if confirm != "retry_timeout":
+        raise PublicMcpError("confirmation_required", 'Set confirm to the exact literal "retry_timeout" to retry this attachment.')
+    if config is None:
+        raise PublicMcpError("config_required", "Timeout retry requires an explicit valid project config.")
+    validate_config(config)
+    validated_timeout_seconds = _validate_optional_timeout_seconds(timeout_seconds)
+    validated_multiplier = _validate_optional_multiplier(multiplier)
+    if validated_timeout_seconds is not None and validated_multiplier is not None:
+        raise PublicMcpError("invalid_input", "Supply at most one of timeout_seconds and multiplier.")
+    limiter.acquire()
+    from .retry_timeout import retry_timeout_candidate
+
+    jsonl_path = config.output_root / "index" / "zotero_text_index.jsonl"
+    result = retry_timeout_candidate(
+        attachment_key,
+        config=config,
+        jsonl_path=jsonl_path,
+        fts_db_path=db_path,
+        timeout_seconds=validated_timeout_seconds,
+        multiplier=validated_multiplier,
+    )
+    if not result.ok:
+        if "No timeout candidate found" in result.error:
+            raise PublicMcpError("timeout_candidate_not_found", "No recorded timeout candidate matches that attachment key.")
+        raise PublicMcpError("retry_failed", "Reconverting this attachment did not complete successfully.")
+    return _serialize_retry_timeout_result(result)
+
+
+def _serialize_retry_timeout_result(result: Any) -> RetryTimeoutResponse:
+    return {
+        "ok": True,
+        "action": result.action,
+        "attachment_key": result.attachment_key,
+        "previous_status": result.previous_status,
+        "new_status": result.new_status,
+        "timeout_seconds_used": result.timeout_seconds_used,
+        "extraction_tool": result.extraction_tool,
+        "resolved_at": result.resolved_at,
         "provenance": {"content_trust": "untrusted_source", "source_kind": "converted_pdf", "attachment_key": result.attachment_key},
     }
 
@@ -719,10 +1003,20 @@ def _validate_chunk_index(chunk_index: object | None) -> int | None:
     return chunk_index
 
 
+_ATTACHMENT_KEY_PATTERN = re.compile(r"[A-Za-z0-9]+")
+
+
 def _validate_attachment_key(value: object) -> str:
     if not isinstance(value, str) or not value.strip() or len(value) > MAX_CITATION_KEY_CHARS:
         raise PublicMcpError("invalid_attachment_key", "attachment_key must be a non-empty bounded string.")
-    return value.strip()
+    stripped = value.strip()
+    # Real Zotero keys are always alphanumeric. Retry-timeout interpolates this value directly
+    # into filesystem paths (output_root / "retry_timeout" / f"{timestamp}_{attachment_key}"), so
+    # this allowlist also closes a path-traversal gap for a corrupted/hand-edited candidate record
+    # (the master timeout_candidates.jsonl file is documented as user-editable).
+    if not _ATTACHMENT_KEY_PATTERN.fullmatch(stripped):
+        raise PublicMcpError("invalid_attachment_key", "attachment_key must contain only letters and digits.")
+    return stripped
 
 
 def _validate_optional_key(value: object | None) -> str | None:
@@ -733,6 +1027,35 @@ def _validate_context_keys(parent_key: object | None, attachment_key: object | N
     if (parent_key is None) == (attachment_key is None):
         raise PublicMcpError("invalid_context_key", "Supply exactly one of parent_key and attachment_key.")
     return _validate_optional_key(parent_key), _validate_optional_key(attachment_key)
+
+
+def _validate_timeout_candidate_status(value: object) -> str:
+    if not isinstance(value, str) or value not in TIMEOUT_CANDIDATE_STATUSES:
+        statuses = ", ".join(TIMEOUT_CANDIDATE_STATUSES)
+        raise PublicMcpError("invalid_status", f"status must be one of: {statuses}.")
+    return value
+
+
+def _validate_optional_timeout_seconds(value: object) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        raise PublicMcpError("invalid_timeout_seconds", "timeout_seconds must be a positive integer.")
+    return value
+
+
+def _validate_optional_multiplier(value: object) -> float | None:
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or value <= 0:
+        raise PublicMcpError("invalid_multiplier", "multiplier must be a positive number.")
+    return float(value)
+
+
+def _validate_reason(value: object) -> str:
+    if not isinstance(value, str) or len(value) > MAX_REASON_CHARS:
+        raise PublicMcpError("invalid_reason", f"reason must be a string of at most {MAX_REASON_CHARS} characters.")
+    return value
 
 
 def _validate_citation_keys(values: object) -> list[str]:

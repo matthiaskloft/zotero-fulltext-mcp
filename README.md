@@ -174,6 +174,21 @@ tool timeout for the long GPU-bound operation. The tool still requires `confirm=
 blocking and rate-limited, and should be called only after the user approves reconverting that
 attachment.
 
+Conversion also records "timeout candidates" -- attachments whose primary extractor exceeded its
+scaled timeout budget and fell back to plain-text extraction (see `retry-timeout` below). Listing
+them (`list_timeout_candidates`) is always available; acting on one (skip permanently, or retry
+with a longer budget) is opt-in the same way math OCR is:
+
+```powershell
+& $python -m zotero_pdf_text install-mcp --config .\config.json --enable-retry-timeout
+```
+
+This requires no optional extra -- retries use the same `pymupdf4llm`/`pymupdf` extractors as
+ordinary conversion, not marker-pdf. The selected database must likewise be the sidecar index
+governed by that config. The generated registration adds `skip_timeout_extraction` and
+`retry_timeout_extraction`; both require their own literal `confirm` string and should be called
+only after the user approves that specific decision.
+
 Verify:
 
 ```powershell
@@ -196,6 +211,9 @@ The safe default server exposes:
   whether a `max_chars` limit truncated the stored chunk.
 - `get_item_context(parent_key | attachment_key)` — path-free bibliographic, extraction, and
   identity context for the supplied key.
+- `list_timeout_candidates(status="pending")` — attachments whose primary extractor exceeded its
+  scaled timeout budget and fell back to plain-text extraction (or failed outright). Read-only;
+  pass a returned `attachment_key` to `skip_timeout_extraction` or `retry_timeout_extraction`.
 
 Optional tools:
 
@@ -205,6 +223,14 @@ Optional tools:
   marker-pdf when equations/figures look garbled (available only with `--enable-reconvert` and an
   explicit valid config). It overwrites derived Markdown/image/index content, is blocking and GPU-bound,
   and is rate-limited. The confirmation literal is an additional check, not user approval.
+- `skip_timeout_extraction(attachment_key, reason, confirm="skip_timeout")` — permanently skip the
+  primary extractor for one timeout candidate (available only with `--enable-retry-timeout`).
+  Writes a persisted skip-list entry; never touches Zotero, Markdown, or the sidecar index.
+- `retry_timeout_extraction(attachment_key, confirm="retry_timeout", timeout_seconds=None,
+  multiplier=None)` — reconvert one timeout candidate with a longer budget (available only with
+  `--enable-retry-timeout`). Only a successful result overwrites the sidecar index entry; the
+  originally converted Markdown file is never overwritten. Blocking, can be CPU-heavy, rate-limited,
+  never writes Zotero.
 
 The index can lag behind live Zotero. Search hits are discovery candidates, not automatically
 body-text evidence: a metadata-only match still carries a chunk locator as a navigation starting

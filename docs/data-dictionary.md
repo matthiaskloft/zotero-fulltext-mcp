@@ -31,6 +31,67 @@ Each converted Markdown file starts with front matter:
 - `has_math`: `true`/`false`, auto-detected from math fonts and Unicode math-symbol density.
 - `error`
 
+### Extraction Timeout and Fallback
+
+`convert-verified`/`convert-sample`/`verify-unverified` try `pymupdf4llm.to_markdown` (the primary
+extractor, which preserves structure and extracts images) before falling back to the plain-text
+`pymupdf.get_text` on timeout or crash. The primary extractor's timeout scales with document length
+and complexity so long or diagram-dense books are not needlessly demoted to the plain-text
+fallback:
+
+- Base budget: `page_count * 4` seconds (`SECONDS_PER_PAGE_TIMEOUT` in `converter.py`), floored at
+  the `--timeout-seconds` CLI value (default 600s).
+- That budget is further multiplied (up to 5x) based on a cheap page-sampled vector-drawing density
+  scan, since `pymupdf4llm`'s layout parser walks every vector path and pages full of statistical
+  plots/diagrams cost far more per page than plain text.
+
+A row's `error` field records `"Primary extractor failed; fallback used. Primary error: ..."` when
+this happened, even though `status` is still `converted` — check `extraction_tool` and `error`
+together, not `status` alone, to find rows that lost structure/images to the fallback.
+
+### Timeout Candidates
+
+Every row whose primary extractor genuinely timed out (not crashed — see `PrimaryExtractorTimeoutError`
+in `converter.py`) is recorded as a "timeout candidate": once per run in `timeout_candidates.csv`/
+`.jsonl` next to that run's `manifest.csv`, and merged into a persistent master file at
+`<output_root>/index/timeout_candidates.jsonl`, deduped by `zotero_attachment_key` with a `status`
+of `pending`, `skipped`, or `resolved` and an `occurrence_count` that increments on repeat timeouts.
+A later automatic conversion run never reopens a `skipped`/`resolved` entry — only the commands
+below change status.
+
+Use `retry-timeout` to resolve a pending candidate, either permanently:
+
+```powershell
+& $python -m zotero_pdf_text retry-timeout --config .\config.json --key <attachment_key> --skip --reason "confirmed to exceed even the scaled timeout cap"
+```
+
+which records the decision in `<output_root>/timeout_skip_list.json` (not hardcoded in source, so
+no code change/PR is needed) — future conversions of that attachment go straight to the plain-text
+fallback. Or retry with more headroom:
+
+```powershell
+& $python -m zotero_pdf_text retry-timeout --config .\config.json --key <attachment_key> --retry
+```
+
+which defaults to the candidate's `suggested_next_timeout_seconds` (2x the last attempted budget,
+capped at 6h); override with `--timeout-seconds` or `--multiplier` (hard-capped at 24h even by
+explicit request). A successful retry converts in a fresh, isolated run directory — the originally
+converted Markdown file from the earlier run is never overwritten — and only then promotes the
+result into `zotero_text_index.jsonl`/`.sqlite`, updating the candidate's status to `resolved`. A
+failed retry leaves the index and the candidate's status untouched (its `occurrence_count` still
+refreshes, since the nested conversion detects the new timeout the same way any other run would).
+
+Both the skip list and the master candidates file are fail-open: a missing or corrupt file just
+means no entries are skipped/reported, same as the drawing-density scan. One extreme outlier
+(`CTDZ69WI`, Gelman et al. — Bayesian Data Analysis) is already recorded in `timeout_skip_list.json`
+in the field, confirmed by direct testing to run past 13,540s / ~3.75h without finishing even at
+the drawing-density-scaled cap.
+
+The MCP server exposes the same workflow: `list_timeout_candidates` (read-only, always available)
+to see pending candidates, and `skip_timeout_extraction`/`retry_timeout_extraction` (opt-in via
+`--enable-retry-timeout`, each gated behind its own literal `confirm` string) to act on one. See
+`README.md`'s "Tool contract" section.
+
 ## JSONL Sidecar
 
 `zotero_text_index.jsonl` contains one record per available converted full text:
