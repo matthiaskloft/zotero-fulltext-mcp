@@ -109,15 +109,13 @@ attachment-path convention exactly (shared via `identity.resolve_attachment_path
 `attachments:`-relative paths resolve against `config.linked_attachments`, and both Windows
 drive-letter and POSIX absolute paths are recognized regardless of the OS this tool runs on.
 
-By default only `high`-confidence pairings are reported -- `classify_identity`'s own `verified`
-status (a DOI exact match, or a strong title match corroborated by an author/year hit). Real-library
-smoke testing found the `medium`/`low` tiers, which are scored purely by a fuzzy title-match
-threshold on a result `classify_identity` itself left `unverified`, to be almost pure noise: an
-edited volume's individual chapter/section entries ("Citations", "Index", "Preface", each its own
-Zotero item with no PDF of its own) get a trivially high `fuzz.partial_ratio` score against almost
-any academic PDF's text once the title is one or two common words, regardless of the specific
-threshold chosen. `medium`/`low` are still available, opt-in only, via `--include-lower-confidence`
-on the CLI, for a broader, explicitly-lower-trust sweep.
+Only `high`-confidence pairings are reported -- `classify_identity`'s own `verified` status (a DOI
+exact match, or a strong title match corroborated by an author/year hit). A fuzzy title-match score
+alone, on a result `classify_identity` itself left `unverified`, is not trusted: real-library smoke
+testing found this to be almost pure noise, since an edited volume's individual chapter/section
+entries ("Citations", "Index", "Preface", each its own Zotero item with no PDF of its own) get a
+trivially high `fuzz.partial_ratio` score against almost any academic PDF's text once the title is
+one or two common words, regardless of the specific threshold chosen.
 
 Findings are written once per run in `orphan_candidates.csv`/`.jsonl` next to that run's own output
 folder (`<output_root>/orphan_discovery/<timestamp>`), and merged into a persistent master file at
@@ -128,10 +126,9 @@ folder (`<output_root>/orphan_discovery/<timestamp>`), and merged into a persist
 (never its local path), the candidate parent's key/title/DOI/creators,
 `candidate_had_stale_attachment` (true when the candidate qualified because its existing PDF
 attachment path went stale, rather than because it never had one -- useful for deciding relink vs.
-attach fresh), `title_score`, `author_evidence`, `year_evidence`, `observed_dois`, a
-`confidence_tier` (`high` by default, `medium`/`low` only with `--include-lower-confidence`, derived
-from `classify_identity`'s own status/rule/title_score rather than a second scoring algorithm), and
-`identity_rule`.
+attach fresh), `title_score`, `author_evidence`, `year_evidence`, `observed_dois`, a `confidence_tier` (always
+`high`, derived from `classify_identity`'s own `verified` status rather than a second scoring
+algorithm), and `identity_rule`.
 
 Use `orphan-candidate` to resolve a pending pairing, either dismissing it:
 

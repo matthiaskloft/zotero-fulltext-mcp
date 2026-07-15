@@ -18,8 +18,6 @@ STATUS_SKIPPED = "skipped"
 STATUS_RESOLVED = "resolved"
 
 CONFIDENCE_HIGH = "high"
-CONFIDENCE_MEDIUM = "medium"
-CONFIDENCE_LOW = "low"
 
 
 @dataclass

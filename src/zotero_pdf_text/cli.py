@@ -482,24 +482,13 @@ def build_parser() -> argparse.ArgumentParser:
             "Scan a dry-run's orphan_pdf rows for plausible Zotero parents by PDF content (title/DOI/"
             "author/year in the early pages), not filename -- the reverse of dry-run's own filename-"
             "based metadata-candidate matching. Explicit opt-in; not part of dry-run. Reports only "
-            "high-confidence (verified) matches by default; see --include-lower-confidence."
+            "high-confidence (classify_identity's own verified status) matches."
         ),
     )
     find_orphan_parents.add_argument("--config", type=Path, default=Path("config.json"), help="Path to project config JSON.")
     find_orphan_parents.add_argument("--mapping-report", type=Path, required=True, help="Path to mapping_report.csv from a dry-run.")
     find_orphan_parents.add_argument("--output-dir", type=Path, default=None, help="Optional output folder for this discovery run.")
     find_orphan_parents.add_argument("--limit", type=int, default=None, help="Optional maximum number of orphan_pdf rows to scan.")
-    find_orphan_parents.add_argument(
-        "--include-lower-confidence",
-        action="store_true",
-        help=(
-            "Also report 'medium'/'low' confidence tiers (a fuzzy title match classify_identity "
-            "itself left unverified). Off by default: on real libraries these produce mostly noise "
-            "(e.g. generic chapter titles like 'Index'/'Citations'/'Preface' from an edited volume "
-            "scoring a high fuzzy match against nearly any PDF). Default output is 'high' confidence "
-            "only (classify_identity's own verified status)."
-        ),
-    )
     orphan_candidate = subparsers.add_parser(
         "orphan-candidate",
         help=(
@@ -993,7 +982,6 @@ def main(argv: list[str] | None = None) -> int:
             args.mapping_report,
             output_dir=args.output_dir,
             limit=args.limit,
-            include_lower_confidence=args.include_lower_confidence,
         )
         print(f"Orphan-parent discovery complete: {run_dir}")
         return 0

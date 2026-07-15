@@ -44,15 +44,14 @@ as primary library records.
    orphan and scores it with the same `classify_identity` engine against Zotero items that have no
    *working* PDF attachment of their own -- either no PDF attachment row at all, or one whose
    recorded path no longer resolves to a real file on disk (moved/renamed/deleted outside Zotero's
-   own management) -- since those are the only items an orphan PDF could plausibly belong to. By
-   default only high-confidence (`classify_identity`-verified) pairings are reported; a broader,
-   noisier `medium`/`low` sweep scored purely by fuzzy title match is available behind an explicit
-   `--include-lower-confidence` flag but is off by default, since a short generic Zotero item title
-   (an edited volume's individual chapter entries -- "Citations", "Index", "Preface") scores a
-   trivially high fuzzy match against nearly any PDF's text without `classify_identity` itself ever
-   verifying the pairing. Plausible pairings are written to `orphan_candidates.csv`/`.jsonl` and a
-   deduped master file, mirroring the timeout-candidate reporting pattern below. A confirmed
-   pairing is still attached the existing way, via `link-pdf`.
+   own management) -- since those are the only items an orphan PDF could plausibly belong to. Only
+   high-confidence (`classify_identity`-verified) pairings are reported: a fuzzy title match alone,
+   without `classify_identity` itself verifying the pairing, isn't trusted, since a short generic
+   Zotero item title (an edited volume's individual chapter entries -- "Citations", "Index",
+   "Preface") scores a trivially high fuzzy match against nearly any PDF's text. Plausible pairings
+   are written to `orphan_candidates.csv`/`.jsonl` and a deduped master file, mirroring the
+   timeout-candidate reporting pattern below. A confirmed pairing is still attached the existing
+   way, via `link-pdf`.
 
 ## Access Layers
 

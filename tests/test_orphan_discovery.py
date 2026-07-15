@@ -119,25 +119,7 @@ class ScoreCandidatesTests(unittest.TestCase):
 
         self.assertEqual(matches, [])
 
-    def test_generic_chapter_titles_can_be_surfaced_via_explicit_opt_in(self):
-        text = (
-            "Jane Smith 2024 A Very Specific Research Title About Bayesian Inference. "
-            "References. Bibliography. Author index. Subject index. See also citations above."
-        )
-        generic_candidates = [
-            _parent(parent_key="CH-CITATIONS", title="Citations", year="", creator_surnames=[]),
-        ]
-
-        matches = score_candidates(text, generic_candidates, include_lower_confidence=True)
-
-        # With the opt-in flag, a low/medium-confidence tier may legitimately surface -- the
-        # point of the flag is exactly to allow this noisier sweep back in when asked for.
-        if matches:
-            _, evidence, tier = matches[0]
-            self.assertIn(tier, ("medium", "low"))
-            self.assertEqual(evidence.status, "unverified")
-
-    def test_high_confidence_verified_match_still_reported_without_opt_in(self):
+    def test_high_confidence_verified_match_still_reported(self):
         text = "Jane Smith\n2024\nA Very Specific Research Title About Bayesian Inference\nAbstract..."
         candidates = [_parent()]
 

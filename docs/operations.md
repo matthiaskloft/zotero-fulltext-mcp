@@ -242,19 +242,12 @@ whose recorded path no longer resolves to a real file on disk):
   --mapping-report $data\runs\20260602_145352\mapping_report.csv
 ```
 
-By default only `high`-confidence pairings are reported (`classify_identity` itself considers the
-match verified — a DOI exact match, or a strong title match corroborated by author/year). Real-
-library testing showed the `medium`/`low` tiers are mostly noise: a short, generic title from an
-edited volume's individual chapter entries ("Citations", "Index", "Preface") scores a trivially
-high fuzzy title match against almost any PDF's text even though `classify_identity` never verifies
-it. Pass `--include-lower-confidence` to opt into that broader, noisier sweep:
-
-```powershell
-& $python -m zotero_pdf_text find-orphan-parents `
-  --config .\config.json `
-  --mapping-report $data\runs\20260602_145352\mapping_report.csv `
-  --include-lower-confidence
-```
+Only `high`-confidence pairings are reported (`classify_identity` itself considers the match
+verified — a DOI exact match, or a strong title match corroborated by author/year). A fuzzy title
+match alone isn't reported: real-library testing showed that's mostly noise, since a short, generic
+title from an edited volume's individual chapter entries ("Citations", "Index", "Preface") scores a
+trivially high fuzzy title match against almost any PDF's text even though `classify_identity`
+never verifies it.
 
 Outputs are written under `converted_text\orphan_discovery\<timestamp>`:
 

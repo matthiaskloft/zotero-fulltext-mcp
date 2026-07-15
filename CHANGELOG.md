@@ -25,12 +25,11 @@ All notable changes to this project are documented here. Format loosely follows
   engine used elsewhere, scoped to Zotero items with no *working* PDF attachment of their own --
   either no PDF attachment row at all, or one whose recorded path no longer resolves to a real file
   on disk (moved/renamed/deleted outside Zotero's own management; resolution mirrors `mapper.py`'s
-  own attachment-path convention). By default only high-confidence (`classify_identity`-verified)
-  pairings are reported; real-library testing showed the `medium`/`low` tiers (scored purely by a
-  fuzzy title match on a result `classify_identity` itself left unverified) are mostly noise --
-  e.g. an edited volume's individual chapter entries ("Citations", "Index", "Preface") score a
-  trivially high fuzzy match against nearly any PDF. `medium`/`low` remain available, opt-in only,
-  via `--include-lower-confidence`. Findings are written per-run (`orphan_candidates.csv`/`.jsonl`,
+  own attachment-path convention). Only high-confidence (`classify_identity`-verified) pairings are
+  reported; a fuzzy title match alone on a result `classify_identity` itself left unverified is not
+  trusted -- real-library testing showed this is mostly noise, e.g. an edited volume's individual
+  chapter entries ("Citations", "Index", "Preface") score a trivially high fuzzy match against
+  nearly any PDF. Findings are written per-run (`orphan_candidates.csv`/`.jsonl`,
   including a `candidate_had_stale_attachment` flag) and merged into a persistent, deduped master
   file, mirroring the timeout-candidate pattern. The new `orphan-candidate` CLI command resolves a
   pending pairing: `--skip` dismisses it, or `--mark-resolved` records that it was confirmed and
