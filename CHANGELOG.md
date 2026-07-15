@@ -20,6 +20,15 @@ All notable changes to this project are documented here. Format loosely follows
 - New MCP tools: `list_timeout_candidates` (read-only, always available) and, opt-in via
   `--enable-retry-timeout`, `skip_timeout_extraction`/`retry_timeout_extraction` (each gated behind
   its own literal `confirm` string and independently rate-limited from math-OCR reconversion).
+- New `find-orphan-parents` CLI command discovers plausible Zotero parents for `orphan_pdf` rows by
+  scoring each orphan PDF's early-page content (not its filename) with the same `classify_identity`
+  engine used elsewhere, scoped to Zotero items that have no PDF attachment of their own. Findings
+  are written per-run (`orphan_candidates.csv`/`.jsonl`) and merged into a persistent, deduped
+  master file, mirroring the timeout-candidate pattern. The new `orphan-candidate` CLI command
+  resolves a pending pairing: `--skip` dismisses it, or `--mark-resolved` records that it was
+  confirmed and already attached via the existing `link-pdf` command (bookkeeping only; it does not
+  attach anything itself). New read-only, always-available MCP tool `list_orphan_candidates`
+  mirrors `list_timeout_candidates` for this workflow.
 
 ### Changed
 

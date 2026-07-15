@@ -227,6 +227,45 @@ The MCP server exposes the same skip/retry workflow via `skip_timeout_extraction
 gated behind its own literal `confirm` string. See `README.md`'s "Tool contract" section and
 `docs/data-dictionary.md`'s "Timeout Candidates" section for the full schema.
 
+## Orphan-Parent Discovery
+
+Use this when a dry run reports `orphan_pdf` rows for PDFs with generic, publisher-generated
+filenames (`1-s2.0-S0022-...-main.pdf`, `downloaded.pdf`) — dry-run's own metadata-candidate
+matching only compares filename against title, so these never get a chance to match by content.
+This command is explicit opt-in, not part of `dry-run`, since it opens every orphan PDF and scans
+every no-PDF Zotero item:
+
+```powershell
+& $python -m zotero_pdf_text find-orphan-parents `
+  --config .\config.json `
+  --mapping-report $data\runs\20260602_145352\mapping_report.csv
+```
+
+Outputs are written under `converted_text\orphan_discovery\<timestamp>`:
+
+- `orphan_candidates.csv` / `.jsonl`: this run's plausible (orphan PDF, candidate parent) pairings.
+
+Findings are also merged into a persistent, deduped master file at
+`converted_text\index\orphan_candidates.jsonl` (see `docs/data-dictionary.md`'s "Orphan Candidates"
+section for the full schema and dedup key). Review a `pending` entry's `confidence_tier`,
+`title_score`, `author_evidence`, `year_evidence`, and `observed_dois`, then resolve it:
+
+```powershell
+& $python -m zotero_pdf_text orphan-candidate --config .\config.json `
+  --orphan-sha256 <sha256> --parent-key <parent_key> --skip --reason "not the same paper"
+```
+
+or, once confirmed and attached via the existing `link-pdf` command:
+
+```powershell
+& $python -m zotero_pdf_text link-pdf --config .\config.json --key <parent_key> --file <orphan_pdf_path>
+& $python -m zotero_pdf_text orphan-candidate --config .\config.json `
+  --orphan-sha256 <sha256> --parent-key <parent_key> --mark-resolved
+```
+
+`orphan-candidate --mark-resolved` only records the decision — it never calls `link-pdf` or
+otherwise touches Zotero itself.
+
 ## SQLite FTS
 
 ```powershell

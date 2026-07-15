@@ -214,6 +214,10 @@ The safe default server exposes:
 - `list_timeout_candidates(status="pending")` — attachments whose primary extractor exceeded its
   scaled timeout budget and fell back to plain-text extraction (or failed outright). Read-only;
   pass a returned `attachment_key` to `skip_timeout_extraction` or `retry_timeout_extraction`.
+- `list_orphan_candidates(status="pending")` — plausible Zotero parents found for orphan PDFs by
+  content (title/DOI/author/year), not filename. Read-only; never triggers discovery itself.
+  Populated only after running the CLI's `find-orphan-parents` command. To act on a candidate,
+  confirm it yourself and run the CLI's `link-pdf` then `orphan-candidate` commands.
 
 Optional tools:
 

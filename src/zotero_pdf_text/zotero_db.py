@@ -91,6 +91,84 @@ def check_pdf_attachment(parent_key: str, zotero_sqlite: Path) -> dict[str, obje
     return {"parent_key": parent_key, "found": len(attachments) > 0, "attachments": attachments}
 
 
+@dataclass(frozen=True)
+class ParentCandidateRecord:
+    parent_key: str
+    item_type: str | None
+    title: str
+    doi: str
+    citation_key: str
+    year: str
+    venue: str
+    creators: list[str]
+    creator_surnames: list[str]
+
+
+def load_items_without_pdf_attachment(zotero_sqlite: Path) -> list[ParentCandidateRecord]:
+    """Return every non-deleted Zotero item that has no PDF attachment of its own.
+
+    These are the only items an orphan PDF could plausibly belong to, so orphan-candidate
+    discovery scores against this set rather than the whole library. Opens the database in
+    immutable read-only mode (mirroring `check_pdf_attachment`/`find_item_by_doi`) so Zotero's
+    WAL write locks are bypassed; items committed after the last WAL checkpoint may not appear.
+    """
+    uri = f"file:{Path(zotero_sqlite).as_posix()}?mode=ro&immutable=1"
+    con = sqlite3.connect(uri, uri=True)
+    con.row_factory = sqlite3.Row
+    cur = con.cursor()
+    rows = cur.execute(
+        """
+        SELECT i.itemID AS item_id, i.key AS parent_key, it.typeName AS item_type
+        FROM items i
+        LEFT JOIN itemTypesCombined it ON it.itemTypeID = i.itemTypeID
+        WHERE i.itemID NOT IN (SELECT itemID FROM deletedItems)
+          AND (it.typeName IS NULL OR it.typeName NOT IN ('attachment', 'note'))
+          AND i.itemID NOT IN (
+              SELECT ia.parentItemID
+              FROM itemAttachments ia
+              JOIN items ai ON ai.itemID = ia.itemID
+              WHERE ia.parentItemID IS NOT NULL
+                AND ai.itemID NOT IN (SELECT itemID FROM deletedItems)
+                AND (
+                    lower(coalesce(ia.contentType, '')) = 'application/pdf'
+                    OR lower(coalesce(ia.path, '')) LIKE '%.pdf'
+                )
+          )
+        """
+    ).fetchall()
+
+    item_ids = sorted({int(row["item_id"]) for row in rows})
+    fields = _load_fields(cur, item_ids)
+    creators = _load_creators(cur, item_ids)
+    con.close()
+
+    records: list[ParentCandidateRecord] = []
+    for row in rows:
+        item_id = int(row["item_id"])
+        item_fields = fields.get(item_id, {})
+        item_creators = creators.get(item_id, [])
+        surnames = [creator.split()[-1] for creator in item_creators if creator.split()]
+        title = item_fields.get("title", "")
+        if not row["parent_key"] or not title:
+            continue
+        records.append(
+            ParentCandidateRecord(
+                parent_key=row["parent_key"],
+                item_type=row["item_type"],
+                title=title,
+                doi=normalize_doi(item_fields.get("DOI", "")),
+                citation_key=_citation_key(item_fields),
+                year=extract_year(item_fields.get("date", "")),
+                venue=item_fields.get("publicationTitle", "")
+                or item_fields.get("conferenceName", "")
+                or item_fields.get("publisher", ""),
+                creators=item_creators,
+                creator_surnames=surnames,
+            )
+        )
+    return records
+
+
 def snapshot_database(source: Path, run_dir: Path) -> Path:
     destination = run_dir / "zotero.sqlite"
     shutil.copy2(source, destination)

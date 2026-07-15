@@ -39,6 +39,13 @@ as primary library records.
    for bounded text retrieval.
 6. Better BibTeX supplies authoritative BibTeX/BibLaTeX entries by
    `citation_key` through its local JSON-RPC endpoint.
+7. `find-orphan-parents` (explicit opt-in, not part of `dry-run`) re-scans a prior dry-run's
+   `orphan_pdf` rows by PDF content instead of filename: it extracts early-page text from each
+   orphan and scores it with the same `classify_identity` engine against Zotero items that have
+   no PDF attachment of their own, since those are the only items an orphan PDF could plausibly
+   belong to. Plausible pairings are written to `orphan_candidates.csv`/`.jsonl` and a deduped
+   master file, mirroring the timeout-candidate reporting pattern below. A confirmed pairing is
+   still attached the existing way, via `link-pdf`.
 
 ## Access Layers
 
@@ -49,8 +56,11 @@ as primary library records.
   library material is labelled untrusted. Search results identify the fields that matched, and
   search/passage locators bind attachment/chunk/character identity to the converted Markdown
   SHA-256. Exact passage reads expose bounded chunk navigation and distinguish the returned span
-  from a larger stored chunk; leading previews are explicitly not exact chunk cursors. The
-  optional math-OCR capability must be enabled at
+  from a larger stored chunk; leading previews are explicitly not exact chunk cursors. Listing
+  timeout candidates (`list_timeout_candidates`) and orphan-parent candidates
+  (`list_orphan_candidates`) is always available and read-only; both identify the underlying PDF
+  by hash/attachment key rather than local path, and neither tool ever triggers discovery,
+  conversion, or a Zotero write itself. The optional math-OCR capability must be enabled at
   startup with an explicit valid config governing the selected database and with the Marker
   dependency installed. It requires an exact confirmation literal, overwrites one attachment's
   derived Markdown, image assets, and index record, and is rate-limited, but it never modifies

@@ -92,6 +92,53 @@ to see pending candidates, and `skip_timeout_extraction`/`retry_timeout_extracti
 `--enable-retry-timeout`, each gated behind its own literal `confirm` string) to act on one. See
 `README.md`'s "Tool contract" section.
 
+### Orphan Candidates
+
+`mapper.py`'s own `_metadata_candidates` fallback only matches an `orphan_pdf` row's *filename*
+against Zotero item titles -- it never opens the PDF at that stage, so a generically-named file
+(`1-s2.0-S0022-...-main.pdf`, `downloaded.pdf`) falls through to `orphan_pdf` even when its actual
+first-page content would trivially identify a Zotero item already in the library. The explicit,
+opt-in `find-orphan-parents` command closes that gap the other way around: it extracts each orphan
+PDF's early-page text (the same window/config the rest of the pipeline uses) and scores it with
+`classify_identity` -- the same deterministic engine used everywhere else in this codebase -- against
+every Zotero item that has no PDF attachment of its own, since those are the only items an orphan
+PDF could plausibly belong to.
+
+Findings are written once per run in `orphan_candidates.csv`/`.jsonl` next to that run's own output
+folder (`<output_root>/orphan_discovery/<timestamp>`), and merged into a persistent master file at
+`<output_root>/index/orphan_candidates.jsonl`, deduped by the pair (`orphan_sha256`,
+`candidate_parent_key`) with a `status` of `pending`, `skipped`, or `resolved` and an
+`occurrence_count` that increments on repeat discovery. A later automatic run never reopens a
+`skipped`/`resolved` entry. Each record carries the orphan's `orphan_sha256`/`orphan_safe_folder_id`
+(never its local path), the candidate parent's key/title/DOI/creators, `title_score`,
+`author_evidence`, `year_evidence`, `observed_dois`, a `confidence_tier` (`high`/`medium`/`low`,
+derived from `classify_identity`'s own status/rule/title_score rather than a second scoring
+algorithm), and `identity_rule`.
+
+Use `orphan-candidate` to resolve a pending pairing, either dismissing it:
+
+```powershell
+& $python -m zotero_pdf_text orphan-candidate --config .\config.json --orphan-sha256 <sha256> --parent-key <parent_key> --skip --reason "not the same paper"
+```
+
+or recording that it was confirmed and already attached:
+
+```powershell
+& $python -m zotero_pdf_text link-pdf --config .\config.json --key <parent_key> --file <orphan_pdf_path>
+& $python -m zotero_pdf_text orphan-candidate --config .\config.json --orphan-sha256 <sha256> --parent-key <parent_key> --mark-resolved
+```
+
+`orphan-candidate --mark-resolved` is bookkeeping only -- it never calls `link-pdf` itself and never
+touches Zotero; `link-pdf` (or a human, directly in Zotero) is what actually attaches the file.
+
+The master file is fail-open, same as `timeout_candidates.jsonl`: a missing or corrupt file just
+means no candidates are reported.
+
+The MCP server exposes `list_orphan_candidates` (read-only, always available) to see pending
+candidates. There is no MCP tool that discovers candidates or attaches anything -- discovery is
+CLI-only (`find-orphan-parents`), and attachment stays gated behind the existing CLI-only
+`link-pdf` command. See `README.md`'s "Tool contract" section.
+
 ## JSONL Sidecar
 
 `zotero_text_index.jsonl` contains one record per available converted full text:
