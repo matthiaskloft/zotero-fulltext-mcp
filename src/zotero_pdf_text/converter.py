@@ -14,16 +14,46 @@ from datetime import datetime
 from pathlib import Path
 
 from .config import ProjectConfig
+from .timeout_candidates import (
+    TimeoutCandidate,
+    append_master_candidates,
+    suggested_next_timeout,
+    write_run_candidates,
+)
 
 try:
     import pymupdf4llm
 except Exception:  # pragma: no cover - exercised only if dependency is missing
     pymupdf4llm = None
 
+try:
+    import fitz
+except Exception:  # pragma: no cover - exercised only if dependency is missing
+    fitz = None
+
 PRIMARY_EXTRACTION_TOOL = "pymupdf4llm.to_markdown"
 FALLBACK_EXTRACTION_TOOL = "pymupdf.get_text"
 EXTRACTION_TOOL = PRIMARY_EXTRACTION_TOOL
 SECONDS_PER_PAGE_TIMEOUT = 4
+
+# pymupdf4llm's layout parser walks every vector path to reconstruct structure, so
+# pages dense with vector drawings (statistical plots, diagrams) cost far more than
+# plain text pages. A bounded page sample keeps this pre-scan cheap (same cost class
+# as math_detection's font/text sampling) while still catching density outliers.
+DRAWING_SAMPLE_PAGES = 40
+DRAWING_DENSITY_DIVISOR = 10.0
+MAX_DRAWING_TIMEOUT_MULTIPLIER = 5.0
+
+SKIP_LIST_FILENAME = "timeout_skip_list.json"
+
+
+class PrimaryExtractorTimeoutError(RuntimeError):
+    """Both the primary extractor and its fallback failed, and the primary failure was a timeout.
+
+    Distinct from a plain RuntimeError (primary crashed rather than timed out) so _convert_row can
+    tell a genuine timeout-driven failure apart from a crash when deciding whether to report a
+    timeout candidate.
+    """
 
 
 @dataclass
@@ -75,6 +105,7 @@ def convert_sample(
         workers=workers,
         timeout_seconds=timeout_seconds,
         force=force,
+        output_root=config.output_root,
     )
 
 
@@ -106,6 +137,7 @@ def convert_verified(
         workers=workers,
         timeout_seconds=timeout_seconds,
         force=force,
+        output_root=config.output_root,
     )
 
 
@@ -142,6 +174,7 @@ def convert_unverified(
         timeout_seconds=timeout_seconds,
         force=force,
         classifications=classifications,
+        output_root=config.output_root,
     )
 
 
@@ -154,6 +187,7 @@ def _convert_verified_rows(
     workers: int | None,
     timeout_seconds: int,
     force: bool,
+    output_root: Path,
 ) -> Path:
     return _convert_mapping_rows(
         mapping_report,
@@ -164,6 +198,7 @@ def _convert_verified_rows(
         timeout_seconds=timeout_seconds,
         force=force,
         classifications={"mapped_verified"},
+        output_root=output_root,
     )
 
 
@@ -177,6 +212,7 @@ def _convert_mapping_rows(
     timeout_seconds: int,
     force: bool,
     classifications: set[str],
+    output_root: Path,
 ) -> Path:
     if workers is None:
         workers = default_worker_count()
@@ -187,25 +223,32 @@ def _convert_mapping_rows(
     markdown_dir = run_dir / "markdown"
     markdown_dir.mkdir(parents=True, exist_ok=exist_ok)
     images_root = run_dir / "images"
+    skip_keys = _load_persisted_skip_keys(output_root)
 
     rows = _selected_rows(mapping_report, limit, classifications)
     indexed_rows = list(enumerate(rows, start=1))
     if workers == 1:
-        results = [
-            _convert_row(row, markdown_dir, images_root, index, timeout_seconds, force=force)
+        row_outcomes = [
+            _convert_row(row, markdown_dir, images_root, index, timeout_seconds, force=force, skip_keys=skip_keys)
             for index, row in indexed_rows
         ]
     else:
         with ThreadPoolExecutor(max_workers=workers) as executor:
-            results = list(
+            row_outcomes = list(
                 executor.map(
-                    lambda item: _convert_row(item[1], markdown_dir, images_root, item[0], timeout_seconds, force=force),
+                    lambda item: _convert_row(
+                        item[1], markdown_dir, images_root, item[0], timeout_seconds, force=force, skip_keys=skip_keys
+                    ),
                     indexed_rows,
                 )
     )
+    results = [result for result, _candidate in row_outcomes]
+    candidates = [candidate for _result, candidate in row_outcomes if candidate is not None]
     _write_manifest(run_dir / "manifest.csv", results)
     _write_jsonl(run_dir / "manifest.jsonl", results)
     _write_summary(run_dir / "summary.md", mapping_report, results, workers, timeout_seconds, force, classifications)
+    write_run_candidates(run_dir, candidates)
+    append_master_candidates(output_root / "index" / "timeout_candidates.jsonl", candidates)
     return run_dir
 
 
@@ -240,13 +283,14 @@ def _convert_row(
     timeout_seconds: int,
     *,
     force: bool,
-) -> ConversionResult:
+    skip_keys: frozenset[str] = frozenset(),
+) -> tuple[ConversionResult, TimeoutCandidate | None]:
     source_path = Path(row["source_path"])
     output_path = markdown_dir / f"{index:04d}_{_output_stem(row)}.md"
     raw_output_path = output_path.with_name(f"{output_path.stem}.raw.tmp")
     images_dir = images_root / output_path.stem
     math_sidecar_path = raw_output_path.with_suffix(".math.json")
-    effective_timeout = _effective_timeout(row, timeout_seconds)
+    effective_timeout = _effective_timeout(row, timeout_seconds, source_path)
     try:
         if output_path.exists() and not force:
             extraction_tool = _existing_extraction_tool(output_path)
@@ -255,41 +299,128 @@ def _convert_row(
             output_path.write_text(
                 _with_front_matter(row, body, extraction_tool, has_math=has_math), encoding="utf-8", newline="\n"
             )
-            return _result(
-                row,
-                output_path,
-                "skipped_existing",
-                extraction_tool=extraction_tool,
-                has_math=has_math,
+            return (
+                _result(
+                    row,
+                    output_path,
+                    "skipped_existing",
+                    extraction_tool=extraction_tool,
+                    has_math=has_math,
+                ),
+                None,
             )
         if force:
             shutil.rmtree(images_dir, ignore_errors=True)
-        extraction_tool, fallback_note = _extract_markdown(source_path, raw_output_path, images_dir, effective_timeout)
+        skip_primary = row.get("zotero_attachment_key") in skip_keys
+        extraction_tool, fallback_note, primary_timed_out = _extract_markdown(
+            source_path, raw_output_path, images_dir, effective_timeout, skip_primary=skip_primary
+        )
         markdown = raw_output_path.read_text(encoding="utf-8")
         has_math = _read_math_sidecar(math_sidecar_path)
         output_path.write_text(
             _with_front_matter(row, markdown, extraction_tool, has_math=has_math), encoding="utf-8", newline="\n"
         )
-        return _result(row, output_path, "converted", extraction_tool=extraction_tool, has_math=has_math, error=fallback_note)
+        result = _result(row, output_path, "converted", extraction_tool=extraction_tool, has_math=has_math, error=fallback_note)
+        candidate = (
+            _build_timeout_candidate(row, source_path, effective_timeout, "fallback_used", "converted")
+            if primary_timed_out
+            else None
+        )
+        return result, candidate
+    except PrimaryExtractorTimeoutError as exc:
+        result = _result(row, output_path, "error", str(exc))
+        candidate = _build_timeout_candidate(row, source_path, effective_timeout, "fallback_failed", "error")
+        return result, candidate
     except subprocess.TimeoutExpired:
-        return _result(row, output_path, "error", f"TimeoutExpired: exceeded {effective_timeout} seconds")
+        return _result(row, output_path, "error", f"TimeoutExpired: exceeded {effective_timeout} seconds"), None
     except subprocess.CalledProcessError as exc:
         stderr = (exc.stderr or "").strip()
         message = stderr[-1000:] if stderr else str(exc)
-        return _result(row, output_path, "error", f"CalledProcessError: {message}")
+        return _result(row, output_path, "error", f"CalledProcessError: {message}"), None
     except Exception as exc:
-        return _result(row, output_path, "error", f"{type(exc).__name__}: {exc}")
+        return _result(row, output_path, "error", f"{type(exc).__name__}: {exc}"), None
     finally:
         raw_output_path.unlink(missing_ok=True)
         math_sidecar_path.unlink(missing_ok=True)
 
 
-def _effective_timeout(row: dict[str, str], timeout_seconds: int) -> int:
+def _build_timeout_candidate(
+    row: dict[str, str],
+    source_path: Path,
+    effective_timeout: int,
+    fallback_outcome: str,
+    conversion_status: str,
+) -> TimeoutCandidate:
+    density = _sample_drawing_density(source_path)
+    return TimeoutCandidate(
+        zotero_parent_key=row.get("zotero_parent_key", ""),
+        zotero_attachment_key=row.get("zotero_attachment_key", ""),
+        item_type=row.get("item_type", ""),
+        title=row.get("title", ""),
+        creators=row.get("creators", ""),
+        year=row.get("year", ""),
+        doi=row.get("doi", ""),
+        citation_key=row.get("citation_key", ""),
+        source_path=row.get("source_path", ""),
+        page_count=row.get("page_count", ""),
+        classification=row.get("classification", ""),
+        identity_status=row.get("identity_status", ""),
+        identity_rule=row.get("identity_rule", ""),
+        safe_folder_id=row.get("safe_folder_id", ""),
+        drawing_density=density,
+        attempted_timeout_seconds=effective_timeout,
+        suggested_next_timeout_seconds=suggested_next_timeout(effective_timeout),
+        fallback_outcome=fallback_outcome,
+        conversion_status=conversion_status,
+        detected_at=datetime.now().isoformat(timespec="seconds"),
+    )
+
+
+def _effective_timeout(row: dict[str, str], timeout_seconds: int, source_path: Path) -> int:
     try:
         page_count = int(row.get("page_count") or 0)
     except ValueError:
         page_count = 0
-    return max(timeout_seconds, page_count * SECONDS_PER_PAGE_TIMEOUT)
+    density = _sample_drawing_density(source_path)
+    multiplier = 1.0 + min(density / DRAWING_DENSITY_DIVISOR, MAX_DRAWING_TIMEOUT_MULTIPLIER - 1.0)
+    seconds_per_page = SECONDS_PER_PAGE_TIMEOUT * multiplier
+    return max(timeout_seconds, int(page_count * seconds_per_page))
+
+
+def _sample_drawing_density(source_path: Path) -> float:
+    """Average vector-drawing count per page, from a bounded page sample.
+
+    A best-effort signal like math_detection's font/text sampling: any failure (missing
+    fitz, unreadable PDF) must not block conversion, so it just falls back to 0 density,
+    i.e. the plain page-count timeout.
+    """
+    if fitz is None:
+        return 0.0
+    try:
+        with fitz.open(source_path) as document:
+            sample_size = min(len(document), DRAWING_SAMPLE_PAGES)
+            if sample_size == 0:
+                return 0.0
+            total_drawings = sum(len(document[i].get_drawings()) for i in range(sample_size))
+        return total_drawings / sample_size
+    except Exception:
+        return 0.0
+
+
+def _load_persisted_skip_keys(output_root: Path) -> frozenset[str]:
+    """Attachment keys that skip straight to the fallback extractor, per timeout_skip_list.json.
+
+    Replaces a prior hardcoded frozenset: a document confirmed to exceed even the
+    drawing-density-scaled timeout gets added here (see `docs/data-dictionary.md`) instead of
+    requiring a source change. Best-effort like the drawing-density scan: a missing or corrupt
+    file just means no skip entries, not a conversion failure.
+    """
+    skip_list_path = output_root / SKIP_LIST_FILENAME
+    try:
+        data = json.loads(skip_list_path.read_text(encoding="utf-8"))
+        return frozenset(data.get("entries", {}).keys())
+    except (OSError, ValueError):
+        return frozenset()
 
 
 def _read_math_sidecar(sidecar_path: Path) -> bool:
@@ -300,25 +431,40 @@ def _read_math_sidecar(sidecar_path: Path) -> bool:
         return False
 
 
-def _extract_markdown(source_path: Path, raw_output_path: Path, images_dir: Path, timeout_seconds: int) -> tuple[str, str]:
-    try:
-        _run_extractor(source_path, raw_output_path, PRIMARY_EXTRACTION_TOOL, timeout_seconds, image_dir=images_dir)
-        return PRIMARY_EXTRACTION_TOOL, ""
-    except subprocess.TimeoutExpired as exc:
-        primary_error = f"TimeoutExpired: exceeded {timeout_seconds} seconds"
-    except subprocess.CalledProcessError as exc:
-        primary_error = f"CalledProcessError: {_stderr_tail(exc)}"
+def _extract_markdown(
+    source_path: Path, raw_output_path: Path, images_dir: Path, timeout_seconds: int, *, skip_primary: bool = False
+) -> tuple[str, str, bool]:
+    primary_timed_out = False
+    if skip_primary:
+        primary_error = "primary extractor skipped: known to exceed the drawing-density timeout cap"
+    else:
+        try:
+            _run_extractor(source_path, raw_output_path, PRIMARY_EXTRACTION_TOOL, timeout_seconds, image_dir=images_dir)
+            return PRIMARY_EXTRACTION_TOOL, "", False
+        except subprocess.TimeoutExpired as exc:
+            primary_error = f"TimeoutExpired: exceeded {timeout_seconds} seconds"
+            primary_timed_out = True
+        except subprocess.CalledProcessError as exc:
+            primary_error = f"CalledProcessError: {_stderr_tail(exc)}"
 
     raw_output_path.unlink(missing_ok=True)
     try:
         _run_extractor(source_path, raw_output_path, FALLBACK_EXTRACTION_TOOL, timeout_seconds)
-        return FALLBACK_EXTRACTION_TOOL, f"Primary extractor failed; fallback used. Primary error: {primary_error}"
-    except subprocess.TimeoutExpired:
-        raise RuntimeError(
-            f"Primary extractor failed ({primary_error}); fallback timed out after {timeout_seconds} seconds"
+        return (
+            FALLBACK_EXTRACTION_TOOL,
+            f"Primary extractor failed; fallback used. Primary error: {primary_error}",
+            primary_timed_out,
         )
+    except subprocess.TimeoutExpired:
+        message = f"Primary extractor failed ({primary_error}); fallback timed out after {timeout_seconds} seconds"
+        if primary_timed_out:
+            raise PrimaryExtractorTimeoutError(message)
+        raise RuntimeError(message)
     except subprocess.CalledProcessError as exc:
-        raise RuntimeError(f"Primary extractor failed ({primary_error}); fallback failed: {_stderr_tail(exc)}")
+        message = f"Primary extractor failed ({primary_error}); fallback failed: {_stderr_tail(exc)}"
+        if primary_timed_out:
+            raise PrimaryExtractorTimeoutError(message)
+        raise RuntimeError(message)
 
 
 def _run_extractor(

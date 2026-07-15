@@ -24,7 +24,10 @@ class McpProtocolTests(unittest.TestCase):
             server = create_server(sqlite_path)
 
             tools = {tool.name: tool for tool in asyncio.run(server.list_tools())}
-            self.assertEqual(set(tools), {"search_fulltext", "get_fulltext_chunk", "get_item_context"})
+            self.assertEqual(
+                set(tools),
+                {"search_fulltext", "get_fulltext_chunk", "get_item_context", "list_timeout_candidates"},
+            )
             for tool in tools.values():
                 self.assertIsNotNone(tool.outputSchema)
                 self.assertEqual(tool.outputSchema["type"], "object")
@@ -121,7 +124,17 @@ class McpProtocolTests(unittest.TestCase):
                 server = create_server(sqlite_path, config=config, enable_bibtex=True, enable_reconvert=True)
 
             tools = {tool.name: tool for tool in asyncio.run(server.list_tools())}
-            self.assertEqual(set(tools), {"search_fulltext", "get_fulltext_chunk", "get_item_context", "export_bibtex_entries_by_key", "reconvert_with_math_ocr"})
+            self.assertEqual(
+                set(tools),
+                {
+                    "search_fulltext",
+                    "get_fulltext_chunk",
+                    "get_item_context",
+                    "list_timeout_candidates",
+                    "export_bibtex_entries_by_key",
+                    "reconvert_with_math_ocr",
+                },
+            )
             self.assertEqual(tools["export_bibtex_entries_by_key"].outputSchema["type"], "object")
             self.assertEqual(tools["reconvert_with_math_ocr"].outputSchema["type"], "object")
             self.assertEqual(

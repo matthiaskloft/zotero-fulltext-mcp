@@ -1,4 +1,5 @@
 import csv
+import json
 import subprocess
 import tempfile
 import unittest
@@ -111,6 +112,105 @@ class ConverterTests(unittest.TestCase):
 
             self.assertEqual(calls[0]["timeout"], 600)
 
+    def test_convert_sample_extends_timeout_for_drawing_dense_documents(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            report = root / "mapping_report.csv"
+            pdf = root / "paper.pdf"
+            pdf.write_bytes(b"%PDF")
+            _write_mapping_report(report, pdf, page_count="200")
+            config = ProjectConfig(root, root, root, root / "output")
+
+            calls: list[dict] = []
+
+            def _capture_and_write(args, **kwargs):
+                calls.append(kwargs)
+                _write_raw_markdown(args, **kwargs)
+
+            with (
+                patch("zotero_pdf_text.converter.subprocess.run", side_effect=_capture_and_write),
+                patch("zotero_pdf_text.converter._sample_drawing_density", return_value=40.0),
+            ):
+                convert_sample(config, report, limit=1, timeout_seconds=600)
+
+            # density 40 / divisor 10 = +4x, capped at the 5x multiplier: 200 * 4 * 5 = 4000
+            self.assertEqual(calls[0]["timeout"], 4000)
+
+    def test_convert_sample_ignores_drawing_density_when_scan_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            report = root / "mapping_report.csv"
+            pdf = root / "paper.pdf"
+            pdf.write_bytes(b"%PDF")
+            _write_mapping_report(report, pdf, page_count="500")
+            config = ProjectConfig(root, root, root, root / "output")
+
+            calls: list[dict] = []
+
+            def _capture_and_write(args, **kwargs):
+                calls.append(kwargs)
+                _write_raw_markdown(args, **kwargs)
+
+            with patch("zotero_pdf_text.converter.subprocess.run", side_effect=_capture_and_write):
+                convert_sample(config, report, limit=1, timeout_seconds=600)
+
+            # unreadable/fake PDF bytes -> density scan fails closed to 0 -> plain page-count timeout
+            self.assertEqual(calls[0]["timeout"], 2000)
+
+    def test_persisted_skip_list_skips_straight_to_fallback(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            report = root / "mapping_report.csv"
+            pdf = root / "paper.pdf"
+            pdf.write_bytes(b"%PDF")
+            _write_mapping_report(report, pdf)
+            output_root = root / "output"
+            output_root.mkdir(parents=True, exist_ok=True)
+            (output_root / "timeout_skip_list.json").write_text(
+                json.dumps({"version": 1, "entries": {"ATTACH": {"reason": "test"}}}), encoding="utf-8"
+            )
+            config = ProjectConfig(root, root, root, output_root)
+
+            calls: list[list[str]] = []
+
+            def _capture_and_write_fallback(args, **kwargs):
+                calls.append(args)
+                Path(args[4]).write_text("Fallback text", encoding="utf-8")
+
+            with patch("zotero_pdf_text.converter.subprocess.run", side_effect=_capture_and_write_fallback):
+                run_dir = convert_sample(config, report, limit=1)
+
+            markdown_file = next((run_dir / "markdown").glob("*.md"))
+            markdown = markdown_file.read_text(encoding="utf-8")
+            self.assertIn('extraction_tool: "pymupdf.get_text"', markdown)
+            # only the fallback ran -- the primary extractor was never invoked
+            self.assertEqual(len(calls), 1)
+            self.assertNotIn("--image-dir", calls[0])
+            with (run_dir / "manifest.csv").open("r", encoding="utf-8-sig", newline="") as handle:
+                rows = list(csv.DictReader(handle))
+            self.assertIn("primary extractor skipped", rows[0]["error"])
+
+    def test_corrupt_skip_list_file_fails_open(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            report = root / "mapping_report.csv"
+            pdf = root / "paper.pdf"
+            pdf.write_bytes(b"%PDF")
+            _write_mapping_report(report, pdf)
+            output_root = root / "output"
+            output_root.mkdir(parents=True, exist_ok=True)
+            (output_root / "timeout_skip_list.json").write_text("{not valid json", encoding="utf-8")
+            config = ProjectConfig(root, root, root, output_root)
+
+            with patch("zotero_pdf_text.converter.subprocess.run", side_effect=_write_raw_markdown):
+                run_dir = convert_sample(config, report, limit=1)
+
+            with (run_dir / "manifest.csv").open("r", encoding="utf-8-sig", newline="") as handle:
+                rows = list(csv.DictReader(handle))
+            # corrupt skip list -> no entries skipped -> primary extractor still ran normally
+            self.assertEqual(rows[0]["status"], "converted")
+            self.assertEqual(rows[0]["extraction_tool"], "pymupdf4llm.to_markdown")
+
     def test_timeout_error_reports_scaled_duration_not_base_timeout(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -161,6 +261,95 @@ class ConverterTests(unittest.TestCase):
             self.assertIn("--image-dir", calls[0])
             self.assertNotIn("--image-dir", calls[1])
             self.assertIn("Primary extractor failed; fallback used", rows[0]["error"])
+
+    def test_primary_timeout_writes_timeout_candidate_with_fallback_used(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            report = root / "mapping_report.csv"
+            pdf = root / "paper.pdf"
+            pdf.write_bytes(b"%PDF")
+            _write_mapping_report(report, pdf, page_count="10")
+            output_root = root / "output"
+            config = ProjectConfig(root, root, root, output_root)
+
+            with patch("zotero_pdf_text.converter.subprocess.run", side_effect=_timeout_primary_then_write_fallback):
+                run_dir = convert_sample(config, report, limit=1, timeout_seconds=600)
+
+            with (run_dir / "timeout_candidates.csv").open("r", encoding="utf-8-sig", newline="") as handle:
+                run_rows = list(csv.DictReader(handle))
+            self.assertEqual(len(run_rows), 1)
+            self.assertEqual(run_rows[0]["fallback_outcome"], "fallback_used")
+            self.assertEqual(run_rows[0]["conversion_status"], "converted")
+            self.assertEqual(run_rows[0]["attempted_timeout_seconds"], "600")
+            self.assertEqual(run_rows[0]["suggested_next_timeout_seconds"], "1200")
+
+            master_path = output_root / "index" / "timeout_candidates.jsonl"
+            master_records = [json.loads(line) for line in master_path.read_text(encoding="utf-8").splitlines()]
+            self.assertEqual(len(master_records), 1)
+            self.assertEqual(master_records[0]["status"], "pending")
+            self.assertEqual(master_records[0]["occurrence_count"], 1)
+            self.assertEqual(master_records[0]["zotero_attachment_key"], "ATTACH")
+
+    def test_primary_and_fallback_timeout_writes_timeout_candidate_with_fallback_failed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            report = root / "mapping_report.csv"
+            pdf = root / "paper.pdf"
+            pdf.write_bytes(b"%PDF")
+            _write_mapping_report(report, pdf, page_count="10")
+            output_root = root / "output"
+            config = ProjectConfig(root, root, root, output_root)
+
+            with patch("zotero_pdf_text.converter.subprocess.run", side_effect=_timeout_primary_and_fallback):
+                run_dir = convert_sample(config, report, limit=1, timeout_seconds=600)
+
+            with (run_dir / "manifest.csv").open("r", encoding="utf-8-sig", newline="") as handle:
+                rows = list(csv.DictReader(handle))
+            self.assertEqual(rows[0]["status"], "error")
+
+            with (run_dir / "timeout_candidates.csv").open("r", encoding="utf-8-sig", newline="") as handle:
+                run_rows = list(csv.DictReader(handle))
+            self.assertEqual(len(run_rows), 1)
+            self.assertEqual(run_rows[0]["fallback_outcome"], "fallback_failed")
+            self.assertEqual(run_rows[0]["conversion_status"], "error")
+
+    def test_called_process_error_on_primary_does_not_write_timeout_candidate(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            report = root / "mapping_report.csv"
+            pdf = root / "paper.pdf"
+            pdf.write_bytes(b"%PDF")
+            _write_mapping_report(report, pdf, page_count="10")
+            output_root = root / "output"
+            config = ProjectConfig(root, root, root, output_root)
+
+            with patch("zotero_pdf_text.converter.subprocess.run", side_effect=_fail_primary_then_write_fallback):
+                run_dir = convert_sample(config, report, limit=1, timeout_seconds=600)
+
+            with (run_dir / "timeout_candidates.csv").open("r", encoding="utf-8-sig", newline="") as handle:
+                run_rows = list(csv.DictReader(handle))
+            self.assertEqual(run_rows, [])
+            self.assertFalse((output_root / "index" / "timeout_candidates.jsonl").exists())
+
+    def test_master_timeout_candidates_jsonl_accumulates_occurrence_count_across_runs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            report = root / "mapping_report.csv"
+            pdf = root / "paper.pdf"
+            pdf.write_bytes(b"%PDF")
+            _write_mapping_report(report, pdf, page_count="10")
+            output_root = root / "output"
+            config = ProjectConfig(root, root, root, output_root)
+
+            with patch("zotero_pdf_text.converter.subprocess.run", side_effect=_timeout_primary_then_write_fallback):
+                convert_sample(config, report, limit=1, timeout_seconds=600, output_dir=root / "run1")
+                convert_sample(config, report, limit=1, timeout_seconds=600, output_dir=root / "run2")
+
+            master_path = output_root / "index" / "timeout_candidates.jsonl"
+            master_records = [json.loads(line) for line in master_path.read_text(encoding="utf-8").splitlines()]
+            self.assertEqual(len(master_records), 1)
+            self.assertEqual(master_records[0]["occurrence_count"], 2)
+            self.assertEqual(master_records[0]["first_detected_at"], master_records[0]["last_detected_at"])
 
     def test_convert_unverified_targets_unverified_rows(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -341,6 +530,17 @@ def _fail_primary_then_write_fallback(args, **kwargs):
     if tool == "pymupdf4llm.to_markdown":
         raise subprocess.CalledProcessError(returncode=1, cmd=args, stderr="primary failed")
     Path(args[4]).write_text("Fallback text", encoding="utf-8")
+
+
+def _timeout_primary_then_write_fallback(args, **kwargs):
+    tool = args[args.index("--tool") + 1]
+    if tool == "pymupdf4llm.to_markdown":
+        raise subprocess.TimeoutExpired(cmd=args, timeout=kwargs.get("timeout"))
+    Path(args[4]).write_text("Fallback text", encoding="utf-8")
+
+
+def _timeout_primary_and_fallback(args, **kwargs):
+    raise subprocess.TimeoutExpired(cmd=args, timeout=kwargs.get("timeout"))
 
 
 if __name__ == "__main__":

@@ -33,6 +33,11 @@ def main(argv: list[str] | None = None) -> int:
         help="Expose single-attachment math OCR; requires an explicit valid --config governing --db.",
     )
     parser.add_argument(
+        "--enable-retry-timeout",
+        action="store_true",
+        help="Expose timeout skip/retry decisions; requires an explicit valid --config governing --db.",
+    )
+    parser.add_argument(
         "--bibtex-endpoint",
         default=None,
         help="Credential-free HTTP endpoint on Zotero's local Better BibTeX port; requires --enable-bibtex.",
@@ -44,6 +49,13 @@ def main(argv: list[str] | None = None) -> int:
             _startup_error(
                 "config_required",
                 "--enable-reconvert requires an explicit valid --config.",
+            )
+        )
+    if args.enable_retry_timeout and args.config is None:
+        raise SystemExit(
+            _startup_error(
+                "config_required",
+                "--enable-retry-timeout requires an explicit valid --config.",
             )
         )
     config = None
@@ -65,6 +77,7 @@ def main(argv: list[str] | None = None) -> int:
             config=config,
             enable_bibtex=args.enable_bibtex,
             enable_reconvert=args.enable_reconvert,
+            enable_retry_timeout=args.enable_retry_timeout,
             **({"bibtex_endpoint": args.bibtex_endpoint} if args.bibtex_endpoint else {}),
         )
     except PublicMcpError as exc:
