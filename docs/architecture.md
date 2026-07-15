@@ -80,6 +80,22 @@ The trusted baseline is `mapped_verified`. Unverified mappings should not be
 silently mixed into verified search results. If they are indexed later, they
 must carry explicit `classification` and `identity_status` fields.
 
+`classify_identity` (`identity.py`) strips Markdown image syntax (`![alt](path)`) from converted
+text before scoring, so an embedded image filename that happens to echo a candidate's title can't
+be mistaken for real article prose by `title_score`. A confidently-parsed DOI in the text that
+conflicts with the expected one is treated as disqualifying evidence regardless of title score —
+that check runs before, and takes precedence over, the title/author/year accept rule, so generic
+topic-vocabulary overlap can never let a wrong-document mapping through just because a real,
+different DOI was also present.
+
+DOI, author-surname, and year evidence is scanned only within a leading `EVIDENCE_WINDOW_CHARS`
+(6,000 characters) window of the converted text, not the whole document — a paper's own DOI stamp
+and byline normally land within the first page or two, while reference lists and cited works can
+run for many more pages after that. This keeps a document that merely cites a different-DOI work,
+or a bibliography entry sharing a claimed author's surname, from being penalized (or credited) for
+evidence that isn't actually about the document itself. Title matching is intentionally not
+windowed, since `title_score`'s fuzzy partial-ratio matching can find a title anywhere in the text.
+
 ## Deferred Memory Layer
 
 Obsidian-style memory is out of scope for this implementation. If added later,

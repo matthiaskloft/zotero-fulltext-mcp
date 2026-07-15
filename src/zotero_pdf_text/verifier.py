@@ -10,7 +10,7 @@ from pathlib import Path
 
 from .config import ProjectConfig
 from .converter import ConversionResult, convert_unverified
-from .identity import classify_identity, normalize_doi
+from .identity import classify_identity, normalize_doi, strip_front_matter
 
 
 @dataclass
@@ -61,6 +61,7 @@ def verify_unverified(
     force: bool = False,
     include_possible_mismatch: bool = False,
     agent_batch_size: int = 25,
+    index_jsonl: Path | None = None,
 ) -> Path:
     run_dir = convert_unverified(
         config,
@@ -72,6 +73,7 @@ def verify_unverified(
         timeout_seconds=timeout_seconds,
         force=force,
         include_possible_mismatch=include_possible_mismatch,
+        index_jsonl=index_jsonl,
     )
     review_unverified_manifest(run_dir / "manifest.csv", run_dir=run_dir, agent_batch_size=agent_batch_size)
     return run_dir
@@ -211,7 +213,7 @@ def _review_manifest_row(row: dict[str, str]) -> VerificationReview:
 
     markdown_path = Path(row["output_path"])
     try:
-        text = _strip_front_matter(markdown_path.read_text(encoding="utf-8", errors="replace"))
+        text = strip_front_matter(markdown_path.read_text(encoding="utf-8", errors="replace"))
     except OSError as exc:
         return _error_review(row, "markdown_read_error", f"{type(exc).__name__}: {exc}")
 
@@ -300,7 +302,7 @@ def _decision_from_evidence(evidence) -> tuple[str, float, str, str]:
             "reject",
             0.95,
             "auto_reject_conflicting_doi_low_title",
-            "Converted text contains a different DOI and weak title evidence.",
+            "Converted text contains a different, confidently-parsed DOI than the expected one.",
         )
     if evidence.title_score >= 95 and evidence.author_evidence and evidence.year_evidence:
         return (
@@ -579,15 +581,6 @@ def _creator_surnames(creators: str) -> list[str]:
         if len(surname) >= 2:
             surnames.append(surname)
     return surnames
-
-
-def _strip_front_matter(markdown: str) -> str:
-    if not markdown.startswith("---\n"):
-        return markdown.strip()
-    end = markdown.find("\n---\n", 4)
-    if end == -1:
-        return markdown.strip()
-    return markdown[end + len("\n---\n") :].strip()
 
 
 def _first_nonempty_lines(text: str, limit: int) -> list[str]:
