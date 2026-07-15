@@ -977,12 +977,17 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "find-orphan-parents":
         config = load_config(args.config)
         validate_config(config)
-        run_dir = orphan_discovery_module.run_orphan_discovery(
-            config,
-            args.mapping_report,
-            output_dir=args.output_dir,
-            limit=args.limit,
-        )
+        try:
+            with pipeline_write_lock(config.output_root, command="find-orphan-parents"):
+                run_dir = orphan_discovery_module.run_orphan_discovery(
+                    config,
+                    args.mapping_report,
+                    output_dir=args.output_dir,
+                    limit=args.limit,
+                )
+        except PipelineLockedError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
         print(f"Orphan-parent discovery complete: {run_dir}")
         return 0
     if args.command == "orphan-candidate":

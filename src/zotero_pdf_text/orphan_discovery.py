@@ -8,6 +8,7 @@ from pathlib import Path
 
 from .config import ProjectConfig
 from .identity import IdentityEvidence, classify_identity
+from .lock import PipelineLockedError, pipeline_write_lock
 from .orphan_candidates import (
     CONFIDENCE_HIGH,
     STATUS_RESOLVED,
@@ -187,7 +188,13 @@ def skip_orphan_candidate(
         return _resolution_error("skip", orphan_sha256, candidate_parent_key, str(exc))
     previous_status = str(candidate.get("status", "pending"))
     now = datetime.now().isoformat(timespec="seconds")
-    mark_status(master_path, match_key, status=STATUS_SKIPPED, extra_fields={"skip_reason": reason, "skipped_at": now})
+    try:
+        with pipeline_write_lock(config.output_root, command="orphan-candidate"):
+            mark_status(
+                master_path, match_key, status=STATUS_SKIPPED, extra_fields={"skip_reason": reason, "skipped_at": now}
+            )
+    except PipelineLockedError as exc:
+        return _resolution_error("skip", orphan_sha256, candidate_parent_key, str(exc), previous_status=previous_status)
     return OrphanResolutionResult(
         ok=True,
         action="skip",
@@ -220,12 +227,18 @@ def mark_orphan_candidate_resolved(
         return _resolution_error("mark-resolved", orphan_sha256, candidate_parent_key, str(exc))
     previous_status = str(candidate.get("status", "pending"))
     now = datetime.now().isoformat(timespec="seconds")
-    mark_status(
-        master_path,
-        match_key,
-        status=STATUS_RESOLVED,
-        extra_fields={"resolved_via": "link-pdf", "resolved_note": note, "resolved_at": now},
-    )
+    try:
+        with pipeline_write_lock(config.output_root, command="orphan-candidate"):
+            mark_status(
+                master_path,
+                match_key,
+                status=STATUS_RESOLVED,
+                extra_fields={"resolved_via": "link-pdf", "resolved_note": note, "resolved_at": now},
+            )
+    except PipelineLockedError as exc:
+        return _resolution_error(
+            "mark-resolved", orphan_sha256, candidate_parent_key, str(exc), previous_status=previous_status
+        )
     return OrphanResolutionResult(
         ok=True,
         action="mark-resolved",
@@ -238,14 +251,16 @@ def mark_orphan_candidate_resolved(
     )
 
 
-def _resolution_error(action: str, orphan_sha256: str, candidate_parent_key: str, error: str) -> OrphanResolutionResult:
+def _resolution_error(
+    action: str, orphan_sha256: str, candidate_parent_key: str, error: str, *, previous_status: str = ""
+) -> OrphanResolutionResult:
     return OrphanResolutionResult(
         ok=False,
         action=action,
         orphan_sha256=orphan_sha256,
         candidate_parent_key=candidate_parent_key,
-        previous_status="",
-        new_status="",
+        previous_status=previous_status,
+        new_status=previous_status,
         error=error,
         resolved_at="",
     )

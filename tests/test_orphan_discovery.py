@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from zotero_pdf_text.config import ProjectConfig
+from zotero_pdf_text.lock import pipeline_write_lock
 from zotero_pdf_text.orphan_discovery import (
     mark_orphan_candidate_resolved,
     run_orphan_discovery,
@@ -283,6 +284,66 @@ class ResolutionHelperTests(unittest.TestCase):
             result = mark_orphan_candidate_resolved(config, "orphansha", "PARENT1", note="attached via link-pdf")
             self.assertTrue(result.ok)
             self.assertEqual(result.new_status, "resolved")
+
+    def test_skip_orphan_candidate_respects_pipeline_lock(self):
+        # Regression test: skip_orphan_candidate used to read-modify-write orphan_candidates.jsonl
+        # without taking the pipeline lock, so a concurrent discovery/resolution command could read
+        # the same prior state and then atomically replace one another, silently losing candidates
+        # or status changes.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            output_root = root / "output"
+            source_path = root / "1-s2.0-S0022-main.pdf"
+            source_path.write_bytes(b"%PDF-fake")
+            mapping_report = root / "mapping_report.csv"
+            fieldnames = ["classification", "source_path", "sha256", "safe_folder_id"]
+            with mapping_report.open("w", encoding="utf-8-sig", newline="") as handle:
+                writer = csv.DictWriter(handle, fieldnames=fieldnames)
+                writer.writeheader()
+                writer.writerow(
+                    {"classification": "orphan_pdf", "source_path": str(source_path), "sha256": "orphansha", "safe_folder_id": "sha256_orphansha"}
+                )
+
+            config = ProjectConfig(root, root, root, output_root)
+            with patch("zotero_pdf_text.orphan_discovery.load_items_without_pdf_attachment", return_value=[_parent()]), patch(
+                "zotero_pdf_text.orphan_discovery.extract_early_text",
+                return_value=("Jane Smith 2024 A Very Specific Research Title About Bayesian Inference", 5),
+            ):
+                run_orphan_discovery(config, mapping_report)
+
+            with pipeline_write_lock(output_root, command="convert-new"):
+                result = skip_orphan_candidate(config, "orphansha", "PARENT1", reason="not a match")
+
+            self.assertFalse(result.ok)
+            self.assertIn("is held by host", result.error)
+
+    def test_mark_orphan_candidate_resolved_respects_pipeline_lock(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            output_root = root / "output"
+            source_path = root / "1-s2.0-S0022-main.pdf"
+            source_path.write_bytes(b"%PDF-fake")
+            mapping_report = root / "mapping_report.csv"
+            fieldnames = ["classification", "source_path", "sha256", "safe_folder_id"]
+            with mapping_report.open("w", encoding="utf-8-sig", newline="") as handle:
+                writer = csv.DictWriter(handle, fieldnames=fieldnames)
+                writer.writeheader()
+                writer.writerow(
+                    {"classification": "orphan_pdf", "source_path": str(source_path), "sha256": "orphansha", "safe_folder_id": "sha256_orphansha"}
+                )
+
+            config = ProjectConfig(root, root, root, output_root)
+            with patch("zotero_pdf_text.orphan_discovery.load_items_without_pdf_attachment", return_value=[_parent()]), patch(
+                "zotero_pdf_text.orphan_discovery.extract_early_text",
+                return_value=("Jane Smith 2024 A Very Specific Research Title About Bayesian Inference", 5),
+            ):
+                run_orphan_discovery(config, mapping_report)
+
+            with pipeline_write_lock(output_root, command="convert-new"):
+                result = mark_orphan_candidate_resolved(config, "orphansha", "PARENT1", note="attached")
+
+            self.assertFalse(result.ok)
+            self.assertIn("is held by host", result.error)
 
 
 if __name__ == "__main__":

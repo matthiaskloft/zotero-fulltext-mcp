@@ -469,7 +469,8 @@ for newly linked verified PDFs in one step.)
 If `converted_text` is a single index shared across more than one machine (e.g. via a synced
 cloud folder), every command that writes under it (`convert-sample`, `convert-verified`,
 `convert-new`, `verify-unverified`, `apply-verification`, `build-index`, `append-index`,
-`build-fts`, `reconvert-math`/`reconvert_with_math_ocr`, `retry-timeout`) takes the same lock file
+`build-fts`, `reconvert-math`/`reconvert_with_math_ocr`, `retry-timeout`, `find-orphan-parents`,
+`orphan-candidate`) takes the same lock file
 (`config.output_root\.pipeline.lock`) before starting and releases it on exit, so two machines
 (or two commands on the same machine) can never rebuild the same SQLite/JSONL files at once — the
 same corruption class as syncing a live Zotero database. `build-index`/`append-index`/`build-fts`
