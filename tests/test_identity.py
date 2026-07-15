@@ -1,6 +1,14 @@
 import unittest
 
-from zotero_pdf_text.identity import classify_identity, normalize_doi, safe_folder_id, strip_markdown_images, title_score
+from zotero_pdf_text.identity import (
+    EVIDENCE_WINDOW_CHARS,
+    classify_identity,
+    normalize_doi,
+    safe_folder_id,
+    strip_front_matter,
+    strip_markdown_images,
+    title_score,
+)
 
 
 class IdentityTests(unittest.TestCase):
@@ -92,6 +100,65 @@ class IdentityTests(unittest.TestCase):
         )
         self.assertEqual(evidence.status, "possible_mismatch")
         self.assertEqual(evidence.rule, "conflicting_doi_low_title")
+
+    def test_strip_front_matter_removes_leading_yaml_block(self):
+        markdown = "---\ntitle: Foo\n---\nReal body text."
+        self.assertEqual(strip_front_matter(markdown), "Real body text.")
+
+    def test_strip_front_matter_leaves_text_without_front_matter_untouched(self):
+        self.assertEqual(strip_front_matter("  Real body text.  "), "Real body text.")
+
+    def test_conflicting_doi_deep_in_a_reference_list_is_not_a_mismatch(self):
+        # A correctly-matched paper that merely *cites* a different-DOI work later in its
+        # reference list must not be penalized just because that DOI shows up somewhere in the
+        # full text -- only DOIs within the leading evidence window count as self-referential.
+        title = "Bayesian Psychometrics for Longitudinal Response Processes"
+        padding = "Unrelated filler prose about the method section. " * 300
+        self.assertGreater(len(padding), EVIDENCE_WINDOW_CHARS)
+        text = (
+            f"{title}. By Smith, 2024. DOI: 10.1000/right. {padding}"
+            "References: Jones (2019). Some other paper. DOI: 10.2000/cited-work."
+        )
+        evidence = classify_identity(
+            title=title,
+            doi="10.1000/right",
+            year="2024",
+            author_surnames=["Smith"],
+            item_type="journalArticle",
+            text=text,
+        )
+        self.assertEqual(evidence.status, "verified")
+        self.assertEqual(evidence.rule, "doi_exact")
+
+    def test_conflicting_doi_within_the_evidence_window_is_still_a_mismatch(self):
+        # The same conflicting DOI, but stamped right on the first page, must still disqualify --
+        # only evidence *outside* the leading window is exempted, not conflicting DOIs in general.
+        evidence = classify_identity(
+            title="Bayesian Psychometrics for Longitudinal Response Processes",
+            doi="10.1000/right",
+            year="2024",
+            author_surnames=["Smith"],
+            item_type="journalArticle",
+            text="Completely different article. DOI: 10.2000/wrong.",
+        )
+        self.assertEqual(evidence.status, "possible_mismatch")
+        self.assertEqual(evidence.rule, "conflicting_doi_low_title")
+
+    def test_author_surname_only_in_a_distant_bibliography_entry_is_not_a_hit(self):
+        # A different author sharing a surname with a bibliography entry, far past the evidence
+        # window, must not count as evidence that the claimed author wrote this document.
+        padding = "Unrelated filler prose about the results section. " * 300
+        self.assertGreater(len(padding), EVIDENCE_WINDOW_CHARS)
+        text = f"{padding} References: Smith, J. (2019). A completely unrelated paper."
+        evidence = classify_identity(
+            title="An Article With No Real Title Match Here At All",
+            doi=None,
+            year=None,
+            author_surnames=["Smith"],
+            item_type="journalArticle",
+            text=text,
+        )
+        self.assertFalse(evidence.author_evidence)
 
 
 if __name__ == "__main__":

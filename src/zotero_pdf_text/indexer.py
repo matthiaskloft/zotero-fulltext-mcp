@@ -10,6 +10,7 @@ from datetime import datetime
 from pathlib import Path
 
 from ._atomic import replace_with_retry
+from .identity import strip_front_matter
 
 
 @dataclass
@@ -150,7 +151,7 @@ def _converted_rows(manifest: Path) -> list[dict[str, str]]:
 def _record_from_manifest_row(row: dict[str, str]) -> TextIndexRecord:
     markdown_path = Path(row["output_path"])
     markdown = markdown_path.read_text(encoding="utf-8")
-    text = _strip_front_matter(markdown)
+    text = strip_front_matter(markdown)
     return TextIndexRecord(
         zotero_parent_key=row.get("zotero_parent_key", ""),
         zotero_attachment_key=row.get("zotero_attachment_key", ""),
@@ -172,15 +173,6 @@ def _record_from_manifest_row(row: dict[str, str]) -> TextIndexRecord:
         has_math=row.get("has_math", "false").strip().lower() == "true",
         text=text,
     )
-
-
-def _strip_front_matter(markdown: str) -> str:
-    if not markdown.startswith("---\n"):
-        return markdown.strip()
-    end = markdown.find("\n---\n", 4)
-    if end == -1:
-        return markdown.strip()
-    return markdown[end + len("\n---\n") :].strip()
 
 
 def _sha256(path: Path) -> str:

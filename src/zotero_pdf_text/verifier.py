@@ -10,7 +10,7 @@ from pathlib import Path
 
 from .config import ProjectConfig
 from .converter import ConversionResult, convert_unverified
-from .identity import classify_identity, normalize_doi
+from .identity import classify_identity, normalize_doi, strip_front_matter
 
 
 @dataclass
@@ -213,7 +213,7 @@ def _review_manifest_row(row: dict[str, str]) -> VerificationReview:
 
     markdown_path = Path(row["output_path"])
     try:
-        text = _strip_front_matter(markdown_path.read_text(encoding="utf-8", errors="replace"))
+        text = strip_front_matter(markdown_path.read_text(encoding="utf-8", errors="replace"))
     except OSError as exc:
         return _error_review(row, "markdown_read_error", f"{type(exc).__name__}: {exc}")
 
@@ -581,15 +581,6 @@ def _creator_surnames(creators: str) -> list[str]:
         if len(surname) >= 2:
             surnames.append(surname)
     return surnames
-
-
-def _strip_front_matter(markdown: str) -> str:
-    if not markdown.startswith("---\n"):
-        return markdown.strip()
-    end = markdown.find("\n---\n", 4)
-    if end == -1:
-        return markdown.strip()
-    return markdown[end + len("\n---\n") :].strip()
 
 
 def _first_nonempty_lines(text: str, limit: int) -> list[str]:

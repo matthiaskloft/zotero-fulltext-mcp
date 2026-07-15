@@ -42,6 +42,8 @@ All notable changes to this project are documented here. Format loosely follows
 - Enabled MCP tools now advertise concrete success output schemas. Expected failures are native
   MCP `isError` results with stable, path-free public codes rather than success-shaped error
   dictionaries; disabled optional tools remain absent from the advertised surface.
+- `strip_front_matter` (previously duplicated verbatim in `indexer.py` and `verifier.py`) now lives
+  in `identity.py` as a single shared helper; `math_ocr.py` was updated to import it from there too.
 
 ### Fixed
 
@@ -59,6 +61,11 @@ All notable changes to this project are documented here. Format loosely follows
   was originally `mapped_verified` or promoted later via `apply-verification`. Previously every run
   re-derived classifications from filename/path signals alone with no memory of past resolutions,
   so the same already-resolved rows were reconverted and rescored on every future run.
+- `classify_identity` now scans DOI/author/year evidence only within a leading 6,000-character
+  window of the converted text, not the entire document. Previously a paper that merely cited a
+  different-DOI work, or a bibliography entry sharing a claimed author's surname, could be wrongly
+  penalized (`possible_mismatch`) or wrongly credited (`author_evidence`) by evidence that appeared
+  only deep in a reference list, far from the document's own title/DOI/byline.
 
 ## [0.2.0] - 2026-07-12
 

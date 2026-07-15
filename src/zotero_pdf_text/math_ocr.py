@@ -13,10 +13,10 @@ from pathlib import Path
 from ._atomic import replace_with_retry
 from .converter import _with_front_matter
 from .fts import build_fts_index, get_item_context
+from .identity import strip_front_matter
 from .indexer import (
     TextIndexRecord,
     _sha256,
-    _strip_front_matter,
     load_indexed_keys,
     replace_text_index_record,
 )
@@ -174,7 +174,7 @@ def reconvert_with_marker(
                 replace_with_retry(staged_images_dir, images_dir)
                 images_promoted = True
                 replace_with_retry(staged_markdown_path, markdown_path)
-                new_text_for_index = _strip_front_matter(new_markdown)
+                new_text_for_index = strip_front_matter(new_markdown)
                 new_record = TextIndexRecord(
                     zotero_parent_key=record["zotero_parent_key"],
                     zotero_attachment_key=record["zotero_attachment_key"],
