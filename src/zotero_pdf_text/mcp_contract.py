@@ -39,6 +39,7 @@ from .fts import (
     get_item_context as get_item_context_fn,
     search_fts,
 )
+from .orphan_candidates import list_candidates as list_orphan_candidate_records
 from .timeout_candidates import STATUS_PENDING, STATUS_RESOLVED, STATUS_SKIPPED, list_candidates
 
 
@@ -77,6 +78,7 @@ DEFAULT_MCP_TOOL_NAMES = (
     "get_fulltext_chunk",
     "get_item_context",
     "list_timeout_candidates",
+    "list_orphan_candidates",
 )
 BIBTEX_MCP_TOOL_NAME = "export_bibtex_entries_by_key"
 RECONVERT_MCP_TOOL_NAME = "reconvert_with_math_ocr"
@@ -245,6 +247,34 @@ class TimeoutCandidateRecord(TypedDict):
 
 class ListTimeoutCandidatesResponse(TypedDict):
     candidates: list[TimeoutCandidateRecord]
+
+
+class OrphanCandidateRecord(TypedDict):
+    orphan_sha256: str
+    orphan_safe_folder_id: str
+    candidate_parent_key: str
+    candidate_item_type: str
+    candidate_title: str
+    candidate_creators: str
+    candidate_year: str
+    candidate_doi: str
+    candidate_citation_key: str
+    candidate_had_stale_attachment: bool
+    orphan_page_count: int
+    title_score: int
+    author_evidence: bool
+    year_evidence: bool
+    observed_dois: str
+    confidence_tier: str
+    identity_rule: str
+    status: str
+    occurrence_count: int
+    first_detected_at: str
+    last_detected_at: str
+
+
+class ListOrphanCandidatesResponse(TypedDict):
+    candidates: list[OrphanCandidateRecord]
 
 
 class RetryTimeoutResponse(TypedDict):
@@ -453,6 +483,25 @@ def create_server(
         """
         return _public_call(
             lambda: _list_timeout_candidates(db_path, status=status, limit=limit)
+        )
+
+    @mcp.tool(annotations=READ_ONLY_TOOL_ANNOTATIONS)
+    def list_orphan_candidates(
+        status: TimeoutCandidateStatusInput = STATUS_PENDING,
+        limit: LimitInput = 10,
+    ) -> ListOrphanCandidatesResponse:
+        """List plausible Zotero parents found for orphan PDFs by content, not filename.
+
+        Each candidate pairs one orphan PDF (identified by orphan_sha256/orphan_safe_folder_id,
+        never a local path) with a Zotero item that has no PDF attachment of its own, plus the
+        title/DOI/author/year evidence and a confidence_tier. Populated only after running the
+        CLI's `find-orphan-parents` command -- this tool never triggers discovery itself. To act
+        on a pending candidate, confirm it yourself, run `link-pdf --key <candidate_parent_key>
+        --file <path>` via the CLI, then record the decision with the CLI's `orphan-candidate`
+        command. Read-only; never writes to Zotero or the sidecar index.
+        """
+        return _public_call(
+            lambda: _list_orphan_candidates(db_path, status=status, limit=limit)
         )
 
     if enable_reconvert:
@@ -788,6 +837,34 @@ def serialize_timeout_candidate(record: object) -> TimeoutCandidateRecord:
     }
 
 
+def serialize_orphan_candidate(record: object) -> OrphanCandidateRecord:
+    if not isinstance(record, dict):
+        raise PublicMcpError("index_unavailable", "The local full-text index returned an invalid response.")
+    return {
+        "orphan_sha256": str(record.get("orphan_sha256", "")),
+        "orphan_safe_folder_id": str(record.get("orphan_safe_folder_id", "")),
+        "candidate_parent_key": str(record.get("candidate_parent_key", "")),
+        "candidate_item_type": str(record.get("candidate_item_type", "")),
+        "candidate_title": str(record.get("candidate_title", "")),
+        "candidate_creators": str(record.get("candidate_creators", "")),
+        "candidate_year": str(record.get("candidate_year", "")),
+        "candidate_doi": str(record.get("candidate_doi", "")),
+        "candidate_citation_key": str(record.get("candidate_citation_key", "")),
+        "candidate_had_stale_attachment": bool(record.get("candidate_had_stale_attachment")),
+        "orphan_page_count": int(record.get("orphan_page_count") or 0),
+        "title_score": int(record.get("title_score") or 0),
+        "author_evidence": bool(record.get("author_evidence")),
+        "year_evidence": bool(record.get("year_evidence")),
+        "observed_dois": str(record.get("observed_dois", "")),
+        "confidence_tier": str(record.get("confidence_tier", "")),
+        "identity_rule": str(record.get("identity_rule", "")),
+        "status": str(record.get("status", "")),
+        "occurrence_count": int(record.get("occurrence_count") or 0),
+        "first_detected_at": str(record.get("first_detected_at", "")),
+        "last_detected_at": str(record.get("last_detected_at", "")),
+    }
+
+
 def serialize_bibtex_export(export: object) -> BibtexResponse:
     data = asdict(export)
     entry = str(data["entry"])
@@ -856,6 +933,17 @@ def _list_timeout_candidates(db_path: Path, *, status: object, limit: object) ->
     candidates_jsonl = db_path.parent / CANDIDATE_JSONL_FILENAME
     records = list_candidates(candidates_jsonl, status=status_filter)[:validated_limit]
     return {"candidates": [serialize_timeout_candidate(record) for record in records]}
+
+
+def _list_orphan_candidates(db_path: Path, *, status: object, limit: object) -> ListOrphanCandidatesResponse:
+    from .orphan_candidates import CANDIDATE_JSONL_FILENAME
+
+    validated_status = _validate_timeout_candidate_status(status)
+    validated_limit = _validate_limit(limit)
+    status_filter = None if validated_status == "all" else validated_status
+    candidates_jsonl = db_path.parent / CANDIDATE_JSONL_FILENAME
+    records = list_orphan_candidate_records(candidates_jsonl, status=status_filter)[:validated_limit]
+    return {"candidates": [serialize_orphan_candidate(record) for record in records]}
 
 
 def _skip_timeout_extraction(

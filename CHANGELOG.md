@@ -20,6 +20,22 @@ All notable changes to this project are documented here. Format loosely follows
 - New MCP tools: `list_timeout_candidates` (read-only, always available) and, opt-in via
   `--enable-retry-timeout`, `skip_timeout_extraction`/`retry_timeout_extraction` (each gated behind
   its own literal `confirm` string and independently rate-limited from math-OCR reconversion).
+- New `find-orphan-parents` CLI command discovers plausible Zotero parents for `orphan_pdf` rows by
+  scoring each orphan PDF's early-page content (not its filename) with the same `classify_identity`
+  engine used elsewhere, scoped to Zotero items with no *working* PDF attachment of their own --
+  either no PDF attachment row at all, or one whose recorded path no longer resolves to a real file
+  on disk (moved/renamed/deleted outside Zotero's own management; resolution mirrors `mapper.py`'s
+  own attachment-path convention). Only high-confidence (`classify_identity`-verified) pairings are
+  reported; a fuzzy title match alone on a result `classify_identity` itself left unverified is not
+  trusted -- real-library testing showed this is mostly noise, e.g. an edited volume's individual
+  chapter entries ("Citations", "Index", "Preface") score a trivially high fuzzy match against
+  nearly any PDF. Findings are written per-run (`orphan_candidates.csv`/`.jsonl`,
+  including a `candidate_had_stale_attachment` flag) and merged into a persistent, deduped master
+  file, mirroring the timeout-candidate pattern. The new `orphan-candidate` CLI command resolves a
+  pending pairing: `--skip` dismisses it, or `--mark-resolved` records that it was confirmed and
+  already attached via the existing `link-pdf` command (bookkeeping only; it does not attach
+  anything itself). New read-only, always-available MCP tool `list_orphan_candidates` mirrors
+  `list_timeout_candidates` for this workflow.
 
 ### Changed
 

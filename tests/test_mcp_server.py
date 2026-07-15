@@ -25,6 +25,7 @@ from zotero_pdf_text.mcp_contract import (
     validate_bibtex_endpoint,
 )
 from zotero_pdf_text.mcp_server import main
+from zotero_pdf_text.orphan_candidates import append_master_candidates as append_master_candidates_orphan
 from zotero_pdf_text.timeout_candidates import TimeoutCandidate, append_master_candidates
 
 
@@ -56,7 +57,7 @@ class McpServerTests(unittest.TestCase):
 
             self.assertEqual(
                 set(server.tools),
-                {"search_fulltext", "get_fulltext_chunk", "get_item_context", "list_timeout_candidates"},
+                {"search_fulltext", "get_fulltext_chunk", "get_item_context", "list_timeout_candidates", "list_orphan_candidates"},
             )
             self.assertNotIn("ensure_zotero_running", server.tools)
             self.assertNotIn("export_bibtex_entries_by_key", server.tools)
@@ -84,7 +85,7 @@ class McpServerTests(unittest.TestCase):
 
         self.assertEqual(
             {tool.name for tool in tools},
-            {"search_fulltext", "get_fulltext_chunk", "get_item_context", "list_timeout_candidates"},
+            {"search_fulltext", "get_fulltext_chunk", "get_item_context", "list_timeout_candidates", "list_orphan_candidates"},
         )
         descriptions = {tool.name: tool.description for tool in tools}
         self.assertIn("title, creators, citation key, and converted body text", descriptions["search_fulltext"])
@@ -111,6 +112,7 @@ class McpServerTests(unittest.TestCase):
                     "get_fulltext_chunk",
                     "get_item_context",
                     "list_timeout_candidates",
+                    "list_orphan_candidates",
                     "export_bibtex_entries_by_key",
                     "reconvert_with_math_ocr",
                 },
@@ -647,6 +649,57 @@ class TimeoutCandidateMcpTests(unittest.TestCase):
             )
 
 
+class OrphanCandidateMcpTests(unittest.TestCase):
+    def test_list_orphan_candidates_strips_source_path_and_reports_evidence(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, sqlite_path, config = _build_index(Path(tmp))
+            _seed_orphan_candidate(config.output_root, root / "1-s2.0-generic-main.pdf")
+            server = create_server(sqlite_path, mcp_factory=FakeFastMCP)
+
+            response = server.tools["list_orphan_candidates"]()
+
+            self.assertEqual(len(response["candidates"]), 1)
+            candidate = response["candidates"][0]
+            self.assertEqual(candidate["candidate_parent_key"], "ORPHANPARENT")
+            self.assertEqual(candidate["status"], "pending")
+            self.assertEqual(candidate["confidence_tier"], "high")
+            self.assertNotIn("orphan_source_path", candidate)
+            self.assertNotIn(str(root), json.dumps(response))
+
+    def test_list_orphan_candidates_filters_by_status(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, sqlite_path, config = _build_index(Path(tmp))
+            _seed_orphan_candidate(config.output_root, root / "book-a.pdf", parent_key="AKEY", status="pending")
+            _seed_orphan_candidate(config.output_root, root / "book-b.pdf", parent_key="BKEY", status="skipped")
+            server = create_server(sqlite_path, mcp_factory=FakeFastMCP)
+
+            pending = server.tools["list_orphan_candidates"]()
+            self.assertEqual([c["candidate_parent_key"] for c in pending["candidates"]], ["AKEY"])
+
+            everything = server.tools["list_orphan_candidates"](status="all")
+            self.assertEqual({c["candidate_parent_key"] for c in everything["candidates"]}, {"AKEY", "BKEY"})
+
+            _assert_tool_error(
+                self, lambda: server.tools["list_orphan_candidates"](status="bogus"), "invalid_status"
+            )
+
+    def test_list_orphan_candidates_is_read_only_and_default_on(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _, sqlite_path, _ = _build_index(Path(tmp))
+            server = create_server(sqlite_path, mcp_factory=FakeFastMCP)
+
+            self.assertIn("list_orphan_candidates", server.tools)
+            self.assertEqual(server.tool_metadata["list_orphan_candidates"]["annotations"], READ_ONLY_TOOL_ANNOTATIONS)
+
+    def test_list_orphan_candidates_fail_open_when_master_file_missing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _, sqlite_path, _ = _build_index(Path(tmp))
+            server = create_server(sqlite_path, mcp_factory=FakeFastMCP)
+
+            response = server.tools["list_orphan_candidates"]()
+            self.assertEqual(response["candidates"], [])
+
+
 class ReconvertRateLimiterConcurrencyTests(unittest.TestCase):
     def test_only_one_concurrent_acquire_succeeds(self):
         # Regression test: acquire() used to read-then-write _last_started_at as separate,
@@ -765,6 +818,46 @@ def _seed_timeout_candidate(
         from zotero_pdf_text.timeout_candidates import mark_status
 
         mark_status(master_path, attachment_key, status=status, extra_fields={})
+
+
+def _seed_orphan_candidate(
+    output_root: Path,
+    source_path: Path,
+    *,
+    parent_key: str = "ORPHANPARENT",
+    status: str = "pending",
+) -> None:
+    from datetime import datetime
+
+    from zotero_pdf_text.orphan_candidates import OrphanCandidate
+
+    candidate = OrphanCandidate(
+        orphan_source_path=str(source_path),
+        orphan_sha256="orphan-sha-value",
+        orphan_safe_folder_id="sha256_orphan_sha_value",
+        orphan_page_count=8,
+        candidate_parent_key=parent_key,
+        candidate_item_type="journalArticle",
+        candidate_title="A Generically Named Paper",
+        candidate_creators="Jane Smith",
+        candidate_year="2024",
+        candidate_doi="10.1000/orphan",
+        candidate_citation_key="smithGeneric2024",
+        candidate_had_stale_attachment=False,
+        title_score=92,
+        author_evidence=True,
+        year_evidence=True,
+        observed_dois="10.1000/orphan",
+        confidence_tier="high",
+        identity_rule="title_author_or_year",
+        detected_at=datetime.now().isoformat(timespec="seconds"),
+    )
+    master_path = output_root / "index" / "orphan_candidates.jsonl"
+    append_master_candidates_orphan(master_path, [candidate])
+    if status != "pending":
+        from zotero_pdf_text.orphan_candidates import mark_status as mark_orphan_status
+
+        mark_orphan_status(master_path, candidate.match_key, status=status, extra_fields={})
 
 
 def _write_config(path: Path, config: ProjectConfig) -> None:

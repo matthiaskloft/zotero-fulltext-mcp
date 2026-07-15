@@ -43,6 +43,7 @@ from .mcp_contract import (
     marker_dependency_available,
 )
 from .runtime import DEFAULT_ZOTERO_EXE, ensure_zotero_running
+from . import orphan_discovery as orphan_discovery_module
 from . import retry_timeout as retry_timeout_module
 from .verifier import apply_verification, verify_unverified
 from .zotero_write import (
@@ -475,6 +476,38 @@ def build_parser() -> argparse.ArgumentParser:
         help="Multiply the candidate's last attempted timeout instead of --timeout-seconds (--retry only).",
     )
     retry_timeout.add_argument("--reason", default="", help="Free-text note stored with a --skip decision.")
+    find_orphan_parents = subparsers.add_parser(
+        "find-orphan-parents",
+        help=(
+            "Scan a dry-run's orphan_pdf rows for plausible Zotero parents by PDF content (title/DOI/"
+            "author/year in the early pages), not filename -- the reverse of dry-run's own filename-"
+            "based metadata-candidate matching. Explicit opt-in; not part of dry-run. Reports only "
+            "high-confidence (classify_identity's own verified status) matches."
+        ),
+    )
+    find_orphan_parents.add_argument("--config", type=Path, default=Path("config.json"), help="Path to project config JSON.")
+    find_orphan_parents.add_argument("--mapping-report", type=Path, required=True, help="Path to mapping_report.csv from a dry-run.")
+    find_orphan_parents.add_argument("--output-dir", type=Path, default=None, help="Optional output folder for this discovery run.")
+    find_orphan_parents.add_argument("--limit", type=int, default=None, help="Optional maximum number of orphan_pdf rows to scan.")
+    orphan_candidate = subparsers.add_parser(
+        "orphan-candidate",
+        help=(
+            "Resolve one suggested (orphan PDF, candidate parent) pairing from orphan_candidates.jsonl: "
+            "either dismiss it, or record that you separately confirmed it and ran `link-pdf` yourself."
+        ),
+    )
+    orphan_candidate.add_argument("--config", type=Path, default=Path("config.json"), help="Path to project config JSON.")
+    orphan_candidate.add_argument("--orphan-sha256", required=True, help="orphan_sha256 from orphan_candidates.jsonl.")
+    orphan_candidate.add_argument("--parent-key", required=True, help="candidate_parent_key from orphan_candidates.jsonl.")
+    orphan_candidate_mode = orphan_candidate.add_mutually_exclusive_group(required=True)
+    orphan_candidate_mode.add_argument("--skip", action="store_true", help="Dismiss this suggested pairing as not a match.")
+    orphan_candidate_mode.add_argument(
+        "--mark-resolved",
+        action="store_true",
+        help="Record that this pairing was confirmed and already attached via `link-pdf` (bookkeeping only; does not attach anything itself).",
+    )
+    orphan_candidate.add_argument("--reason", default="", help="Free-text note stored with a --skip decision.")
+    orphan_candidate.add_argument("--note", default="", help="Free-text note stored with a --mark-resolved decision.")
     install_mcp = subparsers.add_parser(
         "install-mcp",
         help=(
@@ -938,6 +971,35 @@ def main(argv: list[str] | None = None) -> int:
                 fts_db_path=fts_db,
                 timeout_seconds=args.timeout_seconds,
                 multiplier=args.multiplier,
+            )
+        print(json.dumps(result.to_dict(), ensure_ascii=False, indent=2))
+        return 0 if result.ok else 1
+    if args.command == "find-orphan-parents":
+        config = load_config(args.config)
+        validate_config(config)
+        try:
+            with pipeline_write_lock(config.output_root, command="find-orphan-parents"):
+                run_dir = orphan_discovery_module.run_orphan_discovery(
+                    config,
+                    args.mapping_report,
+                    output_dir=args.output_dir,
+                    limit=args.limit,
+                )
+        except PipelineLockedError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        print(f"Orphan-parent discovery complete: {run_dir}")
+        return 0
+    if args.command == "orphan-candidate":
+        config = load_config(args.config)
+        validate_config(config)
+        if args.skip:
+            result = orphan_discovery_module.skip_orphan_candidate(
+                config, args.orphan_sha256, args.parent_key, reason=args.reason
+            )
+        else:
+            result = orphan_discovery_module.mark_orphan_candidate_resolved(
+                config, args.orphan_sha256, args.parent_key, note=args.note
             )
         print(json.dumps(result.to_dict(), ensure_ascii=False, indent=2))
         return 0 if result.ok else 1

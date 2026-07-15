@@ -227,6 +227,53 @@ The MCP server exposes the same skip/retry workflow via `skip_timeout_extraction
 gated behind its own literal `confirm` string. See `README.md`'s "Tool contract" section and
 `docs/data-dictionary.md`'s "Timeout Candidates" section for the full schema.
 
+## Orphan-Parent Discovery
+
+Use this when a dry run reports `orphan_pdf` rows for PDFs with generic, publisher-generated
+filenames (`1-s2.0-S0022-...-main.pdf`, `downloaded.pdf`) — dry-run's own metadata-candidate
+matching only compares filename against title, so these never get a chance to match by content.
+This command is explicit opt-in, not part of `dry-run`, since it opens every orphan PDF and scans
+every candidate Zotero item without a working PDF attachment (no PDF attachment row at all, or one
+whose recorded path no longer resolves to a real file on disk):
+
+```powershell
+& $python -m zotero_pdf_text find-orphan-parents `
+  --config .\config.json `
+  --mapping-report $data\runs\20260602_145352\mapping_report.csv
+```
+
+Only `high`-confidence pairings are reported (`classify_identity` itself considers the match
+verified — a DOI exact match, or a strong title match corroborated by author/year). A fuzzy title
+match alone isn't reported: real-library testing showed that's mostly noise, since a short, generic
+title from an edited volume's individual chapter entries ("Citations", "Index", "Preface") scores a
+trivially high fuzzy title match against almost any PDF's text even though `classify_identity`
+never verifies it.
+
+Outputs are written under `converted_text\orphan_discovery\<timestamp>`:
+
+- `orphan_candidates.csv` / `.jsonl`: this run's plausible (orphan PDF, candidate parent) pairings.
+
+Findings are also merged into a persistent, deduped master file at
+`converted_text\index\orphan_candidates.jsonl` (see `docs/data-dictionary.md`'s "Orphan Candidates"
+section for the full schema and dedup key). Review a `pending` entry's `confidence_tier`,
+`title_score`, `author_evidence`, `year_evidence`, and `observed_dois`, then resolve it:
+
+```powershell
+& $python -m zotero_pdf_text orphan-candidate --config .\config.json `
+  --orphan-sha256 <sha256> --parent-key <parent_key> --skip --reason "not the same paper"
+```
+
+or, once confirmed and attached via the existing `link-pdf` command:
+
+```powershell
+& $python -m zotero_pdf_text link-pdf --config .\config.json --key <parent_key> --file <orphan_pdf_path>
+& $python -m zotero_pdf_text orphan-candidate --config .\config.json `
+  --orphan-sha256 <sha256> --parent-key <parent_key> --mark-resolved
+```
+
+`orphan-candidate --mark-resolved` only records the decision — it never calls `link-pdf` or
+otherwise touches Zotero itself.
+
 ## SQLite FTS
 
 ```powershell
@@ -422,7 +469,8 @@ for newly linked verified PDFs in one step.)
 If `converted_text` is a single index shared across more than one machine (e.g. via a synced
 cloud folder), every command that writes under it (`convert-sample`, `convert-verified`,
 `convert-new`, `verify-unverified`, `apply-verification`, `build-index`, `append-index`,
-`build-fts`, `reconvert-math`/`reconvert_with_math_ocr`, `retry-timeout`) takes the same lock file
+`build-fts`, `reconvert-math`/`reconvert_with_math_ocr`, `retry-timeout`, `find-orphan-parents`,
+`orphan-candidate`) takes the same lock file
 (`config.output_root\.pipeline.lock`) before starting and releases it on exit, so two machines
 (or two commands on the same machine) can never rebuild the same SQLite/JSONL files at once — the
 same corruption class as syncing a live Zotero database. `build-index`/`append-index`/`build-fts`
