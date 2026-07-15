@@ -122,6 +122,16 @@ agent batches.
   --mapping-report $data\runs\20260602_145352\mapping_report.csv
 ```
 
+Before converting, this command checks the sidecar full-text index (default
+`$data\index\zotero_text_index.jsonl`, override with `--index-jsonl`) and skips any attachment key
+already present there — whether it originally landed as `mapped_verified` or was promoted later via
+`apply-verification`, it's already resolved, so it is never reconverted or rescored again.
+Otherwise every `dry-run`/`verify-unverified` cycle would re-run full-text review on the same
+already-resolved rows forever, since `mapper.py`'s classification is re-derived from filename/path
+signals alone and has no memory of past promotions. This check is fail-open, same as
+`timeout_skip_list.json`: a missing or corrupt index just means nothing is skipped, not a
+conversion failure.
+
 Outputs are written under
 `converted_text\unverified_review\<timestamp>`:
 

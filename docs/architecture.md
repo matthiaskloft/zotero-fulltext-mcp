@@ -80,6 +80,14 @@ The trusted baseline is `mapped_verified`. Unverified mappings should not be
 silently mixed into verified search results. If they are indexed later, they
 must carry explicit `classification` and `identity_status` fields.
 
+`classify_identity` (`identity.py`) strips Markdown image syntax (`![alt](path)`) from converted
+text before scoring, so an embedded image filename that happens to echo a candidate's title can't
+be mistaken for real article prose by `title_score`. A confidently-parsed DOI in the text that
+conflicts with the expected one is treated as disqualifying evidence regardless of title score —
+that check runs before, and takes precedence over, the title/author/year accept rule, so generic
+topic-vocabulary overlap can never let a wrong-document mapping through just because a real,
+different DOI was also present.
+
 ## Deferred Memory Layer
 
 Obsidian-style memory is out of scope for this implementation. If added later,

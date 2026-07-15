@@ -43,6 +43,23 @@ All notable changes to this project are documented here. Format loosely follows
   MCP `isError` results with stable, path-free public codes rather than success-shaped error
   dictionaries; disabled optional tools remain absent from the advertised surface.
 
+### Fixed
+
+- `classify_identity` no longer lets an embedded Markdown image filename (e.g.
+  `![](.../A-Candidate-Title.png)`) inflate `title_score` into false-positive full-text evidence;
+  Markdown image syntax is stripped before any title/DOI/author/year matching.
+- A confidently-parsed DOI in the converted text that conflicts with the expected Zotero DOI is
+  now treated as disqualifying evidence regardless of title score. Previously the
+  `conflicting_doi_low_title` check only fired when the title score was below 50, so generic
+  topic-vocabulary overlap between two unrelated works could push the score high enough to dodge
+  the check and let a wrong-document mapping through as `mapped_unverified`/`manual_review` instead
+  of `possible_mismatch`.
+- `verify-unverified` now checks the sidecar full-text index (`zotero_text_index.jsonl`, path
+  overridable via `--index-jsonl`) and skips any attachment key already present there, whether it
+  was originally `mapped_verified` or promoted later via `apply-verification`. Previously every run
+  re-derived classifications from filename/path signals alone with no memory of past resolutions,
+  so the same already-resolved rows were reconverted and rescored on every future run.
+
 ## [0.2.0] - 2026-07-12
 
 First tagged release. Covers everything merged since the initial import, aimed at making the

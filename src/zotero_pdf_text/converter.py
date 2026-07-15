@@ -14,6 +14,7 @@ from datetime import datetime
 from pathlib import Path
 
 from .config import ProjectConfig
+from .indexer import load_indexed_keys
 from .timeout_candidates import (
     TimeoutCandidate,
     append_master_candidates,
@@ -152,6 +153,7 @@ def convert_unverified(
     timeout_seconds: int = 600,
     force: bool = False,
     include_possible_mismatch: bool = False,
+    index_jsonl: Path | None = None,
 ) -> Path:
     if pymupdf4llm is None:
         raise RuntimeError("pymupdf4llm is not installed")
@@ -165,6 +167,8 @@ def convert_unverified(
     classifications = {"mapped_unverified"}
     if include_possible_mismatch:
         classifications.add("possible_mismatch")
+    resolved_index_jsonl = index_jsonl or (config.output_root / "index" / "zotero_text_index.jsonl")
+    already_indexed_keys = _load_indexed_keys_fail_open(resolved_index_jsonl)
     return _convert_mapping_rows(
         mapping_report,
         run_dir,
@@ -175,6 +179,7 @@ def convert_unverified(
         force=force,
         classifications=classifications,
         output_root=config.output_root,
+        skip_attachment_keys=already_indexed_keys,
     )
 
 
@@ -213,6 +218,7 @@ def _convert_mapping_rows(
     force: bool,
     classifications: set[str],
     output_root: Path,
+    skip_attachment_keys: frozenset[str] = frozenset(),
 ) -> Path:
     if workers is None:
         workers = default_worker_count()
@@ -225,7 +231,7 @@ def _convert_mapping_rows(
     images_root = run_dir / "images"
     skip_keys = _load_persisted_skip_keys(output_root)
 
-    rows = _selected_rows(mapping_report, limit, classifications)
+    rows = _selected_rows(mapping_report, limit, classifications, skip_attachment_keys=skip_attachment_keys)
     indexed_rows = list(enumerate(rows, start=1))
     if workers == 1:
         row_outcomes = [
@@ -260,7 +266,13 @@ def _verified_rows(mapping_report: Path, limit: int | None) -> list[dict[str, st
     return _selected_rows(mapping_report, limit, {"mapped_verified"})
 
 
-def _selected_rows(mapping_report: Path, limit: int | None, classifications: set[str]) -> list[dict[str, str]]:
+def _selected_rows(
+    mapping_report: Path,
+    limit: int | None,
+    classifications: set[str],
+    *,
+    skip_attachment_keys: frozenset[str] = frozenset(),
+) -> list[dict[str, str]]:
     rows: list[dict[str, str]] = []
     with mapping_report.open("r", encoding="utf-8-sig", newline="") as handle:
         reader = csv.DictReader(handle)
@@ -268,6 +280,9 @@ def _selected_rows(mapping_report: Path, limit: int | None, classifications: set
             if row.get("classification") not in classifications:
                 continue
             if not row.get("source_path"):
+                continue
+            attachment_key = row.get("zotero_attachment_key")
+            if attachment_key and attachment_key in skip_attachment_keys:
                 continue
             rows.append(row)
             if limit is not None and len(rows) >= limit:
@@ -419,6 +434,20 @@ def _load_persisted_skip_keys(output_root: Path) -> frozenset[str]:
     try:
         data = json.loads(skip_list_path.read_text(encoding="utf-8"))
         return frozenset(data.get("entries", {}).keys())
+    except (OSError, ValueError):
+        return frozenset()
+
+
+def _load_indexed_keys_fail_open(jsonl_path: Path) -> frozenset[str]:
+    """Attachment keys already present in the sidecar full-text index (zotero_text_index.jsonl).
+
+    An attachment reaches the index either as an original `mapped_verified` conversion or via a
+    later `apply-verification` promotion; either way it is already resolved, so `verify-unverified`
+    should not reconvert or rescore it again on a future run. Fail-open like
+    `_load_persisted_skip_keys`: a missing or corrupt index just means nothing is skipped.
+    """
+    try:
+        return frozenset(load_indexed_keys(jsonl_path))
     except (OSError, ValueError):
         return frozenset()
 

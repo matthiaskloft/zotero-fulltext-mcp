@@ -61,6 +61,7 @@ def verify_unverified(
     force: bool = False,
     include_possible_mismatch: bool = False,
     agent_batch_size: int = 25,
+    index_jsonl: Path | None = None,
 ) -> Path:
     run_dir = convert_unverified(
         config,
@@ -72,6 +73,7 @@ def verify_unverified(
         timeout_seconds=timeout_seconds,
         force=force,
         include_possible_mismatch=include_possible_mismatch,
+        index_jsonl=index_jsonl,
     )
     review_unverified_manifest(run_dir / "manifest.csv", run_dir=run_dir, agent_batch_size=agent_batch_size)
     return run_dir
@@ -300,7 +302,7 @@ def _decision_from_evidence(evidence) -> tuple[str, float, str, str]:
             "reject",
             0.95,
             "auto_reject_conflicting_doi_low_title",
-            "Converted text contains a different DOI and weak title evidence.",
+            "Converted text contains a different, confidently-parsed DOI than the expected one.",
         )
     if evidence.title_score >= 95 and evidence.author_evidence and evidence.year_evidence:
         return (

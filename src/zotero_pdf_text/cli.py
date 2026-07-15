@@ -164,6 +164,15 @@ def build_parser() -> argparse.ArgumentParser:
         default=25,
         help="Rows per agent_batches JSONL file for cheap LLM review of ambiguous cases; 0 disables batches.",
     )
+    unverified.add_argument(
+        "--index-jsonl",
+        type=Path,
+        default=None,
+        help=(
+            "Sidecar full-text index to check for already-resolved attachments, which are skipped "
+            "rather than reconverted and rescored. Default: <output_root>/index/zotero_text_index.jsonl."
+        ),
+    )
     apply_review = subparsers.add_parser(
         "apply-verification",
         help="Promote accepted unverified reviews into a conversion-manifest-compatible trusted manifest.",
@@ -573,6 +582,7 @@ def main(argv: list[str] | None = None) -> int:
                     force=args.force,
                     include_possible_mismatch=args.include_possible_mismatch,
                     agent_batch_size=args.agent_batch_size,
+                    index_jsonl=args.index_jsonl,
                 )
         except PipelineLockedError as exc:
             print(str(exc), file=sys.stderr)
