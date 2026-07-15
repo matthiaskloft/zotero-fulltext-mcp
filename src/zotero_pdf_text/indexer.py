@@ -64,6 +64,8 @@ def load_indexed_keys(jsonl_path: Path) -> set[str]:
             line = line.strip()
             if line:
                 record = json.loads(line)
+                if not isinstance(record, dict):
+                    continue
                 key = record.get("zotero_attachment_key", "")
                 if key:
                     keys.add(key)

@@ -445,6 +445,31 @@ class ConverterTests(unittest.TestCase):
             self.assertEqual(len(rows), 1)
             self.assertEqual(rows[0]["zotero_attachment_key"], "ATTACH")
 
+    def test_convert_unverified_fails_open_on_valid_non_object_json_line(self):
+        # A syntactically valid JSON line that isn't an object (e.g. "[]" or "null") must not
+        # crash load_indexed_keys with AttributeError from calling .get() on a non-dict value --
+        # it should be skipped like any other line with no zotero_attachment_key, not treated as a
+        # fatal error that aborts the whole run.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            report = root / "mapping_report.csv"
+            pdf = root / "paper.pdf"
+            pdf.write_bytes(b"%PDF")
+            _write_unverified_mapping_report(report, [("ATTACH", pdf)])
+            output_root = root / "output"
+            index_jsonl = output_root / "index" / "zotero_text_index.jsonl"
+            index_jsonl.parent.mkdir(parents=True, exist_ok=True)
+            index_jsonl.write_text("[]\nnull\n42\n", encoding="utf-8")
+            config = ProjectConfig(root, root, root, output_root)
+
+            with patch("zotero_pdf_text.converter.subprocess.run", side_effect=_write_raw_markdown):
+                run_dir = convert_unverified(config, report, workers=1)
+
+            with (run_dir / "manifest.csv").open("r", encoding="utf-8-sig", newline="") as handle:
+                rows = list(csv.DictReader(handle))
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0]["zotero_attachment_key"], "ATTACH")
+
     def test_has_math_flows_from_sidecar_into_front_matter_and_manifest(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

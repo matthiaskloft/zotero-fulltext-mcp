@@ -12,6 +12,7 @@ from zotero_pdf_text.indexer import (
     _atomic_write_text,
     append_text_index,
     build_text_index,
+    load_indexed_keys,
     replace_text_index_record,
 )
 
@@ -73,6 +74,34 @@ class IndexerTests(unittest.TestCase):
 
             record = json.loads(output.read_text(encoding="utf-8").splitlines()[0])
             self.assertIs(record["has_math"], True)
+
+
+class LoadIndexedKeysTests(unittest.TestCase):
+    def test_returns_keys_from_valid_records(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            jsonl_path = Path(tmp) / "index.jsonl"
+            jsonl_path.write_text(
+                json.dumps({"zotero_attachment_key": "ATTACH1"}) + "\n"
+                + json.dumps({"zotero_attachment_key": "ATTACH2"}) + "\n",
+                encoding="utf-8",
+            )
+            self.assertEqual(load_indexed_keys(jsonl_path), {"ATTACH1", "ATTACH2"})
+
+    def test_skips_valid_non_object_json_lines_instead_of_crashing(self):
+        # "[]", "null", and "42" are all syntactically valid JSON but not objects -- calling
+        # .get() on them would raise AttributeError rather than the ValueError/OSError callers
+        # expect to catch for fail-open handling.
+        with tempfile.TemporaryDirectory() as tmp:
+            jsonl_path = Path(tmp) / "index.jsonl"
+            jsonl_path.write_text(
+                "[]\nnull\n42\n" + json.dumps({"zotero_attachment_key": "ATTACH1"}) + "\n",
+                encoding="utf-8",
+            )
+            self.assertEqual(load_indexed_keys(jsonl_path), {"ATTACH1"})
+
+    def test_returns_empty_set_for_missing_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(load_indexed_keys(Path(tmp) / "missing.jsonl"), set())
 
 
 class ReplaceTextIndexRecordTests(unittest.TestCase):
