@@ -326,3 +326,69 @@ roadblocks above, these are still open:
    The server's stdio entrypoint could fail fast with a clearer stderr message when `--db` points
    to a nonexistent file or an empty index (e.g. "no FTS index found at <path> — run
    `zotero-pdf-text convert` first"), so the failure is actionable instead of generic.
+
+### Updating An Existing Install With Write Extras (2026-07-15)
+
+Snags hit while reinstalling the stable venv to the latest version and adding the `zotero-write`
+extra (marker deliberately excluded). All still open unless noted.
+
+6. **TODO — Windows: the console-script `.exe` is locked while the MCP server is running.**
+   `pip install -e .[...]` into the stable venv fails partway with
+   `[WinError 32] The process cannot access the file ... zotero-fulltext-mcp.exe ... used by
+   another process`. Claude Code keeps one or more `zotero-fulltext-mcp.exe` processes alive for
+   the registered server, and on Windows pip cannot replace the script shim while it executes.
+   Worse, pip has already uninstalled the old dist-info by the time it hits the lock, leaving the
+   package **half-uninstalled** (`pip show` reports no version) plus a leftover
+   `~otero_fulltext_mcp-<ver>.dist-info` directory in `site-packages`. Recovery:
+
+   ```powershell
+   Get-Process zotero-fulltext-mcp -ErrorAction SilentlyContinue | Stop-Process -Force
+   & $python -m pip install -e "<repo>[mcp,zotero-write]"
+   # then remove the stray leftover if present:
+   Get-ChildItem <venv>\Lib\site-packages -Filter "~*" -Directory | Remove-Item -Recurse -Force
+   ```
+
+   Claude Code respawns the server from the freshly installed exe on next use. Consider having
+   `install-mcp`/a dedicated update command detect running server processes and warn (or offer to
+   stop them) before an editable reinstall on Windows.
+
+7. **TODO — `install-mcp --apply` refuses when the server is already registered.** If a
+   `zotero-fulltext` entry already exists in the user config, `--apply` fails with
+   `MCP server zotero-fulltext already exists in user config` (from `claude mcp add`) and does not
+   update the existing entry. To change the registration (e.g. repoint `--config` at a new path)
+   you must remove it first:
+
+   ```powershell
+   claude mcp remove "zotero-fulltext" -s user
+   & $python -m zotero_pdf_text install-mcp --config <new config path> --apply
+   ```
+
+   Consider making `install-mcp --apply` idempotent (remove-then-add, or detect and update in
+   place) so repointing an existing registration is a single command.
+
+8. **TODO — only `install-mcp` auto-resolves the config; every other subcommand defaults to a
+   literal `config.json` next to cwd.** `install-mcp`'s `--config` defaults to `None` and calls
+   `resolve_config_path()` (env var → `config.<hostname>.json` → `config.json`), but
+   `check-setup`, `dry-run`, `convert-*`, `zotero-write`, etc. default `--config` to
+   `Path("config.json")` and never call the resolver. So a config kept outside the checkout (e.g.
+   `~/.config/zotero_fulltext_mcp/config.json`) is **not** auto-found by those commands even
+   though the MCP server finds it — you must pass `--config <abs path>` explicitly or set
+   `ZOTERO_PDF_TEXT_CONFIG`. Least-surprise fix: route every subcommand's config default through
+   `resolve_config_path()`.
+
+9. **TODO — `config.<hostname>.json` uses `platform.node()` (the hostname), not the username.**
+   A per-machine config named after the OS user (e.g. `config.<username>.json`) is silently
+   ignored by `resolve_config_path()` because it looks for `config.{platform.node()}.json`. On a
+   box where the hostname (`LIF-000058`) differs from the username (`nu006612`), a
+   `config.nu006612.json` never auto-resolves and the registration has to bake in an explicit
+   `--config`. Confirm the expected filename with
+   `python -c "import platform; print('config.'+platform.node()+'.json')"`.
+
+10. **Working as designed — `install-mcp --enable-reconvert` requires the `marker` extra.**
+    Without `marker-pdf` installed, `--enable-reconvert` refuses with
+    `--enable-reconvert requires the optional marker dependency (pip install -e .[marker])`. This
+    is intentional capability separation, not a bug: the base install (`[mcp,zotero-write]`) gives
+    the read-only search server plus the approval-gated `zotero-write` CLI workflow, but **not**
+    the `reconvert_with_math_ocr` MCP tool, which needs marker's torch/transformers stack. Install
+    `[marker]` and re-run `install-mcp --enable-reconvert` (and raise `MCP_TIMEOUT` to `180000`)
+    only if you actually need math-OCR reconversion.
