@@ -233,12 +233,27 @@ Use this when a dry run reports `orphan_pdf` rows for PDFs with generic, publish
 filenames (`1-s2.0-S0022-...-main.pdf`, `downloaded.pdf`) — dry-run's own metadata-candidate
 matching only compares filename against title, so these never get a chance to match by content.
 This command is explicit opt-in, not part of `dry-run`, since it opens every orphan PDF and scans
-every no-PDF Zotero item:
+every candidate Zotero item without a working PDF attachment (no PDF attachment row at all, or one
+whose recorded path no longer resolves to a real file on disk):
 
 ```powershell
 & $python -m zotero_pdf_text find-orphan-parents `
   --config .\config.json `
   --mapping-report $data\runs\20260602_145352\mapping_report.csv
+```
+
+By default only `high`-confidence pairings are reported (`classify_identity` itself considers the
+match verified — a DOI exact match, or a strong title match corroborated by author/year). Real-
+library testing showed the `medium`/`low` tiers are mostly noise: a short, generic title from an
+edited volume's individual chapter entries ("Citations", "Index", "Preface") scores a trivially
+high fuzzy title match against almost any PDF's text even though `classify_identity` never verifies
+it. Pass `--include-lower-confidence` to opt into that broader, noisier sweep:
+
+```powershell
+& $python -m zotero_pdf_text find-orphan-parents `
+  --config .\config.json `
+  --mapping-report $data\runs\20260602_145352\mapping_report.csv `
+  --include-lower-confidence
 ```
 
 Outputs are written under `converted_text\orphan_discovery\<timestamp>`:

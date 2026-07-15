@@ -259,6 +259,13 @@ class FindOrphanParentsCliTests(unittest.TestCase):
         self.assertEqual(args.config, Path("config.json"))
         self.assertIsNone(args.output_dir)
         self.assertIsNone(args.limit)
+        self.assertFalse(args.include_lower_confidence)
+
+    def test_parser_include_lower_confidence_flag(self):
+        args = build_parser().parse_args(
+            ["find-orphan-parents", "--mapping-report", "report.csv", "--include-lower-confidence"]
+        )
+        self.assertTrue(args.include_lower_confidence)
 
     def test_dispatch_calls_run_orphan_discovery(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -277,6 +284,31 @@ class FindOrphanParentsCliTests(unittest.TestCase):
             mock_run.assert_called_once()
             _, kwargs = mock_run.call_args
             self.assertEqual(kwargs["limit"], 5)
+            self.assertFalse(kwargs["include_lower_confidence"])
+
+    def test_dispatch_passes_include_lower_confidence_flag(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            from zotero_pdf_text.config import ProjectConfig
+
+            with patch("zotero_pdf_text.cli.load_config") as mock_load_config, patch(
+                "zotero_pdf_text.cli.validate_config"
+            ), patch(
+                "zotero_pdf_text.orphan_discovery.run_orphan_discovery", return_value=root / "output" / "orphan_discovery" / "run1"
+            ) as mock_run:
+                mock_load_config.return_value = ProjectConfig(root, root, root, root / "output")
+                exit_code = main(
+                    [
+                        "find-orphan-parents",
+                        "--mapping-report",
+                        str(root / "report.csv"),
+                        "--include-lower-confidence",
+                    ]
+                )
+
+            self.assertEqual(exit_code, 0)
+            _, kwargs = mock_run.call_args
+            self.assertTrue(kwargs["include_lower_confidence"])
 
 
 class OrphanCandidateCliTests(unittest.TestCase):

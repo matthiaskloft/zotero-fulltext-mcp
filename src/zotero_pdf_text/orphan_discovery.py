@@ -28,10 +28,17 @@ CANDIDATES_RELATIVE_PATH = Path("index") / "orphan_candidates.jsonl"
 # Deterministic tiering built directly on top of classify_identity's own status/rule/title_score,
 # rather than a second scoring algorithm:
 # - "high": classify_identity already considers this verified (DOI exact match, or a strong title
-#   match corroborated by an author/year hit).
-# - "medium": no full verification, but the title is a strong partial match, or both a weaker
-#   title match and independent author+year corroboration are present.
-# - "low": a plausible but weak title match only -- worth a human/LLM glance, not more.
+#   match corroborated by an author/year hit). This is the *only* tier reported by default -- see
+#   `include_lower_confidence` below.
+# - "medium"/"low", opt-in only: no full verification -- classify_identity's own status stayed
+#   "unverified" -- scored only by a fuzzy title_score threshold. In real-library smoke testing
+#   this produced pure noise: a short, generic Zotero item title ("Citations", "Index", "Preface",
+#   an individual chapter entry within an edited volume with no PDF of its own) gets a trivially
+#   high fuzz.partial_ratio against almost any academic PDF's text, regardless of the threshold
+#   chosen, because the fuzzy-matching signal is nearly meaningless once the title is one or two
+#   common words. Trusting title_score at all when classify_identity itself left the verdict
+#   unverified is the problem, not the specific threshold value. Kept behind an explicit opt-in
+#   for a broader, explicitly-lower-trust sweep; never surfaced by default.
 # A conflicting DOI (possible_mismatch) is treated as disqualifying, not merely low-confidence,
 # since it is evidence *against* the pairing rather than for it.
 MEDIUM_TITLE_SCORE_THRESHOLD = 60
@@ -48,14 +55,21 @@ def run_orphan_discovery(
     *,
     output_dir: Path | None = None,
     limit: int | None = None,
+    include_lower_confidence: bool = False,
 ) -> Path:
     """Discover plausible Zotero parents for orphan PDFs, scored on PDF content, not filename.
 
     For every `orphan_pdf` row in a prior dry-run's mapping report, extracts early-page text (the
     same window the rest of the pipeline already uses) and scores it with classify_identity
-    against every Zotero item that has no PDF attachment of its own -- the only items an orphan
-    PDF could plausibly belong to. Never opens the Zotero SQLite database for anything but reads,
-    never converts PDFs to Markdown, and never writes to Zotero.
+    against every Zotero item that has no *working* PDF attachment of its own -- either no PDF
+    attachment row at all, or one whose recorded path no longer resolves to a real file (see
+    `zotero_db.load_items_without_pdf_attachment`) -- the only items an orphan PDF could plausibly
+    belong to. By default only "high"-confidence pairings (classify_identity's own "verified"
+    status) are reported; pass `include_lower_confidence=True` to also surface the "medium"/"low"
+    tiers, which are scored only by a fuzzy title match classify_identity itself left unverified
+    and are noisy on real libraries (see the tiering comment above `_confidence_tier`). Never opens
+    the Zotero SQLite database for anything but reads, never converts PDFs to Markdown, and never
+    writes to Zotero.
     """
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     run_dir = output_dir or (config.output_root / "orphan_discovery" / timestamp)
@@ -65,9 +79,9 @@ def run_orphan_discovery(
     if limit is not None:
         orphan_rows = orphan_rows[:limit]
 
-    parent_candidates = load_items_without_pdf_attachment(config.zotero_sqlite)
+    parent_candidates = load_items_without_pdf_attachment(config.zotero_sqlite, config.linked_attachments)
     logging.info(
-        "Orphan discovery: %s orphan PDFs, %s candidate parent items without a PDF attachment",
+        "Orphan discovery: %s orphan PDFs, %s candidate parent items without a working PDF attachment",
         len(orphan_rows),
         len(parent_candidates),
     )
@@ -85,7 +99,7 @@ def run_orphan_discovery(
             logging.warning("Skipping unreadable orphan PDF %s: %s", source_path, exc)
             continue
 
-        matches = score_candidates(text, parent_candidates)
+        matches = score_candidates(text, parent_candidates, include_lower_confidence=include_lower_confidence)
         detected_at = datetime.now().isoformat(timespec="seconds")
         for candidate, evidence, tier in matches:
             all_candidates.append(
@@ -101,6 +115,7 @@ def run_orphan_discovery(
                     candidate_year=candidate.year,
                     candidate_doi=candidate.doi,
                     candidate_citation_key=candidate.citation_key,
+                    candidate_had_stale_attachment=candidate.had_stale_attachment,
                     title_score=evidence.title_score,
                     author_evidence=evidence.author_evidence,
                     year_evidence=evidence.year_evidence,
@@ -120,11 +135,16 @@ def run_orphan_discovery(
 def score_candidates(
     text: str,
     parent_candidates: list[ParentCandidateRecord],
+    *,
+    include_lower_confidence: bool = False,
 ) -> list[tuple[ParentCandidateRecord, IdentityEvidence, str]]:
     """Score one orphan PDF's early text against every no-PDF Zotero item, reusing classify_identity.
 
-    Returns plausible matches only (possible_mismatch and weak-evidence unverified results are
-    dropped), sorted by confidence tier then title_score, capped to MAX_CANDIDATES_PER_ORPHAN.
+    By default only "high"-confidence matches are returned (classify_identity's own "verified"
+    status); pass `include_lower_confidence=True` to also allow the noisier "medium"/"low" tiers
+    scored purely by fuzzy title match on an "unverified" result. possible_mismatch is always
+    dropped regardless. Results are sorted by confidence tier then title_score, capped to
+    MAX_CANDIDATES_PER_ORPHAN.
     """
     tier_rank = {CONFIDENCE_HIGH: 0, CONFIDENCE_MEDIUM: 1, CONFIDENCE_LOW: 2}
     scored: list[tuple[ParentCandidateRecord, IdentityEvidence, str]] = []
@@ -137,7 +157,7 @@ def score_candidates(
             item_type=candidate.item_type,
             text=text,
         )
-        tier = _confidence_tier(evidence)
+        tier = _confidence_tier(evidence, include_lower_confidence=include_lower_confidence)
         if tier is None:
             continue
         scored.append((candidate, evidence, tier))
@@ -146,11 +166,13 @@ def score_candidates(
     return scored[:MAX_CANDIDATES_PER_ORPHAN]
 
 
-def _confidence_tier(evidence: IdentityEvidence) -> str | None:
+def _confidence_tier(evidence: IdentityEvidence, *, include_lower_confidence: bool) -> str | None:
     if evidence.status == "possible_mismatch":
         return None
     if evidence.status == "verified":
         return CONFIDENCE_HIGH
+    if not include_lower_confidence:
+        return None
     if evidence.title_score >= MEDIUM_TITLE_SCORE_THRESHOLD or (evidence.author_evidence and evidence.year_evidence):
         return CONFIDENCE_MEDIUM
     if evidence.title_score >= LOW_TITLE_SCORE_THRESHOLD:

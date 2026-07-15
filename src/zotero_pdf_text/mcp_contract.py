@@ -259,6 +259,7 @@ class OrphanCandidateRecord(TypedDict):
     candidate_year: str
     candidate_doi: str
     candidate_citation_key: str
+    candidate_had_stale_attachment: bool
     orphan_page_count: int
     title_score: int
     author_evidence: bool
@@ -849,6 +850,7 @@ def serialize_orphan_candidate(record: object) -> OrphanCandidateRecord:
         "candidate_year": str(record.get("candidate_year", "")),
         "candidate_doi": str(record.get("candidate_doi", "")),
         "candidate_citation_key": str(record.get("candidate_citation_key", "")),
+        "candidate_had_stale_attachment": bool(record.get("candidate_had_stale_attachment")),
         "orphan_page_count": int(record.get("orphan_page_count") or 0),
         "title_score": int(record.get("title_score") or 0),
         "author_evidence": bool(record.get("author_evidence")),

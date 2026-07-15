@@ -35,6 +35,7 @@ class OrphanCandidate:
     candidate_year: str
     candidate_doi: str
     candidate_citation_key: str
+    candidate_had_stale_attachment: bool
     title_score: int
     author_evidence: bool
     year_evidence: bool

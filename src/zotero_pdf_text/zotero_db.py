@@ -6,7 +6,7 @@ import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 
-from .identity import extract_year, normalize_doi
+from .identity import extract_year, normalize_doi, resolve_attachment_paths
 
 
 @dataclass(frozen=True)
@@ -102,48 +102,87 @@ class ParentCandidateRecord:
     venue: str
     creators: list[str]
     creator_surnames: list[str]
+    had_stale_attachment: bool = False
 
 
-def load_items_without_pdf_attachment(zotero_sqlite: Path) -> list[ParentCandidateRecord]:
-    """Return every non-deleted Zotero item that has no PDF attachment of its own.
+def _attachment_path_resolves(zotero_path: str | None, linked_root: Path) -> bool:
+    """True if any path `resolve_attachment_paths` derives from this attachment row exists on disk.
 
-    These are the only items an orphan PDF could plausibly belong to, so orphan-candidate
-    discovery scores against this set rather than the whole library. Opens the database in
-    immutable read-only mode (mirroring `check_pdf_attachment`/`find_item_by_doi`) so Zotero's
-    WAL write locks are bypassed; items committed after the last WAL checkpoint may not appear.
+    An attachment row this tool does not attempt to resolve at all (e.g. a `storage:`-relative
+    path) is treated as resolving -- there is no local convention for checking it, so it must not
+    be reported as a stale/broken path it may not be.
+    """
+    paths = resolve_attachment_paths(zotero_path, linked_root)
+    if not paths:
+        return True
+    return any(path.exists() for path in paths)
+
+
+def load_items_without_pdf_attachment(
+    zotero_sqlite: Path,
+    linked_attachments: Path,
+) -> list[ParentCandidateRecord]:
+    """Return every non-deleted Zotero item with no *working* PDF attachment of its own.
+
+    An item qualifies either because it has zero PDF attachment rows at all, or because every PDF
+    attachment row it does have points at a path that no longer resolves to a real file on disk
+    (moved/renamed/deleted outside Zotero's own management) -- `had_stale_attachment` distinguishes
+    the two cases on the returned record. These are the only items an orphan PDF could plausibly
+    belong to, so orphan-candidate discovery scores against this set rather than the whole library.
+    Opens the database in immutable read-only mode (mirroring
+    `check_pdf_attachment`/`find_item_by_doi`) so Zotero's WAL write locks are bypassed; items
+    committed after the last WAL checkpoint may not appear.
     """
     uri = f"file:{Path(zotero_sqlite).as_posix()}?mode=ro&immutable=1"
     con = sqlite3.connect(uri, uri=True)
     con.row_factory = sqlite3.Row
     cur = con.cursor()
-    rows = cur.execute(
+    all_items = cur.execute(
         """
         SELECT i.itemID AS item_id, i.key AS parent_key, it.typeName AS item_type
         FROM items i
         LEFT JOIN itemTypesCombined it ON it.itemTypeID = i.itemTypeID
         WHERE i.itemID NOT IN (SELECT itemID FROM deletedItems)
           AND (it.typeName IS NULL OR it.typeName NOT IN ('attachment', 'note'))
-          AND i.itemID NOT IN (
-              SELECT ia.parentItemID
-              FROM itemAttachments ia
-              JOIN items ai ON ai.itemID = ia.itemID
-              WHERE ia.parentItemID IS NOT NULL
-                AND ai.itemID NOT IN (SELECT itemID FROM deletedItems)
-                AND (
-                    lower(coalesce(ia.contentType, '')) = 'application/pdf'
-                    OR lower(coalesce(ia.path, '')) LIKE '%.pdf'
-                )
+        """
+    ).fetchall()
+    pdf_attachment_rows = cur.execute(
+        """
+        SELECT ia.parentItemID AS parent_item_id, ia.path AS path
+        FROM itemAttachments ia
+        JOIN items ai ON ai.itemID = ia.itemID
+        WHERE ia.parentItemID IS NOT NULL
+          AND ai.itemID NOT IN (SELECT itemID FROM deletedItems)
+          AND (
+              lower(coalesce(ia.contentType, '')) = 'application/pdf'
+              OR lower(coalesce(ia.path, '')) LIKE '%.pdf'
           )
         """
     ).fetchall()
 
-    item_ids = sorted({int(row["item_id"]) for row in rows})
+    pdf_paths_by_item: dict[int, list[str]] = {}
+    for row in pdf_attachment_rows:
+        pdf_paths_by_item.setdefault(int(row["parent_item_id"]), []).append(row["path"] or "")
+
+    qualifying_rows: list[sqlite3.Row] = []
+    stale_by_item: dict[int, bool] = {}
+    for row in all_items:
+        item_id = int(row["item_id"])
+        attachment_paths = pdf_paths_by_item.get(item_id, [])
+        if not attachment_paths:
+            qualifying_rows.append(row)
+            stale_by_item[item_id] = False
+        elif all(not _attachment_path_resolves(path, linked_attachments) for path in attachment_paths):
+            qualifying_rows.append(row)
+            stale_by_item[item_id] = True
+
+    item_ids = sorted({int(row["item_id"]) for row in qualifying_rows})
     fields = _load_fields(cur, item_ids)
     creators = _load_creators(cur, item_ids)
     con.close()
 
     records: list[ParentCandidateRecord] = []
-    for row in rows:
+    for row in qualifying_rows:
         item_id = int(row["item_id"])
         item_fields = fields.get(item_id, {})
         item_creators = creators.get(item_id, [])
@@ -164,6 +203,7 @@ def load_items_without_pdf_attachment(zotero_sqlite: Path) -> list[ParentCandida
                 or item_fields.get("publisher", ""),
                 creators=item_creators,
                 creator_surnames=surnames,
+                had_stale_attachment=stale_by_item.get(item_id, False),
             )
         )
     return records

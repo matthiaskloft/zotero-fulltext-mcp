@@ -101,8 +101,23 @@ first-page content would trivially identify a Zotero item already in the library
 opt-in `find-orphan-parents` command closes that gap the other way around: it extracts each orphan
 PDF's early-page text (the same window/config the rest of the pipeline uses) and scores it with
 `classify_identity` -- the same deterministic engine used everywhere else in this codebase -- against
-every Zotero item that has no PDF attachment of its own, since those are the only items an orphan
-PDF could plausibly belong to.
+every Zotero item that has no *working* PDF attachment of its own: either no PDF attachment row at
+all, or a PDF attachment row whose recorded path no longer resolves to a real file on disk (moved,
+renamed, or deleted outside Zotero's own management). These are the only items an orphan PDF could
+plausibly belong to. Path resolution for the stale-attachment check mirrors `mapper.py`'s own
+attachment-path convention exactly (shared via `identity.resolve_attachment_paths`): Zotero's
+`attachments:`-relative paths resolve against `config.linked_attachments`, and both Windows
+drive-letter and POSIX absolute paths are recognized regardless of the OS this tool runs on.
+
+By default only `high`-confidence pairings are reported -- `classify_identity`'s own `verified`
+status (a DOI exact match, or a strong title match corroborated by an author/year hit). Real-library
+smoke testing found the `medium`/`low` tiers, which are scored purely by a fuzzy title-match
+threshold on a result `classify_identity` itself left `unverified`, to be almost pure noise: an
+edited volume's individual chapter/section entries ("Citations", "Index", "Preface", each its own
+Zotero item with no PDF of its own) get a trivially high `fuzz.partial_ratio` score against almost
+any academic PDF's text once the title is one or two common words, regardless of the specific
+threshold chosen. `medium`/`low` are still available, opt-in only, via `--include-lower-confidence`
+on the CLI, for a broader, explicitly-lower-trust sweep.
 
 Findings are written once per run in `orphan_candidates.csv`/`.jsonl` next to that run's own output
 folder (`<output_root>/orphan_discovery/<timestamp>`), and merged into a persistent master file at
@@ -110,10 +125,13 @@ folder (`<output_root>/orphan_discovery/<timestamp>`), and merged into a persist
 `candidate_parent_key`) with a `status` of `pending`, `skipped`, or `resolved` and an
 `occurrence_count` that increments on repeat discovery. A later automatic run never reopens a
 `skipped`/`resolved` entry. Each record carries the orphan's `orphan_sha256`/`orphan_safe_folder_id`
-(never its local path), the candidate parent's key/title/DOI/creators, `title_score`,
-`author_evidence`, `year_evidence`, `observed_dois`, a `confidence_tier` (`high`/`medium`/`low`,
-derived from `classify_identity`'s own status/rule/title_score rather than a second scoring
-algorithm), and `identity_rule`.
+(never its local path), the candidate parent's key/title/DOI/creators,
+`candidate_had_stale_attachment` (true when the candidate qualified because its existing PDF
+attachment path went stale, rather than because it never had one -- useful for deciding relink vs.
+attach fresh), `title_score`, `author_evidence`, `year_evidence`, `observed_dois`, a
+`confidence_tier` (`high` by default, `medium`/`low` only with `--include-lower-confidence`, derived
+from `classify_identity`'s own status/rule/title_score rather than a second scoring algorithm), and
+`identity_rule`.
 
 Use `orphan-candidate` to resolve a pending pairing, either dismissing it:
 

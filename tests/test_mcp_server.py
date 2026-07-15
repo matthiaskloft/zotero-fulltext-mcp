@@ -843,6 +843,7 @@ def _seed_orphan_candidate(
         candidate_year="2024",
         candidate_doi="10.1000/orphan",
         candidate_citation_key="smithGeneric2024",
+        candidate_had_stale_attachment=False,
         title_score=92,
         author_evidence=True,
         year_evidence=True,

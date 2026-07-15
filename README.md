@@ -216,8 +216,10 @@ The safe default server exposes:
   pass a returned `attachment_key` to `skip_timeout_extraction` or `retry_timeout_extraction`.
 - `list_orphan_candidates(status="pending")` — plausible Zotero parents found for orphan PDFs by
   content (title/DOI/author/year), not filename. Read-only; never triggers discovery itself.
-  Populated only after running the CLI's `find-orphan-parents` command. To act on a candidate,
-  confirm it yourself and run the CLI's `link-pdf` then `orphan-candidate` commands.
+  Populated only after running the CLI's `find-orphan-parents` command, which by default reports
+  only high-confidence (`classify_identity`-verified) pairings — pass `--include-lower-confidence`
+  to that command for a broader, noisier sweep. To act on a candidate, confirm it yourself and run
+  the CLI's `link-pdf` then `orphan-candidate` commands.
 
 Optional tools:
 
