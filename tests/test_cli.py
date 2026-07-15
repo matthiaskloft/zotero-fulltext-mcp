@@ -85,6 +85,109 @@ class ReconvertMathCliTests(unittest.TestCase):
             self.assertEqual(exit_code, 1)
 
 
+class RetryTimeoutCliTests(unittest.TestCase):
+    def test_parser_requires_exactly_one_of_skip_or_retry(self):
+        with self.assertRaises(SystemExit):
+            build_parser().parse_args(["retry-timeout", "--key", "ABCD1234"])
+        with self.assertRaises(SystemExit):
+            build_parser().parse_args(["retry-timeout", "--key", "ABCD1234", "--skip", "--retry"])
+
+    def test_parser_defaults_for_retry(self):
+        args = build_parser().parse_args(["retry-timeout", "--key", "ABCD1234", "--retry"])
+        self.assertEqual(args.command, "retry-timeout")
+        self.assertEqual(args.key, "ABCD1234")
+        self.assertTrue(args.retry)
+        self.assertFalse(args.skip)
+        self.assertIsNone(args.timeout_seconds)
+        self.assertIsNone(args.multiplier)
+
+    def test_parser_defaults_for_skip(self):
+        args = build_parser().parse_args(["retry-timeout", "--key", "ABCD1234", "--skip"])
+        self.assertTrue(args.skip)
+        self.assertEqual(args.reason, "")
+
+    def test_skip_dispatch_calls_skip_timeout_candidate(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config_path = root / "config.json"
+            config_path.write_text(
+                '{"zotero_root": "%s", "zotero_data_directory": "%s", '
+                '"linked_attachments": "%s", "output_root": "%s"}'
+                % (root, root, root, root / "output"),
+                encoding="utf-8",
+            )
+            from zotero_pdf_text.config import ProjectConfig
+            from zotero_pdf_text.retry_timeout import RetryTimeoutResult
+
+            success = RetryTimeoutResult(
+                ok=True,
+                action="skip",
+                attachment_key="ABCD1234",
+                previous_status="pending",
+                new_status="skipped",
+                timeout_seconds_used=None,
+                extraction_tool="",
+                markdown_path="",
+                error="",
+                resolved_at="2026-07-15T00:00:00",
+            )
+            with patch("zotero_pdf_text.cli.load_config") as mock_load_config, patch(
+                "zotero_pdf_text.cli.validate_config"
+            ), patch("zotero_pdf_text.retry_timeout.skip_timeout_candidate", return_value=success) as mock_skip:
+                mock_load_config.return_value = ProjectConfig(root, root, root, root / "output")
+                exit_code = main(
+                    ["retry-timeout", "--key", "ABCD1234", "--skip", "--reason", "too slow", "--config", str(config_path)]
+                )
+
+            self.assertEqual(exit_code, 0)
+            mock_skip.assert_called_once()
+            _, kwargs = mock_skip.call_args
+            self.assertEqual(kwargs["reason"], "too slow")
+
+    def test_retry_dispatch_calls_retry_timeout_candidate_and_returns_expected_exit_code(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            from zotero_pdf_text.config import ProjectConfig
+            from zotero_pdf_text.retry_timeout import RetryTimeoutResult
+
+            failure = RetryTimeoutResult(
+                ok=False,
+                action="retry",
+                attachment_key="ABCD1234",
+                previous_status="pending",
+                new_status="pending",
+                timeout_seconds_used=1200,
+                extraction_tool="",
+                markdown_path="",
+                error="No timeout candidate found",
+                resolved_at="",
+            )
+            with patch("zotero_pdf_text.cli.load_config") as mock_load_config, patch(
+                "zotero_pdf_text.cli.validate_config"
+            ), patch("zotero_pdf_text.retry_timeout.retry_timeout_candidate", return_value=failure) as mock_retry:
+                mock_load_config.return_value = ProjectConfig(root, root, root, root / "output")
+                exit_code = main(["retry-timeout", "--key", "ABCD1234", "--retry", "--multiplier", "2.0"])
+
+            self.assertEqual(exit_code, 1)
+            mock_retry.assert_called_once()
+            _, kwargs = mock_retry.call_args
+            self.assertEqual(kwargs["multiplier"], 2.0)
+            self.assertIsNone(kwargs["timeout_seconds"])
+
+    def test_rejects_timeout_seconds_and_multiplier_together(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            from zotero_pdf_text.config import ProjectConfig
+
+            with patch("zotero_pdf_text.cli.load_config") as mock_load_config, patch("zotero_pdf_text.cli.validate_config"):
+                mock_load_config.return_value = ProjectConfig(root, root, root, root / "output")
+                exit_code = main(
+                    ["retry-timeout", "--key", "ABCD1234", "--retry", "--timeout-seconds", "1000", "--multiplier", "2.0"]
+                )
+
+            self.assertEqual(exit_code, 2)
+
+
 class PipelineLockRootTests(unittest.TestCase):
     def test_walks_up_past_index_directory(self):
         # build-index/append-index/build-fts have no --config, only an explicit index path, but
@@ -335,6 +438,7 @@ class InstallMcpCliTests(unittest.TestCase):
                     "search_fulltext",
                     "get_fulltext_chunk",
                     "get_item_context",
+                    "list_timeout_candidates",
                     "reconvert_with_math_ocr",
                 ],
             )
@@ -427,6 +531,80 @@ class InstallMcpCliTests(unittest.TestCase):
             )
             with patch("zotero_pdf_text.cli.marker_dependency_available", return_value=False):
                 self.assertEqual(main(["install-mcp", "--config", str(config_path), "--enable-reconvert"]), 2)
+
+    def test_enable_retry_timeout_registration_forwards_flag_and_tools(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config_path = root / "config.json"
+            (root / "zotero.sqlite").write_bytes(b"")
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "zotero_root": str(root),
+                        "zotero_data_directory": str(root),
+                        "linked_attachments": str(root),
+                        "output_root": str(root / "converted_text"),
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with patch("sys.executable", str(root / "Scripts" / "python.exe")), patch("sys.stdout") as mock_stdout:
+                exit_code = main(["install-mcp", "--config", str(config_path), "--enable-retry-timeout"])
+            printed = "".join(call.args[0] for call in mock_stdout.write.call_args_list)
+            self.assertEqual(exit_code, 0)
+            self.assertIn("--enable-retry-timeout", printed)
+            self.assertIn("skip_timeout_extraction", printed)
+            self.assertIn("retry_timeout_extraction", printed)
+
+    def test_enable_retry_timeout_does_not_require_marker_dependency(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config_path = root / "config.json"
+            (root / "zotero.sqlite").write_bytes(b"")
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "zotero_root": str(root),
+                        "zotero_data_directory": str(root),
+                        "linked_attachments": str(root),
+                        "output_root": str(root / "converted_text"),
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with patch("zotero_pdf_text.cli.marker_dependency_available", return_value=False), patch(
+                "sys.executable", str(root / "Scripts" / "python.exe")
+            ), patch("sys.stdout"):
+                exit_code = main(["install-mcp", "--config", str(config_path), "--enable-retry-timeout"])
+            self.assertEqual(exit_code, 0)
+
+    def test_enable_retry_timeout_rejects_database_config_mismatch(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config_path = root / "config.json"
+            (root / "zotero.sqlite").write_bytes(b"")
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "zotero_root": str(root),
+                        "zotero_data_directory": str(root),
+                        "linked_attachments": str(root),
+                        "output_root": str(root / "converted_text"),
+                    }
+                ),
+                encoding="utf-8",
+            )
+            self.assertEqual(
+                main(
+                    [
+                        "install-mcp",
+                        "--config", str(config_path),
+                        "--db", str(root / "different.sqlite"),
+                        "--enable-retry-timeout",
+                    ]
+                ),
+                2,
+            )
 
     def test_bibtex_endpoint_requires_integration_flag(self):
         with tempfile.TemporaryDirectory() as tmp:

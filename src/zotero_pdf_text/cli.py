@@ -38,10 +38,12 @@ from .mcp_contract import (
     RECONVERT_MCP_TOOL_NAME,
     RECONVERT_STARTUP_TIMEOUT_SECONDS,
     RECONVERT_TOOL_TIMEOUT_SECONDS,
+    RETRY_TIMEOUT_MCP_TOOL_NAMES,
     configured_index_path,
     marker_dependency_available,
 )
 from .runtime import DEFAULT_ZOTERO_EXE, ensure_zotero_running
+from . import retry_timeout as retry_timeout_module
 from .verifier import apply_verification, verify_unverified
 from .zotero_write import (
     apply_write_plan,
@@ -415,6 +417,55 @@ def build_parser() -> argparse.ArgumentParser:
         help="SQLite FTS database to rebuild. Default: ZOTERO_FULLTEXT_DB env var or the standard path.",
     )
     reconvert_math.add_argument("--timeout-seconds", type=int, default=5400, help="marker-pdf timeout in seconds.")
+    retry_timeout = subparsers.add_parser(
+        "retry-timeout",
+        help=(
+            "Resolve a recorded extraction-timeout candidate: either permanently skip the primary "
+            "extractor for it (no source change needed) or reconvert it with a longer timeout and "
+            "promote a successful result into the live manifest/index."
+        ),
+    )
+    retry_timeout.add_argument("--key", required=True, help="Zotero attachment key from timeout_candidates.jsonl.")
+    retry_timeout.add_argument("--config", type=Path, default=Path("config.json"), help="Path to project config JSON.")
+    retry_timeout.add_argument(
+        "--jsonl",
+        type=Path,
+        default=None,
+        help="JSONL index to update on a successful retry. Default: <output_root>/index/zotero_text_index.jsonl.",
+    )
+    retry_timeout.add_argument(
+        "--fts-db",
+        type=Path,
+        default=None,
+        help="SQLite FTS database to rebuild on a successful retry. Default: ZOTERO_FULLTEXT_DB env var or the standard path.",
+    )
+    retry_timeout_mode = retry_timeout.add_mutually_exclusive_group(required=True)
+    retry_timeout_mode.add_argument(
+        "--skip",
+        action="store_true",
+        help="Permanently skip the primary extractor for this attachment (writes timeout_skip_list.json); does not reconvert.",
+    )
+    retry_timeout_mode.add_argument(
+        "--retry",
+        action="store_true",
+        help="Reconvert with a longer timeout and promote a successful result into the live index.",
+    )
+    retry_timeout.add_argument(
+        "--timeout-seconds",
+        type=int,
+        default=None,
+        help=(
+            "Explicit retry timeout in seconds (--retry only); defaults to the candidate's "
+            f"suggested_next_timeout_seconds. Hard-capped at {retry_timeout_module.MAX_RETRY_TIMEOUT_SECONDS}."
+        ),
+    )
+    retry_timeout.add_argument(
+        "--multiplier",
+        type=float,
+        default=None,
+        help="Multiply the candidate's last attempted timeout instead of --timeout-seconds (--retry only).",
+    )
+    retry_timeout.add_argument("--reason", default="", help="Free-text note stored with a --skip decision.")
     install_mcp = subparsers.add_parser(
         "install-mcp",
         help=(
@@ -430,6 +481,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--enable-reconvert",
         action="store_true",
         help="Enable single-attachment math OCR in MCP; the generated registration includes the explicit config.",
+    )
+    install_mcp.add_argument(
+        "--enable-retry-timeout",
+        action="store_true",
+        help="Enable timeout skip/retry decisions in MCP; the generated registration includes the explicit config.",
     )
     install_mcp.add_argument(
         "--bibtex-endpoint",
@@ -854,6 +910,27 @@ def main(argv: list[str] | None = None) -> int:
         )
         print(json.dumps(result.to_dict(), ensure_ascii=False, indent=2))
         return 0 if result.ok else 1
+    if args.command == "retry-timeout":
+        if args.timeout_seconds is not None and args.multiplier is not None:
+            print("--timeout-seconds and --multiplier are mutually exclusive.", file=sys.stderr)
+            return 2
+        config = load_config(args.config)
+        validate_config(config)
+        if args.skip:
+            result = retry_timeout_module.skip_timeout_candidate(args.key, config=config, reason=args.reason)
+        else:
+            jsonl_path = args.jsonl or (config.output_root / "index" / "zotero_text_index.jsonl")
+            fts_db = args.fts_db or (config.output_root / "index" / "zotero_text_index.sqlite")
+            result = retry_timeout_module.retry_timeout_candidate(
+                args.key,
+                config=config,
+                jsonl_path=jsonl_path,
+                fts_db_path=fts_db,
+                timeout_seconds=args.timeout_seconds,
+                multiplier=args.multiplier,
+            )
+        print(json.dumps(result.to_dict(), ensure_ascii=False, indent=2))
+        return 0 if result.ok else 1
     if args.command == "install-mcp":
         return _install_mcp(args)
     parser.error(f"Unknown command: {args.command}")
@@ -893,6 +970,15 @@ def _install_mcp(args: argparse.Namespace) -> int:
         if not marker_dependency_available():
             print("--enable-reconvert requires the optional marker dependency (pip install -e .[marker]).", file=sys.stderr)
             return 2
+    if args.enable_retry_timeout:
+        try:
+            validate_config(config)
+        except (OSError, TypeError, ValueError):
+            print("--enable-retry-timeout requires a valid project config.", file=sys.stderr)
+            return 2
+        if db_path.resolve(strict=False) != expected_db_path.resolve(strict=False):
+            print("--enable-retry-timeout requires --db to be the index governed by the project config.", file=sys.stderr)
+            return 2
 
     venv_scripts_dir = Path(sys.executable).resolve().parent
     exe_name = "zotero-fulltext-mcp.exe" if os.name == "nt" else "zotero-fulltext-mcp"
@@ -906,6 +992,8 @@ def _install_mcp(args: argparse.Namespace) -> int:
         server_args.append("--enable-bibtex")
     if args.enable_reconvert:
         server_args.append("--enable-reconvert")
+    if args.enable_retry_timeout:
+        server_args.append("--enable-retry-timeout")
     if args.bibtex_endpoint:
         if not args.enable_bibtex:
             print("--bibtex-endpoint requires --enable-bibtex.", file=sys.stderr)
@@ -920,6 +1008,8 @@ def _install_mcp(args: argparse.Namespace) -> int:
         enabled_tools.append(BIBTEX_MCP_TOOL_NAME)
     if args.enable_reconvert:
         enabled_tools.append(RECONVERT_MCP_TOOL_NAME)
+    if args.enable_retry_timeout:
+        enabled_tools.extend(RETRY_TIMEOUT_MCP_TOOL_NAMES)
     # Use json.dumps for every embedded string, not Python repr(): repr() renders a backslash
     # as two characters, but TOML single-quoted (literal) strings treat backslashes literally,
     # so repr() output silently doubles every backslash in a Windows path once TOML parses it.

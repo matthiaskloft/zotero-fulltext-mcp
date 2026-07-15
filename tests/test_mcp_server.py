@@ -19,10 +19,13 @@ from zotero_pdf_text.mcp_contract import (
     PublicMcpError,
     READ_ONLY_TOOL_ANNOTATIONS,
     RECONVERT_TOOL_ANNOTATIONS,
+    RETRY_TIMEOUT_TOOL_ANNOTATIONS,
+    SKIP_TIMEOUT_TOOL_ANNOTATIONS,
     create_server,
     validate_bibtex_endpoint,
 )
 from zotero_pdf_text.mcp_server import main
+from zotero_pdf_text.timeout_candidates import TimeoutCandidate, append_master_candidates
 
 
 class FakeFastMCP:
@@ -53,7 +56,7 @@ class McpServerTests(unittest.TestCase):
 
             self.assertEqual(
                 set(server.tools),
-                {"search_fulltext", "get_fulltext_chunk", "get_item_context"},
+                {"search_fulltext", "get_fulltext_chunk", "get_item_context", "list_timeout_candidates"},
             )
             self.assertNotIn("ensure_zotero_running", server.tools)
             self.assertNotIn("export_bibtex_entries_by_key", server.tools)
@@ -79,7 +82,10 @@ class McpServerTests(unittest.TestCase):
 
         tools = server._tool_manager.list_tools()
 
-        self.assertEqual({tool.name for tool in tools}, {"search_fulltext", "get_fulltext_chunk", "get_item_context"})
+        self.assertEqual(
+            {tool.name for tool in tools},
+            {"search_fulltext", "get_fulltext_chunk", "get_item_context", "list_timeout_candidates"},
+        )
         descriptions = {tool.name: tool.description for tool in tools}
         self.assertIn("title, creators, citation key, and converted body text", descriptions["search_fulltext"])
         self.assertIn("Omitting", descriptions["get_fulltext_chunk"])
@@ -104,6 +110,7 @@ class McpServerTests(unittest.TestCase):
                     "search_fulltext",
                     "get_fulltext_chunk",
                     "get_item_context",
+                    "list_timeout_candidates",
                     "export_bibtex_entries_by_key",
                     "reconvert_with_math_ocr",
                 },
@@ -500,6 +507,134 @@ class McpServerTests(unittest.TestCase):
             self.assertNotIn(str(missing), str(raised.exception))
 
 
+class TimeoutCandidateMcpTests(unittest.TestCase):
+    def test_list_timeout_candidates_strips_source_path_and_labels_provenance(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, sqlite_path, config = _build_index(Path(tmp))
+            _seed_timeout_candidate(config.output_root, root / "long-book.pdf")
+            server = create_server(sqlite_path, mcp_factory=FakeFastMCP)
+
+            response = server.tools["list_timeout_candidates"]()
+
+            self.assertEqual(len(response["candidates"]), 1)
+            candidate = response["candidates"][0]
+            self.assertEqual(candidate["attachment_key"], "SLOWKEY")
+            self.assertEqual(candidate["status"], "pending")
+            self.assertNotIn("source_path", candidate)
+            self.assertNotIn(str(root), json.dumps(response))
+
+    def test_list_timeout_candidates_filters_by_status(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, sqlite_path, config = _build_index(Path(tmp))
+            _seed_timeout_candidate(config.output_root, root / "book-a.pdf", attachment_key="AKEY", status="pending")
+            _seed_timeout_candidate(config.output_root, root / "book-b.pdf", attachment_key="BKEY", status="skipped")
+            server = create_server(sqlite_path, mcp_factory=FakeFastMCP)
+
+            pending = server.tools["list_timeout_candidates"]()
+            self.assertEqual([c["attachment_key"] for c in pending["candidates"]], ["AKEY"])
+
+            everything = server.tools["list_timeout_candidates"](status="all")
+            self.assertEqual({c["attachment_key"] for c in everything["candidates"]}, {"AKEY", "BKEY"})
+
+            _assert_tool_error(
+                self, lambda: server.tools["list_timeout_candidates"](status="bogus"), "invalid_status"
+            )
+
+    def test_list_timeout_candidates_is_read_only_and_default_on(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _, sqlite_path, _ = _build_index(Path(tmp))
+            server = create_server(sqlite_path, mcp_factory=FakeFastMCP)
+
+            self.assertIn("list_timeout_candidates", server.tools)
+            self.assertEqual(server.tool_metadata["list_timeout_candidates"]["annotations"], READ_ONLY_TOOL_ANNOTATIONS)
+
+    def test_retry_timeout_tools_are_opt_in_and_absent_by_default(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _, sqlite_path, config = _build_index(Path(tmp))
+            default_server = create_server(sqlite_path, config=config, mcp_factory=FakeFastMCP)
+            self.assertNotIn("skip_timeout_extraction", default_server.tools)
+            self.assertNotIn("retry_timeout_extraction", default_server.tools)
+
+    def test_retry_timeout_tools_require_an_explicit_valid_config(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _, sqlite_path, _ = _build_index(Path(tmp))
+            with self.assertRaisesRegex(PublicMcpError, "explicit valid project config") as missing:
+                create_server(sqlite_path, enable_retry_timeout=True, mcp_factory=FakeFastMCP)
+            self.assertEqual(missing.exception.code, "config_required")
+
+    def test_retry_timeout_tools_do_not_require_marker_dependency(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _, sqlite_path, config = _build_index(Path(tmp))
+            with patch("zotero_pdf_text.mcp_contract.marker_dependency_available", return_value=False):
+                server = create_server(sqlite_path, config=config, enable_retry_timeout=True, mcp_factory=FakeFastMCP)
+            self.assertIn("skip_timeout_extraction", server.tools)
+            self.assertIn("retry_timeout_extraction", server.tools)
+
+    def test_skip_timeout_extraction_requires_literal_confirmation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, sqlite_path, config = _build_index(Path(tmp))
+            _seed_timeout_candidate(config.output_root, root / "long-book.pdf")
+            server = create_server(sqlite_path, config=config, enable_retry_timeout=True, mcp_factory=FakeFastMCP)
+
+            self.assertEqual(
+                server.tool_metadata["skip_timeout_extraction"]["annotations"], SKIP_TIMEOUT_TOOL_ANNOTATIONS
+            )
+            skip = server.tools["skip_timeout_extraction"]
+            _assert_tool_error(self, lambda: skip("SLOWKEY", reason="too slow", confirm="yes"), "confirmation_required")
+
+            result = skip("SLOWKEY", reason="too slow", confirm="skip_timeout")
+            self.assertTrue(result["ok"])
+            self.assertEqual(result["new_status"], "skipped")
+            self.assertNotIn(str(root), json.dumps(result))
+
+    def test_retry_timeout_extraction_requires_literal_confirmation_and_is_rate_limited(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, sqlite_path, config = _build_index(Path(tmp))
+            _seed_timeout_candidate(config.output_root, root / "long-book.pdf")
+            server = create_server(sqlite_path, config=config, enable_retry_timeout=True, mcp_factory=FakeFastMCP)
+
+            self.assertEqual(
+                server.tool_metadata["retry_timeout_extraction"]["annotations"], RETRY_TIMEOUT_TOOL_ANNOTATIONS
+            )
+            retry = server.tools["retry_timeout_extraction"]
+            _assert_tool_error(self, lambda: retry("SLOWKEY", confirm="yes"), "confirmation_required")
+
+            from zotero_pdf_text.retry_timeout import RetryTimeoutResult
+
+            success = RetryTimeoutResult(
+                ok=True,
+                action="retry",
+                attachment_key="SLOWKEY",
+                previous_status="pending",
+                new_status="resolved",
+                timeout_seconds_used=1200,
+                extraction_tool="pymupdf4llm.to_markdown",
+                markdown_path=str(root / "secret.md"),
+                error="",
+                resolved_at="2026-07-15T00:00:00",
+            )
+            with patch("zotero_pdf_text.retry_timeout.retry_timeout_candidate", return_value=success):
+                result = retry("SLOWKEY", confirm="retry_timeout")
+            self.assertTrue(result["ok"])
+            self.assertNotIn(str(root), json.dumps(result))
+
+            _assert_tool_error(self, lambda: retry("SLOWKEY", confirm="retry_timeout"), "timeout_retry_rate_limited")
+
+    def test_retry_timeout_extraction_rejects_timeout_seconds_and_multiplier_together(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, sqlite_path, config = _build_index(Path(tmp))
+            _seed_timeout_candidate(config.output_root, root / "long-book.pdf")
+            server = create_server(sqlite_path, config=config, enable_retry_timeout=True, mcp_factory=FakeFastMCP)
+
+            _assert_tool_error(
+                self,
+                lambda: server.tools["retry_timeout_extraction"](
+                    "SLOWKEY", confirm="retry_timeout", timeout_seconds=1000, multiplier=2.0
+                ),
+                "invalid_input",
+            )
+
+
 class ReconvertRateLimiterConcurrencyTests(unittest.TestCase):
     def test_only_one_concurrent_acquire_succeeds(self):
         # Regression test: acquire() used to read-then-write _last_started_at as separate,
@@ -579,6 +714,45 @@ def _build_index(root: Path) -> tuple[Path, Path, ProjectConfig]:
     build_fts_index(jsonl_path, sqlite_path)
     (root / "zotero.sqlite").write_bytes(b"")
     return root, sqlite_path, ProjectConfig(root, root, root, output_root)
+
+
+def _seed_timeout_candidate(
+    output_root: Path,
+    source_path: Path,
+    *,
+    attachment_key: str = "SLOWKEY",
+    status: str = "pending",
+) -> None:
+    from datetime import datetime
+
+    candidate = TimeoutCandidate(
+        zotero_parent_key="SLOWPARENT",
+        zotero_attachment_key=attachment_key,
+        item_type="attachment",
+        title="A Long Book",
+        creators="Jane Smith",
+        year="2024",
+        doi="10.1000/slow",
+        citation_key="smithLongBook2024",
+        source_path=str(source_path),
+        page_count="600",
+        classification="mapped_verified",
+        identity_status="verified",
+        identity_rule="doi_exact",
+        safe_folder_id=f"zotero_{attachment_key}",
+        drawing_density=12.0,
+        attempted_timeout_seconds=2400,
+        suggested_next_timeout_seconds=4800,
+        fallback_outcome="fallback_used",
+        conversion_status="converted",
+        detected_at=datetime.now().isoformat(timespec="seconds"),
+    )
+    master_path = output_root / "index" / "timeout_candidates.jsonl"
+    append_master_candidates(master_path, [candidate])
+    if status != "pending":
+        from zotero_pdf_text.timeout_candidates import mark_status
+
+        mark_status(master_path, attachment_key, status=status, extra_fields={})
 
 
 def _write_config(path: Path, config: ProjectConfig) -> None:

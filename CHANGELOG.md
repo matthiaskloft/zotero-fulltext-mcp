@@ -5,6 +5,22 @@ All notable changes to this project are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Added
+
+- Conversion timeouts now scale with page count and a cheap vector-drawing-density scan (long or
+  diagram-dense books no longer lose structure/images to the plain-text fallback needlessly), and
+  every genuine primary-extractor timeout is recorded as a "timeout candidate" (per-run
+  `timeout_candidates.csv`/`.jsonl` plus a persistent, deduped master file) instead of only a manifest
+  `error` note.
+- New `retry-timeout` CLI command resolves a pending timeout candidate: `--skip` permanently routes
+  that attachment straight to the plain-text fallback (recorded in `timeout_skip_list.json`, not
+  hardcoded in source), or `--retry` reconverts it with a longer budget and promotes a successful
+  result into the live manifest/index without ever overwriting the originally converted Markdown
+  file in place.
+- New MCP tools: `list_timeout_candidates` (read-only, always available) and, opt-in via
+  `--enable-retry-timeout`, `skip_timeout_extraction`/`retry_timeout_extraction` (each gated behind
+  its own literal `confirm` string and independently rate-limited from math-OCR reconversion).
+
 ### Changed
 
 - The default MCP surface is now entirely read-only. Single-attachment math OCR is registered only
