@@ -274,6 +274,55 @@ or, once confirmed and attached via the existing `link-pdf` command:
 `orphan-candidate --mark-resolved` only records the decision — it never calls `link-pdf` or
 otherwise touches Zotero itself.
 
+## Duplicate Attachment Cleanup
+
+Use this when a dry run's mapping report shows a Zotero item with 2+ linked PDF attachments and
+you suspect some are redundant copies of the same file (a trailing `2`/`3`/`4` in the filename, or
+a copy fetched from a different source). This command only ever considers **byte-identical**
+duplicates (same SHA-256) — near-identical copies re-extracted from a different mirror/OCR pass,
+and groups of 3+ attachments where the "keep" file can't be picked unambiguously, are reported but
+left for manual review; see `docs/troubleshooting.md` item 6 for why that's a deliberate scope cut,
+not a missing case.
+
+```powershell
+& $python -m zotero_pdf_text find-duplicate-attachments `
+  --config .\config.json `
+  --mapping-report $data\runs\20260602_145352\mapping_report.csv
+```
+
+Within a group of attachments sharing the same parent and file hash, the group is auto-resolved
+only when exactly one member's filename has no trailing-suffix reading at all, and every other
+member's filename, with a trailing suffix stripped (`...Regularization2`, `...Regularization 1`,
+`...Regularization (1)`), matches that one filename exactly — that one is kept, the rest are
+proposed for removal. A title that happens to end in a digit (`...Phase 2.pdf`) is not enough on
+its own to call it "suffixed": the stripped form has to match another file in the same group, so a
+digit that's actually part of the title just leaves the group ambiguous rather than picking the
+wrong file to keep. A group with zero or multiple candidates without any suffix reading, or where a
+suffixed name doesn't actually extend the unsuffixed one, is written to
+`ambiguous_duplicate_groups.csv`/`.jsonl` instead.
+
+Outputs are written under `converted_text\duplicate_attachments\<timestamp>`:
+
+- `duplicate_groups.csv` / `.jsonl`: resolved groups (parent key, citation key, sha256, which
+  attachment is kept, which are proposed for removal).
+- `ambiguous_duplicate_groups.csv` / `.jsonl`: groups that need a human to pick which to keep.
+- `duplicate_trash_plan.jsonl`: a `trash_item` write plan for every proposed removal, in the same
+  format `zotero-write plan` produces.
+
+This command never touches Zotero. Nothing is removed until you run the plan through the existing
+approval-gated write workflow:
+
+```powershell
+& $python -m zotero_pdf_text zotero-write validate --plan $data\duplicate_attachments\<run>\duplicate_trash_plan.jsonl
+& $python -m zotero_pdf_text zotero-write approve --plan $data\duplicate_attachments\<run>\duplicate_trash_plan.jsonl --rows 1-77
+& $python -m zotero_pdf_text zotero-write validate --plan $data\duplicate_attachments\<run>\duplicate_trash_plan.jsonl --require-approved
+& $python -m zotero_pdf_text zotero-write apply --plan $data\duplicate_attachments\<run>\duplicate_trash_plan.jsonl `
+  --approve --out-script $data\duplicate_attachments\<run>\trash.js
+```
+
+See "Approval-Gated Zotero Writes" below for what `apply` actually does (generates/runs a Zotero
+script; deleted attachments go to Zotero's trash, not straight to disk deletion).
+
 ## SQLite FTS
 
 ```powershell
