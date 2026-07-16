@@ -43,6 +43,7 @@ from .mcp_contract import (
     marker_dependency_available,
 )
 from .runtime import DEFAULT_ZOTERO_EXE, ensure_zotero_running
+from . import duplicate_attachments as duplicate_attachments_module
 from . import orphan_discovery as orphan_discovery_module
 from . import retry_timeout as retry_timeout_module
 from .verifier import apply_verification, verify_unverified
@@ -97,7 +98,7 @@ def build_parser() -> argparse.ArgumentParser:
         "check-setup",
         help="Validate config paths and environment before running a conversion. Read-only.",
     )
-    check_setup.add_argument("--config", type=Path, default=Path("config.json"), help="Path to project config JSON.")
+    check_setup.add_argument("--config", type=Path, default=resolve_config_path(), help="Path to project config JSON. Default: resolved for this machine.")
     check_setup.add_argument(
         "--require-mcp",
         action="store_true",
@@ -105,9 +106,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     check_setup.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
     dry_run = subparsers.add_parser("dry-run", help="Map Zotero metadata to linked PDFs without conversion.")
-    dry_run.add_argument("--config", type=Path, default=Path("config.json"), help="Path to project config JSON.")
+    dry_run.add_argument("--config", type=Path, default=resolve_config_path(), help="Path to project config JSON. Default: resolved for this machine.")
     sample = subparsers.add_parser("convert-sample", help="Convert a small mapped_verified PDF sample to Markdown.")
-    sample.add_argument("--config", type=Path, default=Path("config.json"), help="Path to project config JSON.")
+    sample.add_argument("--config", type=Path, default=resolve_config_path(), help="Path to project config JSON. Default: resolved for this machine.")
     sample.add_argument("--mapping-report", type=Path, required=True, help="Path to mapping_report.csv from a dry-run.")
     sample.add_argument("--limit", type=int, default=10, help="Maximum number of mapped_verified PDFs to convert.")
     sample.add_argument("--output-dir", type=Path, default=None, help="Optional output folder for this sample run.")
@@ -120,7 +121,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     sample.add_argument("--timeout-seconds", type=int, default=600, help="Per-PDF extraction timeout in seconds.")
     verified = subparsers.add_parser("convert-verified", help="Convert mapped_verified PDFs to Markdown.")
-    verified.add_argument("--config", type=Path, default=Path("config.json"), help="Path to project config JSON.")
+    verified.add_argument("--config", type=Path, default=resolve_config_path(), help="Path to project config JSON. Default: resolved for this machine.")
     verified.add_argument("--mapping-report", type=Path, required=True, help="Path to mapping_report.csv from a dry-run.")
     verified.add_argument("--limit", type=int, default=None, help="Optional maximum number of mapped_verified PDFs.")
     verified.add_argument("--output-dir", type=Path, default=None, help="Optional output folder for this conversion run.")
@@ -141,7 +142,7 @@ def build_parser() -> argparse.ArgumentParser:
         "verify-unverified",
         help="Convert mapped_unverified PDFs to quarantine Markdown and write full-text review decisions.",
     )
-    unverified.add_argument("--config", type=Path, default=Path("config.json"), help="Path to project config JSON.")
+    unverified.add_argument("--config", type=Path, default=resolve_config_path(), help="Path to project config JSON. Default: resolved for this machine.")
     unverified.add_argument("--mapping-report", type=Path, required=True, help="Path to mapping_report.csv from a dry-run.")
     unverified.add_argument("--limit", type=int, default=None, help="Optional maximum number of mapped_unverified PDFs.")
     unverified.add_argument("--output-dir", type=Path, default=None, help="Optional output folder for this review run.")
@@ -267,7 +268,7 @@ def build_parser() -> argparse.ArgumentParser:
     bibtex_add.add_argument("--library-id", default=None, help="Optional Zotero library ID. Omit for My Library.")
     bibtex_add.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
     ingest = subparsers.add_parser("ingest-candidates", help="Dry-run dedupe for an LLM article import queue.")
-    ingest.add_argument("--config", type=Path, default=Path("config.json"), help="Path to project config JSON.")
+    ingest.add_argument("--config", type=Path, default=resolve_config_path(), help="Path to project config JSON. Default: resolved for this machine.")
     ingest.add_argument("--input", type=Path, required=True, help="Candidate queue JSONL or JSON array.")
     ingest.add_argument("--output", type=Path, default=None, help="Optional JSONL dry-run report to write.")
     ingest_approved_parser = subparsers.add_parser(
@@ -278,7 +279,7 @@ def build_parser() -> argparse.ArgumentParser:
     zotero_write = subparsers.add_parser("zotero-write", help="Approval-gated Zotero write-plan workflow.")
     write_subparsers = zotero_write.add_subparsers(dest="write_command", required=True)
     write_plan = write_subparsers.add_parser("plan", help="Create an audited Zotero write plan from candidates.")
-    write_plan.add_argument("--config", type=Path, default=Path("config.json"), help="Path to project config JSON.")
+    write_plan.add_argument("--config", type=Path, default=resolve_config_path(), help="Path to project config JSON. Default: resolved for this machine.")
     write_plan.add_argument("--input", type=Path, required=True, help="Candidate queue JSONL or JSON array.")
     write_plan.add_argument("--output", type=Path, required=True, help="Write-plan JSONL to create.")
     write_validate = write_subparsers.add_parser("validate", help="Validate a Zotero write plan.")
@@ -311,7 +312,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Add a reference to Zotero by DOI via the Zotero connector (no plugins required).",
     )
     import_doi.add_argument("--doi", required=True, help="DOI to import (e.g. 10.1037/xge0001375).")
-    import_doi.add_argument("--config", type=Path, default=Path("config.json"), help="Path to project config JSON.")
+    import_doi.add_argument("--config", type=Path, default=resolve_config_path(), help="Path to project config JSON. Default: resolved for this machine.")
     import_doi.add_argument(
         "--connector-endpoint",
         default=DEFAULT_CONNECTOR_ENDPOINT,
@@ -332,7 +333,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Check whether a Zotero item has a PDF attachment (reads local SQLite, no connector required).",
     )
     check_pdf.add_argument("--key", required=True, help="Zotero item key (8-character alphanumeric).")
-    check_pdf.add_argument("--config", type=Path, default=Path("config.json"), help="Path to project config JSON.")
+    check_pdf.add_argument("--config", type=Path, default=resolve_config_path(), help="Path to project config JSON. Default: resolved for this machine.")
     check_pdf.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
     find_pdf = subparsers.add_parser(
         "find-pdf",
@@ -342,7 +343,7 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     find_pdf.add_argument("--key", required=True, help="Zotero item key (8-character alphanumeric).")
-    find_pdf.add_argument("--config", type=Path, default=Path("config.json"), help="Path to project config JSON.")
+    find_pdf.add_argument("--config", type=Path, default=resolve_config_path(), help="Path to project config JSON. Default: resolved for this machine.")
     find_pdf.add_argument(
         "--debug-bridge-endpoint",
         default=DEFAULT_DEBUG_BRIDGE_ENDPOINT,
@@ -365,7 +366,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     link_pdf.add_argument("--key", required=True, help="Zotero parent item key (8-character alphanumeric).")
     link_pdf.add_argument("--file", required=True, help="Absolute path to the local PDF to attach.")
-    link_pdf.add_argument("--config", type=Path, default=Path("config.json"), help="Path to project config JSON.")
+    link_pdf.add_argument("--config", type=Path, default=resolve_config_path(), help="Path to project config JSON. Default: resolved for this machine.")
     link_pdf.add_argument(
         "--debug-bridge-endpoint",
         default=DEFAULT_DEBUG_BRIDGE_ENDPOINT,
@@ -383,7 +384,7 @@ def build_parser() -> argparse.ArgumentParser:
             "convert them, and merge into the index and FTS database."
         ),
     )
-    convert_new.add_argument("--config", type=Path, default=Path("config.json"), help="Path to project config JSON.")
+    convert_new.add_argument("--config", type=Path, default=resolve_config_path(), help="Path to project config JSON. Default: resolved for this machine.")
     convert_new.add_argument(
         "--jsonl",
         type=Path,
@@ -413,7 +414,7 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     reconvert_math.add_argument("--key", required=True, help="Zotero attachment key.")
-    reconvert_math.add_argument("--config", type=Path, default=Path("config.json"), help="Path to project config JSON.")
+    reconvert_math.add_argument("--config", type=Path, default=resolve_config_path(), help="Path to project config JSON. Default: resolved for this machine.")
     reconvert_math.add_argument(
         "--jsonl",
         type=Path,
@@ -436,7 +437,7 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     retry_timeout.add_argument("--key", required=True, help="Zotero attachment key from timeout_candidates.jsonl.")
-    retry_timeout.add_argument("--config", type=Path, default=Path("config.json"), help="Path to project config JSON.")
+    retry_timeout.add_argument("--config", type=Path, default=resolve_config_path(), help="Path to project config JSON. Default: resolved for this machine.")
     retry_timeout.add_argument(
         "--jsonl",
         type=Path,
@@ -485,10 +486,24 @@ def build_parser() -> argparse.ArgumentParser:
             "high-confidence (classify_identity's own verified status) matches."
         ),
     )
-    find_orphan_parents.add_argument("--config", type=Path, default=Path("config.json"), help="Path to project config JSON.")
+    find_orphan_parents.add_argument("--config", type=Path, default=resolve_config_path(), help="Path to project config JSON. Default: resolved for this machine.")
     find_orphan_parents.add_argument("--mapping-report", type=Path, required=True, help="Path to mapping_report.csv from a dry-run.")
     find_orphan_parents.add_argument("--output-dir", type=Path, default=None, help="Optional output folder for this discovery run.")
     find_orphan_parents.add_argument("--limit", type=int, default=None, help="Optional maximum number of orphan_pdf rows to scan.")
+    find_duplicate_attachments = subparsers.add_parser(
+        "find-duplicate-attachments",
+        help=(
+            "Scan a dry-run's mapping report for Zotero items with 2+ linked PDF attachments that "
+            "are byte-identical (same SHA-256), and write a trash write-plan for the redundant "
+            "copies. Only auto-resolves a group when exactly one filename lacks a trailing numeric "
+            "suffix; anything else is reported as ambiguous for manual review. Never touches Zotero "
+            "itself -- the generated plan feeds into the existing zotero-write approve/validate/"
+            "apply --approve gate."
+        ),
+    )
+    find_duplicate_attachments.add_argument("--config", type=Path, default=resolve_config_path(), help="Path to project config JSON. Default: resolved for this machine.")
+    find_duplicate_attachments.add_argument("--mapping-report", type=Path, required=True, help="Path to mapping_report.csv from a dry-run.")
+    find_duplicate_attachments.add_argument("--output-dir", type=Path, default=None, help="Optional output folder for this discovery run.")
     orphan_candidate = subparsers.add_parser(
         "orphan-candidate",
         help=(
@@ -496,7 +511,7 @@ def build_parser() -> argparse.ArgumentParser:
             "either dismiss it, or record that you separately confirmed it and ran `link-pdf` yourself."
         ),
     )
-    orphan_candidate.add_argument("--config", type=Path, default=Path("config.json"), help="Path to project config JSON.")
+    orphan_candidate.add_argument("--config", type=Path, default=resolve_config_path(), help="Path to project config JSON. Default: resolved for this machine.")
     orphan_candidate.add_argument("--orphan-sha256", required=True, help="orphan_sha256 from orphan_candidates.jsonl.")
     orphan_candidate.add_argument("--parent-key", required=True, help="candidate_parent_key from orphan_candidates.jsonl.")
     orphan_candidate_mode = orphan_candidate.add_mutually_exclusive_group(required=True)
@@ -989,6 +1004,21 @@ def main(argv: list[str] | None = None) -> int:
             print(str(exc), file=sys.stderr)
             return 2
         print(f"Orphan-parent discovery complete: {run_dir}")
+        return 0
+    if args.command == "find-duplicate-attachments":
+        config = load_config(args.config)
+        validate_config(config)
+        try:
+            with pipeline_write_lock(config.output_root, command="find-duplicate-attachments"):
+                run_dir = duplicate_attachments_module.run_duplicate_discovery(
+                    config,
+                    args.mapping_report,
+                    output_dir=args.output_dir,
+                )
+        except PipelineLockedError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        print(f"Duplicate-attachment discovery complete: {run_dir}")
         return 0
     if args.command == "orphan-candidate":
         config = load_config(args.config)

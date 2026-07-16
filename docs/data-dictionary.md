@@ -154,6 +154,27 @@ candidates. There is no MCP tool that discovers candidates or attaches anything 
 CLI-only (`find-orphan-parents`), and attachment stays gated behind the existing CLI-only
 `link-pdf` command. See `README.md`'s "Tool contract" section.
 
+### Duplicate Attachment Groups
+
+`find-duplicate-attachments` groups a dry-run's mapping-report rows by `(zotero_parent_key,
+sha256)` -- attachments on the same Zotero item with byte-identical file content. Within a group,
+exactly one filename with no trailing-suffix reading (`Name.pdf` vs. `Name2.pdf`/`Name 1.pdf`/
+`Name (1).pdf`) is required, and every other filename must strip down to that exact filename, to
+auto-resolve; anything else (a genuinely different edition, an unexpected naming scheme, or a
+filename that merely ends in a digit as part of its own title without another group member
+matching its stripped form) is written as ambiguous instead of guessed. This is deliberately
+narrower than the fuzzy/near-identical-text matching explored manually for this problem (see
+`docs/troubleshooting.md` item 6) -- byte-identical content plus an unambiguous filename pairing is
+the only case safe to resolve without a human looking at it.
+
+`duplicate_groups.csv`/`.jsonl` (resolved) and `ambiguous_duplicate_groups.csv`/`.jsonl` are written
+per-run under `<output_root>/duplicate_attachments/<timestamp>`, alongside `duplicate_trash_plan.jsonl`
+-- a `trash_item` write plan (same schema as `zotero-write plan`'s output) covering every resolved
+group's "drop" attachments, with `approval_status="pending"`. This command never calls Zotero itself;
+running the plan through `zotero-write approve`/`validate --require-approved`/`apply --approve` is
+what actually trashes the redundant attachments (see `docs/operations.md`'s "Duplicate Attachment
+Cleanup" and "Approval-Gated Zotero Writes" sections).
+
 ## JSONL Sidecar
 
 `zotero_text_index.jsonl` contains one record per available converted full text:
