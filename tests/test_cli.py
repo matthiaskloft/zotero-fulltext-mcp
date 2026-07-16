@@ -10,6 +10,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from zotero_pdf_text.cli import _pipeline_lock_root, _shell_quote, build_parser, main
+from zotero_pdf_text.config import resolve_config_path
 from zotero_pdf_text.fts import ChunkNotFoundError, SearchResult
 from zotero_pdf_text.math_ocr import ReconvertResult
 
@@ -19,7 +20,7 @@ class ReconvertMathCliTests(unittest.TestCase):
         args = build_parser().parse_args(["reconvert-math", "--key", "ABCD1234"])
         self.assertEqual(args.command, "reconvert-math")
         self.assertEqual(args.key, "ABCD1234")
-        self.assertEqual(args.config, Path("config.json"))
+        self.assertEqual(args.config, resolve_config_path())
         self.assertIsNone(args.jsonl)
         self.assertIsNone(args.fts_db)
         self.assertEqual(args.timeout_seconds, 5400)
@@ -256,7 +257,7 @@ class FindOrphanParentsCliTests(unittest.TestCase):
         args = build_parser().parse_args(["find-orphan-parents", "--mapping-report", "report.csv"])
         self.assertEqual(args.command, "find-orphan-parents")
         self.assertEqual(args.mapping_report, Path("report.csv"))
-        self.assertEqual(args.config, Path("config.json"))
+        self.assertEqual(args.config, resolve_config_path())
         self.assertIsNone(args.output_dir)
         self.assertIsNone(args.limit)
 
@@ -277,6 +278,32 @@ class FindOrphanParentsCliTests(unittest.TestCase):
             mock_run.assert_called_once()
             _, kwargs = mock_run.call_args
             self.assertEqual(kwargs["limit"], 5)
+
+
+class FindDuplicateAttachmentsCliTests(unittest.TestCase):
+    def test_parser_defaults(self):
+        args = build_parser().parse_args(["find-duplicate-attachments", "--mapping-report", "report.csv"])
+        self.assertEqual(args.command, "find-duplicate-attachments")
+        self.assertEqual(args.mapping_report, Path("report.csv"))
+        self.assertEqual(args.config, resolve_config_path())
+        self.assertIsNone(args.output_dir)
+
+    def test_dispatch_calls_run_duplicate_discovery(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            from zotero_pdf_text.config import ProjectConfig
+
+            with patch("zotero_pdf_text.cli.load_config") as mock_load_config, patch(
+                "zotero_pdf_text.cli.validate_config"
+            ), patch(
+                "zotero_pdf_text.duplicate_attachments.run_duplicate_discovery",
+                return_value=root / "output" / "duplicate_attachments" / "run1",
+            ) as mock_run:
+                mock_load_config.return_value = ProjectConfig(root, root, root, root / "output")
+                exit_code = main(["find-duplicate-attachments", "--mapping-report", str(root / "report.csv")])
+
+            self.assertEqual(exit_code, 0)
+            mock_run.assert_called_once()
 
 
 class OrphanCandidateCliTests(unittest.TestCase):

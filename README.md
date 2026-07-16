@@ -130,7 +130,9 @@ or `convert-new` does not. Add `--require-mcp` to fail if the `mcp` extra isn't 
 PDFs, and is the incremental command you'll run repeatedly as you add papers. See
 `docs/operations.md` for the full command reference (sampling, manual review of unverified
 matches, rebuilding vs. appending to the index, etc.) and `docs/architecture.md`/
-`docs/data-dictionary.md` for how the pipeline and schema fit together.
+`docs/data-dictionary.md` for how the pipeline and schema fit together. If a `dry-run` turns up
+unverified matches, orphan PDFs, or duplicate attachments — common early on while a library is
+still being built up — see `docs/library-cleanup.md` for which command to run and in what order.
 
 Smoke-test the index directly:
 

@@ -327,6 +327,20 @@ roadblocks above, these are still open:
    to a nonexistent file or an empty index (e.g. "no FTS index found at <path> — run
    `zotero-pdf-text convert` first"), so the failure is actionable instead of generic.
 
+6. **Partially fixed.** Duplicate Zotero attachments inflate the fulltext index. Found 2026-07-15
+   while auditing conversion timeouts: 70 Zotero parent items have 2+ linked PDF attachments (mostly
+   the same paper saved twice under slightly different filenames — a trailing `2`/`3`/`4`, or a
+   legitimate copy alongside a `z-lib.org` copy), producing 77 redundant converted/indexed rows out
+   of 1604 (~4.8%). `find-duplicate-attachments` (see `docs/operations.md`'s "Duplicate Attachment
+   Cleanup") now covers the safe subset: byte-identical duplicates within the same Zotero item,
+   auto-resolved only when exactly one filename lacks a trailing numeric suffix, written as a
+   `trash_item` write-plan gated by the existing `zotero-write approve`/`validate --require-approved`/
+   `apply --approve` flow — nothing is ever removed without that explicit approval step. Groups that
+   aren't byte-identical (same paper re-extracted from a different mirror/OCR pass, near-identical
+   text) or where the "keep" filename can't be picked unambiguously (3+ attachments, genuinely
+   different editions) are still a per-item judgment call and are reported as ambiguous rather than
+   guessed — see `ambiguous_duplicate_groups.csv` in the command's output directory.
+
 ### Updating An Existing Install With Write Extras (2026-07-15)
 
 Snags hit while reinstalling the stable venv to the latest version and adding the `zotero-write`
@@ -366,15 +380,12 @@ extra (marker deliberately excluded). All still open unless noted.
    Consider making `install-mcp --apply` idempotent (remove-then-add, or detect and update in
    place) so repointing an existing registration is a single command.
 
-8. **TODO — only `install-mcp` auto-resolves the config; every other subcommand defaults to a
-   literal `config.json` next to cwd.** `install-mcp`'s `--config` defaults to `None` and calls
-   `resolve_config_path()` (env var → `config.<hostname>.json` → `config.json`), but
-   `check-setup`, `dry-run`, `convert-*`, `zotero-write`, etc. default `--config` to
-   `Path("config.json")` and never call the resolver. So a config kept outside the checkout (e.g.
-   `~/.config/zotero_fulltext_mcp/config.json`) is **not** auto-found by those commands even
-   though the MCP server finds it — you must pass `--config <abs path>` explicitly or set
-   `ZOTERO_PDF_TEXT_CONFIG`. Least-surprise fix: route every subcommand's config default through
-   `resolve_config_path()`.
+8. **Fixed.** Only `install-mcp` used to auto-resolve the config; every other subcommand defaulted
+   to a literal `config.json` next to cwd instead of calling `resolve_config_path()` (env var →
+   `config.<hostname>.json` → `config.json`). A config kept outside the checkout (e.g.
+   `~/.config/zotero_fulltext_mcp/config.json`) was **not** auto-found by those commands even
+   though the MCP server found it — you had to pass `--config <abs path>` explicitly or set
+   `ZOTERO_PDF_TEXT_CONFIG`. All subcommands' `--config` defaults now call `resolve_config_path()`.
 
 9. **TODO — `config.<hostname>.json` uses `platform.node()` (the hostname), not the username.**
    A per-machine config named after the OS user (e.g. `config.<username>.json`) is silently
