@@ -202,6 +202,40 @@ class FindByteIdenticalDuplicatesTests(unittest.TestCase):
         self.assertEqual(len(result.ambiguous), 1)
         self.assertEqual(result.ambiguous[0].reason, "multiple attachments without a numeric suffix")
 
+    def test_rows_sharing_the_same_attachment_key_are_not_a_duplicate_pair(self):
+        # Real-world case: one row is the attachment's actual Zotero-linked path
+        # (mapped_verified), the other is a stray file the mapper's metadata-candidate fallback
+        # merely guessed belongs to the same item (mapped_unverified), reusing the SAME
+        # zotero_attachment_key rather than naming a second real attachment. There is only one
+        # real attachment here, so this must be skipped entirely -- not resolved (which would
+        # produce a trash_item plan whose "drop" target is the same key as "keep"), and not even
+        # reported as ambiguous.
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "mapping_report.csv"
+            _write_mapping_report(
+                path,
+                [
+                    {
+                        "zotero_parent_key": "PARENT1",
+                        "zotero_attachment_key": "SAMEKEY",
+                        "citation_key": "ghaderi2023",
+                        "source_name": "Ghaderi et al - 2023 - A Framework 1.pdf",
+                        "sha256": "shared-hash",
+                    },
+                    {
+                        "zotero_parent_key": "PARENT1",
+                        "zotero_attachment_key": "SAMEKEY",
+                        "citation_key": "ghaderi2023",
+                        "source_name": "Ghaderi et al - 2023 - A Framework.pdf",
+                        "sha256": "shared-hash",
+                    },
+                ],
+            )
+            result = find_byte_identical_duplicates(path)
+
+        self.assertEqual(result.resolved, [])
+        self.assertEqual(result.ambiguous, [])
+
     def test_different_parents_or_hashes_are_not_grouped(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "mapping_report.csv"
