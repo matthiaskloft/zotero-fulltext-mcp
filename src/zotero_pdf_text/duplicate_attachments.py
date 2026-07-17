@@ -140,14 +140,18 @@ def find_byte_identical_duplicates(mapping_report_path: Path) -> DuplicateDiscov
     ambiguous: list[AmbiguousDuplicateGroup] = []
     for (parent_key, sha256), members in groups.items():
         citation_key = members[0].get("citation_key", "")
+        # Two rows can share the same zotero_attachment_key (see docstring); when they do, prefer
+        # the row that's actually the attachment's real Zotero-linked path (mapped_verified) for
+        # this file's filename, not whichever row happens to appear first in the CSV -- otherwise
+        # a resolved group could report a fabricated "keep_filename" (a guessed candidate's name)
+        # instead of the real attachment's, misleading whoever reviews the plan before approving it.
         files_by_key: dict[str, DuplicateFile] = {}
         for member in members:
             key = member["zotero_attachment_key"]
-            if key not in files_by_key:
-                files_by_key[key] = DuplicateFile(
-                    attachment_key=key,
-                    filename=Path(member.get("source_name") or member.get("source_path", "")).name,
-                )
+            filename = Path(member.get("source_name") or member.get("source_path", "")).name
+            existing = files_by_key.get(key)
+            if existing is None or member.get("classification") == "mapped_verified":
+                files_by_key[key] = DuplicateFile(attachment_key=key, filename=filename)
         files = tuple(files_by_key.values())
         if len(files) < 2:
             continue
