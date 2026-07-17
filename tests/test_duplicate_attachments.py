@@ -18,6 +18,7 @@ FIELDNAMES = [
     "citation_key",
     "source_name",
     "sha256",
+    "classification",
 ]
 
 
@@ -201,6 +202,85 @@ class FindByteIdenticalDuplicatesTests(unittest.TestCase):
         self.assertEqual(result.resolved, [])
         self.assertEqual(len(result.ambiguous), 1)
         self.assertEqual(result.ambiguous[0].reason, "multiple attachments without a numeric suffix")
+
+    def test_rows_sharing_the_same_attachment_key_are_not_a_duplicate_pair(self):
+        # Real-world case: one row is the attachment's actual Zotero-linked path
+        # (mapped_verified), the other is a stray file the mapper's metadata-candidate fallback
+        # merely guessed belongs to the same item (mapped_unverified), reusing the SAME
+        # zotero_attachment_key rather than naming a second real attachment. There is only one
+        # real attachment here, so this must be skipped entirely -- not resolved (which would
+        # produce a trash_item plan whose "drop" target is the same key as "keep"), and not even
+        # reported as ambiguous.
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "mapping_report.csv"
+            _write_mapping_report(
+                path,
+                [
+                    {
+                        "zotero_parent_key": "PARENT1",
+                        "zotero_attachment_key": "SAMEKEY",
+                        "citation_key": "ghaderi2023",
+                        "source_name": "Ghaderi et al - 2023 - A Framework 1.pdf",
+                        "sha256": "shared-hash",
+                    },
+                    {
+                        "zotero_parent_key": "PARENT1",
+                        "zotero_attachment_key": "SAMEKEY",
+                        "citation_key": "ghaderi2023",
+                        "source_name": "Ghaderi et al - 2023 - A Framework.pdf",
+                        "sha256": "shared-hash",
+                    },
+                ],
+            )
+            result = find_byte_identical_duplicates(path)
+
+        self.assertEqual(result.resolved, [])
+        self.assertEqual(result.ambiguous, [])
+
+    def test_mixed_group_prefers_mapped_verified_filename_for_the_shared_key(self):
+        # A genuinely resolvable group (two DISTINCT attachment keys, one suffixed) where one of
+        # those keys also has a same-key guessed-candidate artifact row (see the test above). The
+        # artifact row appears first in the CSV with a fabricated filename; the real
+        # mapped_verified row for that same key appears second. keep_filename must reflect the
+        # real linked file, not whichever row happened to come first.
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "mapping_report.csv"
+            _write_mapping_report(
+                path,
+                [
+                    {
+                        "zotero_parent_key": "PARENT1",
+                        "zotero_attachment_key": "REALKEY",
+                        "citation_key": "smith2020",
+                        "source_name": "Guessed Candidate Name.pdf",
+                        "sha256": "shared-hash",
+                        "classification": "mapped_unverified",
+                    },
+                    {
+                        "zotero_parent_key": "PARENT1",
+                        "zotero_attachment_key": "REALKEY",
+                        "citation_key": "smith2020",
+                        "source_name": "Smith - 2020 - Real Title.pdf",
+                        "sha256": "shared-hash",
+                        "classification": "mapped_verified",
+                    },
+                    {
+                        "zotero_parent_key": "PARENT1",
+                        "zotero_attachment_key": "DROPKEY",
+                        "citation_key": "smith2020",
+                        "source_name": "Smith - 2020 - Real Title 1.pdf",
+                        "sha256": "shared-hash",
+                        "classification": "mapped_verified",
+                    },
+                ],
+            )
+            result = find_byte_identical_duplicates(path)
+
+        self.assertEqual(len(result.resolved), 1)
+        group = result.resolved[0]
+        self.assertEqual(group.keep_key, "REALKEY")
+        self.assertEqual(group.keep_filename, "Smith - 2020 - Real Title.pdf")
+        self.assertEqual(group.drop_files[0].attachment_key, "DROPKEY")
 
     def test_different_parents_or_hashes_are_not_grouped(self):
         with tempfile.TemporaryDirectory() as tmp:

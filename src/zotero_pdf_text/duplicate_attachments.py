@@ -107,14 +107,24 @@ def find_byte_identical_duplicates(mapping_report_path: Path) -> DuplicateDiscov
     slightly different filenames (a trailing suffix, or a mirror/z-lib copy).
 
     Only rows with both a zotero_parent_key and zotero_attachment_key (i.e. the mapper actually
-    matched the file to a Zotero item, unlike an orphan_pdf/unsupported row) are considered. Within
-    a group of 2+ attachments sharing the same parent and file hash: if exactly one member's
-    filename has no other group member's stripped-suffix form matching it (see _strip_suffix), it
-    is kept, and every other member is accepted as a drop only if stripping its own suffix yields
-    exactly that filename; otherwise (zero or multiple candidates without a suffix, or a suffixed
-    filename that doesn't actually extend the keep candidate -- e.g. genuinely different editions,
-    or an unexpected naming scheme) the group is reported as ambiguous and left for manual review
-    rather than guessed.
+    matched the file to a Zotero item, unlike an orphan_pdf/unsupported row) are considered. A real
+    Zotero library's mapping report routinely has two rows sharing the exact same
+    zotero_attachment_key under one parent: one row is the attachment's real Zotero-linked path
+    (`mapped_verified`), and the other is a stray file the mapper's metadata-candidate fallback
+    merely guessed belongs to the same item (`mapped_unverified`/`possible_mismatch`), reusing that
+    already-linked attachment's key rather than naming a second real attachment. Those rows are not
+    two attachments to choose between -- there is only one real Zotero attachment in that case, so
+    rows are first collapsed to one file per distinct zotero_attachment_key; a parent+hash group
+    left with fewer than 2 distinct attachment keys after that has nothing to dedupe and is skipped
+    entirely (not even reported as ambiguous).
+
+    Within a genuine group of 2+ *distinct* attachments sharing the same parent and file hash: if
+    exactly one member's filename has no other group member's stripped-suffix form matching it
+    (see _strip_suffix), it is kept, and every other member is accepted as a drop only if stripping
+    its own suffix yields exactly that filename; otherwise (zero or multiple candidates without a
+    suffix, or a suffixed filename that doesn't actually extend the keep candidate -- e.g.
+    genuinely different editions, or an unexpected naming scheme) the group is reported as
+    ambiguous and left for manual review rather than guessed.
     """
     rows = _load_mapping_rows(mapping_report_path)
     groups: dict[tuple[str, str], list[dict[str, str]]] = {}
@@ -129,16 +139,22 @@ def find_byte_identical_duplicates(mapping_report_path: Path) -> DuplicateDiscov
     resolved: list[ResolvedDuplicateGroup] = []
     ambiguous: list[AmbiguousDuplicateGroup] = []
     for (parent_key, sha256), members in groups.items():
-        if len(members) < 2:
-            continue
         citation_key = members[0].get("citation_key", "")
-        files = tuple(
-            DuplicateFile(
-                attachment_key=member["zotero_attachment_key"],
-                filename=Path(member.get("source_name") or member.get("source_path", "")).name,
-            )
-            for member in members
-        )
+        # Two rows can share the same zotero_attachment_key (see docstring); when they do, prefer
+        # the row that's actually the attachment's real Zotero-linked path (mapped_verified) for
+        # this file's filename, not whichever row happens to appear first in the CSV -- otherwise
+        # a resolved group could report a fabricated "keep_filename" (a guessed candidate's name)
+        # instead of the real attachment's, misleading whoever reviews the plan before approving it.
+        files_by_key: dict[str, DuplicateFile] = {}
+        for member in members:
+            key = member["zotero_attachment_key"]
+            filename = Path(member.get("source_name") or member.get("source_path", "")).name
+            existing = files_by_key.get(key)
+            if existing is None or member.get("classification") == "mapped_verified":
+                files_by_key[key] = DuplicateFile(attachment_key=key, filename=filename)
+        files = tuple(files_by_key.values())
+        if len(files) < 2:
+            continue
         stems = {f.attachment_key: _stem(f.filename) for f in files}
         no_suffix = [f for f in files if _strip_suffix(stems[f.attachment_key]) is None]
         if len(no_suffix) != 1:
