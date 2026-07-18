@@ -1,15 +1,11 @@
 from __future__ import annotations
 
-import contextlib
 import csv
 import hashlib
 import json
-import os
-from dataclasses import asdict, dataclass
-from datetime import datetime
+from dataclasses import dataclass
 from pathlib import Path
 
-from ._atomic import replace_with_retry
 from .identity import strip_front_matter
 
 
@@ -36,24 +32,6 @@ class TextIndexRecord:
     text: str
 
 
-def _atomic_write_text(path: Path, content: str) -> None:
-    """Write content to path via a same-directory temp file plus atomic replace.
-
-    A crash or interruption mid-write leaves the temp file orphaned (cleaned up on the next
-    successful call, or manually) rather than leaving `path` itself truncated or half-written.
-    """
-    tmp_path = path.with_name(f".{path.name}.tmp-{os.getpid()}")
-    try:
-        tmp_path.write_text(content, encoding="utf-8", newline="\n")
-        replace_with_retry(tmp_path, path)
-    finally:
-        # Suppress cleanup failures so they never shadow a real exception from the write/replace
-        # above (missing_ok=True already handles the common case where the temp file no longer
-        # exists because the replace succeeded).
-        with contextlib.suppress(OSError):
-            tmp_path.unlink(missing_ok=True)
-
-
 def load_indexed_keys(jsonl_path: Path) -> set[str]:
     """Return the set of zotero_attachment_key values already present in a JSONL index."""
     if not jsonl_path.exists():
@@ -70,74 +48,6 @@ def load_indexed_keys(jsonl_path: Path) -> set[str]:
                 if key:
                     keys.add(key)
     return keys
-
-
-def append_text_index(new_manifest: Path, existing_jsonl: Path, output: Path) -> Path:
-    """Append records from new_manifest to existing_jsonl, skipping already-indexed attachment keys."""
-    output.parent.mkdir(parents=True, exist_ok=True)
-    existing_keys = load_indexed_keys(existing_jsonl)
-    new_rows = [
-        row
-        for row in _converted_rows(new_manifest)
-        if row.get("zotero_attachment_key", "") not in existing_keys
-    ]
-    if not new_rows:
-        if output.resolve() != existing_jsonl.resolve() and existing_jsonl.exists():
-            import shutil
-            shutil.copy2(existing_jsonl, output)
-        return output
-    new_records = [_record_from_manifest_row(row) for row in new_rows]
-    existing_text = existing_jsonl.read_text(encoding="utf-8") if existing_jsonl.exists() else ""
-    parts: list[str] = []
-    if existing_text:
-        parts.append(existing_text)
-        if not existing_text.endswith("\n"):
-            parts.append("\n")
-    for record in new_records:
-        parts.append(json.dumps(asdict(record), ensure_ascii=False) + "\n")
-    _atomic_write_text(output, "".join(parts))
-    return output
-
-
-def replace_text_index_record(jsonl_path: Path, attachment_key: str, new_record: TextIndexRecord) -> Path:
-    """Replace the JSONL line for attachment_key with new_record, preserving all other lines and order."""
-    if not jsonl_path.exists():
-        raise FileNotFoundError(jsonl_path)
-    # Split on the literal "\n" the writer uses, not str.splitlines() -- splitlines() also
-    # breaks on Unicode line/paragraph separators (U+2028/U+2029), which can legitimately
-    # appear inside a record's extracted text and would otherwise fragment that JSON line.
-    content = jsonl_path.read_text(encoding="utf-8")
-    lines = content.split("\n")
-    if lines and lines[-1] == "":
-        lines = lines[:-1]
-    new_lines: list[str] = []
-    replaced = False
-    for line in lines:
-        if not line.strip():
-            new_lines.append(line)
-            continue
-        record = json.loads(line)
-        if record.get("zotero_attachment_key") == attachment_key:
-            new_lines.append(json.dumps(asdict(new_record), ensure_ascii=False))
-            replaced = True
-        else:
-            new_lines.append(line)
-    if not replaced:
-        raise KeyError(f"No JSONL record found for attachment key {attachment_key}")
-    _atomic_write_text(jsonl_path, "\n".join(new_lines) + "\n")
-    return jsonl_path
-
-
-def build_text_index(manifest: Path, output: Path) -> Path:
-    if not manifest.exists():
-        raise FileNotFoundError(manifest)
-    output.parent.mkdir(parents=True, exist_ok=True)
-
-    records = [_record_from_manifest_row(row) for row in _converted_rows(manifest)]
-    content = "".join(json.dumps(asdict(record), ensure_ascii=False) + "\n" for record in records)
-    _atomic_write_text(output, content)
-    _write_summary(output.with_suffix(".summary.md"), manifest, output, records)
-    return output
 
 
 def _converted_rows(manifest: Path) -> list[dict[str, str]]:
@@ -183,26 +93,3 @@ def _sha256(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
-
-
-def _write_summary(path: Path, manifest: Path, output: Path, records: list[TextIndexRecord]) -> None:
-    total_chars = sum(record.char_count for record in records)
-    total_words = sum(record.word_count for record in records)
-    lines = [
-        "# Zotero Text Index Summary",
-        "",
-        f"- Created: {datetime.now().isoformat(timespec='seconds')}",
-        f"- Manifest: `{manifest}`",
-        f"- Index: `{output}`",
-        f"- Records: {len(records)}",
-        f"- Total characters: {total_chars}",
-        f"- Total words: {total_words}",
-        "",
-        "## Schema",
-        "",
-        "- Zotero keys, citation keys, and bibliographic metadata",
-        "- Source PDF and Markdown paths",
-        "- Markdown SHA-256 and text size statistics",
-        "- Full Markdown-derived text in `text`",
-    ]
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")

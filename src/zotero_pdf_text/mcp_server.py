@@ -7,8 +7,9 @@ import os
 import sqlite3
 from pathlib import Path
 
+from .artifacts import ArtifactError, ManagedIndexMissingError, resolve_reader_db_path
 from .config import load_config, resolve_config_path
-from .fts import connect_readonly
+from .fts import IndexSchemaUnsupportedError, connect_readonly
 from .mcp_contract import PublicMcpError, create_server
 
 
@@ -103,14 +104,37 @@ def _load_server_config(path: Path):
 
 
 def _validate_startup_database(db_path: Path) -> None:
-    if not db_path.is_file():
+    # Resolve the managed current generation via the pointer next to db_path -- the only way an
+    # index is located. Tool requests re-resolve per call, so a generation published while the
+    # server runs is picked up without a restart.
+    try:
+        resolved = resolve_reader_db_path(db_path)
+    except ManagedIndexMissingError as exc:
+        raise SystemExit(
+            _startup_error("database_unavailable", "The selected local full-text index is unavailable.")
+        ) from exc
+    except ArtifactError as exc:
+        raise SystemExit(
+            _startup_error(
+                "index_pointer_invalid",
+                "The managed index pointer is invalid or names a missing generation. Re-publish the index with the CLI's rebuild-index command.",
+            )
+        ) from exc
+    if not resolved.is_file():
         raise SystemExit(_startup_error("database_unavailable", "The selected local full-text index is unavailable."))
     try:
-        connection = connect_readonly(db_path)
+        connection = connect_readonly(resolved)
         try:
             connection.execute("PRAGMA schema_version").fetchone()
         finally:
             connection.close()
+    except IndexSchemaUnsupportedError as exc:
+        raise SystemExit(
+            _startup_error(
+                "index_schema_unsupported",
+                "The selected database is not a supported full-text index. Rebuild it with the CLI's rebuild-index command.",
+            )
+        ) from exc
     except (sqlite3.DatabaseError, OSError, FileNotFoundError) as exc:
         raise SystemExit(_startup_error("database_unavailable", "The selected local full-text index is unavailable.")) from exc
 

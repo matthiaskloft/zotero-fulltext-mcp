@@ -9,7 +9,7 @@ from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
-from zotero_pdf_text.cli import _pipeline_lock_root, _shell_quote, build_parser, main
+from zotero_pdf_text.cli import _shell_quote, build_parser, main
 from zotero_pdf_text.config import resolve_config_path
 from zotero_pdf_text.fts import ChunkNotFoundError, SearchResult
 from zotero_pdf_text.math_ocr import ReconvertResult
@@ -21,8 +21,6 @@ class ReconvertMathCliTests(unittest.TestCase):
         self.assertEqual(args.command, "reconvert-math")
         self.assertEqual(args.key, "ABCD1234")
         self.assertEqual(args.config, resolve_config_path())
-        self.assertIsNone(args.jsonl)
-        self.assertIsNone(args.fts_db)
         self.assertEqual(args.timeout_seconds, 5400)
 
     def test_dispatch_calls_reconvert_with_marker_and_returns_zero_on_success(self):
@@ -409,20 +407,6 @@ class OrphanCandidateCliTests(unittest.TestCase):
                 )
 
             self.assertEqual(exit_code, 1)
-
-
-class PipelineLockRootTests(unittest.TestCase):
-    def test_walks_up_past_index_directory(self):
-        # build-index/append-index/build-fts have no --config, only an explicit index path, but
-        # must lock the same root convert-new/reconvert-math derive from config.output_root --
-        # otherwise commands writing the same index files can race past each other's lock.
-        output_root = Path("C:/data/converted_text")
-        index_path = output_root / "index" / "zotero_text_index.jsonl"
-        self.assertEqual(_pipeline_lock_root(index_path), output_root)
-
-    def test_falls_back_to_immediate_parent_for_non_conventional_layout(self):
-        path = Path("C:/data/custom_index.jsonl")
-        self.assertEqual(_pipeline_lock_root(path), Path("C:/data"))
 
 
 class ShellQuoteTests(unittest.TestCase):
@@ -851,100 +835,151 @@ class InstallMcpCliTests(unittest.TestCase):
             )
 
 
-class AppendIndexCliTests(unittest.TestCase):
-    def test_parser_defaults(self):
-        args = build_parser().parse_args(["append-index", "--manifest", "new.csv"])
-        self.assertEqual(args.command, "append-index")
-        self.assertEqual(args.manifest, Path("new.csv"))
-        self.assertEqual(args.index, Path("converted_text/index/zotero_text_index.jsonl"))
-        self.assertIsNone(args.fts_db)
+class ManagedIndexCliTests(unittest.TestCase):
+    _MANIFEST_HEADER = (
+        "status,output_path,zotero_attachment_key,zotero_parent_key,title,creators,year,doi,"
+        "citation_key,source_path,extraction_tool,page_count,classification,identity_status,"
+        "identity_rule,has_math\n"
+    )
 
-    def test_appends_new_rows_and_skips_existing_key(self):
+    def test_parser_defaults(self):
+        args = build_parser().parse_args(["rebuild-index"])
+        self.assertEqual(args.command, "rebuild-index")
+        self.assertIsNone(args.manifest)
+        self.assertIsNone(args.from_jsonl)
+        args = build_parser().parse_args(["update-index", "--manifest", "new.csv"])
+        self.assertEqual(args.command, "update-index")
+        self.assertEqual(args.manifest, Path("new.csv"))
+
+    def test_rebuild_migrates_legacy_jsonl_and_update_appends_new_rows(self):
+        from zotero_pdf_text.artifacts import current_generation_jsonl, read_current_pointer
+
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
+            output_root = root / "converted_text"
+            index_root = output_root / "index"
+            index_root.mkdir(parents=True)
             existing_md = root / "existing.md"
             existing_md.write_text("---\nzotero_attachment_key: OLD1\n---\nOld body", encoding="utf-8")
             new_md = root / "new.md"
             new_md.write_text("---\nzotero_attachment_key: NEW1\n---\nNew body", encoding="utf-8")
 
-            existing_manifest = root / "existing_manifest.csv"
-            existing_manifest.write_text(
-                "status,output_path,zotero_attachment_key,zotero_parent_key,title,creators,year,doi,"
-                "citation_key,source_path,extraction_tool,page_count,classification,identity_status,"
-                "identity_rule,has_math\n"
-                f"converted,{existing_md},OLD1,P1,Old Title,,,,,,pymupdf,1,mapped_verified,verified,doi_exact,false\n",
+            legacy_jsonl = index_root / "zotero_text_index.jsonl"
+            legacy_jsonl.write_text(
+                json.dumps(
+                    {
+                        "zotero_parent_key": "P1",
+                        "zotero_attachment_key": "OLD1",
+                        "title": "Old Title",
+                        "creators": "",
+                        "year": "",
+                        "doi": "",
+                        "citation_key": "",
+                        "source_path": "",
+                        "markdown_path": str(existing_md),
+                        "markdown_sha256": "old",
+                        "extraction_tool": "pymupdf",
+                        "char_count": 8,
+                        "word_count": 2,
+                        "page_count": "1",
+                        "classification": "mapped_verified",
+                        "identity_status": "verified",
+                        "identity_rule": "doi_exact",
+                        "has_math": False,
+                        "text": "Old body",
+                    }
+                )
+                + "\n",
                 encoding="utf-8",
             )
-            index_path = root / "index" / "zotero_text_index.jsonl"
-            from zotero_pdf_text.indexer import build_text_index
-
-            build_text_index(existing_manifest, index_path)
-
-            new_manifest = root / "new_manifest.csv"
-            new_manifest.write_text(
-                "status,output_path,zotero_attachment_key,zotero_parent_key,title,creators,year,doi,"
-                "citation_key,source_path,extraction_tool,page_count,classification,identity_status,"
-                "identity_rule,has_math\n"
-                f"converted,{new_md},NEW1,P2,New Title,,,,,,pymupdf,1,mapped_verified,fulltext_verified,"
-                "fulltext_review:agent,false\n"
-                f"converted,{existing_md},OLD1,P1,Old Title,,,,,,pymupdf,1,mapped_verified,verified,doi_exact,false\n",
-                encoding="utf-8",
-            )
-
-            exit_code = main(
-                [
-                    "append-index",
-                    "--manifest",
-                    str(new_manifest),
-                    "--index",
-                    str(index_path),
-                ]
-            )
-            self.assertEqual(exit_code, 0)
-
-            keys = {
-                json.loads(line)["zotero_attachment_key"]
-                for line in index_path.read_text(encoding="utf-8").splitlines()
-                if line.strip()
-            }
-            self.assertEqual(keys, {"OLD1", "NEW1"})
-            self.assertTrue((root / "index" / "zotero_text_index.sqlite").exists())
-
-    def test_rejects_index_and_fts_db_under_different_lock_roots(self):
-        # Regression test: append-index writes both --index and --fts-db. Locking only
-        # _pipeline_lock_root(args.index) would leave a --fts-db under a genuinely different
-        # output_root (e.g. a separate drive) unprotected by the lock -- a concurrent build-fts
-        # targeting that same FTS file could race past it. The command must refuse instead of
-        # silently guaranteeing less exclusion than the lock implies.
-        with tempfile.TemporaryDirectory() as tmp_a, tempfile.TemporaryDirectory() as tmp_b:
-            index_path = Path(tmp_a) / "index" / "zotero_text_index.jsonl"
-            index_path.parent.mkdir(parents=True)
-            index_path.write_text("", encoding="utf-8")
-            manifest_path = Path(tmp_a) / "manifest.csv"
-            manifest_path.write_text(
-                "status,output_path,zotero_attachment_key,zotero_parent_key,title,creators,year,doi,"
-                "citation_key,source_path,extraction_tool,page_count,classification,identity_status,"
-                "identity_rule,has_math\n",
-                encoding="utf-8",
-            )
-            fts_db_path = Path(tmp_b) / "search" / "zotero_text_index.sqlite"
 
             buffer = io.StringIO()
             with redirect_stdout(buffer):
-                exit_code = main(
-                    [
-                        "append-index",
-                        "--manifest",
-                        str(manifest_path),
-                        "--index",
-                        str(index_path),
-                        "--fts-db",
-                        str(fts_db_path),
-                    ]
-                )
+                exit_code = main(["rebuild-index", "--output-root", str(output_root)])
+            self.assertEqual(exit_code, 0, buffer.getvalue())
+            pointer = read_current_pointer(index_root)
+            self.assertIsNotNone(pointer)
+            first_generation = pointer["current_generation"]
 
+            new_manifest = root / "new_manifest.csv"
+            new_manifest.write_text(
+                self._MANIFEST_HEADER
+                + f"converted,{new_md},NEW1,P2,New Title,,,,,,pymupdf,1,mapped_verified,fulltext_verified,"
+                "fulltext_review:agent,false\n"
+                + f"converted,{existing_md},OLD1,P1,Old Title,,,,,,pymupdf,1,mapped_verified,verified,doi_exact,false\n",
+                encoding="utf-8",
+            )
+            buffer = io.StringIO()
+            with redirect_stdout(buffer):
+                exit_code = main(
+                    ["update-index", "--output-root", str(output_root), "--manifest", str(new_manifest)]
+                )
+            self.assertEqual(exit_code, 0, buffer.getvalue())
+            payload = json.loads(buffer.getvalue())
+            self.assertEqual(payload["new_records"], 1)
+            self.assertNotEqual(payload["generation_id"], first_generation)
+
+            current_jsonl = current_generation_jsonl(index_root)
+            keys = [
+                json.loads(line)["zotero_attachment_key"]
+                for line in current_jsonl.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            self.assertEqual(keys, ["OLD1", "NEW1"])
+            # The legacy files are left untouched for the user to remove manually.
+            self.assertTrue(legacy_jsonl.exists())
+
+    def test_update_index_without_generation_directs_to_rebuild(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            output_root = Path(tmp) / "converted_text"
+            manifest = Path(tmp) / "manifest.csv"
+            manifest.write_text(self._MANIFEST_HEADER, encoding="utf-8")
+            buffer = io.StringIO()
+            with redirect_stdout(buffer):
+                exit_code = main(
+                    ["update-index", "--output-root", str(output_root), "--manifest", str(manifest)]
+                )
             self.assertEqual(exit_code, 2)
-            self.assertFalse(fts_db_path.exists())
+
+    def test_rebuild_index_reports_duplicate_attachment_keys(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            output_root = root / "converted_text"
+            index_root = output_root / "index"
+            index_root.mkdir(parents=True)
+            record = {
+                "zotero_parent_key": "P1",
+                "zotero_attachment_key": "DUP1",
+                "title": "Title",
+                "creators": "",
+                "year": "",
+                "doi": "",
+                "citation_key": "",
+                "source_path": "",
+                "markdown_path": "x.md",
+                "markdown_sha256": "a",
+                "extraction_tool": "pymupdf",
+                "char_count": 4,
+                "word_count": 1,
+                "page_count": "1",
+                "classification": "mapped_verified",
+                "identity_status": "verified",
+                "identity_rule": "doi_exact",
+                "has_math": False,
+                "text": "body",
+            }
+            legacy_jsonl = index_root / "zotero_text_index.jsonl"
+            legacy_jsonl.write_text(
+                json.dumps(record) + "\n" + json.dumps(record) + "\n", encoding="utf-8"
+            )
+            buffer = io.StringIO()
+            with redirect_stdout(buffer):
+                exit_code = main(["rebuild-index", "--output-root", str(output_root)])
+            self.assertEqual(exit_code, 2)
+            # No generation was published.
+            from zotero_pdf_text.artifacts import read_current_pointer
+
+            self.assertIsNone(read_current_pointer(index_root))
 
 
 class SearchCliTests(unittest.TestCase):
@@ -956,7 +991,9 @@ class SearchCliTests(unittest.TestCase):
         self.assertEqual(any_terms.search_mode, "any_terms")
 
     def test_json_search_result_reports_mode_and_no_results(self):
-        with patch("zotero_pdf_text.cli.search_fts", return_value=[]) as search:
+        with patch("zotero_pdf_text.cli.search_fts", return_value=[]) as search, patch(
+            "zotero_pdf_text.cli.resolve_reader_db_path", side_effect=lambda p: p
+        ):
             output = io.StringIO()
             with redirect_stdout(output):
                 exit_code = main(
@@ -991,7 +1028,9 @@ class SearchCliTests(unittest.TestCase):
             identity_rule="doi_exact",
             has_math=False,
         )
-        with patch("zotero_pdf_text.cli.search_fts", return_value=[result]):
+        with patch("zotero_pdf_text.cli.search_fts", return_value=[result]), patch(
+            "zotero_pdf_text.cli.resolve_reader_db_path", side_effect=lambda p: p
+        ):
             output = io.StringIO()
             with redirect_stdout(output):
                 exit_code = main(["search-fts", "--db", "unused.sqlite", "--query", "title", "--json"])
@@ -1005,7 +1044,7 @@ class SearchCliTests(unittest.TestCase):
         with patch(
             "zotero_pdf_text.cli.get_fulltext",
             side_effect=ChunkNotFoundError("Chunk 99 does not exist for attachment ATTACH1"),
-        ):
+        ), patch("zotero_pdf_text.cli.resolve_reader_db_path", side_effect=lambda p: p):
             output = io.StringIO()
             with redirect_stdout(output):
                 exit_code = main(

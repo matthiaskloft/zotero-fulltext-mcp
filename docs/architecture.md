@@ -27,19 +27,23 @@ as primary library records.
    linked PDFs, and writes mapping reports.
 2. `convert-verified` converts `mapped_verified` PDFs to Markdown with YAML
    front matter.
-3. `build-index` reads a conversion manifest and creates a JSONL sidecar with
-   metadata, paths, checksums, conversion metadata, and full text (full rebuild,
-   for the first build or a manifest that already covers everything trusted).
-   `append-index` adds a smaller manifest's new rows into an existing JSONL
-   sidecar instead, skipping attachment keys already indexed; `convert-new` runs
-   dry-run, conversion, and this append step together for new items.
-4. `build-fts` reads the JSONL sidecar and creates a SQLite FTS5 database with
-   chunked searchable text (`append-index` triggers this automatically).
-5. LLM tools use Zotero MCP for live Zotero metadata and the full-text sidecar
+3. `rebuild-index` reads a conversion manifest (or snapshots an existing JSONL sidecar) and
+   stages a complete **index generation** under `<output_root>/index/generations/<id>/`: the
+   JSONL sidecar (metadata, paths, checksums, conversion metadata, full text), a SQLite FTS5
+   database with chunked searchable text, and an artifact manifest with checksums and build
+   parameters. The generation is validated (checksums, `PRAGMA integrity_check`, record/chunk
+   counts, attachment-key uniqueness) and only then published by atomically replacing the
+   `current.json` pointer; the previous generation is retained for rollback. `update-index`
+   publishes a successor generation from the current one plus a smaller manifest's new rows,
+   skipping attachment keys already indexed; `convert-new` runs dry-run, conversion, and this
+   update step together for new items. A publish journal makes an interrupted publication
+   recoverable by the next writer run; readers never observe a partially updated index because
+   they resolve the pointer per request and open exactly one complete generation.
+4. LLM tools use Zotero MCP for live Zotero metadata and the full-text sidecar
    for bounded text retrieval.
-6. Better BibTeX supplies authoritative BibTeX/BibLaTeX entries by
+5. Better BibTeX supplies authoritative BibTeX/BibLaTeX entries by
    `citation_key` through its local JSON-RPC endpoint.
-7. `find-orphan-parents` (explicit opt-in, not part of `dry-run`) re-scans a prior dry-run's
+6. `find-orphan-parents` (explicit opt-in, not part of `dry-run`) re-scans a prior dry-run's
    `orphan_pdf` rows by PDF content instead of filename: it extracts early-page text from each
    orphan and scores it with the same `classify_identity` engine against Zotero items that have no
    *working* PDF attachment of their own -- either no PDF attachment row at all, or one whose

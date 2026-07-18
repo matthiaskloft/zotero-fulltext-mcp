@@ -32,10 +32,10 @@ class PipelineLockTests(unittest.TestCase):
             root = Path(tmp)
             with pipeline_write_lock(root, command="convert-new"):
                 with self.assertRaises(PipelineLockedError):
-                    with pipeline_write_lock(root, command="build-fts"):
+                    with pipeline_write_lock(root, command="rebuild-index"):
                         pass
 
-    def test_stale_lock_is_treated_as_free(self):
+    def test_stale_lock_fails_loudly_naming_holder(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             lock_path = root / LOCK_FILENAME
@@ -53,17 +53,27 @@ class PipelineLockTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
-            with pipeline_write_lock(root, command="build-fts"):
-                payload = json.loads(lock_path.read_text(encoding="utf-8"))
-                self.assertEqual(payload["command"], "build-fts")
+            with self.assertRaises(PipelineLockedError) as ctx:
+                with pipeline_write_lock(root, command="rebuild-index"):
+                    pass
+            message = str(ctx.exception)
+            self.assertIn("other-machine", message)
+            self.assertIn("stale", message)
+            self.assertIn("delete the lock file manually", message)
+            # The stale lock is never silently overwritten.
+            payload = json.loads(lock_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["hostname"], "other-machine")
 
-    def test_corrupt_lock_file_is_treated_as_free(self):
+    def test_corrupt_lock_file_fails_loudly(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             lock_path = root / LOCK_FILENAME
             lock_path.write_text("not json", encoding="utf-8")
-            with pipeline_write_lock(root, command="build-fts"):
-                self.assertTrue(lock_path.exists())
+            with self.assertRaises(PipelineLockedError) as ctx:
+                with pipeline_write_lock(root, command="rebuild-index"):
+                    pass
+            self.assertIn("unreadable or corrupt", str(ctx.exception))
+            self.assertEqual(lock_path.read_text(encoding="utf-8"), "not json")
 
 
 if __name__ == "__main__":

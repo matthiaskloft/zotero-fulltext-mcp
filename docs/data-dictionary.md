@@ -175,9 +175,41 @@ running the plan through `zotero-write approve`/`validate --require-approved`/`a
 what actually trashes the redundant attachments (see `docs/operations.md`'s "Duplicate Attachment
 Cleanup" and "Approval-Gated Zotero Writes" sections).
 
+## Managed Index Generations
+
+Under `<output_root>/index/`, the managed layout consists of:
+
+- `generations/<generation-id>/` — one immutable, complete publication of the derived index:
+  `index.jsonl` (the JSONL sidecar), `index.sqlite` (the FTS database), and
+  `artifact_manifest.json`. Generation IDs match `YYYYMMDDTHHMMSSZ-<8 hex>`; anything else is
+  rejected on read, and resolved directories are containment-checked beneath `generations/`.
+- `current.json` — the single atomically replaced publication pointer:
+  `schema_version` (currently 1), `current_generation`, `previous_generation` (retained for
+  rollback, `null` on the first publish), and `published_at` (UTC ISO-8601). It stores only
+  validated relative generation IDs, never filesystem paths.
+- `publish_journal.json` — transient; exists only between "generation validated" and "pointer
+  replaced" during a publication. Fields: `schema_version`, `state` (`publishing`),
+  `generation_id`, `previous_pointer` (the full prior pointer object or `null`), `started_at`.
+  The next write command consumes it deterministically: it completes the publication if the
+  named generation validates, otherwise removes the partial staging and leaves the prior
+  pointer untouched.
+
+`artifact_manifest.json` fields: `schema_version`, `generation_id`, `created_at`, `command`
+(the publishing command), `chunk_chars`/`overlap_chars` (build parameters, preserved by
+successor generations), `records`/`chunks`/`total_chars`/`total_words`, and `files` — a map of
+`index.jsonl`/`index.sqlite` to `{sha256, bytes}`. Validation before every publish re-derives
+the checksums and DB counts and refuses on any mismatch. Builds also refuse duplicate
+`zotero_attachment_key` values, which would otherwise make full-text retrieval return an
+arbitrary row.
+
+There is no legacy fallback: readers and writers both require the managed layout, and a root
+without `current.json` yields a hard error directing you to the one-time `rebuild-index`
+migration (which snapshots a legacy `zotero_text_index.jsonl` when present).
+
 ## JSONL Sidecar
 
-`zotero_text_index.jsonl` contains one record per available converted full text:
+The JSONL sidecar (`index.jsonl` inside a generation; legacy `zotero_text_index.jsonl`)
+contains one record per available converted full text:
 
 - Zotero keys
 - title, creators, year, DOI, citation key
@@ -196,7 +228,8 @@ just-in-time only — roughly 27s/page, so it is not meant for bulk reconversion
 
 ## SQLite FTS
 
-`zotero_text_index.sqlite` contains:
+The FTS database (`index.sqlite` inside a generation; legacy `zotero_text_index.sqlite`)
+contains:
 
 - `metadata`: one record per indexed attachment
 - `chunks`: bounded text chunks with character ranges

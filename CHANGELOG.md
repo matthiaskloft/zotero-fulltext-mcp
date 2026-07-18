@@ -7,6 +7,26 @@ All notable changes to this project are documented here. Format loosely follows
 
 ### Added
 
+- Transactional derived-index artifacts (hardening-plan Package 2, reduced scope): the JSONL
+  sidecar and SQLite FTS database are now published together as immutable, checksummed *index
+  generations* under `<output_root>/index/generations/<id>/`, behind a single atomically replaced
+  `current.json` pointer. A failed, interrupted, or invalid build can never take the published
+  index offline; a publish journal makes an interruption between validation and pointer swap
+  deterministically recoverable by the next write command; the previous generation is retained
+  for rollback and older ones are swept automatically. New `rebuild-index` (full generation from
+  a conversion manifest or an existing JSONL — also the one-time migration command from the
+  legacy layout) and `update-index` (successor generation from the current one plus a manifest's
+  new rows) commands are the only publication paths. Readers — the MCP server and the
+  `search-fts`/`get-fulltext`/`coverage-report` commands — resolve `current.json` per request
+  next to the configured `--db` path, which now acts purely as the index-root anchor, so
+  existing registrations keep working unchanged after the one-time migration. There is no
+  legacy standalone-database fallback: an unmigrated root fails loudly naming `rebuild-index`.
+- Index builds now reject duplicate `zotero_attachment_key` values with an actionable error
+  (previously a duplicate silently made full-text retrieval return an arbitrary row), and
+  readers detect a foreign/legacy SQLite schema and name the `rebuild-index` recovery command
+  instead of surfacing a low-level "no such table" error (`index_schema_unsupported`, and
+  `index_pointer_invalid` for a corrupt/tampered pointer, as MCP startup/tool error codes).
+
 - Conversion timeouts now scale with page count and a cheap vector-drawing-density scan (long or
   diagram-dense books no longer lose structure/images to the plain-text fallback needlessly), and
   every genuine primary-extractor timeout is recorded as a "timeout candidate" (per-run
@@ -39,6 +59,22 @@ All notable changes to this project are documented here. Format loosely follows
 
 ### Changed
 
+- **Removed** `build-index`, `append-index`, and `build-fts` (and their `indexer.py` writer
+  functions): each could publish a half-updated index (JSONL and SQLite replaced separately).
+  `indexer.py` is now a pure record-building module. `convert-new`, `reconvert-math`, and a successful
+  `retry-timeout --retry` publish successor generations instead of mutating the shared
+  JSONL/FTS files in place, and their `--jsonl`/`--fts-db` overrides were removed with the
+  in-place layout; math reconversion's index rollback logic is now simply "the pointer never
+  moved". The MCP `reconvert`/`retry-timeout` capabilities require the managed layout at
+  startup.
+- The pipeline write lock is acquired with an atomic exclusive create (closing a
+  check-then-write race between two local processes), and a stale or corrupt lock file now
+  fails loudly naming the recorded holder instead of being silently overwritten — on a
+  cloud-synced output tree a lock that merely looks stale can belong to a machine whose sync is
+  lagging. Delete `.pipeline.lock` manually only after confirming no other machine is mid-run.
+- Explicit `--output-dir` arguments on config-managed commands are resolved (including
+  symlinks) and rejected when they escape `output_root`, since the pipeline lock only protects
+  writes inside that tree.
 - The default MCP surface is now entirely read-only. Single-attachment math OCR is registered only
   with `--enable-reconvert` plus an explicit valid config; its confirmation literal remains defense
   in depth rather than a substitute for user approval. Reconversion preflights its JSONL sidecar

@@ -6,6 +6,12 @@ from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
 
+from zotero_pdf_text.artifacts import (
+    current_generation_jsonl,
+    resolve_reader_db_path,
+    stage_and_publish,
+    write_jsonl_from_existing,
+)
 from zotero_pdf_text.config import ProjectConfig
 from zotero_pdf_text.retry_timeout import (
     MAX_RETRY_TIMEOUT_SECONDS,
@@ -13,6 +19,19 @@ from zotero_pdf_text.retry_timeout import (
     skip_timeout_candidate,
 )
 from zotero_pdf_text.timeout_candidates import TimeoutCandidate, append_master_candidates, find_candidate
+
+
+def _publish_generation(output_root: Path, records: list[dict]) -> None:
+    """Publish a managed generation holding the given records (possibly none)."""
+    index_root = output_root / "index"
+    source = index_root / "seed.jsonl"
+    source.parent.mkdir(parents=True, exist_ok=True)
+    source.write_text(
+        "".join(json.dumps(record, ensure_ascii=False) + "\n" for record in records),
+        encoding="utf-8",
+    )
+    stage_and_publish(index_root, write_jsonl_from_existing(source), command="test")
+    source.unlink()
 
 
 def _seed_candidate(output_root: Path, source_path: Path, *, attempted_timeout_seconds: int = 600) -> None:
@@ -96,21 +115,19 @@ class RetryTimeoutCandidateTests(unittest.TestCase):
             pdf.write_bytes(b"%PDF")
             _seed_candidate(output_root, pdf)
             config = ProjectConfig(root, root, root, output_root)
-            jsonl_path = output_root / "index" / "zotero_text_index.jsonl"
-            fts_db_path = output_root / "index" / "zotero_text_index.sqlite"
+            _publish_generation(output_root, [])
 
             with patch("zotero_pdf_text.converter.subprocess.run", side_effect=_write_raw_markdown):
-                result = retry_timeout_candidate(
-                    "ATTACH", config=config, jsonl_path=jsonl_path, fts_db_path=fts_db_path
-                )
+                result = retry_timeout_candidate("ATTACH", config=config)
 
             self.assertTrue(result.ok, result.error)
             self.assertEqual(result.new_status, "resolved")
             self.assertEqual(result.extraction_tool, "pymupdf4llm.to_markdown")
-            records = [json.loads(line) for line in jsonl_path.read_text(encoding="utf-8").splitlines()]
+            jsonl_path = current_generation_jsonl(output_root / "index")
+            records = [json.loads(line) for line in jsonl_path.read_text(encoding="utf-8").splitlines() if line]
             self.assertEqual(len(records), 1)
             self.assertEqual(records[0]["zotero_attachment_key"], "ATTACH")
-            self.assertTrue(fts_db_path.exists())
+            self.assertTrue(resolve_reader_db_path(output_root / "index" / "zotero_text_index.sqlite").exists())
             candidate = find_candidate(output_root / "index" / "timeout_candidates.jsonl", "ATTACH")
             self.assertEqual(candidate["status"], "resolved")
             self.assertEqual(candidate["resolved_via"], "retry")
@@ -123,11 +140,9 @@ class RetryTimeoutCandidateTests(unittest.TestCase):
             pdf.write_bytes(b"%PDF")
             _seed_candidate(output_root, pdf)
             config = ProjectConfig(root, root, root, output_root)
-            jsonl_path = output_root / "index" / "zotero_text_index.jsonl"
-            fts_db_path = output_root / "index" / "zotero_text_index.sqlite"
-            jsonl_path.parent.mkdir(parents=True, exist_ok=True)
-            jsonl_path.write_text(
-                json.dumps(
+            _publish_generation(
+                output_root,
+                [
                     {
                         "zotero_parent_key": "PARENT",
                         "zotero_attachment_key": "ATTACH",
@@ -149,18 +164,15 @@ class RetryTimeoutCandidateTests(unittest.TestCase):
                         "has_math": False,
                         "text": "Old",
                     }
-                )
-                + "\n",
-                encoding="utf-8",
+                ],
             )
 
             with patch("zotero_pdf_text.converter.subprocess.run", side_effect=_write_raw_markdown):
-                result = retry_timeout_candidate(
-                    "ATTACH", config=config, jsonl_path=jsonl_path, fts_db_path=fts_db_path
-                )
+                result = retry_timeout_candidate("ATTACH", config=config)
 
             self.assertTrue(result.ok, result.error)
-            records = [json.loads(line) for line in jsonl_path.read_text(encoding="utf-8").splitlines()]
+            jsonl_path = current_generation_jsonl(output_root / "index")
+            records = [json.loads(line) for line in jsonl_path.read_text(encoding="utf-8").splitlines() if line]
             self.assertEqual(len(records), 1)  # replaced, not duplicated
             self.assertEqual(records[0]["extraction_tool"], "pymupdf4llm.to_markdown")
 
@@ -172,19 +184,18 @@ class RetryTimeoutCandidateTests(unittest.TestCase):
             pdf.write_bytes(b"%PDF")
             _seed_candidate(output_root, pdf)
             config = ProjectConfig(root, root, root, output_root)
-            jsonl_path = output_root / "index" / "zotero_text_index.jsonl"
-            fts_db_path = output_root / "index" / "zotero_text_index.sqlite"
+            _publish_generation(output_root, [])
+            jsonl_before = current_generation_jsonl(output_root / "index")
 
             def _raise_timeout(args, **kwargs):
                 raise subprocess.TimeoutExpired(cmd=args, timeout=kwargs.get("timeout"))
 
             with patch("zotero_pdf_text.converter.subprocess.run", side_effect=_raise_timeout):
-                result = retry_timeout_candidate(
-                    "ATTACH", config=config, jsonl_path=jsonl_path, fts_db_path=fts_db_path
-                )
+                result = retry_timeout_candidate("ATTACH", config=config)
 
             self.assertFalse(result.ok)
-            self.assertFalse(jsonl_path.exists())
+            # No successor generation was published.
+            self.assertEqual(current_generation_jsonl(output_root / "index"), jsonl_before)
             candidate = find_candidate(output_root / "index" / "timeout_candidates.jsonl", "ATTACH")
             self.assertEqual(candidate["status"], "pending")
             self.assertEqual(candidate["occurrence_count"], 2)  # bumped by the nested convert_verified call
@@ -195,12 +206,7 @@ class RetryTimeoutCandidateTests(unittest.TestCase):
             output_root = root / "output"
             config = ProjectConfig(root, root, root, output_root)
 
-            result = retry_timeout_candidate(
-                "MISSING",
-                config=config,
-                jsonl_path=output_root / "index" / "zotero_text_index.jsonl",
-                fts_db_path=output_root / "index" / "zotero_text_index.sqlite",
-            )
+            result = retry_timeout_candidate("MISSING", config=config)
 
             self.assertFalse(result.ok)
             self.assertIn("No timeout candidate found", result.error)
@@ -217,8 +223,6 @@ class RetryTimeoutCandidateTests(unittest.TestCase):
             result = retry_timeout_candidate(
                 "ATTACH",
                 config=config,
-                jsonl_path=output_root / "index" / "zotero_text_index.jsonl",
-                fts_db_path=output_root / "index" / "zotero_text_index.sqlite",
                 timeout_seconds=MAX_RETRY_TIMEOUT_SECONDS + 1,
             )
 
@@ -237,8 +241,6 @@ class RetryTimeoutCandidateTests(unittest.TestCase):
             result = retry_timeout_candidate(
                 "ATTACH",
                 config=config,
-                jsonl_path=output_root / "index" / "zotero_text_index.jsonl",
-                fts_db_path=output_root / "index" / "zotero_text_index.sqlite",
                 timeout_seconds=0,
             )
 
@@ -257,8 +259,6 @@ class RetryTimeoutCandidateTests(unittest.TestCase):
             result = retry_timeout_candidate(
                 "ATTACH",
                 config=config,
-                jsonl_path=output_root / "index" / "zotero_text_index.jsonl",
-                fts_db_path=output_root / "index" / "zotero_text_index.sqlite",
                 multiplier=0,
             )
 
@@ -277,8 +277,6 @@ class RetryTimeoutCandidateTests(unittest.TestCase):
             result = retry_timeout_candidate(
                 "ATTACH",
                 config=config,
-                jsonl_path=output_root / "index" / "zotero_text_index.jsonl",
-                fts_db_path=output_root / "index" / "zotero_text_index.sqlite",
                 multiplier=-2.0,
             )
 
@@ -293,13 +291,12 @@ class RetryTimeoutCandidateTests(unittest.TestCase):
             pdf.write_bytes(b"%PDF")
             _seed_candidate(output_root, pdf, attempted_timeout_seconds=10)
             config = ProjectConfig(root, root, root, output_root)
+            _publish_generation(output_root, [])
 
             with patch("zotero_pdf_text.converter.subprocess.run", side_effect=_write_raw_markdown):
                 result = retry_timeout_candidate(
                     "ATTACH",
                     config=config,
-                    jsonl_path=output_root / "index" / "zotero_text_index.jsonl",
-                    fts_db_path=output_root / "index" / "zotero_text_index.sqlite",
                     multiplier=0.001,
                 )
 
@@ -315,8 +312,6 @@ class RetryTimeoutCandidateTests(unittest.TestCase):
             result = retry_timeout_candidate(
                 "../escape",
                 config=config,
-                jsonl_path=output_root / "index" / "zotero_text_index.jsonl",
-                fts_db_path=output_root / "index" / "zotero_text_index.sqlite",
             )
 
             self.assertFalse(result.ok)
@@ -335,8 +330,6 @@ class RetryTimeoutCandidateTests(unittest.TestCase):
                 result = retry_timeout_candidate(
                     "ATTACH",
                     config=config,
-                    jsonl_path=output_root / "index" / "zotero_text_index.jsonl",
-                    fts_db_path=output_root / "index" / "zotero_text_index.sqlite",
                 )
 
             self.assertFalse(result.ok)
@@ -354,14 +347,29 @@ class RetryTimeoutCandidateTests(unittest.TestCase):
             result = retry_timeout_candidate(
                 "ATTACH",
                 config=config,
-                jsonl_path=output_root / "index" / "zotero_text_index.jsonl",
-                fts_db_path=output_root / "index" / "zotero_text_index.sqlite",
                 timeout_seconds=1000,
                 multiplier=2.0,
             )
 
             self.assertFalse(result.ok)
             self.assertIn("at most one", result.error)
+
+    def test_unmigrated_legacy_layout_returns_error_after_conversion(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            output_root = root / "output"
+            pdf = root / "paper.pdf"
+            pdf.write_bytes(b"%PDF")
+            _seed_candidate(output_root, pdf)
+            config = ProjectConfig(root, root, root, output_root)
+
+            with patch("zotero_pdf_text.converter.subprocess.run", side_effect=_write_raw_markdown):
+                result = retry_timeout_candidate("ATTACH", config=config)
+
+            self.assertFalse(result.ok)
+            self.assertIn("rebuild-index", result.error)
+            candidate = find_candidate(output_root / "index" / "timeout_candidates.jsonl", "ATTACH")
+            self.assertEqual(candidate["status"], "pending")
 
     def test_multiplier_scales_the_last_attempted_timeout(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -371,6 +379,7 @@ class RetryTimeoutCandidateTests(unittest.TestCase):
             pdf.write_bytes(b"%PDF")
             _seed_candidate(output_root, pdf, attempted_timeout_seconds=1000)
             config = ProjectConfig(root, root, root, output_root)
+            _publish_generation(output_root, [])
 
             calls = []
 
@@ -382,8 +391,6 @@ class RetryTimeoutCandidateTests(unittest.TestCase):
                 result = retry_timeout_candidate(
                     "ATTACH",
                     config=config,
-                    jsonl_path=output_root / "index" / "zotero_text_index.jsonl",
-                    fts_db_path=output_root / "index" / "zotero_text_index.sqlite",
                     multiplier=3.0,
                 )
 

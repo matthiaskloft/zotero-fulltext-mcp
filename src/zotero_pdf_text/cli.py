@@ -25,11 +25,26 @@ from .bibtex import (
     import_doi_via_connector,
     link_local_pdf,
 )
+from .artifacts import (
+    ArtifactError,
+    current_generation_jsonl,
+    resolve_reader_db_path,
+    stage_and_publish,
+    write_jsonl_appending_manifest,
+    write_jsonl_from_conversion_manifest,
+    write_jsonl_from_existing,
+)
 from .config import load_config, resolve_config_path, validate_config
 from .converter import convert_sample, convert_verified, default_worker_count
-from .fts import ChunkNotFoundError, build_fts_index, coverage_report, get_fulltext, search_fts
+from .fts import (
+    ChunkNotFoundError,
+    IndexSchemaUnsupportedError,
+    coverage_report,
+    get_fulltext,
+    search_fts,
+)
 from .ingestion import dry_run_ingest, ingest_approved
-from .indexer import append_text_index, build_text_index, load_indexed_keys
+from .indexer import load_indexed_keys
 from .lock import PipelineLockedError, pipeline_write_lock
 from .mapper import run_dry_run
 from .mcp_contract import (
@@ -75,20 +90,51 @@ def _default_fts_db() -> Path:
 DEFAULT_FTS_DB = _default_fts_db()
 
 
-def _pipeline_lock_root(index_related_path: Path) -> Path:
-    """Best-effort output_root for locking, for commands that take an explicit index path
-    instead of --config.
+def _resolve_managed_root(args: argparse.Namespace) -> tuple[Path, Path]:
+    """Resolve (output_root, index_root) for the managed index command family.
 
-    Index files conventionally live at <output_root>/index/<file> (see docs/operations.md).
-    convert-new and reconvert-math derive lock_root from their loaded config.output_root
-    directly; build-index/append-index/build-fts have no config, only an explicit --output/
-    --index path, so they must derive the equivalent root the same way to lock the same file --
-    otherwise two commands writing into the same pipeline output can race past each other's
-    lock. Walk up past a literal "index" directory component when present; otherwise fall back
-    to the immediate parent (locking a narrower, but still safe, scope).
+    ``--output-root`` is the explicit standalone escape hatch (tests, indexes managed outside a
+    full project config); otherwise the project config supplies ``output_root``. Only the
+    output root is needed here -- rebuild/update never touch Zotero paths, so this deliberately
+    does not run validate_config() and works without a Zotero installation present.
     """
-    parent = index_related_path.parent
-    return parent.parent if parent.name == "index" else parent
+    if getattr(args, "output_root", None) is not None:
+        output_root = args.output_root
+    else:
+        config_path = args.config if args.config is not None else resolve_config_path()
+        config = load_config(config_path)
+        output_root = config.output_root
+    return output_root, output_root / "index"
+
+
+def _default_rebuild_source(index_root: Path) -> Path | None:
+    """Pick rebuild-index's default JSONL source: current generation, else the legacy sidecar."""
+    current = current_generation_jsonl(index_root)
+    if current is not None:
+        return current
+    legacy = index_root / "zotero_text_index.jsonl"
+    return legacy if legacy.is_file() else None
+
+
+def _reject_outside_output_root(output_root: Path, candidate: Path | None, flag: str) -> bool:
+    """Return True (and print an error) when an explicit path escapes the managed output root.
+
+    The pipeline write lock lives at ``output_root``; a write target outside that tree would be
+    silently unprotected by the lock the command just took, so it is rejected up front. Symlinks
+    are resolved before comparison so a link inside the root cannot smuggle writes outside it.
+    """
+    if candidate is None:
+        return False
+    resolved_root = output_root.resolve()
+    resolved = candidate.resolve()
+    if resolved != resolved_root and resolved_root not in resolved.parents:
+        print(
+            f"{flag} ({candidate}) resolves outside the configured output_root ({output_root}); "
+            "the pipeline lock only covers writes inside output_root, so this path is refused.",
+            file=sys.stderr,
+        )
+        return True
+    return False
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -193,32 +239,56 @@ def build_parser() -> argparse.ArgumentParser:
         default=0.92,
         help="Minimum confidence required to promote an accepted review row.",
     )
-    index = subparsers.add_parser("build-index", help="Build a JSONL sidecar index from a conversion manifest.")
-    index.add_argument("--manifest", type=Path, required=True, help="Path to manifest.csv from a conversion run.")
-    index.add_argument(
-        "--output",
-        type=Path,
-        default=Path("converted_text/index/zotero_text_index.jsonl"),
-        help="Path to the JSONL index to write.",
+    rebuild_index = subparsers.add_parser(
+        "rebuild-index",
+        help=(
+            "Build and atomically publish a complete managed index generation (JSONL + SQLite FTS) "
+            "under <output_root>/index/generations/. Also the one-time migration command from the "
+            "legacy standalone zotero_text_index.jsonl/.sqlite layout."
+        ),
     )
-    append_index = subparsers.add_parser(
-        "append-index",
-        help="Append a small manifest's rows into an existing JSONL index (skips already-indexed attachment keys) and rebuild FTS.",
-    )
-    append_index.add_argument(
-        "--manifest", type=Path, required=True, help="Manifest.csv with the new rows to add (e.g. from apply-verification)."
-    )
-    append_index.add_argument(
-        "--index",
-        type=Path,
-        default=Path("converted_text/index/zotero_text_index.jsonl"),
-        help="Existing JSONL index to append into, in place.",
-    )
-    append_index.add_argument(
-        "--fts-db",
+    rebuild_index.add_argument("--config", type=Path, default=None, help="Path to project config JSON. Default: resolved for this machine.")
+    rebuild_index.add_argument(
+        "--output-root",
         type=Path,
         default=None,
-        help="SQLite FTS database to rebuild from the updated index. Defaults next to --index.",
+        help="Explicit output root to manage instead of the config's output_root (advanced/standalone use).",
+    )
+    rebuild_index_source = rebuild_index.add_mutually_exclusive_group()
+    rebuild_index_source.add_argument(
+        "--manifest",
+        type=Path,
+        default=None,
+        help="Conversion manifest.csv to rebuild the whole index from.",
+    )
+    rebuild_index_source.add_argument(
+        "--from-jsonl",
+        type=Path,
+        default=None,
+        help=(
+            "Existing JSONL sidecar to snapshot into the first managed generation. Default when "
+            "neither source is given: the current generation's JSONL (pure re-chunk rebuild), else "
+            "the legacy <output_root>/index/zotero_text_index.jsonl (migration)."
+        ),
+    )
+    rebuild_index.add_argument("--chunk-chars", type=int, default=None, help="Maximum characters per searchable chunk.")
+    rebuild_index.add_argument("--overlap-chars", type=int, default=None, help="Characters of overlap between chunks.")
+    update_index = subparsers.add_parser(
+        "update-index",
+        help=(
+            "Publish a successor managed generation: current generation's records plus a conversion "
+            "manifest's new rows (already-indexed attachment keys are skipped)."
+        ),
+    )
+    update_index.add_argument("--config", type=Path, default=None, help="Path to project config JSON. Default: resolved for this machine.")
+    update_index.add_argument(
+        "--output-root",
+        type=Path,
+        default=None,
+        help="Explicit output root to manage instead of the config's output_root (advanced/standalone use).",
+    )
+    update_index.add_argument(
+        "--manifest", type=Path, required=True, help="Manifest.csv with the new rows to add (e.g. from apply-verification)."
     )
     ensure = subparsers.add_parser("ensure-zotero", help="Start Zotero if needed and report connector health.")
     ensure.add_argument("--zotero-exe", type=Path, default=DEFAULT_ZOTERO_EXE, help="Path to zotero.exe.")
@@ -226,11 +296,6 @@ def build_parser() -> argparse.ArgumentParser:
     ensure.add_argument("--no-launch", action="store_true", help="Only check status; do not launch Zotero.")
     ensure.add_argument("--require-connector", action="store_true", help="Return non-zero if the local connector ping fails.")
     ensure.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
-    fts = subparsers.add_parser("build-fts", help="Build a SQLite FTS index from the JSONL sidecar.")
-    fts.add_argument("--index-jsonl", type=Path, required=True, help="Path to zotero_text_index.jsonl.")
-    fts.add_argument("--output", type=Path, default=DEFAULT_FTS_DB, help="SQLite FTS database to write.")
-    fts.add_argument("--chunk-chars", type=int, default=6000, help="Maximum characters per searchable chunk.")
-    fts.add_argument("--overlap-chars", type=int, default=500, help="Characters of overlap between chunks.")
     search = subparsers.add_parser("search-fts", help="Search the SQLite FTS full-text index.")
     search.add_argument("--db", type=Path, default=DEFAULT_FTS_DB, help="SQLite FTS database path.")
     search.add_argument("--query", required=True, help="Search query.")
@@ -386,18 +451,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     convert_new.add_argument("--config", type=Path, default=resolve_config_path(), help="Path to project config JSON. Default: resolved for this machine.")
     convert_new.add_argument(
-        "--jsonl",
-        type=Path,
-        default=None,
-        help="JSONL index to update. Default: <output_root>/index/zotero_text_index.jsonl.",
-    )
-    convert_new.add_argument(
-        "--fts-db",
-        type=Path,
-        default=None,
-        help="SQLite FTS database to rebuild. Default: ZOTERO_FULLTEXT_DB env var or the standard path.",
-    )
-    convert_new.add_argument(
         "--workers",
         type=int,
         default=None,
@@ -415,18 +468,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     reconvert_math.add_argument("--key", required=True, help="Zotero attachment key.")
     reconvert_math.add_argument("--config", type=Path, default=resolve_config_path(), help="Path to project config JSON. Default: resolved for this machine.")
-    reconvert_math.add_argument(
-        "--jsonl",
-        type=Path,
-        default=None,
-        help="JSONL index to update. Default: <output_root>/index/zotero_text_index.jsonl.",
-    )
-    reconvert_math.add_argument(
-        "--fts-db",
-        type=Path,
-        default=None,
-        help="SQLite FTS database to rebuild. Default: ZOTERO_FULLTEXT_DB env var or the standard path.",
-    )
     reconvert_math.add_argument("--timeout-seconds", type=int, default=5400, help="marker-pdf timeout in seconds.")
     retry_timeout = subparsers.add_parser(
         "retry-timeout",
@@ -438,18 +479,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     retry_timeout.add_argument("--key", required=True, help="Zotero attachment key from timeout_candidates.jsonl.")
     retry_timeout.add_argument("--config", type=Path, default=resolve_config_path(), help="Path to project config JSON. Default: resolved for this machine.")
-    retry_timeout.add_argument(
-        "--jsonl",
-        type=Path,
-        default=None,
-        help="JSONL index to update on a successful retry. Default: <output_root>/index/zotero_text_index.jsonl.",
-    )
-    retry_timeout.add_argument(
-        "--fts-db",
-        type=Path,
-        default=None,
-        help="SQLite FTS database to rebuild on a successful retry. Default: ZOTERO_FULLTEXT_DB env var or the standard path.",
-    )
     retry_timeout_mode = retry_timeout.add_mutually_exclusive_group(required=True)
     retry_timeout_mode.add_argument(
         "--skip",
@@ -578,6 +607,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "convert-sample":
         config = load_config(args.config)
         validate_config(config)
+        if _reject_outside_output_root(config.output_root, args.output_dir, "--output-dir"):
+            return 2
         try:
             with pipeline_write_lock(config.output_root, command="convert-sample"):
                 run_dir = convert_sample(
@@ -597,6 +628,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "convert-verified":
         config = load_config(args.config)
         validate_config(config)
+        if _reject_outside_output_root(config.output_root, args.output_dir, "--output-dir"):
+            return 2
         try:
             with pipeline_write_lock(config.output_root, command="convert-verified"):
                 run_dir = convert_verified(
@@ -617,6 +650,18 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "verify-unverified":
         config = load_config(args.config)
         validate_config(config)
+        if _reject_outside_output_root(config.output_root, args.output_dir, "--output-dir"):
+            return 2
+        index_root = config.output_root / "index"
+        # Prefer the managed current generation's JSONL for already-resolved detection; fall
+        # back to the module's own legacy default when no generation is published yet.
+        index_jsonl = args.index_jsonl
+        if index_jsonl is None:
+            try:
+                index_jsonl = current_generation_jsonl(index_root)
+            except ArtifactError as exc:
+                print(str(exc), file=sys.stderr)
+                return 2
         try:
             with pipeline_write_lock(config.output_root, command="verify-unverified"):
                 run_dir = verify_unverified(
@@ -630,7 +675,7 @@ def main(argv: list[str] | None = None) -> int:
                     force=args.force,
                     include_possible_mismatch=args.include_possible_mismatch,
                     agent_batch_size=args.agent_batch_size,
-                    index_jsonl=args.index_jsonl,
+                    index_jsonl=index_jsonl,
                 )
         except PipelineLockedError as exc:
             print(str(exc), file=sys.stderr)
@@ -651,43 +696,72 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         print(json.dumps(summary, ensure_ascii=False, indent=2))
         return 0
-    if args.command == "build-index":
+    if args.command == "rebuild-index":
         try:
-            with pipeline_write_lock(_pipeline_lock_root(args.output), command="build-index"):
-                output = build_text_index(args.manifest, args.output)
+            output_root, index_root = _resolve_managed_root(args)
+        except (FileNotFoundError, KeyError, TypeError, ValueError, OSError) as exc:
+            print(f"Could not resolve an output root: {exc}", file=sys.stderr)
+            return 2
+        try:
+            with pipeline_write_lock(output_root, command="rebuild-index"):
+                if args.manifest is not None:
+                    writer = write_jsonl_from_conversion_manifest(args.manifest)
+                else:
+                    source = args.from_jsonl or _default_rebuild_source(index_root)
+                    if source is None:
+                        print(
+                            "No index source found: supply --manifest or --from-jsonl, or run "
+                            "against an output root that already has a managed generation or a "
+                            "legacy zotero_text_index.jsonl.",
+                            file=sys.stderr,
+                        )
+                        return 2
+                    writer = write_jsonl_from_existing(source)
+                info = stage_and_publish(
+                    index_root,
+                    writer,
+                    command="rebuild-index",
+                    chunk_chars=args.chunk_chars,
+                    overlap_chars=args.overlap_chars,
+                )
         except PipelineLockedError as exc:
             print(str(exc), file=sys.stderr)
             return 2
-        print(f"Text index complete: {output}")
+        except (ArtifactError, FileNotFoundError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        result = info.summary.to_dict()
+        result["generation_id"] = info.generation_id
+        print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0
-    if args.command == "append-index":
-        fts_db = args.fts_db or (args.index.parent / f"{args.index.stem}.sqlite")
-        # append-index writes both --index and fts_db; a single _pipeline_lock_root(args.index)
-        # only protects the JSONL side. If an explicit --fts-db resolves to a different canonical
-        # root (e.g. a separate drive/share), locking just one leaves the other artifact
-        # unprotected against a concurrent command writing the same FTS file from its own root --
-        # refuse rather than silently guaranteeing less than the lock implies.
-        index_lock_root = _pipeline_lock_root(args.index)
-        fts_lock_root = _pipeline_lock_root(fts_db)
-        if index_lock_root != fts_lock_root:
-            print(
-                f"--index ({args.index}) and --fts-db ({fts_db}) resolve to different pipeline "
-                f"lock roots ({index_lock_root} vs {fts_lock_root}); place both under one "
-                "output_root so this command's lock actually covers everything it writes.",
-                file=sys.stderr,
-            )
+    if args.command == "update-index":
+        try:
+            output_root, index_root = _resolve_managed_root(args)
+        except (FileNotFoundError, KeyError, TypeError, ValueError, OSError) as exc:
+            print(f"Could not resolve an output root: {exc}", file=sys.stderr)
             return 2
         try:
-            with pipeline_write_lock(index_lock_root, command="append-index"):
-                before = len(load_indexed_keys(args.index))
-                append_text_index(args.manifest, args.index, args.index)
-                after = len(load_indexed_keys(args.index))
-                summary = build_fts_index(args.index, fts_db)
+            with pipeline_write_lock(output_root, command="update-index"):
+                current_jsonl = current_generation_jsonl(index_root)
+                if current_jsonl is None:
+                    print(
+                        "No managed index generation exists yet. Run 'zotero-pdf-text "
+                        "rebuild-index' once to publish the first generation (it migrates a "
+                        "legacy zotero_text_index.jsonl automatically), then retry.",
+                        file=sys.stderr,
+                    )
+                    return 2
+                writer, new_records = write_jsonl_appending_manifest(current_jsonl, args.manifest)
+                info = stage_and_publish(index_root, writer, command="update-index")
         except PipelineLockedError as exc:
             print(str(exc), file=sys.stderr)
             return 2
-        result = summary.to_dict()
-        result["new_records"] = after - before
+        except (ArtifactError, FileNotFoundError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        result = info.summary.to_dict()
+        result["generation_id"] = info.generation_id
+        result["new_records"] = new_records
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0
     if args.command == "ensure-zotero":
@@ -702,22 +776,13 @@ def main(argv: list[str] | None = None) -> int:
         else:
             _print_zotero_status(status.to_dict())
         return 0 if status.running and (status.connector_ok or not args.require_connector) else 1
-    if args.command == "build-fts":
+    if args.command == "search-fts":
         try:
-            with pipeline_write_lock(_pipeline_lock_root(args.output), command="build-fts"):
-                summary = build_fts_index(
-                    args.index_jsonl,
-                    args.output,
-                    chunk_chars=args.chunk_chars,
-                    overlap_chars=args.overlap_chars,
-                )
-        except PipelineLockedError as exc:
+            db_path = resolve_reader_db_path(args.db)
+            results = search_fts(db_path, args.query, limit=args.limit, search_mode=args.search_mode)
+        except (ArtifactError, IndexSchemaUnsupportedError) as exc:
             print(str(exc), file=sys.stderr)
             return 2
-        print(json.dumps(summary.to_dict(), ensure_ascii=False, indent=2))
-        return 0
-    if args.command == "search-fts":
-        results = search_fts(args.db, args.query, limit=args.limit, search_mode=args.search_mode)
         if args.json:
             print(
                 json.dumps(
@@ -732,12 +797,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "get-fulltext":
         try:
             result = get_fulltext(
-                args.db,
+                resolve_reader_db_path(args.db),
                 attachment_key=args.attachment_key,
                 max_chars=args.max_chars,
                 chunk_index=args.chunk_index,
             )
-        except ChunkNotFoundError as exc:
+        except (ChunkNotFoundError, ArtifactError, IndexSchemaUnsupportedError) as exc:
             print(str(exc), file=sys.stderr)
             return 2
         if args.json:
@@ -746,7 +811,11 @@ def main(argv: list[str] | None = None) -> int:
             _print_fulltext_result(result.to_dict())
         return 0
     if args.command == "coverage-report":
-        report = coverage_report(args.db)
+        try:
+            report = coverage_report(resolve_reader_db_path(args.db))
+        except (ArtifactError, IndexSchemaUnsupportedError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
         if args.json:
             print(json.dumps(report, ensure_ascii=False, indent=2))
         else:
@@ -919,14 +988,22 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "convert-new":
         config = load_config(args.config)
         validate_config(config)
-        jsonl_path = args.jsonl or (config.output_root / "index" / "zotero_text_index.jsonl")
-        fts_db = args.fts_db or (config.output_root / "index" / "zotero_text_index.sqlite")
+        index_root = config.output_root / "index"
         try:
             with pipeline_write_lock(config.output_root, command="convert-new"):
+                current_jsonl = current_generation_jsonl(index_root)
+                legacy_jsonl = index_root / "zotero_text_index.jsonl"
+                if current_jsonl is None and legacy_jsonl.is_file():
+                    print(
+                        "A legacy zotero_text_index.jsonl exists but no managed generation does. "
+                        "Run 'zotero-pdf-text rebuild-index' once to migrate it, then retry.",
+                        file=sys.stderr,
+                    )
+                    return 2
                 print("Running dry-run to regenerate mapping report...")
                 run_dir = run_dry_run(config)
                 mapping_report = run_dir / "mapping_report.csv"
-                indexed_keys = load_indexed_keys(jsonl_path)
+                indexed_keys = load_indexed_keys(current_jsonl) if current_jsonl is not None else set()
                 print(f"Existing index: {len(indexed_keys)} records")
                 new_rows = _filter_new_mapping_rows(mapping_report, indexed_keys)
                 if not new_rows:
@@ -943,26 +1020,29 @@ def main(argv: list[str] | None = None) -> int:
                 )
                 print(f"Conversion complete: {conv_run_dir}")
                 new_manifest = conv_run_dir / "manifest.csv"
-                append_text_index(new_manifest, jsonl_path, jsonl_path)
-                print(f"JSONL index updated: {jsonl_path}")
-                summary = build_fts_index(jsonl_path, fts_db)
+                if current_jsonl is None:
+                    writer = write_jsonl_from_conversion_manifest(new_manifest)
+                else:
+                    writer, _new_count = write_jsonl_appending_manifest(current_jsonl, new_manifest)
+                info = stage_and_publish(index_root, writer, command="convert-new")
         except PipelineLockedError as exc:
             print(str(exc), file=sys.stderr)
             return 2
-        print(json.dumps(summary.to_dict(), ensure_ascii=False, indent=2))
+        except ArtifactError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        result = info.summary.to_dict()
+        result["generation_id"] = info.generation_id
+        print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0
     if args.command == "reconvert-math":
         from .math_ocr import reconvert_with_marker
 
         config = load_config(args.config)
         validate_config(config)
-        jsonl_path = args.jsonl or (config.output_root / "index" / "zotero_text_index.jsonl")
-        fts_db = args.fts_db or (config.output_root / "index" / "zotero_text_index.sqlite")
         result = reconvert_with_marker(
             args.key,
-            db_path=fts_db,
-            jsonl_path=jsonl_path,
-            fts_db_path=fts_db,
+            index_root=config.output_root / "index",
             lock_root=config.output_root,
             timeout_seconds=args.timeout_seconds,
         )
@@ -977,13 +1057,9 @@ def main(argv: list[str] | None = None) -> int:
         if args.skip:
             result = retry_timeout_module.skip_timeout_candidate(args.key, config=config, reason=args.reason)
         else:
-            jsonl_path = args.jsonl or (config.output_root / "index" / "zotero_text_index.jsonl")
-            fts_db = args.fts_db or (config.output_root / "index" / "zotero_text_index.sqlite")
             result = retry_timeout_module.retry_timeout_candidate(
                 args.key,
                 config=config,
-                jsonl_path=jsonl_path,
-                fts_db_path=fts_db,
                 timeout_seconds=args.timeout_seconds,
                 multiplier=args.multiplier,
             )
@@ -992,6 +1068,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "find-orphan-parents":
         config = load_config(args.config)
         validate_config(config)
+        if _reject_outside_output_root(config.output_root, args.output_dir, "--output-dir"):
+            return 2
         try:
             with pipeline_write_lock(config.output_root, command="find-orphan-parents"):
                 run_dir = orphan_discovery_module.run_orphan_discovery(
@@ -1008,6 +1086,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "find-duplicate-attachments":
         config = load_config(args.config)
         validate_config(config)
+        if _reject_outside_output_root(config.output_root, args.output_dir, "--output-dir"):
+            return 2
         try:
             with pipeline_write_lock(config.output_root, command="find-duplicate-attachments"):
                 run_dir = duplicate_attachments_module.run_duplicate_discovery(

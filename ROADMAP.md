@@ -17,10 +17,10 @@ Source plans:
 |------|---------|--------|--------|----------|
 | 1 | Package 1: Safe MCP Read Surface | hardening plan | DONE | Shipped as PR #4. Prerequisite for exposing this server to any client at all. |
 | 2 | Package 4A: Retrieval Foundation | hardening plan | DONE | Shipped as PR #5. Prerequisite for Package 4B; makes search predictable and bounded. |
-| 3 | **Public Release Readiness (Phases 1-4)** | release-readiness plan | TODO — **next up** | Supersedes hardening plan's Package 5, whose own deferral condition ("unless the project becomes shared/public") is now true — the repo is public. This is the only package standing between "works for the author" and "installable by a researcher who has never seen this code." Nothing else in either plan blocks external use the way this does. |
-| 4 | Package 2: Transactional Derived Artifacts (reduced scope) | hardening plan | OPTIONAL | Ranked below release readiness because its narrow, user-facing slice (don't destroy a working index on a failed rebuild) is already carved out and delivered by release-readiness Phase 2. The remaining scope — full immutable generations, a current-pointer, cross-machine recovery journal — solves ongoing production-operation problems this deployment has not confirmed it has. Revisit only if a real need appears. |
-| 5 | Package 3: Canonical Library and Reconciliation | hardening plan | OPTIONAL | Explicitly the highest-risk, most speculative package (whole-library migration). Depends on Package 2. Start only if the timestamped-run layout becomes an actual practical pain point. |
-| 6 | Package 4B: Generation-Aware Retrieval and Library Status | hardening plan | BLOCKED | Hard dependency on Packages 2 and 3 above. Cannot start until one of them ships. |
+| 3 | **Public Release Readiness (Phases 1-4)** | release-readiness plan | DONE | Shipped as PR #7 and tagged v0.2.0. CI matrix (Windows/macOS/Linux), `uv.lock`, crash-safe index publication, `check-setup`, tagged releases. |
+| 4 | Package 2: Transactional Derived Artifacts (reduced scope) | hardening plan | DONE | Implemented 2026-07-17: immutable index generations + atomic `current.json` pointer + publish journal, managed `rebuild-index`/`update-index` command family, exclusive-create lock hardening, duplicate-key rejection, schema detection, output-root containment. |
+| 5 | Package 3: Canonical Library and Reconciliation | hardening plan | OPTIONAL | Explicitly the highest-risk, most speculative package (whole-library migration). Depends on Package 2 (now shipped). Start only if the timestamped-run layout becomes an actual practical pain point. |
+| 6 | Package 4B: Generation-Aware Retrieval and Library Status | hardening plan | BLOCKED | Depends on Packages 2 (done) and 3 (optional). Cannot start until Package 3 ships. |
 | — | Package 5 steps 2-6 (schema-compat tests, fixture tests, upgrade guide) | hardening plan | FOLDED IN | Superseded in scope by release-readiness Phase 1 (CI) and Phase 2 (crash-safety tests); remaining schema-compat/fixture/upgrade-guide work is deferred alongside Packages 2-3, since it documents behavior those packages would add. |
 
 ## Rationale for this ordering
@@ -41,7 +41,8 @@ Source plans:
 
 ## Next action
 
-Rank 3 (Public Release Readiness) is the first not-done item. Its Phase 1 (Cross-Platform CI and
-Dependency Reproducibility) is the first phase within it — see the elevated package-level plan
-added to `plan-public-release-readiness.md`'s Phase 1 section (Goal, files, steps, dependencies,
-and explicit acceptance criteria) for the ready-to-implement detail.
+Ranks 1-4 are done. The remaining items (Package 3, and Package 4B behind it) are optional and
+explicitly need-driven: start Package 3 only if the timestamped-run layout becomes an actual
+practical pain point, per the hardening plan's own status notes. With Package 2's Unreleased
+changelog backlog plus PRs #8-#18, cutting a v0.3.0 release (per AGENTS.md's release convention)
+is the more immediate next step than either optional package.
