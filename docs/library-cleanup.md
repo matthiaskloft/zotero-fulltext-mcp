@@ -53,9 +53,9 @@ the discovery command alone.
 
 ## After cleanup: rebuild or append the index
 
-Promote verified/orphan-resolved rows into a manifest and run `append-index` (see "Unverified PDF
-Review" and "JSONL Sidecar" in `docs/operations.md`) rather than a full `build-index` rebuild, so
-cleanup doesn't cost a full reconversion of the library.
+Promote verified/orphan-resolved rows into a manifest and run `update-index` (see "Unverified PDF
+Review" and "Managed Index Generations" in `docs/operations.md`) rather than a full
+`rebuild-index --manifest` rebuild, so cleanup doesn't cost a full reconversion of the library.
 
 ## Related, but not "cleanup" in this sense
 

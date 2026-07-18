@@ -11,7 +11,7 @@
 | Plan | DONE | 2026-07-10 | Five packages. Package 1 is the committed near-term deliverable. |
 | Plan revision | DONE | 2026-07-11 | Rescoped for a single-user/few-machine personal tool: Packages 2-5 marked optional/deferred, several reduced in scope. See "Revision Notes" at the end. |
 | Package 1: Safe MCP Read Surface | DONE | 2026-07-11 | Merged as PR #4 (`codex/mcp-safe-read-surface`). |
-| Package 2: Transactional Derived Artifacts (reduced scope) | OPTIONAL | | Blocking prerequisite for Package 3 and generation-bound retrieval. Start only after Package 1 ships and a real need appears. |
+| Package 2: Transactional Derived Artifacts (reduced scope) | IMPLEMENTED | 2026-07-17 | Immutable generations + `current.json` pointer + publish journal (`artifacts.py`), managed `rebuild-index`/`update-index` command family replacing `build-index`/`append-index`/`build-fts`, exclusive-create lock with loud stale failure, duplicate-key rejection, schema detection, and output-root containment. Steps already delivered elsewhere (atomic temp-then-replace, reconvert locking) were not rebuilt. See CHANGELOG Unreleased. |
 | Package 3: Canonical Library and Reconciliation | OPTIONAL | | Depends on Package 2; blocking prerequisite for library status. Pursue only if the timestamped-run layout becomes an actual pain point. |
 | Package 4A: Retrieval Foundation | DONE | 2026-07-11 | Implemented on `codex/package-4-retrieval-foundation`; ready to ship. |
 | Package 4B: Generation-Aware Retrieval and Library Status | BLOCKED | | Depends on Packages 2, 3, and 4A. |

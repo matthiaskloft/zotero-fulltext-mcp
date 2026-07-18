@@ -23,12 +23,19 @@ try:
 except ImportError:
     from typing import TypedDict
 
+from .artifacts import (
+    ArtifactError,
+    ManagedIndexMissingError,
+    current_generation_jsonl,
+    resolve_reader_db_path,
+)
 from .bibtex import DEFAULT_BBT_ENDPOINT, DEFAULT_BBT_TRANSLATOR, export_bibtex_entries
 from .config import ProjectConfig, validate_config
 from .fts import (
     ChunkNotFoundError,
     DEFAULT_CONTEXT_RECORD_LIMIT,
     FullTextResult,
+    IndexSchemaUnsupportedError,
     MAX_QUERY_CHARS,
     MAX_QUERY_TERM_CHARS,
     MAX_QUERY_TERMS,
@@ -416,7 +423,9 @@ def create_server(
 
         def operation() -> SearchResponse:
             validated_mode = _validate_search_mode(search_mode)
-            results = search_fts(db_path, _validate_query(query), limit=_validate_limit(limit), search_mode=validated_mode)
+            results = search_fts(
+                _resolve_request_db(db_path), _validate_query(query), limit=_validate_limit(limit), search_mode=validated_mode
+            )
             return {
                 "search_mode": validated_mode,
                 "no_results": not results,
@@ -439,7 +448,7 @@ def create_server(
         return _public_call(
             lambda: serialize_fulltext_result(
                 get_fulltext(
-                    db_path,
+                    _resolve_request_db(db_path),
                     attachment_key=_validate_attachment_key(attachment_key),
                     max_chars=_validate_max_chars(max_chars),
                     chunk_index=_validate_chunk_index(chunk_index),
@@ -461,7 +470,7 @@ def create_server(
             validated_parent_key, validated_attachment_key = _validate_context_keys(parent_key, attachment_key)
             return serialize_item_context(
                 get_item_context_fn(
-                    db_path,
+                    _resolve_request_db(db_path),
                     parent_key=validated_parent_key,
                     attachment_key=validated_attachment_key,
                     limit=MAX_CONTEXT_RECORDS,
@@ -523,7 +532,6 @@ def create_server(
                     attachment_key,
                     confirm=confirm,
                     config=config,
-                    db_path=db_path,
                     limiter=limiter,
                 )
             )
@@ -579,7 +587,6 @@ def create_server(
                     timeout_seconds=timeout_seconds,
                     multiplier=multiplier,
                     config=config,
-                    db_path=db_path,
                     limiter=retry_limiter,
                 )
             )
@@ -615,6 +622,37 @@ def configured_index_path(config: ProjectConfig) -> Path:
     return config.output_root / "index" / "zotero_text_index.sqlite"
 
 
+def _resolve_request_db(db_path: Path) -> Path:
+    """Resolve the managed current generation (when present) once per tool request.
+
+    Resolving per request rather than at startup means a long-running server picks up newly
+    published generations immediately, and a publication concurrent with a request is safe: the
+    request opens whichever complete generation the atomic pointer named at resolution time.
+    Pointer problems surface as a stable public error; the internal message contains local
+    paths, so it is redacted here rather than passed through.
+    """
+    try:
+        return resolve_reader_db_path(db_path)
+    except ManagedIndexMissingError:
+        # No pointer means no index is published here at all -- the same client-facing
+        # condition as a missing database file, so reuse that stable code.
+        raise PublicMcpError("database_unavailable", "The local full-text index is unavailable.") from None
+    except ArtifactError:
+        raise PublicMcpError(
+            "index_pointer_invalid",
+            "The managed index pointer is invalid or names a missing generation. "
+            "Re-publish the index with the CLI's rebuild-index command.",
+        ) from None
+
+
+def _managed_sidecar_jsonl(config: ProjectConfig) -> Path | None:
+    """Return the current generation's JSONL for a config, or None when unmigrated/invalid."""
+    try:
+        return current_generation_jsonl(config.output_root / "index")
+    except ArtifactError:
+        return None
+
+
 def _validate_reconvert_setup(config: ProjectConfig | None, db_path: Path) -> None:
     if config is None:
         raise PublicMcpError(
@@ -633,10 +671,11 @@ def _validate_reconvert_setup(config: ProjectConfig | None, db_path: Path) -> No
             "database_config_mismatch",
             "Math reconversion requires the selected database to be the index governed by the project config.",
         )
-    if not (config.output_root / "index" / "zotero_text_index.jsonl").is_file():
+    if _managed_sidecar_jsonl(config) is None:
         raise PublicMcpError(
             "sidecar_index_unavailable",
-            "Math reconversion requires the configured text sidecar index.",
+            "Math reconversion publishes managed index generations and requires one to exist. "
+            "Run the CLI's rebuild-index command once to migrate the index, then restart.",
         )
     if not marker_dependency_available():
         raise PublicMcpError(
@@ -663,10 +702,11 @@ def _validate_retry_timeout_setup(config: ProjectConfig | None, db_path: Path) -
             "database_config_mismatch",
             "Timeout skip/retry requires the selected database to be the index governed by the project config.",
         )
-    if not (config.output_root / "index" / "zotero_text_index.jsonl").is_file():
+    if _managed_sidecar_jsonl(config) is None:
         raise PublicMcpError(
             "sidecar_index_unavailable",
-            "Timeout skip/retry requires the configured text sidecar index.",
+            "A successful timeout retry publishes a managed index generation and requires one to "
+            "exist. Run the CLI's rebuild-index command once to migrate the index, then restart.",
         )
     # Deliberately no marker_dependency_available() check: retry-timeout reconverts with
     # pymupdf4llm/pymupdf, the same extractors as ordinary conversion, not marker-pdf.
@@ -883,7 +923,6 @@ def _reconvert_with_math_ocr(
     *,
     confirm: object,
     config: ProjectConfig | None,
-    db_path: Path,
     limiter: ReconvertRateLimiter,
 ) -> ReconvertResponse:
     attachment_key = _validate_attachment_key(attachment_key)
@@ -892,7 +931,13 @@ def _reconvert_with_math_ocr(
     if config is None:
         raise PublicMcpError("config_required", "Math reconversion requires an explicit valid project config.")
     validate_config(config)
-    jsonl_path = config.output_root / "index" / "zotero_text_index.jsonl"
+    jsonl_path = _managed_sidecar_jsonl(config)
+    if jsonl_path is None:
+        raise PublicMcpError(
+            "sidecar_index_unavailable",
+            "Math reconversion publishes managed index generations and requires one to exist. "
+            "Run the CLI's rebuild-index command once to migrate the index.",
+        )
     from .indexer import load_indexed_keys
 
     if attachment_key not in load_indexed_keys(jsonl_path):
@@ -903,9 +948,7 @@ def _reconvert_with_math_ocr(
     try:
         result = reconvert_with_marker(
             attachment_key,
-            db_path=db_path,
-            jsonl_path=jsonl_path,
-            fts_db_path=db_path,
+            index_root=config.output_root / "index",
             lock_root=config.output_root,
         )
     except RuntimeError:
@@ -977,7 +1020,6 @@ def _retry_timeout_extraction(
     timeout_seconds: object,
     multiplier: object,
     config: ProjectConfig | None,
-    db_path: Path,
     limiter: ReconvertRateLimiter,
 ) -> RetryTimeoutResponse:
     attachment_key = _validate_attachment_key(attachment_key)
@@ -993,12 +1035,9 @@ def _retry_timeout_extraction(
     limiter.acquire()
     from .retry_timeout import retry_timeout_candidate
 
-    jsonl_path = config.output_root / "index" / "zotero_text_index.jsonl"
     result = retry_timeout_candidate(
         attachment_key,
         config=config,
-        jsonl_path=jsonl_path,
-        fts_db_path=db_path,
         timeout_seconds=validated_timeout_seconds,
         multiplier=validated_multiplier,
     )
@@ -1031,6 +1070,12 @@ def _public_call(operation: Callable[[], Any], *, integration: bool = False) -> 
         return result
     except PublicMcpError:
         raise
+    except IndexSchemaUnsupportedError:
+        raise PublicMcpError(
+            "index_schema_unsupported",
+            "The selected database is not a supported full-text index. Rebuild it with the "
+            "CLI's rebuild-index command.",
+        ) from None
     except FileNotFoundError:
         raise PublicMcpError("database_unavailable", "The local full-text index is unavailable.") from None
     except ChunkNotFoundError:

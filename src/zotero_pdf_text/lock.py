@@ -42,26 +42,57 @@ def pipeline_write_lock(root: Path, *, command: str = "") -> Iterator[Path]:
 
 
 def _acquire(lock_path: Path, command: str) -> None:
-    existing = _read_lock(lock_path)
-    if existing is not None and not _is_stale(existing):
-        raise PipelineLockedError(
-            f"{lock_path} is held by host '{existing.get('hostname')}' "
-            f"(pid {existing.get('pid')}, command '{existing.get('command')}', "
-            f"started {existing.get('started_at')}). If that machine isn't actually running "
-            "the pipeline right now, delete the lock file manually before retrying."
-        )
-    if existing is not None:
-        print(
-            f"Warning: ignoring stale lock at {lock_path} from host '{existing.get('hostname')}' "
-            f"(started {existing.get('started_at')})."
-        )
-    payload = {
-        "hostname": platform.node(),
-        "pid": os.getpid(),
-        "started_at": time.strftime(_TIMESTAMP_FORMAT),
-        "command": command,
-    }
-    lock_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    """Acquire the lock with an exclusive create; never silently replace an existing lock.
+
+    ``O_CREAT | O_EXCL`` makes creation atomic, closing the check-then-write race two local
+    processes could previously win simultaneously. A stale or corrupt lock file now fails
+    loudly, naming the recorded holder, instead of being silently overwritten: on a cloud-synced
+    output tree a lock that merely *looks* stale can belong to a machine whose sync is lagging,
+    and clobbering it would let two writers collide. The user deletes the file manually once
+    they have confirmed no other machine is mid-run.
+    """
+    payload = json.dumps(
+        {
+            "hostname": platform.node(),
+            "pid": os.getpid(),
+            "started_at": time.strftime(_TIMESTAMP_FORMAT),
+            "command": command,
+        },
+        indent=2,
+    )
+    for _ in range(3):
+        try:
+            fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        except FileExistsError:
+            existing = _read_lock(lock_path)
+            if existing is None:
+                if not lock_path.exists():
+                    # Holder released between our failed create and the read; retry the create.
+                    continue
+                raise PipelineLockedError(
+                    f"{lock_path} exists but is unreadable or corrupt. Confirm no other machine "
+                    "is running the pipeline, then delete the lock file manually before retrying."
+                )
+            holder = (
+                f"host '{existing.get('hostname')}' (pid {existing.get('pid')}, "
+                f"command '{existing.get('command')}', started {existing.get('started_at')})"
+            )
+            if _is_stale(existing):
+                raise PipelineLockedError(
+                    f"{lock_path} is held by {holder} and looks stale. Confirm that machine is "
+                    "not actually running the pipeline, then delete the lock file manually "
+                    "before retrying."
+                )
+            raise PipelineLockedError(
+                f"{lock_path} is held by {holder}. If that machine isn't actually running the "
+                "pipeline right now, delete the lock file manually before retrying."
+            )
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(payload)
+        return
+    raise PipelineLockedError(
+        f"Could not acquire {lock_path}: another process kept creating and releasing it."
+    )
 
 
 def _read_lock(lock_path: Path) -> dict | None:

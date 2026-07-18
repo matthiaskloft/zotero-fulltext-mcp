@@ -75,39 +75,61 @@ after extraction succeeds:
   --force
 ```
 
-## JSONL Sidecar
+## Managed Index Generations
 
-`build-index` does a **full rebuild** from one manifest — it overwrites `--output` entirely, so it
-is only correct for a from-scratch index or a single manifest that already covers everything
-trusted. The production index has been built incrementally across many separate conversion runs
-since the original full conversion, so running `build-index` against any one of those manifests
-today would silently drop every row from the others.
+The derived index (JSONL sidecar plus SQLite FTS database) is published as immutable
+*generations* under `$data\index\generations\<generation-id>\`, each containing `index.jsonl`,
+`index.sqlite`, and an `artifact_manifest.json` with checksums, record/chunk counts, and the
+chunking parameters used. `$data\index\current.json` is the single, atomically replaced pointer
+that names the current generation; readers (the MCP server, `search-fts`, `get-fulltext`,
+`coverage-report`) follow it automatically. A failed or interrupted build can never take the
+published index offline: the pointer only moves after the new generation validates, and the
+previous generation is retained for rollback. Older generations are swept automatically after a
+successful publish, so disk use stays bounded at roughly two full copies.
+
+`rebuild-index` builds and publishes a complete generation. With `--manifest` it rebuilds from
+one conversion manifest; with `--from-jsonl` (or no source argument) it snapshots an existing
+JSONL — the default picks the current generation's JSONL when one exists, else the legacy
+`zotero_text_index.jsonl`:
 
 ```powershell
-& $python -m zotero_pdf_text build-index `
-  --manifest <first-full-conversion>\manifest.csv `
-  --output $data\index\zotero_text_index.jsonl
+& $python -m zotero_pdf_text rebuild-index --config .\config.json
 ```
 
 For every subsequent manifest (new items, promoted `apply-verification` rows, etc.), use
-`append-index` instead — it adds only rows whose `zotero_attachment_key` isn't already indexed,
-then rebuilds SQLite FTS from the updated JSONL:
+`update-index` instead — it starts from the current generation, adds only rows whose
+`zotero_attachment_key` isn't already indexed, and publishes the successor generation:
 
 ```powershell
-& $python -m zotero_pdf_text append-index `
-  --manifest <new-or-promoted>\manifest.csv `
-  --index $data\index\zotero_text_index.jsonl
+& $python -m zotero_pdf_text update-index `
+  --config .\config.json `
+  --manifest <new-or-promoted>\manifest.csv
 ```
 
-`append-index` writes its updated JSONL to a same-directory temp file first and only replaces the
-existing one via an atomic rename once the write succeeds. If the process crashes or is killed
-mid-write, the previous JSONL is untouched rather than truncated — re-run the same `append-index`
-command once the underlying issue is fixed; nothing needs manual recovery.
+If either command (or the machine) dies mid-publication, the next write command recovers
+deterministically from the publish journal: it either completes the interrupted publication of
+the already-validated generation or rolls it back, and readers meanwhile keep resolving the
+previous complete generation. Nothing needs manual recovery.
 
-If you pass an explicit `--fts-db` that lives under a different `output_root` than `--index` (an
-unusual split-storage setup), the command refuses to start rather than locking only the JSONL
-side and leaving the FTS database unprotected against a concurrent writer. Keep both under one
-`output_root`.
+### One-time migration from the legacy layout
+
+Earlier versions maintained `zotero_text_index.jsonl`/`.sqlite` directly in `$data\index\` via
+the now-removed `build-index`/`append-index`/`build-fts` commands. The managed pointer is now
+the *only* index location readers accept — an unmigrated root fails loudly until you run
+`rebuild-index` once (it snapshots a legacy JSONL into the first managed generation when one
+exists). Existing MCP registrations keep working unchanged after that: the registered `--db`
+path acts as the index-root anchor whose sibling `current.json` is resolved per request. The
+legacy files are left in place untouched; delete them manually once you've confirmed search
+works. Third-party tools that read the SQLite file directly must follow `current.json` to the
+generation database it names.
+
+### Rolling back a bad publish
+
+`current.json` records both `current_generation` and `previous_generation`. To roll back, edit
+`current.json` to swap the previous generation into `current_generation` (or re-run
+`rebuild-index --from-jsonl $data\index\generations\<previous-id>\index.jsonl`). The previous
+generation's files are still on disk — only the two newest generations are retained, so roll
+back before publishing again.
 
 ## Unverified PDF Review
 
@@ -165,10 +187,10 @@ prepended copy of the entire existing library.
   --min-confidence 0.92
 ```
 
-Then append the promoted manifest into the main index (see `append-index` above) rather than
-rebuilding from it with `build-index`. `append-index` skips rows whose attachment key is already
-indexed, so candidates that turn out to duplicate an already-trusted record are dropped rather than
-overwriting the trusted one.
+Then publish the promoted manifest into the main index with `update-index` (see "Managed Index
+Generations" above) rather than rebuilding from it with `rebuild-index --manifest`.
+`update-index` skips rows whose attachment key is already indexed, so candidates that turn out
+to duplicate an already-trusted record are dropped rather than overwriting the trusted one.
 
 Note: agent-assigned confidence is a coarser, more conservative scale than the deterministic
 rule engine's (which reserves 0.93+ for its own accepts) — a `min-confidence` tuned for
@@ -214,9 +236,10 @@ go straight to the plain-text fallback. Or retry with a longer budget:
 This defaults to the candidate's `suggested_next_timeout_seconds` (2x the last attempted budget,
 capped at 6h); override with `--timeout-seconds` or `--multiplier` (hard-capped at 24h even by
 explicit request). A successful retry converts into a fresh, isolated run directory — the
-originally converted Markdown is never overwritten — and only then promotes the result into
-`zotero_text_index.jsonl`/`.sqlite`, marking the candidate `resolved`. A failed retry leaves the
-index and the candidate's status untouched.
+originally converted Markdown is never overwritten — and only then promotes the result by
+publishing a successor managed index generation, marking the candidate `resolved`. A failed
+retry leaves the published index and the candidate's status untouched. Requires the managed
+index layout (run `rebuild-index` once to migrate).
 
 Both the skip list and the master candidates file are fail-open: a missing or corrupt file just
 means no entries are skipped/reported, same as the drawing-density scan used to scale timeouts in
@@ -325,17 +348,15 @@ script; deleted attachments go to Zotero's trash, not straight to disk deletion)
 
 ## SQLite FTS
 
-```powershell
-& $python -m zotero_pdf_text build-fts `
-  --index-jsonl $data\index\zotero_text_index.jsonl `
-  --output $data\index\zotero_text_index.sqlite
-```
+The FTS database is built as part of every managed generation — see "Managed Index Generations"
+above; there is no separate FTS build command anymore. Every staged database passes a `PRAGMA
+integrity_check`, checksum validation, and a duplicate-attachment-key check before the pointer
+moves; a crash, kill, or failed check during a rebuild leaves the previous generation in place
+and still queryable.
 
-Like `append-index`, `build-fts` builds into a same-directory temp file, runs a `PRAGMA
-integrity_check` against it, and only replaces `--output` via an atomic rename once that check
-passes. A crash, kill, or failed integrity check during rebuild leaves the previous SQLite
-database in place and still queryable — search keeps working against the last good index until a
-successful rebuild replaces it.
+The read commands below take `--db` as an index-root anchor: the `current.json` next to it is
+the only way an index is located, and a missing pointer is a hard error naming `rebuild-index`
+(there is no standalone-database fallback).
 
 Search:
 
@@ -507,32 +528,37 @@ After the script runs successfully, refresh derived artifacts:
 ```powershell
 & $python -m zotero_pdf_text dry-run --config .\config.json
 & $python -m zotero_pdf_text convert-verified --config .\config.json --mapping-report <new_mapping_report.csv>
-& $python -m zotero_pdf_text append-index --manifest <new_manifest.csv> --index $data\index\zotero_text_index.jsonl
+& $python -m zotero_pdf_text update-index --config .\config.json --manifest <new_manifest.csv>
 ```
 
-(Or simply run `convert-new`, which does exactly this dry-run → convert → append-index sequence
+(Or simply run `convert-new`, which does exactly this dry-run → convert → update-index sequence
 for newly linked verified PDFs in one step.)
 
 ## Multi-Machine Write Lock
 
 If `converted_text` is a single index shared across more than one machine (e.g. via a synced
 cloud folder), every command that writes under it (`convert-sample`, `convert-verified`,
-`convert-new`, `verify-unverified`, `apply-verification`, `build-index`, `append-index`,
-`build-fts`, `reconvert-math`/`reconvert_with_math_ocr`, `retry-timeout`, `find-orphan-parents`,
+`convert-new`, `verify-unverified`, `apply-verification`, `rebuild-index`, `update-index`,
+`reconvert-math`/`reconvert_with_math_ocr`, `retry-timeout`, `find-orphan-parents`,
 `orphan-candidate`) takes the same lock file
 (`config.output_root\.pipeline.lock`) before starting and releases it on exit, so two machines
-(or two commands on the same machine) can never rebuild the same SQLite/JSONL files at once — the
-same corruption class as syncing a live Zotero database. `build-index`/`append-index`/`build-fts`
-take an explicit `--output`/`--index` path instead of `--config`; they derive the same canonical
-root from that path's conventional `<output_root>\index\<file>` layout rather than locking the
-narrower `index` subdirectory, so they still share the lock with `convert-new` and
-`reconvert-math` even though they never load a `ProjectConfig`.
+(or two commands on the same machine) can never rebuild the same index files at once — the
+same corruption class as syncing a live Zotero database. The lock is acquired with an atomic
+exclusive create, so two local processes can no longer race past each other's check. Explicit
+output paths supplied to config-managed commands are containment-checked against `output_root`
+before locking, since a write target outside that tree would silently escape the lock's
+protection.
+
+Cloud-sync folders do not provide distributed transactions: lock-file propagation can lag, so
+nominate **one designated writer machine** for a synced output tree and run write commands only
+there. Readers (the MCP server, search) are safe on any machine — the atomic pointer means they
+only ever see complete generations.
 
 If a command refuses to start with a message naming another host, pid, and start time, check that
-the other machine isn't actually mid-run before doing anything. If that machine's process has
-genuinely died (crash, forced shutdown) and left a stale lock, the command already treats locks
-older than 6 hours as free automatically; for anything more recent, delete `.pipeline.lock` by hand
-only once you're sure the other machine isn't running it.
+the other machine isn't actually mid-run before doing anything. A stale or corrupt lock is never
+silently overwritten (a lock that merely looks stale can belong to a machine whose sync is
+lagging) — the command names the recorded holder and asks you to delete `.pipeline.lock` by hand
+once you're sure the other machine isn't running it.
 
 ## Tests
 

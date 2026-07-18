@@ -124,9 +124,8 @@ After successful Zotero writes:
 3. Convert newly linked verified PDFs. For a small import, export just the new
    mapping row to a one-row CSV and pass that to `convert-verified` so the full
    corpus is not reconverted.
-4. Rebuild JSONL with `build-index`.
-5. Rebuild SQLite FTS with `build-fts`. For a single new record, build a
-   focused JSONL/FTS first, smoke-test it with `search-fts`, then merge the new
-   JSONL record into the main sidecar and rebuild the main FTS.
+4. Publish the new rows with `update-index --manifest <that run's manifest.csv>` — it appends
+   only not-yet-indexed attachment keys to the current managed generation and atomically
+   publishes the successor, then smoke-test with `search-fts`.
 
 No LLM should silently add, delete, or overwrite Zotero records.

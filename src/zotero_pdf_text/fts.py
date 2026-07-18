@@ -112,6 +112,44 @@ class ChunkNotFoundError(LookupError):
     """Raised when an attachment exists but an exact chunk index does not."""
 
 
+class DuplicateAttachmentKeyError(ValueError):
+    """Raised when an index build encounters the same zotero_attachment_key twice.
+
+    Duplicate keys would make get_fulltext return an arbitrary row for that attachment, so the
+    build refuses instead of publishing an ambiguous index.
+    """
+
+
+class IndexSchemaUnsupportedError(RuntimeError):
+    """Raised when a SQLite file is not (or is no longer) a supported full-text index."""
+
+
+_REQUIRED_TABLES = frozenset({"metadata", "chunks", "chunks_fts"})
+_REQUIRED_METADATA_COLUMNS = frozenset(
+    {
+        "record_id",
+        "zotero_parent_key",
+        "zotero_attachment_key",
+        "title",
+        "creators",
+        "year",
+        "doi",
+        "citation_key",
+        "source_path",
+        "markdown_path",
+        "markdown_sha256",
+        "extraction_tool",
+        "char_count",
+        "word_count",
+        "page_count",
+        "classification",
+        "identity_status",
+        "identity_rule",
+        "has_math",
+    }
+)
+
+
 def build_fts_index(
     index_jsonl: Path,
     output: Path,
@@ -135,11 +173,23 @@ def build_fts_index(
         try:
             _create_schema(con)
             records = chunks = total_chars = total_words = 0
+            seen_attachment_keys: set[str] = set()
             with index_jsonl.open("r", encoding="utf-8") as handle:
                 for line in handle:
                     if not line.strip():
                         continue
                     record = json.loads(line)
+                    attachment_key = str(record.get("zotero_attachment_key") or "")
+                    if attachment_key:
+                        if attachment_key in seen_attachment_keys:
+                            raise DuplicateAttachmentKeyError(
+                                f"Attachment key {attachment_key} appears more than once in "
+                                f"{index_jsonl}; a duplicate key would make full-text retrieval "
+                                "return an arbitrary row. Run 'zotero-pdf-text "
+                                "find-duplicate-attachments' to locate the duplicates, then "
+                                "remove the redundant JSONL record before rebuilding."
+                            )
+                        seen_attachment_keys.add(attachment_key)
                     records += 1
                     total_chars += int(record.get("char_count") or 0)
                     total_words += int(record.get("word_count") or 0)
@@ -681,7 +731,46 @@ def _match_query(terms: list[str], search_mode: str) -> str:
 def connect_readonly(db_path: Path) -> sqlite3.Connection:
     if not db_path.exists():
         raise FileNotFoundError(db_path)
-    return sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+    con = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+    try:
+        _assert_supported_schema(con, db_path)
+    except BaseException:
+        con.close()
+        raise
+    return con
+
+
+def _assert_supported_schema(con: sqlite3.Connection, db_path: Path) -> None:
+    """Fail with a recovery instruction when db_path is not a supported full-text index.
+
+    Without this, pointing a reader at an empty, foreign, or legacy-schema SQLite file surfaces
+    as a low-level 'no such table'/'no such column' OperationalError from whichever query runs
+    first, which names neither the problem nor the fix.
+    """
+    try:
+        tables = {
+            row[0]
+            for row in con.execute(
+                "SELECT name FROM sqlite_master WHERE type IN ('table', 'view')"
+            ).fetchall()
+        }
+        missing_tables = _REQUIRED_TABLES - tables
+        missing_columns: frozenset[str] = frozenset()
+        if not missing_tables:
+            columns = {row[1] for row in con.execute("PRAGMA table_info(metadata)").fetchall()}
+            missing_columns = _REQUIRED_METADATA_COLUMNS - columns
+    except sqlite3.DatabaseError as exc:
+        raise IndexSchemaUnsupportedError(
+            f"{db_path} is not a readable SQLite database ({exc}). Rebuild the index with "
+            "'zotero-pdf-text rebuild-index'."
+        ) from exc
+    if missing_tables or missing_columns:
+        missing = ", ".join(sorted(missing_tables) + sorted(missing_columns))
+        raise IndexSchemaUnsupportedError(
+            f"{db_path} is not a supported full-text index (missing: {missing}). It may predate "
+            "the current index schema or be a different SQLite file entirely. Rebuild it with "
+            "'zotero-pdf-text rebuild-index'."
+        )
 
 
 def _metadata_dict(row: sqlite3.Row) -> dict[str, object]:
