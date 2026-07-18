@@ -115,6 +115,12 @@ def resolve_generation_dir(index_root: Path, generation_id: str) -> Path:
     The strict ID pattern already excludes separators and traversal, but the resolved-parent
     check below keeps holding even if the pattern is ever loosened, and it also rejects a
     ``generations`` entry that is itself a symlink escaping the index root.
+
+    The containment check compares fully resolved paths, but the *returned* path keeps the
+    caller's original (unresolved) spelling: ``.resolve()`` also rewrites harmless
+    platform indirections — macOS's ``/var`` -> ``/private/var`` symlink, Windows 8.3 short
+    names like ``RUNNER~1`` — which would make the result no longer comparable to sibling
+    paths derived from the same ``index_root``.
     """
     if not is_valid_generation_id(generation_id):
         raise CurrentPointerError(
@@ -122,8 +128,8 @@ def resolve_generation_dir(index_root: Path, generation_id: str) -> Path:
             "If current.json was edited or corrupted, re-publish with 'zotero-pdf-text rebuild-index'."
         )
     generations_dir = (index_root / GENERATIONS_DIRNAME).resolve()
-    candidate = (index_root / GENERATIONS_DIRNAME / generation_id).resolve()
-    if candidate.parent != generations_dir:
+    candidate = index_root / GENERATIONS_DIRNAME / generation_id
+    if candidate.resolve().parent != generations_dir:
         raise CurrentPointerError(
             f"Generation '{generation_id}' resolves outside the managed generations directory; "
             "refusing to open it."
