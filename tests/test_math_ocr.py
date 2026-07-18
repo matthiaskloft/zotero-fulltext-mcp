@@ -139,6 +139,33 @@ class ReconvertWithMarkerTests(unittest.TestCase):
             self.assertTrue(search_fts(db_path, "Garbled"))
             self.assertFalse(search_fts(db_path, "Better"))
 
+    def test_post_commit_cleanup_failure_does_not_roll_back_markdown(self):
+        # Once the pointer swap has committed the new generation, a cleanup failure inside
+        # publication must not surface as a reconversion failure: rolling the Markdown back at
+        # that point would leave the published index text and markdown_sha256 disagreeing with
+        # the file on disk.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _, markdown_path, index_root = _build_fixture(root)
+            generation_before = read_current_pointer(index_root)["current_generation"]
+
+            def _write_marker_output(args, **kwargs):
+                Path(args[4]).write_text("# Better body\n\nEquation: $x^2$", encoding="utf-8")
+
+            with patch("zotero_pdf_text.math_ocr.subprocess.run", side_effect=_write_marker_output), patch(
+                "zotero_pdf_text.artifacts._sweep_unreferenced_generations",
+                side_effect=OSError("simulated sweep failure"),
+            ):
+                result = reconvert_with_marker("ATTACH1", index_root=index_root, lock_root=root)
+
+            self.assertTrue(result.ok, result.error)
+            self.assertIn("# Better body", markdown_path.read_text(encoding="utf-8"))
+            self.assertNotEqual(
+                read_current_pointer(index_root)["current_generation"], generation_before
+            )
+            db_path = resolve_reader_db_path(index_root / "zotero_text_index.sqlite")
+            self.assertTrue(search_fts(db_path, "Better"))
+
     def test_sidecar_key_race_returns_clean_failure_without_committing(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

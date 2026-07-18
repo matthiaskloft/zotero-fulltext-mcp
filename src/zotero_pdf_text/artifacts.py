@@ -332,6 +332,13 @@ def publish_generation(index_root: Path, generation_id: str) -> dict[str, object
     deterministic: recovery either completes this exact publication or leaves the prior pointer
     untouched. Callers must hold the pipeline write lock. After a successful swap, generations
     no longer referenced by the pointer are swept, keeping current + previous for rollback.
+
+    The pointer swap is the non-rollbackable commit point: once it succeeds, this function
+    returns success no matter what post-commit cleanup does. A journal-unlink or retention-sweep
+    failure must not escape as an exception, because callers (e.g. math reconversion) treat an
+    exception as "publication failed" and roll back their source artifacts while readers already
+    resolve the new generation. A leftover journal that names the now-current generation is
+    harmless — the next writer's recovery pass simply deletes it.
     """
     paths = IndexPaths(index_root)
     validate_generation(index_root, generation_id)
@@ -358,9 +365,21 @@ def publish_generation(index_root: Path, generation_id: str) -> dict[str, object
         "published_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }
     _atomic_write_json(paths.pointer_path, pointer)
-    paths.journal_path.unlink(missing_ok=True)
-    _sweep_unreferenced_generations(paths, keep={generation_id, pointer.get("previous_generation")})
+    _post_commit_cleanup(paths, keep={generation_id, pointer.get("previous_generation")})
     return pointer
+
+
+def _post_commit_cleanup(paths: IndexPaths, keep: set[object]) -> None:
+    """Best-effort journal removal and retention sweep after a successful pointer swap.
+
+    Nothing here may raise: the publication is already committed, and an escaping exception
+    would make callers believe it failed. Failures leave at most a stale journal (cleaned by the
+    next recovery pass) or an extra retained generation directory (swept on the next publish).
+    """
+    with contextlib.suppress(OSError):
+        paths.journal_path.unlink(missing_ok=True)
+    with contextlib.suppress(OSError):
+        _sweep_unreferenced_generations(paths, keep=keep)
 
 
 def recover_pending_publication(index_root: Path) -> str | None:
@@ -396,8 +415,7 @@ def recover_pending_publication(index_root: Path) -> str | None:
         pointer = None
     if pointer is not None and pointer.get("current_generation") == generation_id:
         # The swap completed; only the journal cleanup was interrupted.
-        paths.journal_path.unlink(missing_ok=True)
-        _sweep_unreferenced_generations(paths, keep={generation_id, pointer.get("previous_generation")})
+        _post_commit_cleanup(paths, keep={generation_id, pointer.get("previous_generation")})
         return f"completed interrupted publication of generation '{generation_id}'"
     try:
         validate_generation(index_root, generation_id)
@@ -417,8 +435,7 @@ def recover_pending_publication(index_root: Path) -> str | None:
         "published_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }
     _atomic_write_json(paths.pointer_path, pointer)
-    paths.journal_path.unlink(missing_ok=True)
-    _sweep_unreferenced_generations(paths, keep={generation_id, pointer.get("previous_generation")})
+    _post_commit_cleanup(paths, keep={generation_id, pointer.get("previous_generation")})
     return f"completed interrupted publication of generation '{generation_id}'"
 
 

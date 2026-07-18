@@ -371,6 +371,32 @@ class RecoveryTests(unittest.TestCase):
             # Unknown directory names are never deleted.
             self.assertTrue(foreign_dir.exists())
 
+    def test_post_commit_cleanup_failure_does_not_fail_the_publication(self):
+        # The pointer swap is the commit point: once it succeeds, a journal-unlink or
+        # retention-sweep failure must not escape as an exception, or callers roll back their
+        # source artifacts while readers already resolve the new generation.
+        with tempfile.TemporaryDirectory() as tmp:
+            index_root = Path(tmp)
+            first = _stage_from_records(index_root, [_record("A1", "Original body text.")])
+            publish_generation(index_root, first.generation_id)
+            second = _stage_from_records(index_root, [_record("A1", "Updated body text.")])
+
+            with patch(
+                "zotero_pdf_text.artifacts._sweep_unreferenced_generations",
+                side_effect=OSError("simulated sweep failure"),
+            ):
+                pointer = publish_generation(index_root, second.generation_id)
+
+            self.assertEqual(pointer["current_generation"], second.generation_id)
+            self.assertEqual(
+                read_current_pointer(index_root)["current_generation"], second.generation_id
+            )
+            # Whatever cleanup skipped is repaired by the next recovery pass under the lock.
+            recover_pending_publication(index_root)
+            self.assertEqual(
+                read_current_pointer(index_root)["current_generation"], second.generation_id
+            )
+
     def test_publish_crash_between_journal_and_pointer_is_recoverable(self):
         with tempfile.TemporaryDirectory() as tmp:
             index_root = Path(tmp)
