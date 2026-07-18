@@ -29,15 +29,19 @@ Steps:
 3. If MCP still fails, restart stale `pyzotero-mcp` processes.
 4. Re-run the Zotero MCP search.
 
-## SQLite FTS Missing
+## SQLite FTS Missing, Pointer Invalid, or Schema Unsupported
 
-If `search-fts` reports a missing database, build it:
+If `search-fts` (or the MCP server at startup) reports a missing database, an invalid managed
+index pointer (`index_pointer_invalid`), or an unsupported index schema
+(`index_schema_unsupported`), publish a fresh managed generation:
 
 ```powershell
-& $python -m zotero_pdf_text build-fts `
-  --index-jsonl $data\index\zotero_text_index.jsonl `
-  --output $data\index\zotero_text_index.sqlite
+& $python -m zotero_pdf_text rebuild-index --config .\config.json
 ```
+
+This snapshots the current (or legacy) JSONL sidecar into a validated generation and atomically
+repoints `current.json` at it. A corrupt/hand-edited `current.json` is never silently ignored in
+favor of stale data — readers fail loudly until a valid generation is re-published.
 
 ## Fresh Build Cannot Import the Converter or PDF Dependencies
 
@@ -98,8 +102,7 @@ Rebuild in this order:
 
 1. `dry-run`
 2. `convert-verified --resume`
-3. `build-index`
-4. `build-fts`
+3. `rebuild-index --manifest <that run's manifest.csv>`
 
 `convert-verified --resume` refreshes YAML/front matter and manifest metadata
 for existing Markdown files. It does not rerun PDF extraction.
@@ -120,8 +123,7 @@ If `citation_key`, title, DOI, or creator metadata looks stale, run:
 
 1. `dry-run`
 2. `convert-verified --resume`
-3. `build-index`
-4. `build-fts`
+3. `rebuild-index --manifest <that run's manifest.csv>`
 
 Force reconversion is not required for metadata-only changes.
 

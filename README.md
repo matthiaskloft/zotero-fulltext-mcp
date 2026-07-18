@@ -127,9 +127,13 @@ or `convert-new` does not. Add `--require-mcp` to fail if the `mcp` extra isn't 
 ```
 
 `convert-new` runs mapping, conversion, and index updates together for newly linked verified
-PDFs, and is the incremental command you'll run repeatedly as you add papers. See
-`docs/operations.md` for the full command reference (sampling, manual review of unverified
-matches, rebuilding vs. appending to the index, etc.) and `docs/architecture.md`/
+PDFs, and is the incremental command you'll run repeatedly as you add papers. The index is
+published as immutable, checksummed *generations* behind an atomically replaced `current.json`
+pointer (`rebuild-index`/`update-index` manage this), so an interrupted or failed rebuild can
+never leave you without a working search index. Upgrading from a pre-generation layout is a
+one-time `rebuild-index --config .\config.json` — see "Managed Index Generations" in
+`docs/operations.md`. That document also has the full command reference (sampling, manual
+review of unverified matches, rebuilding vs. updating the index, etc.); see `docs/architecture.md`/
 `docs/data-dictionary.md` for how the pipeline and schema fit together. If a `dry-run` turns up
 unverified matches, orphan PDFs, or duplicate attachments — common early on while a library is
 still being built up — see `docs/library-cleanup.md` for which command to run and in what order.

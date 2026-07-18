@@ -184,8 +184,10 @@ class McpServerTests(unittest.TestCase):
             ) as get_context:
                 server.tools["get_item_context"](attachment_key="ATTACH1")
 
+            from zotero_pdf_text.artifacts import resolve_reader_db_path
+
             get_context.assert_called_once_with(
-                sqlite_path,
+                resolve_reader_db_path(sqlite_path),
                 parent_key=None,
                 attachment_key="ATTACH1",
                 limit=MAX_CONTEXT_RECORDS,
@@ -255,6 +257,7 @@ class McpServerTests(unittest.TestCase):
             )
             jsonl_path.write_text(json.dumps(record) + "\n", encoding="utf-8")
             build_fts_index(jsonl_path, sqlite_path, chunk_chars=14_000, overlap_chars=0)
+            _republish(root, chunk_chars=14_000, overlap_chars=0)
             server = create_server(sqlite_path, mcp_factory=FakeFastMCP)
 
             search_locator = server.tools["search_fulltext"]("target")["results"][0]["source_locator"]
@@ -306,6 +309,7 @@ class McpServerTests(unittest.TestCase):
                     )
                     jsonl_path.write_text(json.dumps(record) + "\n", encoding="utf-8")
                     build_fts_index(jsonl_path, sqlite_path)
+                    _republish(root)
                     server = create_server(sqlite_path, mcp_factory=FakeFastMCP)
 
                     search_result = server.tools["search_fulltext"]("searchable")["results"][0]
@@ -394,7 +398,9 @@ class McpServerTests(unittest.TestCase):
                     )
             self.assertEqual(missing_marker.exception.code, "marker_dependency_missing")
 
-            (config.output_root / "index" / "zotero_text_index.jsonl").unlink()
+            # Removing the managed pointer makes the sidecar unavailable: the opt-in mutation
+            # capabilities require a managed generation, not the legacy JSONL.
+            (config.output_root / "index" / "current.json").unlink()
             with self.assertRaises(PublicMcpError) as missing_sidecar:
                 create_server(
                     sqlite_path,
@@ -433,8 +439,18 @@ class McpServerTests(unittest.TestCase):
             root, sqlite_path, config = _build_index(Path(tmp))
             config_path = root / "config.json"
             _write_config(config_path, config)
-            other_db = root / "other.sqlite"
-            other_db.write_bytes(sqlite_path.read_bytes())
+            # A second, fully published managed index at a different root: startup validation
+            # resolves it fine, so the failure exercised here is specifically the
+            # config-governance mismatch, not index availability.
+            from zotero_pdf_text.artifacts import stage_and_publish, write_jsonl_from_existing
+
+            other_index = root / "other" / "index"
+            stage_and_publish(
+                other_index,
+                write_jsonl_from_existing(root / "output" / "index" / "zotero_text_index.jsonl"),
+                command="test",
+            )
+            other_db = other_index / "zotero_text_index.sqlite"
             with patch("zotero_pdf_text.mcp_contract.marker_dependency_available", return_value=True):
                 with self.assertRaises(SystemExit) as raised:
                     main(["--db", str(other_db), "--config", str(config_path), "--enable-reconvert"])
@@ -777,8 +793,27 @@ def _build_index(root: Path) -> tuple[Path, Path, ProjectConfig]:
     )
     sqlite_path = index_root / "zotero_text_index.sqlite"
     build_fts_index(jsonl_path, sqlite_path)
+    # Publish a managed generation too: the opt-in mutation capabilities (reconvert,
+    # retry-timeout) require the managed layout, and readers resolve it when present.
+    from zotero_pdf_text.artifacts import stage_and_publish, write_jsonl_from_existing
+
+    stage_and_publish(index_root, write_jsonl_from_existing(jsonl_path), command="test")
     (root / "zotero.sqlite").write_bytes(b"")
     return root, sqlite_path, ProjectConfig(root, root, root, output_root)
+
+
+def _republish(root: Path, *, chunk_chars: int | None = None, overlap_chars: int | None = None) -> None:
+    """Publish a fresh managed generation from the fixture's (possibly rewritten) legacy JSONL."""
+    from zotero_pdf_text.artifacts import stage_and_publish, write_jsonl_from_existing
+
+    index_root = root / "output" / "index"
+    stage_and_publish(
+        index_root,
+        write_jsonl_from_existing(index_root / "zotero_text_index.jsonl"),
+        command="test",
+        chunk_chars=chunk_chars,
+        overlap_chars=overlap_chars,
+    )
 
 
 def _seed_timeout_candidate(

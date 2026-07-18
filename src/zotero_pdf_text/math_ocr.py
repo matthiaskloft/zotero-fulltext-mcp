@@ -11,14 +11,20 @@ from datetime import datetime
 from pathlib import Path
 
 from ._atomic import replace_with_retry
+from .artifacts import (
+    ArtifactError,
+    current_generation_jsonl,
+    resolve_reader_db_path,
+    stage_and_publish,
+    write_jsonl_upserting_record,
+)
 from .converter import _with_front_matter
-from .fts import build_fts_index, get_item_context
+from .fts import get_item_context
 from .identity import strip_front_matter
 from .indexer import (
     TextIndexRecord,
     _sha256,
     load_indexed_keys,
-    replace_text_index_record,
 )
 from .lock import PipelineLockedError, pipeline_write_lock
 
@@ -48,12 +54,24 @@ class ReconvertResult:
 def reconvert_with_marker(
     attachment_key: str,
     *,
-    db_path: Path,
-    jsonl_path: Path,
-    fts_db_path: Path,
+    index_root: Path,
     lock_root: Path,
     timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS,
 ) -> ReconvertResult:
+    try:
+        jsonl_path = current_generation_jsonl(index_root)
+    except ArtifactError as exc:
+        return _error_result(attachment_key, str(exc))
+    if jsonl_path is None:
+        return _error_result(
+            attachment_key,
+            "Reconversion publishes a managed index generation, but no managed generation exists "
+            "yet. Publish one with 'zotero-pdf-text rebuild-index', then retry.",
+        )
+    try:
+        db_path = resolve_reader_db_path(index_root / "zotero_text_index.sqlite")
+    except ArtifactError as exc:
+        return _error_result(attachment_key, str(exc))
     context = get_item_context(db_path, attachment_key=attachment_key)
     records = context.get("records", [])
     if not records:
@@ -142,20 +160,31 @@ def reconvert_with_marker(
         cleanup_staging()
         raise
 
-    # Every other writer of jsonl_path/fts_db_path (build-index, append-index, convert-*) takes
-    # a lock; without one here, a reconvert-math run racing another write command could have its
-    # update silently discarded by "last atomic replace wins" -- no exception, no data corruption,
-    # just a lost update. `lock_root` must be the same canonical root the caller's other pipeline
-    # commands lock (e.g. convert-new's config.output_root) -- locking jsonl_path.parent here
-    # would use a different lock file than convert-new's, defeating mutual exclusion between them
-    # even though both write the same index files. The Markdown and sidecar writes happen inside
-    # the lock, and their previous state is restored if a later commit step fails. Writing Markdown
-    # before acquiring the lock would leave it updated while the index still describes the old
-    # extraction if the lock were contested. The lock is held only around these writes, not the
-    # preceding GPU-bound extraction.
+    # Every other writer of the managed index (rebuild-index, update-index, convert-new) takes a
+    # lock; without one here, a reconvert-math run racing another write command could have its
+    # published generation silently superseded -- no exception, no data corruption, just a lost
+    # update. `lock_root` must be the same canonical root the caller's other pipeline commands
+    # lock (e.g. convert-new's config.output_root). The Markdown/image swap and the generation
+    # publication happen inside the lock; the index side needs no byte-level rollback because a
+    # failed staging or publication simply never replaces current.json -- only the swapped
+    # Markdown/image files must be restored on failure. The lock is held only around these
+    # writes, not the preceding GPU-bound extraction.
     try:
         with pipeline_write_lock(lock_root, command="reconvert-math"):
-            if attachment_key not in load_indexed_keys(jsonl_path):
+            # Re-resolve under the lock: another writer may have published a new generation
+            # while marker-pdf was extracting.
+            try:
+                jsonl_path = current_generation_jsonl(index_root)
+            except ArtifactError as exc:
+                return _error_result(
+                    attachment_key,
+                    str(exc),
+                    previous_extraction_tool=previous_extraction_tool,
+                    previous_char_count=previous_char_count,
+                    markdown_path=str(markdown_path),
+                    source_path=str(source_path),
+                )
+            if jsonl_path is None or attachment_key not in load_indexed_keys(jsonl_path):
                 return _error_result(
                     attachment_key,
                     f"No text-sidecar record found for attachment key {attachment_key}",
@@ -165,7 +194,6 @@ def reconvert_with_marker(
                     source_path=str(source_path),
                 )
             previous_markdown = markdown_path.read_bytes() if markdown_path.exists() else None
-            previous_jsonl = jsonl_path.read_bytes()
             previous_images_path = staging_root / "previous-images"
             images_promoted = False
             try:
@@ -196,8 +224,11 @@ def reconvert_with_marker(
                     has_math=has_math,
                     text=new_text_for_index,
                 )
-                replace_text_index_record(jsonl_path, attachment_key, new_record)
-                build_fts_index(jsonl_path, fts_db_path)
+                stage_and_publish(
+                    index_root,
+                    write_jsonl_upserting_record(jsonl_path, attachment_key, new_record),
+                    command="reconvert-math",
+                )
             except Exception:
                 image_rollback_error: OSError | None = None
                 try:
@@ -212,8 +243,6 @@ def reconvert_with_marker(
                     markdown_path.unlink(missing_ok=True)
                 else:
                     _restore_bytes(markdown_path, previous_markdown)
-                _restore_bytes(jsonl_path, previous_jsonl)
-                build_fts_index(jsonl_path, fts_db_path)
                 if image_rollback_error is not None:
                     raise RuntimeError("Math reconversion could not restore prior image assets.") from image_rollback_error
                 raise
