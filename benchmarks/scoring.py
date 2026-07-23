@@ -95,29 +95,74 @@ def _reconstruct_ref(png_path: Path, text_before: str, text_after: str) -> CropR
     )
 
 
-def load_tier(tier: str) -> list[BenchmarkCrop]:
+def one_to_one_problems(
+    geometry_keys: set[str], png_keys: set[str], label_keys: set[str]
+) -> list[str]:
+    """Describe any break in the geometry <-> PNG <-> labels correspondence.
+
+    Returns an empty list when all three key sets are identical. Pure and set-based so it can be
+    unit-tested directly; ``load_tier`` raises on any problem it reports.
+    """
+    problems: list[str] = []
+    missing_png = geometry_keys - png_keys
+    orphan_png = png_keys - geometry_keys
+    if missing_png or orphan_png:
+        problems.append(
+            f"geometry vs PNG files -- geometry entries with no PNG: {sorted(missing_png)}; "
+            f"PNGs with no geometry entry: {sorted(orphan_png)}"
+        )
+    unlabelled = geometry_keys - label_keys
+    stale_labels = label_keys - geometry_keys
+    if unlabelled or stale_labels:
+        problems.append(
+            f"geometry vs labels -- crops with no label: {sorted(unlabelled)}; "
+            f"labels with no crop: {sorted(stale_labels)}"
+        )
+    return problems
+
+
+def load_tier(tier: str, *, strict: bool = True) -> list[BenchmarkCrop]:
     """Load every labelled crop of one tier as reconstructed CropRefs.
 
     ``tier`` names a directory under ``benchmarks/`` holding ``crops/<key>/geometry.json`` and a
-    ``labels.json`` mapping ``<key>/<crop>.png`` to a ground-truth label. Crops without a label are
-    skipped (a partially-labelled, still-growing tier is not an error).
+    ``labels.json`` mapping ``<key>/<crop>.png`` to a ground-truth label.
+
+    In the default ``strict`` mode the geometry entries, the PNG files on disk, and the label keys
+    must correspond one-to-one, or this raises. Silently skipping a mismatch is exactly how a
+    regenerated tier could shed hard examples (fewer crops, stale labels) while CI stayed green --
+    the failure this benchmark exists to prevent. Building a tier incrementally (labelling in
+    progress) is the one case that legitimately has unlabelled crops: pass ``strict=False`` for
+    that, which CI never does.
     """
     tier_dir = TIER_ROOT / tier
+    crops_dir = tier_dir / "crops"
     labels = json.loads((tier_dir / "labels.json").read_text(encoding="utf-8"))["crops"]
-    crops: list[BenchmarkCrop] = []
-    for geometry_file in sorted((tier_dir / "crops").glob("*/geometry.json")):
-        key_dir = geometry_file.parent.name
+
+    geometry: dict[str, tuple[dict, Path]] = {}
+    for geometry_file in sorted(crops_dir.glob("*/geometry.json")):
+        key_dir = geometry_file.parent
         for entry in json.loads(geometry_file.read_text(encoding="utf-8")):
-            key = f"{key_dir}/{entry['id']}.png"
-            expected = labels.get(key)
-            if expected is None:
-                continue
-            ref = _reconstruct_ref(
-                geometry_file.parent / f"{entry['id']}.png",
-                entry.get("text_before", ""),
-                entry.get("text_after", ""),
+            geometry[f"{key_dir.name}/{entry['id']}.png"] = (entry, key_dir)
+    png_keys = {f"{png.parent.name}/{png.name}" for png in crops_dir.glob("*/*.png")}
+
+    if strict:
+        problems = one_to_one_problems(set(geometry), png_keys, set(labels))
+        if problems:
+            raise ValueError(
+                f"benchmark tier {tier!r} is inconsistent:\n  " + "\n  ".join(problems)
             )
-            crops.append(BenchmarkCrop(entry["id"], key_dir, expected, ref))
+
+    crops: list[BenchmarkCrop] = []
+    for key, (entry, key_dir) in sorted(geometry.items()):
+        expected = labels.get(key)
+        if expected is None:
+            continue  # only reachable when strict=False
+        ref = _reconstruct_ref(
+            key_dir / f"{entry['id']}.png",
+            entry.get("text_before", ""),
+            entry.get("text_after", ""),
+        )
+        crops.append(BenchmarkCrop(entry["id"], key_dir.name, expected, ref))
     return crops
 
 
