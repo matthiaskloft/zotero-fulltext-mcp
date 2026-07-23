@@ -13,7 +13,6 @@
     "host": "localhost",
     "port": 11434,
     "model": "glm-ocr:q8_0",
-    "max_workers": 1,
     "per_image_timeout_seconds": 120,
     "enriched_suffix": "_ocr_eq"
   }

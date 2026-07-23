@@ -89,6 +89,29 @@ def _build_fixture(root: Path) -> tuple[Path, Path, Path]:
     return output_root, markdown_path, index_root
 
 
+def _build_two_crop_fixture(root: Path) -> tuple[Path, Path, Path]:
+    """Like _build_fixture but with two crops, so a run can partially recover the mathematics."""
+    output_root, markdown_path, index_root = _build_fixture(root)
+    images_dir = output_root / "images" / "0001_paper"
+    (images_dir / "crop-02.png").write_bytes(_png_bytes(540, 30))
+    body = (
+        "# Paper\n\nThe result follows:\n\n![](crop-01.png)\n\n"
+        "and also:\n\n![](crop-02.png)\n\nwhere x is free."
+    )
+    text = markdown_path.read_text(encoding="utf-8")
+    head, _, _ = text.partition("---\n\n")
+    markdown_path.write_text(head + "---\n\n" + body, encoding="utf-8")
+
+    # Keep the published record's text in step with the two-crop body.
+    jsonl = current_generation_jsonl(index_root)
+    record = json.loads(jsonl.read_text(encoding="utf-8").splitlines()[0])
+    record["text"] = body
+    legacy = index_root / "zotero_text_index.jsonl"
+    legacy.write_text(json.dumps(record, ensure_ascii=False) + "\n", encoding="utf-8")
+    stage_and_publish(index_root, write_jsonl_from_existing(legacy), command="test")
+    return output_root, markdown_path, index_root
+
+
 def _run(output_root: Path, index_root: Path, *, settings: ImageOcrSettings = SETTINGS, **kwargs):
     return ocr_images_for_attachment(
         "ATTACH1",
@@ -145,6 +168,66 @@ class ImageOcrCommitTests(unittest.TestCase):
             self.assertEqual(published["word_count"], len(published["text"].split()))
             self.assertNotEqual(published["markdown_sha256"], "deadbeef")
             self.assertTrue(published["has_math"])
+
+    def test_figure_only_run_records_participation_but_not_math_capability(self):
+        """A run that recovered no mathematics must not shed the math-lossy warning. GLM-OCR
+        participation is still recorded (image_ocr_tool), but the extractor label -- which gates
+        math_extraction_may_be_lossy -- stays unchanged so the warning persists."""
+        with tempfile.TemporaryDirectory() as tmp:
+            output_root, markdown_path, index_root = _build_fixture(Path(tmp))
+            with patch("zotero_pdf_text.image_ocr.probe", return_value=HEALTHY), patch(
+                "zotero_pdf_text.image_ocr.classify_crop", return_value=CLASS_FIGURE
+            ), patch("zotero_pdf_text.image_ocr.generate", return_value="A scatter plot."):
+                result = _run(output_root, index_root)
+
+            self.assertTrue(result.ok, result.error)
+            enriched = _enriched_path(markdown_path).read_text(encoding="utf-8")
+            self.assertNotIn("+glm-ocr", enriched)            # not claimed math-capable
+            self.assertIn("image_ocr_tool:", enriched)        # participation still recorded
+            published = json.loads(
+                current_generation_jsonl(index_root).read_text(encoding="utf-8").splitlines()[0]
+            )
+            self.assertEqual(published["extraction_tool"], "pymupdf4llm.to_markdown")
+
+    def test_partial_formula_failure_is_not_marked_math_capable(self):
+        """When some formula crops failed, the mathematics was only partially recovered, so the
+        record must not be marked math-capable even though a splice happened."""
+        with tempfile.TemporaryDirectory() as tmp:
+            output_root, markdown_path, index_root = _build_two_crop_fixture(Path(tmp))
+            with patch("zotero_pdf_text.image_ocr.probe", return_value=HEALTHY), patch(
+                "zotero_pdf_text.image_ocr.classify_crop", return_value=CLASS_FORMULA
+            ), patch(
+                "zotero_pdf_text.image_ocr.generate",
+                side_effect=["E = mc^2", OllamaError("second crop failed")],
+            ):
+                result = _run(output_root, index_root)
+
+            self.assertTrue(result.ok, result.error)
+            self.assertEqual(result.ocr_failed, 1)
+            enriched = _enriched_path(markdown_path).read_text(encoding="utf-8")
+            self.assertIn("$$\nE = mc^2\n$$", enriched)       # the one that succeeded was spliced
+            self.assertIn("![](crop-02.png)", enriched)       # the one that failed kept its placeholder
+            self.assertNotIn("+glm-ocr", enriched)            # not claimed math-capable
+            published = json.loads(
+                current_generation_jsonl(index_root).read_text(encoding="utf-8").splitlines()[0]
+            )
+            self.assertEqual(published["extraction_tool"], "pymupdf4llm.to_markdown")
+
+    def test_all_formulas_recovered_is_marked_math_capable(self):
+        """The positive control for the two above: when every formula crop succeeds, the composite
+        math-capable marker is applied and the warning is correctly suppressed."""
+        with tempfile.TemporaryDirectory() as tmp:
+            output_root, markdown_path, index_root = _build_two_crop_fixture(Path(tmp))
+            with patch("zotero_pdf_text.image_ocr.probe", return_value=HEALTHY), patch(
+                "zotero_pdf_text.image_ocr.classify_crop", return_value=CLASS_FORMULA
+            ), patch("zotero_pdf_text.image_ocr.generate", side_effect=["E = mc^2", "a^2 + b^2"]):
+                result = _run(output_root, index_root)
+
+            self.assertTrue(result.ok, result.error)
+            published = json.loads(
+                current_generation_jsonl(index_root).read_text(encoding="utf-8").splitlines()[0]
+            )
+            self.assertEqual(published["extraction_tool"], "pymupdf4llm.to_markdown+glm-ocr")
 
     def test_in_place_mode_overwrites_when_the_suffix_is_empty(self):
         with tempfile.TemporaryDirectory() as tmp:

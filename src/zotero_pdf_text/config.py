@@ -19,7 +19,6 @@ class ImageOcrSettings:
     host: str = "localhost"
     port: int = 11434
     model: str = "glm-ocr:q8_0"
-    max_workers: int = 1
     per_image_timeout_seconds: int = 120
     # Enrichment is written to a sibling file named "<stem><enriched_suffix>.md" and the original
     # is never modified. Set to "" to overwrite the original in place instead (no safety copy).
@@ -73,7 +72,6 @@ def _load_image_ocr(data: object) -> ImageOcrSettings:
         host=str(data.get("host", defaults.host)),
         port=int(data.get("port", defaults.port)),
         model=str(data.get("model", defaults.model)),
-        max_workers=int(data.get("max_workers", defaults.max_workers)),
         per_image_timeout_seconds=int(
             data.get("per_image_timeout_seconds", defaults.per_image_timeout_seconds)
         ),

@@ -2,7 +2,9 @@ import struct
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
+from zotero_pdf_text.config import ImageOcrSettings
 from zotero_pdf_text.image_ocr import (
     CAPTION_FIGURE_RE,
     CAPTION_TABLE_RE,
@@ -11,6 +13,10 @@ from zotero_pdf_text.image_ocr import (
     CLASS_SKIP,
     CLASS_TABLE,
     PICTURE_TEXT_MARKER,
+    TASK_PROMPTS,
+    CropPlan,
+    _cache_key,
+    _run_ocr,
     composite_extraction_tool,
     enriched_path_for,
     find_crop_refs,
@@ -359,6 +365,54 @@ class TableAndCrossReferenceTests(unittest.TestCase):
 class PictureMarkerTests(unittest.TestCase):
     def test_marker_constant_matches_what_the_extractor_emits(self):
         self.assertEqual(PICTURE_TEXT_MARKER, "<!-- Start of picture text -->")
+
+
+class CacheKeyTests(unittest.TestCase):
+    """The cache key must depend on the model, so switching image_ocr.model never serves another
+    model's output. Guards the regression Codex flagged: a content+prompt-only key silently reused
+    the previous model's answer on --force."""
+
+    def _png(self) -> Path:
+        self._tmp = tempfile.TemporaryDirectory()
+        return _write_png(Path(self._tmp.name), "crop.png", 537, 28)
+
+    def test_switching_the_model_changes_the_key(self):
+        png = self._png()
+        prompt = TASK_PROMPTS[CLASS_FORMULA]
+        self.assertNotEqual(
+            _cache_key(png, prompt, "glm-ocr:q8_0"), _cache_key(png, prompt, "glm-ocr:fp16")
+        )
+
+    def test_same_inputs_give_a_stable_key(self):
+        png = self._png()
+        prompt = TASK_PROMPTS[CLASS_FORMULA]
+        self.assertEqual(
+            _cache_key(png, prompt, "glm-ocr:q8_0"), _cache_key(png, prompt, "glm-ocr:q8_0")
+        )
+
+    def test_run_ocr_does_not_reuse_another_models_cached_output(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            images_dir = Path(tmp)
+            png = _write_png(images_dir, "crop.png", 537, 28)
+            ref = find_crop_refs("![](crop.png)", images_dir)[0]
+            plan = CropPlan(ref, CLASS_FORMULA)
+
+            with patch("zotero_pdf_text.image_ocr.generate", return_value="from model A") as gen:
+                first = _run_ocr([plan], settings=ImageOcrSettings(model="A"), images_dir=images_dir)
+            self.assertEqual(first[0].ocr_text, "from model A")
+            self.assertEqual(gen.call_count, 1)
+
+            # Same crop and prompt, different model: must re-OCR, not serve model A's cached answer.
+            with patch("zotero_pdf_text.image_ocr.generate", return_value="from model B") as gen:
+                second = _run_ocr([plan], settings=ImageOcrSettings(model="B"), images_dir=images_dir)
+            self.assertEqual(second[0].ocr_text, "from model B")
+            self.assertEqual(gen.call_count, 1)
+
+            # Re-running model A still hits the cache (no new generate call).
+            with patch("zotero_pdf_text.image_ocr.generate", return_value="unused") as gen:
+                third = _run_ocr([plan], settings=ImageOcrSettings(model="A"), images_dir=images_dir)
+            self.assertEqual(third[0].ocr_text, "from model A")
+            self.assertEqual(gen.call_count, 0)
 
 
 if __name__ == "__main__":

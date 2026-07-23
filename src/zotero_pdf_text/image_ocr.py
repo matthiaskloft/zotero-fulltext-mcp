@@ -103,6 +103,12 @@ FRONT_MATTER_AT_KEY = "image_ocr_at"
 
 CACHE_FILENAME = ".image-ocr-cache.json"
 
+# Bumped whenever the *meaning* of a cached entry changes without the crop bytes, prompt or model
+# changing -- e.g. a change to sanitize_ocr_output. A key mismatch then forces a clean re-OCR
+# instead of serving output produced under the old behaviour. The model is part of the key too, so
+# switching image_ocr.model correctly misses rather than reusing another model's answer.
+CACHE_SCHEMA_VERSION = "1"
+
 # A single crop should never contribute more than this much text. A runaway table or a model
 # that starts repeating itself would otherwise be spliced verbatim into the document.
 MAX_OCR_RESPONSE_CHARS = 8000
@@ -670,12 +676,22 @@ def ocr_images_for_attachment(
             ),
         )
 
+    # Math-capability provenance is only claimed when the mathematics was actually recovered:
+    # every formula crop that was eligible produced text. A figure-only run, or one where any
+    # formula crop failed or came back empty, leaves the extractor label unchanged so the
+    # `math_extraction_may_be_lossy` warning (gated on it) correctly persists. That "GLM-OCR
+    # participated" is still recorded, separately, in the `image_ocr_tool` front-matter field.
+    formula_plans = [plan for plan in plans if plan.crop_class == CLASS_FORMULA]
+    math_recovered = bool(formula_plans) and all(plan.ocr_text for plan in formula_plans)
+    previous_tool = str(record.get("extraction_tool", ""))
+    extraction_tool = composite_extraction_tool(previous_tool) if math_recovered else previous_tool
+
     enriched_at = datetime.now().isoformat(timespec="seconds")
     new_body = splice(body, replacements)
     new_markdown = _with_front_matter(
         record,
         new_body,
-        composite_extraction_tool(str(record.get("extraction_tool", ""))),
+        extraction_tool,
         has_math=has_math,
         extra_fields={
             FRONT_MATTER_TOOL_KEY: f"{OCR_TOOL} ({settings.model})",
@@ -691,6 +707,7 @@ def ocr_images_for_attachment(
             source_bytes=original_bytes,
             target_path=enriched_path,
             new_markdown=new_markdown,
+            extraction_tool=extraction_tool,
             has_math=has_math,
             index_root=index_root,
             lock_root=lock_root,
@@ -743,7 +760,7 @@ def _run_ocr(
         if prompt is None or plan.ref.png_path is None:
             updated.append(plan)
             continue
-        key = _cache_key(plan.ref.png_path, prompt)
+        key = _cache_key(plan.ref.png_path, prompt, settings.model)
         if key in cache:
             updated.append(CropPlan(plan.ref, plan.crop_class, ocr_text=cache[key]))
             continue
@@ -768,11 +785,18 @@ def _run_ocr(
     return updated
 
 
-def _cache_key(png_path: Path, prompt: str) -> str:
-    """Key cache entries by crop *content*, so a regenerated crop correctly misses."""
+def _cache_key(png_path: Path, prompt: str, model: str) -> str:
+    """Key cache entries by everything that determines the output: crop *content*, the task
+    prompt, the serving model, and a schema version. A regenerated crop, a different model, or a
+    changed sanitizer all miss correctly instead of serving stale output."""
     digest = hashlib.sha256()
     digest.update(png_path.read_bytes())
+    digest.update(b"\x00")
     digest.update(prompt.encode("utf-8"))
+    digest.update(b"\x00")
+    digest.update(model.encode("utf-8"))
+    digest.update(b"\x00")
+    digest.update(CACHE_SCHEMA_VERSION.encode("utf-8"))
     return digest.hexdigest()
 
 
@@ -801,6 +825,7 @@ def _commit(
     source_bytes: bytes,
     target_path: Path,
     new_markdown: str,
+    extraction_tool: str,
     has_math: bool,
     index_root: Path,
     lock_root: Path,
@@ -861,7 +886,9 @@ def _commit(
                 # Computed after the write: the published generation must describe the file that
                 # is now on disk, or the source-locator invariant breaks.
                 markdown_sha256=_sha256(target_path),
-                extraction_tool=composite_extraction_tool(str(record.get("extraction_tool", ""))),
+                # Decided by the caller from whether the mathematics was actually recovered;
+                # composed once so the front matter and the index record never disagree.
+                extraction_tool=extraction_tool,
                 char_count=len(new_text),
                 word_count=len(new_text.split()),
                 page_count=record["page_count"],
