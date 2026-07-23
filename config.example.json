@@ -7,5 +7,14 @@
   "early_pages": 3,
   "max_page_chars": 12000,
   "manually_accepted_attachment_keys": [],
-  "manually_accepted_mappings": []
+  "manually_accepted_mappings": [],
+  "_image_ocr_comment": "Optional. Omit the whole block to accept these defaults. Used only by the 'ocr-images' command, which reads figure/equation PNGs already extracted during conversion and sends them to a local Ollama-served OCR model.",
+  "image_ocr": {
+    "host": "localhost",
+    "port": 11434,
+    "model": "glm-ocr:q8_0",
+    "max_workers": 1,
+    "per_image_timeout_seconds": 120,
+    "enriched_suffix": "_ocr_eq"
+  }
 }

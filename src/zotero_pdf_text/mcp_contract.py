@@ -91,6 +91,13 @@ BIBTEX_MCP_TOOL_NAME = "export_bibtex_entries_by_key"
 RECONVERT_MCP_TOOL_NAME = "reconvert_with_math_ocr"
 RETRY_TIMEOUT_MCP_TOOL_NAMES = ("skip_timeout_extraction", "retry_timeout_extraction")
 
+# Extraction paths that resolve mathematical notation faithfully, so a record produced by one of
+# them needs no lossy-math warning. A record's extraction_tool can be a composite such as
+# "pymupdf4llm.to_markdown+glm-ocr" when a math-capable pass enriched output that an ordinary
+# extractor produced -- the original extractor stays visible in provenance, which is why
+# membership is tested per component instead of by equality against a single name.
+MATH_CAPABLE_EXTRACTION_TOOLS = frozenset({"marker", "glm-ocr"})
+
 READ_ONLY_TOOL_ANNOTATIONS = {
     "readOnlyHint": True,
     "destructiveHint": False,
@@ -1221,9 +1228,14 @@ def _reliability_warnings(
         warnings.append("identity_unverified")
     if classification != "mapped_verified":
         warnings.append("attachment_match_unverified")
-    if has_math and extraction_tool != "marker":
+    if has_math and not _is_math_capable(extraction_tool):
         warnings.append("math_extraction_may_be_lossy")
     return warnings
+
+
+def _is_math_capable(extraction_tool: str) -> bool:
+    """Whether any component of a (possibly composite) extraction_tool resolves math faithfully."""
+    return any(part in MATH_CAPABLE_EXTRACTION_TOOLS for part in extraction_tool.split("+"))
 
 
 def _source_locator(

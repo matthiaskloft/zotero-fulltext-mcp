@@ -209,6 +209,38 @@ Before creating a Zotero write candidate, normalize the PDF path and confirm it
 exists with `Test-Path`; `zotero-write validate --require-approved` will reject
 missing local PDFs.
 
+## Converted Output Paths Recorded By A Previous Machine
+
+Index records store the absolute `markdown_path` written by whichever machine ran the
+conversion, and converted Markdown embeds absolute image links the same way. Move the library —
+a new machine, a renamed sync folder, a different cloud provider — and search keeps working
+(the text lives in the index) while every recorded path silently stops resolving on disk.
+
+`ocr-images` handles both cases: it re-roots a stale `markdown_path` by matching the deepest
+suffix that exists under `output_root`, and it locates crop PNGs by filename against the images
+directory derived from the Markdown's own location rather than trusting the embedded link. If
+it reports that no matching file was found under `output_root`, the recorded path shares no
+suffix with the current tree — check that `output_root` in your config points at the directory
+that actually contains `markdown/` and `images/`.
+
+Other commands that consume recorded paths (`reconvert-math`) do not re-root and will report
+the file as missing. Republishing the index from the current tree (`rebuild-index`) rewrites the
+stored paths.
+
+## Image OCR Runtime Is Unavailable
+
+`ocr-images` and the `image-ocr runtime` row in `check-setup` report three distinct states, each
+with its own fix:
+
+- **"Ollama is not reachable at …"** — the server is not running, or is on a different host/port
+  than the `image_ocr` block in your config. Start Ollama and retry.
+- **"no `glm-ocr` model is installed"** — run `ollama pull glm-ocr:q8_0`.
+- **"`glm-ocr:q8_0` is not pulled. Installed tags: …"** — a different tag of the same model is
+  already present. Either pull the configured tag or set `image_ocr.model` to one listed.
+
+The probe never runs an inference, so it stays fast even on a CPU-only machine where a real OCR
+call takes minutes.
+
 ## Better BibTeX Export Fails
 
 `bibtex-export`, `bibtex-add`, and `export_bibtex_entries_by_key` require
