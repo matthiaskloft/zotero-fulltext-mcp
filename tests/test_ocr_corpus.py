@@ -32,8 +32,22 @@ EXPECTED = json.loads((CORPUS_DIR / "expected.json").read_text(encoding="utf-8")
 MARKER_RE = re.compile(r"CORPUSMARK-[A-Z]+-\d+")
 
 
+def _expected_crop_count(spec):
+    """How many crops this element should produce: 0 for no_crop, an explicit override where a
+    construct intentionally fragments (e.g. FIG-003 -> 2), otherwise 1."""
+    if spec["expected_class"] == "no_crop":
+        return 0
+    return spec.get("expected_crops", 1)
+
+
 def _convert_corpus():
-    """Run the real extractor over the corpus PDF and return (marker -> CropRef, body)."""
+    """Run the real extractor over the corpus PDF.
+
+    Returns (by_marker, unmarked, body, tmp) where by_marker maps each CORPUSMARK token to the
+    *list* of crops it produced -- one construct can fragment into several crops, and collapsing
+    them to one would silently drop the extras from every assertion. ``unmarked`` holds any crop
+    that resolved to no preceding marker, so a produced-but-untraceable crop cannot hide.
+    """
     import pymupdf4llm
 
     tmp = tempfile.TemporaryDirectory()
@@ -48,12 +62,22 @@ def _convert_corpus():
         dpi=150,
     )
     refs = find_crop_refs(body, images_dir)
-    by_marker = {}
+    by_marker: dict[str, list] = {}
+    unmarked: list = []
     for ref in refs:
         preceding = [m for m in MARKER_RE.finditer(body) if m.start() < ref.span[0]]
         if preceding:
-            by_marker[preceding[-1].group(0)] = ref
-    return by_marker, body, tmp
+            by_marker.setdefault(preceding[-1].group(0), []).append(ref)
+        else:
+            unmarked.append(ref)
+    return by_marker, unmarked, body, tmp
+
+
+def _all_marked_crops(by_marker):
+    """Every (marker, ref) pair across all markers, so assertions cover fragmented crops too."""
+    for marker, refs in by_marker.items():
+        for ref in refs:
+            yield marker, ref
 
 
 class CorpusExtractionTests(unittest.TestCase):
@@ -61,7 +85,7 @@ class CorpusExtractionTests(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.by_marker, cls.body, cls._tmp = _convert_corpus()
+        cls.by_marker, cls.unmarked, cls.body, cls._tmp = _convert_corpus()
 
     @classmethod
     def tearDownClass(cls):
@@ -70,18 +94,26 @@ class CorpusExtractionTests(unittest.TestCase):
     def test_every_element_matches_its_recorded_crop_expectation(self):
         for marker, spec in EXPECTED.items():
             with self.subTest(marker=marker):
-                produced = marker in self.by_marker
-                if spec["expected_class"] == "no_crop":
-                    self.assertFalse(produced, f"{marker} unexpectedly produced a crop: {spec['note']}")
-                else:
-                    self.assertTrue(produced, f"{marker} produced no crop: {spec['note']}")
+                produced = len(self.by_marker.get(marker, []))
+                expected = _expected_crop_count(spec)
+                self.assertEqual(
+                    produced,
+                    expected,
+                    f"{marker} produced {produced} crop(s), expected {expected}: {spec['note']}",
+                )
 
     def test_every_produced_crop_resolves_on_disk(self):
-        for marker, ref in self.by_marker.items():
-            with self.subTest(marker=marker):
+        for marker, ref in _all_marked_crops(self.by_marker):
+            with self.subTest(marker=marker, png=ref.png_path.name if ref.png_path else None):
                 self.assertTrue(ref.exists, f"{marker} crop did not resolve")
                 self.assertGreater(ref.width, 0)
                 self.assertGreater(ref.height, 0)
+
+    def test_every_produced_crop_is_traceable_to_a_marker(self):
+        """No crop may resolve to no preceding marker: an untraceable crop would be excluded from
+        the ground-truth and classification assertions entirely, hiding a real regression."""
+        stray = [ref.png_path.name if ref.png_path else "<unresolved>" for ref in self.unmarked]
+        self.assertFalse(stray, f"crops produced with no preceding CORPUSMARK token: {stray}")
 
     def test_geometry_alone_cannot_separate_content_from_decoration(self):
         """The corpus must keep containing counterexamples in both directions.
@@ -95,7 +127,7 @@ class CorpusExtractionTests(unittest.TestCase):
         # A negative sitting inside the equation band: aspect alone would send it to the model.
         decoration_in_equation_band = [
             marker
-            for marker, ref in self.by_marker.items()
+            for marker, ref in _all_marked_crops(self.by_marker)
             if EXPECTED[marker]["expected_class"] == CLASS_SKIP and ref.aspect > EQUATION_MIN_ASPECT
         ]
         self.assertTrue(
@@ -109,7 +141,7 @@ class CorpusExtractionTests(unittest.TestCase):
 
         content_in_gap = [
             marker
-            for marker, ref in self.by_marker.items()
+            for marker, ref in _all_marked_crops(self.by_marker)
             if EXPECTED[marker]["expected_class"] in TASK_PROMPTS and _in_gap(ref)
         ]
         self.assertTrue(
@@ -122,14 +154,14 @@ class CorpusExtractionTests(unittest.TestCase):
         # picture-text marker, and it carries a "Fig. 2" caption -- both signals classify_crop
         # leans on. (FIG-001 is pure vector with no text, so it has no marker and is recognised
         # as a figure by its caption alone; that path is covered by the classification test.)
-        figure = self.by_marker["CORPUSMARK-FIG-002"]
+        figure = self.by_marker["CORPUSMARK-FIG-002"][0]
         neighbours = f"{figure.text_before}\n{figure.text_after}"
         self.assertIn(PICTURE_TEXT_MARKER, neighbours)
         self.assertIn("Fig. 2", self.body)
 
     def test_equations_carry_no_caption_or_picture_marker(self):
         """What separates the gap-band equation from the gap-band figure is its surroundings."""
-        equation = self.by_marker["CORPUSMARK-EQ-009"]
+        equation = self.by_marker["CORPUSMARK-EQ-009"][0]
         neighbours = f"{equation.text_before}\n{equation.text_after}"
         self.assertNotIn(PICTURE_TEXT_MARKER, neighbours)
 
@@ -139,7 +171,7 @@ class CorpusClassificationTests(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.by_marker, cls.body, cls._tmp = _convert_corpus()
+        cls.by_marker, cls.unmarked, cls.body, cls._tmp = _convert_corpus()
 
     @classmethod
     def tearDownClass(cls):
@@ -154,7 +186,7 @@ class CorpusClassificationTests(unittest.TestCase):
         (telling you to drop the flag)."""
         mismatches = []
         recovered = []
-        for marker, ref in sorted(self.by_marker.items()):
+        for marker, ref in sorted(_all_marked_crops(self.by_marker), key=lambda mr: (mr[0], mr[1].png_path.name)):
             spec = EXPECTED[marker]
             expected = spec["expected_class"]
             blind_spot = spec.get("heuristic_blind_spot")
@@ -194,7 +226,7 @@ class CorpusRecognitionTests(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.by_marker, cls.body, cls._tmp = _convert_corpus()
+        cls.by_marker, cls.unmarked, cls.body, cls._tmp = _convert_corpus()
 
     @classmethod
     def tearDownClass(cls):
@@ -214,11 +246,13 @@ class CorpusRecognitionTests(unittest.TestCase):
             if not tokens or marker not in self.by_marker:
                 continue
             with self.subTest(marker=marker):
+                # Score the primary crop; a fragmented element (e.g. FIG-003) carries its notation
+                # in the first crop, and the detached strip has no tokens of its own.
                 text = generate(
                     settings.base_url,
                     settings.model,
                     TASK_PROMPTS[spec["expected_class"]],
-                    self.by_marker[marker].png_path,
+                    self.by_marker[marker][0].png_path,
                     timeout=settings.per_image_timeout_seconds,
                 )
                 lowered = text.lower()

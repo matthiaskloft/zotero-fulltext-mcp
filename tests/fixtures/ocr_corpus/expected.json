@@ -30,7 +30,7 @@
     "CORPUSMARK-EQBOX-001": {"expected_class": "formula", "note": "display equation inside a shaded definition box; both the words ('Definition', 'with') and the fraction must be recovered", "expected_tokens": ["frac", "MS", "df"]},
     "CORPUSMARK-FIG-001": {"expected_class": "figure", "note": "vector figure of line segments and points with a 'Fig. 1' caption and a picture-text marker", "expected_tokens": []},
     "CORPUSMARK-FIG-002": {"expected_class": "figure", "note": "pgfplots bar chart (probability mass function)", "expected_tokens": []},
-    "CORPUSMARK-FIG-003": {"expected_class": "figure", "note": "pgfplots normal density; produces TWO crops (density area + detached axis strip), both figure", "expected_tokens": []},
+    "CORPUSMARK-FIG-003": {"expected_class": "figure", "expected_crops": 2, "note": "pgfplots normal density; produces TWO crops (density area + detached axis strip), both figure", "expected_tokens": []},
     "CORPUSMARK-FIG-004": {"expected_class": "figure", "note": "line plot on a full grid; the ruled grid is a table-look trap", "expected_tokens": []},
     "CORPUSMARK-FIG-005": {"expected_class": "figure", "note": "Venn diagram of two events in a sample space", "expected_tokens": []},
     "CORPUSMARK-FIG-006": {"expected_class": "figure", "note": "path/measurement-model diagram (latent variable and indicators)", "expected_tokens": []},
