@@ -50,6 +50,17 @@ All notable changes to this project are documented here. Format loosely follows
   deepest suffix that exists under `output_root`, and resolves crop PNGs by filename rather than
   by the absolute image link embedded in the Markdown. A library that moved between machines
   keeps working instead of reporting that it has no images.
+- Real-article classification benchmark tier (`benchmarks/preprints/`) plus a reusable scoring
+  harness (`benchmarks/scoring.py`) and CI test (`tests/test_benchmark_preprints.py`). It scores
+  `classify_crop` on 103 crops from open first-author preprints (used with the author's
+  permission; see `benchmarks/preprints/ATTRIBUTION.md`), complementing the synthetic corpus with
+  real-world content. The benchmark freezes the classifier's *inputs* — each crop's geometry and
+  the two neighbouring Markdown lines it reads — not a stale prediction, so CI re-runs the current
+  algorithm offline with no PDF, model or network. Source PDFs are fetched on first use into a
+  git-ignored cache and never redistributed; only the small crops, labels and short caption
+  snippets are tracked. Assertions are invariants rather than a per-crop table (accuracy floor,
+  every equation reaches the formula prompt, mistakes are only figures conservatively over-routed
+  to formula), so the tier can grow with harder examples without churn.
 
 ### Fixed
 
