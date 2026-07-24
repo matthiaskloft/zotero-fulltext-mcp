@@ -1,0 +1,362 @@
+[
+  {
+    "id": "interval_truth_00",
+    "width": 264,
+    "height": 66,
+    "aspect": 4.0,
+    "complexity": 0.1981,
+    "text_before": "_Dual Range Slider (DRS)_",
+    "text_after": "<!-- Start of picture text -->",
+    "heuristic": "figure"
+  },
+  {
+    "id": "interval_truth_01",
+    "width": 655,
+    "height": 82,
+    "aspect": 7.988,
+    "complexity": 0.0717,
+    "text_before": "In this section, we will introduce the notation for the data and the parameters. Appendix A provides an overview of these definitions, along with short explanations. We assume that interval responses ",
+    "text_after": "Since any of the three components in **_X_** can be zero, we add a padding constant _c_ to all components to ensure that we can later apply a log-ratio transformation. After adding",
+    "heuristic": "formula"
+  },
+  {
+    "id": "interval_truth_02",
+    "width": 680,
+    "height": 55,
+    "aspect": 12.364,
+    "complexity": 0.1372,
+    "text_before": "the constant, the compositional form is restored by dividing each element of the vector by the sum of all its elements.",
+    "text_after": "where **1** is a vector of three ones. Other methods have been proposed to remove zero-components, some of which have properties that are more optimal for compositional analysis, like the preservation",
+    "heuristic": "formula"
+  },
+  {
+    "id": "interval_truth_03",
+    "width": 776,
+    "height": 82,
+    "aspect": 9.463,
+    "complexity": 0.1876,
+    "text_before": "Next, we need to convert interval responses into a format better suited for our modeling framework, which assumes a bivariate normal distribution. For this purpose, we apply a specific version of the ",
+    "text_after": "The transformation yields a vector **_Z_** _\u2208_ R<sup>2</sup> with two elements, _Z_<sup>_loc_</sup> and _Z_<sup>_wid_</sup> , which correspond to the unbounded interval location and width, respectivel",
+    "heuristic": "formula"
+  },
+  {
+    "id": "interval_truth_04",
+    "width": 905,
+    "height": 318,
+    "aspect": 2.846,
+    "complexity": 0.13,
+    "text_before": "_Illustration of the Multivariate Logit Transformation_",
+    "text_after": "_Note._ The five observed response intervals are: Interval 1 = [ _._ 05 _, ._ 20], Interval 2 <u>1</u> = [ _._ 10 _, ._ 90], Interval 3 = \ufffd 3<sup>_,_</sup><sup><u>2</u></sup> 3 \ufffd, Interval 4 = [ _._ 5",
+    "heuristic": "formula"
+  },
+  {
+    "id": "interval_truth_05",
+    "width": 824,
+    "height": 215,
+    "aspect": 3.833,
+    "complexity": 0.122,
+    "text_before": "_i_ = 1 _, . . . , I_ (number of respondents) to item _j_ = 1 _, . . . , J_ (number of items). We assume the following data-generating mechanism for **_Z_** _ij_ : Respondent _i_ makes a latent apprai",
+    "text_after": "The latent appraisal is further influenced by the respondent\u2019s scaling bias,",
+    "heuristic": "formula"
+  },
+  {
+    "id": "interval_truth_06",
+    "width": 672,
+    "height": 45,
+    "aspect": 14.933,
+    "complexity": 0.1989,
+    "text_before": "_a_<sup>_loc_</sup> _i \u2208_ R<sup>2</sup> +<sup>,andshiftingbiases,[</sup><sup>_bloc_</sup> _i_<sup>,</sup><sup>_bwid_</sup> _i_ ]<sup>_\u22a4_</sup> _\u2208_ R<sup>2</sup> , which yields the final response:",
+    "text_after": "The two shifting biases are directional response biases and add a constant to each",
+    "heuristic": "formula"
+  },
+  {
+    "id": "interval_truth_07",
+    "width": 669,
+    "height": 264,
+    "aspect": 2.534,
+    "complexity": 0.1216,
+    "text_before": "Since the appraisal of the interval location _A_<sup>_loc_</sup> _ij_<sup>consistsoftheconsensuslocation</sup> plus an error, the scaling bias does not only influence the expected interval location, b",
+    "text_after": "The model can easily be modified by omitting bias parameters that are not relevant for certain applications (see also Section 4.1). Our own workflow involves first fitting the full model and then exam",
+    "heuristic": "formula"
+  },
+  {
+    "id": "interval_truth_08",
+    "width": 886,
+    "height": 635,
+    "aspect": 1.395,
+    "complexity": 0.1807,
+    "text_before": "_Illustration of How Changing the Person Parameters in the Interval Consensus Model Influences the Predicted Responses_",
+    "text_after": "_Note._ The scatter plots in the left-hand subpanels show simulated responses of one respondent to 100 randomly drawn items on the unbounded, bivariate scale. The right-hand subpanels show the corresp",
+    "heuristic": "figure"
+  },
+  {
+    "id": "interval_truth_09",
+    "width": 857,
+    "height": 176,
+    "aspect": 4.869,
+    "complexity": 0.1523,
+    "text_before": "It is difficult to interpret the estimate for the latent consensus interval, [ _Tj_<sup>_loc, T_</sup> _j_<sup>_wid_</sup> ]<sup>_\u22a4_</sup> , on the transformed, unbounded scale. To facilitate a substa",
+    "text_after": "where, again, _c_ = _._ 01 and **1** is the vector of ones. If no padding was applied before fitting the model, we set _c_ = 0. Third, we compute the actual interval boundaries on the bounded scale fr",
+    "heuristic": "formula"
+  },
+  {
+    "id": "interval_truth_10",
+    "width": 640,
+    "height": 45,
+    "aspect": 14.222,
+    "complexity": 0.1525,
+    "text_before": "where, again, _c_ = _._ 01 and **1** is the vector of ones. If no padding was applied before fitting the model, we set _c_ = 0. Third, we compute the actual interval boundaries on the bounded scale fr",
+    "text_after": "with _Tj_<sup>_\u2217_</sup> 1<sup>beingthefirstand</sup><sup>_T_</sup> _j_<sup>_\u2217_</sup> 2<sup>thesecondcomponentofthesimplex</sup><sup>**T**</sup><sup>_\u2217_</sup> _j_<sup>.Theinterval</sup> formed by [ _Tj",
+    "heuristic": "formula"
+  },
+  {
+    "id": "interval_truth_11",
+    "width": 599,
+    "height": 38,
+    "aspect": 15.763,
+    "complexity": 0.2086,
+    "text_before": "First, based on common applications of interval responses (e.g., in Ellerby et al., 2022; Kloft & Heck, 2024), we assume that consensus intervals with a very large width spanning the entire response s",
+    "text_after": "This prior has an expected value of _._ 29 and a mode of _._ 09 and therefore reflects our beliefs about the marginal width of true intervals more adequately than a uniform prior. However, interval re",
+    "heuristic": "formula"
+  },
+  {
+    "id": "interval_truth_12",
+    "width": 651,
+    "height": 142,
+    "aspect": 4.585,
+    "complexity": 0.1255,
+    "text_before": "Second, conditional on a particular width of a consensus interval, we do not assume that particular locations of the consensus interval are more likely than others. This assumption makes the prior cho",
+    "text_after": "INTERVAL CONSENSUS MODEL",
+    "heuristic": "formula"
+  },
+  {
+    "id": "interval_truth_13",
+    "width": 761,
+    "height": 78,
+    "aspect": 9.756,
+    "complexity": 0.135,
+    "text_before": "Third, we transform the consensus interval from the bounded simplex to the unbounded bivariate scale via the isometric log-ratio function in Equation (3):",
+    "text_after": "Alternatively, we could have also applied an uninformative prior directly on the simplex via a Dirichlet distribution (an implementation of this prior can also be found in the OSF repository):",
+    "heuristic": "formula"
+  },
+  {
+    "id": "interval_truth_14",
+    "width": 636,
+    "height": 32,
+    "aspect": 19.875,
+    "complexity": 0.219,
+    "text_before": "Alternatively, we could have also applied an uninformative prior directly on the simplex via a Dirichlet distribution (an implementation of this prior can also be found in the OSF repository):",
+    "text_after": "The person proficiency parameters, [ _Ei_<sup>_loc, E_</sup> _i_<sup>_wid_</sup> ]<sup>_\u22a4_</sup> , have weakly informative priors on both the means and the variances (see Table 1, column 1). The prior",
+    "heuristic": "formula"
+  },
+  {
+    "id": "interval_truth_15",
+    "width": 807,
+    "height": 411,
+    "aspect": 1.964,
+    "complexity": 0.1324,
+    "text_before": "_Default Prior Distributions for the Interval Consensus Model_",
+    "text_after": "the means for reasons of identifiability (Anders et al., 2014):",
+    "heuristic": "formula"
+  },
+  {
+    "id": "interval_truth_16",
+    "width": 569,
+    "height": 199,
+    "aspect": 2.859,
+    "complexity": 0.1442,
+    "text_before": "the means for reasons of identifiability (Anders et al., 2014):",
+    "text_after": "The mean vector of the shifting bias parameters, [ _b_<sup>_loc_</sup> _i_<sup>_, bwid_</sup> _i_ ]<sup>_\u22a4_</sup> , is fixed to zero to make the model identifiable with respect to the estimated mean o",
+    "heuristic": "formula"
+  },
+  {
+    "id": "interval_truth_17",
+    "width": 403,
+    "height": 34,
+    "aspect": 11.853,
+    "complexity": 0.408,
+    "text_before": "the means for reasons of identifiability (Anders et al., 2014):",
+    "text_after": "The mean vector of the shifting bias parameters, [ _b_<sup>_loc_</sup> _i_<sup>_, bwid_</sup> _i_ ]<sup>_\u22a4_</sup> , is fixed to zero to make the model identifiable with respect to the estimated mean o",
+    "heuristic": "formula"
+  },
+  {
+    "id": "interval_truth_18",
+    "width": 582,
+    "height": 53,
+    "aspect": 10.981,
+    "complexity": 0.1286,
+    "text_before": "Finally, we assign weakly informative priors to the residual correlation between interval location and width via a scaled beta distribution:",
+    "text_after": "INTERVAL CONSENSUS MODEL",
+    "heuristic": "formula"
+  },
+  {
+    "id": "interval_truth_19",
+    "width": 757,
+    "height": 97,
+    "aspect": 7.804,
+    "complexity": 0.1667,
+    "text_before": "defined as follows:",
+    "text_after": "where _J_ is the number of items in a specific condition and _N_ is the number of repetitions of the simulation. We computed the mean of the (absolute) bias of location and width jointly because we ex",
+    "heuristic": "formula"
+  },
+  {
+    "id": "interval_truth_20",
+    "width": 765,
+    "height": 99,
+    "aspect": 7.727,
+    "complexity": 0.1722,
+    "text_before": "We additionally calculated the mean squared error (MSE) for the bivariate vector [ _Tj_<sup>_loc, T_</sup> _j_<sup>_wid_</sup> ]<sup>_\u22a4_</sup> of the latent, unbounded consensus intervals:",
+    "text_after": "We also calculated the MSE for the location and width individually.",
+    "heuristic": "formula"
+  },
+  {
+    "id": "interval_truth_21",
+    "width": 722,
+    "height": 82,
+    "aspect": 8.805,
+    "complexity": 0.1964,
+    "text_before": "As a measure of parameter recovery, we also computed the average Pearson correlation between the estimated and the true values of the parameters:",
+    "text_after": "where _\u03b8_<sup>\u02c6</sup> _i_ and _\u03b8i_ represent the estimated and true values respectively, _\u03b8_<sup>\u00af\u02c6</sup> and _\u03b8_<sup>\u00af</sup> are their respective means, and _K_ represents either the number of items ",
+    "heuristic": "formula"
+  },
+  {
+    "id": "interval_truth_22",
+    "width": 392,
+    "height": 67,
+    "aspect": 5.851,
+    "complexity": 0.3036,
+    "text_before": "_Absolute Bias of Consensus Interval Location and Width._",
+    "text_after": "_Note._ This figure shows the standardized absolute bias (y-axis) of the consensus interval location (upper row) and width (lower row) for different numbers of items (columns) and respondents (x-axis)",
+    "heuristic": "formula"
+  },
+  {
+    "id": "interval_truth_23",
+    "width": 212,
+    "height": 424,
+    "aspect": 0.5,
+    "complexity": 0.2038,
+    "text_before": "_Absolute Bias of Consensus Interval Location and Width._",
+    "text_after": "_Note._ This figure shows the standardized absolute bias (y-axis) of the consensus interval location (upper row) and width (lower row) for different numbers of items (columns) and respondents (x-axis)",
+    "heuristic": "figure"
+  },
+  {
+    "id": "interval_truth_24",
+    "width": 178,
+    "height": 172,
+    "aspect": 1.035,
+    "complexity": 0.2006,
+    "text_before": "_Absolute Bias of Consensus Interval Location and Width._",
+    "text_after": "_Note._ This figure shows the standardized absolute bias (y-axis) of the consensus interval location (upper row) and width (lower row) for different numbers of items (columns) and respondents (x-axis)",
+    "heuristic": "figure"
+  },
+  {
+    "id": "interval_truth_25",
+    "width": 177,
+    "height": 172,
+    "aspect": 1.029,
+    "complexity": 0.1984,
+    "text_before": "_Absolute Bias of Consensus Interval Location and Width._",
+    "text_after": "_Note._ This figure shows the standardized absolute bias (y-axis) of the consensus interval location (upper row) and width (lower row) for different numbers of items (columns) and respondents (x-axis)",
+    "heuristic": "figure"
+  },
+  {
+    "id": "interval_truth_26",
+    "width": 402,
+    "height": 212,
+    "aspect": 1.896,
+    "complexity": 0.1908,
+    "text_before": "_Absolute Bias of Consensus Interval Location and Width._",
+    "text_after": "_Note._ This figure shows the standardized absolute bias (y-axis) of the consensus interval location (upper row) and width (lower row) for different numbers of items (columns) and respondents (x-axis)",
+    "heuristic": "formula"
+  },
+  {
+    "id": "interval_truth_27",
+    "width": 208,
+    "height": 172,
+    "aspect": 1.209,
+    "complexity": 0.2122,
+    "text_before": "_Absolute Bias of Consensus Interval Location and Width._",
+    "text_after": "_Note._ This figure shows the standardized absolute bias (y-axis) of the consensus interval location (upper row) and width (lower row) for different numbers of items (columns) and respondents (x-axis)",
+    "heuristic": "figure"
+  },
+  {
+    "id": "interval_truth_28",
+    "width": 208,
+    "height": 172,
+    "aspect": 1.209,
+    "complexity": 0.2094,
+    "text_before": "_Absolute Bias of Consensus Interval Location and Width._",
+    "text_after": "_Note._ This figure shows the standardized absolute bias (y-axis) of the consensus interval location (upper row) and width (lower row) for different numbers of items (columns) and respondents (x-axis)",
+    "heuristic": "figure"
+  },
+  {
+    "id": "interval_truth_29",
+    "width": 941,
+    "height": 685,
+    "aspect": 1.374,
+    "complexity": 0.1341,
+    "text_before": "_Correlation Between True and Estimated Parameters_",
+    "text_after": "_Note._ This figure shows the correlations (y-axis) between the true, data-generating parameters and the corresponding model estimates for all parameters (rows) for different numbers of items (columns",
+    "heuristic": "figure"
+  },
+  {
+    "id": "interval_truth_30",
+    "width": 860,
+    "height": 98,
+    "aspect": 8.776,
+    "complexity": 0.0606,
+    "text_before": "_Estimated Consensus Intervals for Verbal Quantifiers_",
+    "text_after": "_Note._ Black horizontal interval: Consensus interval estimated by the interval consensus model. Gray horizontal bar: Typical interval based on the median location and median width of the observed, lo",
+    "heuristic": "formula"
+  },
+  {
+    "id": "interval_truth_31",
+    "width": 397,
+    "height": 98,
+    "aspect": 4.051,
+    "complexity": 0.0588,
+    "text_before": "_Estimated Consensus Intervals for Verbal Quantifiers_",
+    "text_after": "_Note._ Black horizontal interval: Consensus interval estimated by the interval consensus model. Gray horizontal bar: Typical interval based on the median location and median width of the observed, lo",
+    "heuristic": "formula"
+  },
+  {
+    "id": "interval_truth_32",
+    "width": 397,
+    "height": 98,
+    "aspect": 4.051,
+    "complexity": 0.0527,
+    "text_before": "_Estimated Consensus Intervals for Verbal Quantifiers_",
+    "text_after": "_Note._ Black horizontal interval: Consensus interval estimated by the interval consensus model. Gray horizontal bar: Typical interval based on the median location and median width of the observed, lo",
+    "heuristic": "formula"
+  },
+  {
+    "id": "interval_truth_33",
+    "width": 397,
+    "height": 98,
+    "aspect": 4.051,
+    "complexity": 0.0967,
+    "text_before": "_Estimated Consensus Intervals for Verbal Quantifiers_",
+    "text_after": "_Note._ Black horizontal interval: Consensus interval estimated by the interval consensus model. Gray horizontal bar: Typical interval based on the median location and median width of the observed, lo",
+    "heuristic": "formula"
+  },
+  {
+    "id": "interval_truth_34",
+    "width": 397,
+    "height": 123,
+    "aspect": 3.228,
+    "complexity": 0.0962,
+    "text_before": "_Estimated Consensus Intervals for Verbal Quantifiers_",
+    "text_after": "_Note._ Black horizontal interval: Consensus interval estimated by the interval consensus model. Gray horizontal bar: Typical interval based on the median location and median width of the observed, lo",
+    "heuristic": "formula"
+  },
+  {
+    "id": "interval_truth_35",
+    "width": 30,
+    "height": 141,
+    "aspect": 0.213,
+    "complexity": 0.2087,
+    "text_before": "_Prior and Posterior Distributions for the Cultural Consensus Intervals_",
+    "text_after": "_Note._ Orange points: 1 _,_ 000 posterior draws for each verbal quantifier. Purple to yellow density in the background: prior density estimated from 1,000,000 samples and standardized to a maximum de",
+    "heuristic": "formula"
+  }
+]

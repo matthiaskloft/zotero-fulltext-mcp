@@ -13,3 +13,6 @@ config.*.json
 *.jsonl
 .env
 .workflow-state.json
+# Cached benchmark source PDFs: fetched on first use, never committed. Only the derived
+# crops + labels under benchmarks/preprints/ are tracked (self-contained for CI).
+benchmarks/preprints/.cache/

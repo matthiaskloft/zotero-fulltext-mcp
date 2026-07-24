@@ -1,0 +1,102 @@
+[
+  {
+    "id": "discriminant_validity_00",
+    "width": 803,
+    "height": 93,
+    "aspect": 8.634,
+    "complexity": 0.0797,
+    "text_before": "_Dual-Range Slider (DRS) response format._",
+    "text_after": "_Note._ Screenshot of the _noUiSlider_ JavaScript range slider (Gersen, 2024) that we used in the experimental study. The scale ranges from 0% to 100%.",
+    "heuristic": "formula"
+  },
+  {
+    "id": "discriminant_validity_01",
+    "width": 894,
+    "height": 447,
+    "aspect": 2.0,
+    "complexity": 0.3882,
+    "text_before": "_Stimulus Examples: Color Dot Estimation Task_",
+    "text_after": "_Note._ Left panel: 66% of the displayed dots are purple. Right panel: 15% of the displayed dots are purple.",
+    "heuristic": "formula"
+  },
+  {
+    "id": "discriminant_validity_02",
+    "width": 740,
+    "height": 47,
+    "aspect": 15.745,
+    "complexity": 0.1337,
+    "text_before": "Each response interval partitions the response scale into three components through the lower bound _XL_ (left slider) and the upper bound _XU_ (right slider). Assuming that the raw responses are scale",
+    "text_after": "Essentially, _Y_ 1 is the segment between the lower scale limit and the left slider, _Y_ 2 is the segment that resembles the width of the response interval, and _Y_ 3 is the segment between the right ",
+    "heuristic": "formula"
+  },
+  {
+    "id": "discriminant_validity_03",
+    "width": 699,
+    "height": 82,
+    "aspect": 8.524,
+    "complexity": 0.1755,
+    "text_before": "We then transform the interval responses from the compositional format to a bivariate, unbounded space via the isometric log-ratio transformation:",
+    "text_after": "We choose this transformation because it compensates for the fact that interval locations closer to one of the response scale limits will yield smaller interval widths. This is done by considering the",
+    "heuristic": "formula"
+  },
+  {
+    "id": "discriminant_validity_04",
+    "width": 895,
+    "height": 461,
+    "aspect": 1.941,
+    "complexity": 0.361,
+    "text_before": "_Empirical Distribution of Interval Responses_",
+    "text_after": "<!-- Start of picture text -->",
+    "heuristic": "figure"
+  },
+  {
+    "id": "discriminant_validity_05",
+    "width": 942,
+    "height": 505,
+    "aspect": 1.865,
+    "complexity": 0.1488,
+    "text_before": "_Point-wise Cumulative Frequency Plots of Interval Responses_",
+    "text_after": "<!-- Start of picture text -->",
+    "heuristic": "figure"
+  },
+  {
+    "id": "discriminant_validity_06",
+    "width": 942,
+    "height": 943,
+    "aspect": 0.999,
+    "complexity": 0.1742,
+    "text_before": "_Exploratory Factor Analysis: Factor Loadings_",
+    "text_after": "<!-- Start of picture text -->",
+    "heuristic": "figure"
+  },
+  {
+    "id": "discriminant_validity_07",
+    "width": 942,
+    "height": 755,
+    "aspect": 1.248,
+    "complexity": 0.1224,
+    "text_before": "_Factor Loadings Bifactor Model: General Factor vs. Six Task Specific Factors_",
+    "text_after": "<!-- Start of picture text -->",
+    "heuristic": "figure"
+  },
+  {
+    "id": "discriminant_validity_08",
+    "width": 740,
+    "height": 44,
+    "aspect": 16.818,
+    "complexity": 0.1488,
+    "text_before": "Let us assume we have our interval response in the compositional format given by:",
+    "text_after": "Either of the three components might be zero if respondents were allowed to set either the lower interval bound to the minimum of the response scale ( _Y_ 1 = 0), the upper interval bound to the maxim",
+    "heuristic": "formula"
+  },
+  {
+    "id": "discriminant_validity_09",
+    "width": 638,
+    "height": 57,
+    "aspect": 11.193,
+    "complexity": 0.1182,
+    "text_before": "Either of the three components might be zero if respondents were allowed to set either the lower interval bound to the minimum of the response scale ( _Y_ 1 = 0), the upper interval bound to the maxim",
+    "text_after": "In this case we have added a padding constant _c_ of 1%, assuming **_Y_** is on the unit scale, which effectively transforms former zero-components to be<sup><u>0</u></sup> 1<sup>_<u>.</u>_</sup> _._<",
+    "heuristic": "formula"
+  }
+]

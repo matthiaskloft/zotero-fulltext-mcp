@@ -103,6 +103,37 @@ notes. Do not add that functionality here; it duplicates the maintained official
 server, which is the intended companion for live-metadata access. See `README.md` for how the
 two are meant to be paired.
 
+## Synthetic OCR Validation Corpus
+
+Most tests write `b"%PDF"` and mock the extractor subprocess. `tests/fixtures/ocr_corpus/` is the
+exception: a LaTeX-generated document that runs the *real* conversion path, so image-OCR
+classification can be scored against known ground truth without shipping anyone's library.
+
+- `corpus.tex` — equation varieties (numbered, unnumbered, aligned, matrix, cases, symbol-heavy,
+  text-in-equation, norm, product, nested radical), a captioned figure, deliberately adversarial
+  negatives, and cross-reference traps (equations preceded by "Table N …" / "Figure N …" prose
+  that must not be mistaken for captions). Each element is preceded by a `CORPUSMARK-*` token
+  (single `[A-Z]+` segment, no internal hyphen) that lands in the text layer, which is how an
+  observed crop is tied back to the element that produced it — never by crop ordering or filename.
+  Elements that produce no crop (inline math, a plain tabular, a thin rule) are asserted `no_crop`.
+- `corpus.pdf` — committed, because CI has no LaTeX toolchain. Regenerate with
+  `python tools/build_ocr_corpus.py`; `--report` re-runs the observation without recompiling.
+- `expected.json` — ground truth, **recorded from an observed run and reviewed, not written
+  blind**. Whether a construct becomes a crop is a property of the extractor: LaTeX tabular
+  content stays text and produces none, while a decorative separator band produces one shaped
+  exactly like a display equation.
+
+If a change makes the corpus geometrically tidy, a test fails on purpose. The corpus must keep
+containing content that geometry misclassifies in both directions — decoration inside the equation
+aspect band, and a real equation outside every band — because that is the evidence that
+classification needs more than crop dimensions.
+
+pymupdf4llm converts every `tabular` to Markdown text, so a table *crop* cannot be produced
+synthetically; the corpus documents that as `no_crop`, and the table-classification path is
+covered by direct `CropRef` unit tests in `tests/test_image_ocr.py` using geometry observed in a
+real library (a blocky crop under a "Table N" caption is a table; a thin equation strip beside a
+"Table N …" cross-reference is not).
+
 ## Verification
 
 For source changes, run the focused pytest suite first. If changes touch CLI or MCP-tool
