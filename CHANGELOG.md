@@ -7,6 +7,48 @@ All notable changes to this project are documented here. Format loosely follows
 
 ### Added
 
+- `ocr-images --key <ATTACHMENT_KEY>`: recover the equations, tables and figure content that
+  conversion left stranded in extracted PNGs. `pymupdf4llm` pulls vector-drawn display equations
+  out of a PDF into their own crop files and leaves an opaque `![](…png)` placeholder behind, so
+  that notation never reaches the text index. This command walks the converted Markdown,
+  classifies each referenced crop, asks a locally served OCR model the matching question
+  (formula / table / figure recognition), and splices the answer back at the placeholder's
+  position — equations and tables replace their placeholder, figures keep the image link and gain
+  a searchable description. Because the crops are already isolated regions, no PDF re-rendering
+  or layout analysis is involved and **no new dependency is added**: the model is reached over
+  HTTP through Ollama using only the standard library, on GPU or CPU. `--dry-run` prints the full
+  classification table without contacting the model. Runs are resumable through a content-keyed
+  cache beside the crops, guarded against accidental re-runs, and commit under the same pipeline
+  write lock as every other index writer, and refusing to commit if the original changed while
+  OCR was running. Configured through an optional `image_ocr` block; `check-setup` reports the
+  runtime's availability.
+- Image OCR is non-destructive: the original converted Markdown is never modified. The enriched
+  result is written to a sibling file (`<stem>_ocr_eq.md` by default; `image_ocr.enriched_suffix`
+  is configurable, `""` overwrites in place) and the index is repointed at it, so the original
+  remains on disk as a permanent anchor and search still returns the recovered content. Each run
+  regenerates the sibling from the pristine original, so `--force` always starts from clean
+  placeholders.
+- Crop classification (`classify_crop`) decides per crop whether it is a formula, table, figure,
+  or decoration to skip, which selects the OCR task prompt. Alongside crop geometry and
+  neighbouring caption / picture-marker text, it uses a compression signal — compressed PNG bytes
+  per pixel — to tell a solid decorative bar from a wide display equation, which are otherwise
+  indistinguishable by shape or surrounding text and need no image library to separate. A "Table N"
+  or "Figure N" mention is treated as a caption only for a blockier crop, so a thin single-line
+  equation strip beside a running-prose cross-reference (e.g. "Table 4 shows the coefficients")
+  stays a formula rather than being mislabelled — a false positive observed on real documents.
+- `ocr-images` re-roots converted-output paths recorded by a previous machine, matching the
+  deepest suffix that exists under `output_root`, and resolves crop PNGs by filename rather than
+  by the absolute image link embedded in the Markdown. A library that moved between machines
+  keeps working instead of reporting that it has no images.
+
+### Fixed
+
+- Records whose math was recovered by a math-capable pass no longer carry a spurious
+  `math_extraction_may_be_lossy` warning in MCP responses. The check was an equality test against
+  a single extractor name (`marker`); it is now a per-component membership test, so a composite
+  provenance label such as `pymupdf4llm.to_markdown+glm-ocr` is recognised while an unknown
+  extractor still warns.
+
 - Transactional derived-index artifacts (hardening-plan Package 2, reduced scope): the JSONL
   sidecar and SQLite FTS database are now published together as immutable, checksummed *index
   generations* under `<output_root>/index/generations/<id>/`, behind a single atomically replaced

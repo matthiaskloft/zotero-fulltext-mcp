@@ -469,6 +469,27 @@ def build_parser() -> argparse.ArgumentParser:
     reconvert_math.add_argument("--key", required=True, help="Zotero attachment key.")
     reconvert_math.add_argument("--config", type=Path, default=resolve_config_path(), help="Path to project config JSON. Default: resolved for this machine.")
     reconvert_math.add_argument("--timeout-seconds", type=int, default=5400, help="marker-pdf timeout in seconds.")
+    ocr_images = subparsers.add_parser(
+        "ocr-images",
+        help=(
+            "Read a single paper's already-extracted figure/equation PNGs with a locally served "
+            "OCR model and splice the recognised content back into its markdown. Use when "
+            "conversion left opaque image placeholders where display equations or tables used to "
+            "be. Requires a running Ollama server with the configured OCR model pulled."
+        ),
+    )
+    ocr_images.add_argument("--key", required=True, help="Zotero attachment key.")
+    ocr_images.add_argument("--config", type=Path, default=resolve_config_path(), help="Path to project config JSON. Default: resolved for this machine.")
+    ocr_images.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Classify the crops and print the table without contacting the OCR model.",
+    )
+    ocr_images.add_argument(
+        "--force",
+        action="store_true",
+        help="Re-enrich a paper that was already enriched (re-appends figure descriptions).",
+    )
     retry_timeout = subparsers.add_parser(
         "retry-timeout",
         help=(
@@ -1048,6 +1069,26 @@ def main(argv: list[str] | None = None) -> int:
         )
         print(json.dumps(result.to_dict(), ensure_ascii=False, indent=2))
         return 0 if result.ok else 1
+    if args.command == "ocr-images":
+        from .image_ocr import CropPlan, ocr_images_for_attachment
+
+        config = load_config(args.config)
+        validate_config(config)
+        plans: list[CropPlan] = []
+        result = ocr_images_for_attachment(
+            args.key,
+            index_root=config.output_root / "index",
+            lock_root=config.output_root,
+            output_root=config.output_root,
+            settings=config.image_ocr,
+            force=args.force,
+            dry_run=args.dry_run,
+            plans_out=plans,
+        )
+        if args.dry_run and result.ok:
+            _print_crop_table(plans)
+        print(json.dumps(result.to_dict(), ensure_ascii=False, indent=2))
+        return 0 if result.ok else 1
     if args.command == "retry-timeout":
         if args.timeout_seconds is not None and args.multiplier is not None:
             print("--timeout-seconds and --multiplier are mutually exclusive.", file=sys.stderr)
@@ -1408,7 +1449,56 @@ def run_setup_checks(config_path: Path, *, require_mcp: bool = False) -> list[Se
         required = require_mcp and extra_name == "mcp"
         results.append(SetupCheckResult(f"extra:{extra_name}", available, detail, required=required))
 
+    # Informational: 'ocr-images' needs a running server rather than an installed package, so a
+    # missing runtime is reported like an absent optional extra, never as a setup failure.
+    from ._ollama_client import probe
+
+    status = probe(config.image_ocr.base_url, config.image_ocr.model)
+    results.append(
+        SetupCheckResult("image-ocr runtime", status.ok, status.detail, required=False)
+    )
+
     return results
+
+
+def _console_safe(text: str) -> str:
+    """Drop characters the active console encoding cannot render.
+
+    Crop context lines are full of mathematical notation, and a Windows console defaulting to
+    cp1252 raises UnicodeEncodeError on the first one. A diagnostic table is not worth crashing
+    the command over, so unrenderable characters degrade to '?' instead.
+    """
+    encoding = getattr(sys.stdout, "encoding", None) or "utf-8"
+    return text.encode(encoding, errors="replace").decode(encoding, errors="replace")
+
+
+def _print_crop_table(plans: list) -> None:
+    """Print one row per crop reference: what it is on disk, and what it was classified as.
+
+    This is the tuning surface for classify_crop() -- it runs without contacting the OCR model,
+    so a rule can be iterated against a whole real document for free.
+    """
+    print(f"{'#':>4}  {'crop':<24} {'pixels':>11} {'aspect':>7}  {'class':<8} context")
+    for position, plan in enumerate(plans, start=1):
+        ref = plan.ref
+        name = ref.png_path.name if ref.png_path else f"(unresolved) {_link_basename_display(ref.link)}"
+        # Crop filenames carry the whole source PDF name; only the page/index tail distinguishes
+        # them, so keep the tail rather than the head when the column overflows.
+        display_name = name if len(name) <= 24 else "..." + name[-21:]
+        pixels = f"{ref.width}x{ref.height}" if ref.exists else "-"
+        aspect = f"{ref.aspect:.2f}" if ref.exists else "-"
+        context = _console_safe((ref.text_after or ref.text_before)[:52])
+        print(
+            f"{position:>4}  {_console_safe(display_name):<24} {pixels:>11} {aspect:>7}  "
+            f"{plan.crop_class:<8} {context}"
+        )
+    print()
+
+
+def _link_basename_display(link: str) -> str:
+    from .image_ocr import link_basename
+
+    return link_basename(link) or link[:40]
 
 
 def _check_output_root_writable(output_root: Path) -> tuple[bool, str]:

@@ -534,12 +534,62 @@ After the script runs successfully, refresh derived artifacts:
 (Or simply run `convert-new`, which does exactly this dry-run → convert → update-index sequence
 for newly linked verified PDFs in one step.)
 
+## Image OCR For Equations, Tables And Figures
+
+`pymupdf4llm` extracts vector-drawn display equations, tables and figures into their own PNGs
+and leaves an opaque `![](…png)` placeholder in the Markdown, so that content never reaches the
+text index. `ocr-images` reads those already-extracted crops with a locally served OCR model and
+splices the result back at the placeholder's position. It does not re-render or re-extract the
+PDF — the crops are already isolated regions, which is what makes this cheap enough to run
+without a GPU.
+
+```powershell
+zotero-pdf-text ocr-images --key <ATTACHMENT_KEY> --dry-run
+zotero-pdf-text ocr-images --key <ATTACHMENT_KEY>
+```
+
+**Start with `--dry-run`.** It prints one row per crop — filename, pixel dimensions, aspect
+ratio, decided class and the neighbouring Markdown line — in document order, without contacting
+the model. That is the tuning surface for the classification rule: how a document partitions
+into equations, tables, figures and skips is visible for free before any OCR runs.
+
+Behaviour worth knowing:
+
+- **Non-destructive by default.** The original converted Markdown is never modified. The enriched
+  result is written to a sibling file named `<stem>_ocr_eq.md` (the suffix is
+  `image_ocr.enriched_suffix`, configurable), and the index is repointed at it so search returns
+  the recovered equations while the original stays on disk as a permanent anchor. Set the suffix
+  to `""` to overwrite in place instead, with no safety copy. Because the original is preserved,
+  each run regenerates the enriched sibling from the pristine source — so `--force` always starts
+  from clean placeholders rather than from an already-spliced file.
+- **Resumable.** Results are cached beside the crops (`images/<stem>/.image-ocr-cache.json`),
+  keyed by crop content plus prompt. An interrupted run picks up where it stopped; a regenerated
+  crop correctly misses the cache.
+- **Re-run guarded.** A completed run leaves the enriched sibling in place; re-running refuses
+  unless `--force` is given, which regenerates it from the original.
+- **Provenance is composite.** The record's `extraction_tool` becomes
+  `pymupdf4llm.to_markdown+glm-ocr`, keeping the original extractor visible while clearing the
+  `math_extraction_may_be_lossy` warning that MCP clients see.
+- **Durability caveat.** `rebuild-index --manifest` rebuilds records from the conversion
+  manifest CSV, which still carries the original `extraction_tool` — that resets the composite
+  label and revives the warning. The enriched *text* survives (the Markdown is re-read from
+  disk). A plain `rebuild-index` copies the current JSONL and preserves everything, as does a
+  non-forced re-run of the converter; `--force` conversion discards enrichment, as expected.
+- **Failure is inert.** A missing crop, an unreachable server, or an original that changed
+  mid-run leaves the original, any prior enriched sibling, and the published index generation
+  untouched; a publication that fails after the sibling is written removes the half-written file.
+
+The `--manifest` durability caveat below has a second facet here: `rebuild-index --manifest`
+rebuilds `markdown_path` from the conversion manifest, which names the original file — so it
+repoints the index back at the un-enriched original. The enriched sibling remains on disk and a
+plain `rebuild-index` (or a re-run of `ocr-images`) restores the pointer.
+
 ## Multi-Machine Write Lock
 
 If `converted_text` is a single index shared across more than one machine (e.g. via a synced
 cloud folder), every command that writes under it (`convert-sample`, `convert-verified`,
 `convert-new`, `verify-unverified`, `apply-verification`, `rebuild-index`, `update-index`,
-`reconvert-math`/`reconvert_with_math_ocr`, `retry-timeout`, `find-orphan-parents`,
+`reconvert-math`/`reconvert_with_math_ocr`, `retry-timeout`, `ocr-images`, `find-orphan-parents`,
 `orphan-candidate`) takes the same lock file
 (`config.output_root\.pipeline.lock`) before starting and releases it on exit, so two machines
 (or two commands on the same machine) can never rebuild the same index files at once — the
