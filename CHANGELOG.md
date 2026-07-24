@@ -61,6 +61,21 @@ All notable changes to this project are documented here. Format loosely follows
   snippets are tracked. Assertions are invariants rather than a per-crop table (accuracy floor,
   every equation reaches the formula prompt, mistakes are only figures conservatively over-routed
   to formula), so the tier can grow with harder examples without churn.
+- Recognition-quality scoring (`benchmarks/recognition.py`) that measures the layer *after*
+  classification: given a crop's OCR output, how much of the expected notation actually survived.
+  It scores **token recall** against the corpus's `expected_tokens` rather than an exact LaTeX
+  match — many spellings render the same mathematics — with a normalization that erases meaningless
+  differences (backslashes, whitespace) while keeping case significant (`\Gamma` ≠ `\gamma`). The
+  metric is pure and unit-tested offline (`tests/test_recognition_scoring.py`); the live corpus
+  recognition tier now reports aggregate micro/macro recall with per-element and corpus-wide floors
+  instead of a pass-if-any-token-appears check. A pressure-test harness
+  (`tools/score_recognition.py`) runs any Ollama-served model over the corpus and reports recall,
+  with `--model` to compare models on identical crops.
+- End-to-end search-recovery test (`tests/test_recognition_scoring.py`): drives canned OCR text
+  through the real `render_replacement` → `splice` → `build_fts_index` → `search_fts` path and
+  proves a term that lived *only* inside an equation image is unfindable before enrichment and
+  findable after. This promotes the plan's manual "search now hits" verification into an automated,
+  offline (no model, no network) invariant — the payoff of the whole feature, guarded in CI.
 
 ### Fixed
 
