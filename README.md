@@ -64,6 +64,30 @@ needed for `reconvert-math` and the opt-in `reconvert_with_math_ocr` MCP tool, G
 `[test]` (pytest, needed to run the test suite — `pip install -e .[mcp,test]`). A plain
 `pip install -e .` with no extras gets you the conversion pipeline and CLI but not the MCP server.
 
+### Optional: local image OCR for equations and figures
+
+Conversion pulls display equations, tables and figures that a PDF drew as vector graphics into
+their own PNGs, leaving an opaque `![](…png)` placeholder in the Markdown — so that notation is
+absent from the text layer and unsearchable. The `ocr-images` command reads those already-extracted
+crops with a locally served OCR model and splices the result back into place.
+
+This needs **no Python extra** — it talks to [Ollama](https://ollama.com) over HTTP using only the
+standard library:
+
+```bash
+ollama pull glm-ocr:q8_0
+```
+
+The original converted Markdown is never modified: the enriched result is written to a sibling
+file (`<stem>_ocr_eq.md` by default) and the index points at it, so search returns the recovered
+equations while the original stays put.
+
+Ollama runs on Windows, macOS and Linux and falls back to CPU automatically when no GPU is
+available. On a GPU the model is a few hundred megabytes of VRAM and a document takes well under a
+minute; on CPU it is usable but slow enough to leave running. Point the command at a different
+host, port or model — and change the sibling suffix — through the optional `image_ocr` block in
+your config (see `config.example.json`). Verify the runtime with `zotero-pdf-text check-setup`.
+
 ### Reproducible install with `uv` (recommended for contributors)
 
 If you cloned the repo above, this is a faster alternative to the `pip install -e .[mcp]` step:

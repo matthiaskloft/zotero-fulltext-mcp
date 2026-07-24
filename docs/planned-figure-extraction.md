@@ -127,3 +127,24 @@ Worth revisiting before committing to the full figure-index design above: a simi
 just-in-time approach (flag pages/PDFs likely to have extractable figures, extract on demand via
 an MCP tool) may cover most real usage with much less machinery than a bulk figure-extraction
 pipeline and dedicated SQLite index.
+
+## Update: `ocr-images` shipped the just-in-time approach for graphics content
+
+The paragraph above proved right a second time. Rather than build the artifact layer and figure
+index described at the top of this document, `ocr-images` (see `docs/operations.md`) reads the
+crop PNGs that normal conversion *already* extracts, and folds their content back into the
+Markdown as text:
+
+- No `figures/` tree, no `zotero_figure_index.sqlite`, no per-figure confidence or provenance
+  records, no `search_figures`/`get_figure_image` MCP tools.
+- Equations and tables become searchable Markdown in place; figures keep their PNG link and gain
+  a text description beneath it, so the existing full-text index covers graphics content without
+  a second index to build, publish, or keep consistent.
+- Classification (figure vs table vs equation vs decorative) happens per crop at OCR time from
+  cheap signals — crop geometry, neighbouring caption text, and the extractor's own picture
+  markers — rather than from a stored `extraction_method`/`confidence` field.
+
+What the design above still describes and `ocr-images` does not provide: page renders, cropped
+figure *images* addressable on their own, and caption/figure-label metadata as queryable fields.
+If those turn out to be needed, the artifact layer is still the right shape for them — but the
+searchable-text half of the problem is now solved without it.

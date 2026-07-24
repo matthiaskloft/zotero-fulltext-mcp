@@ -292,6 +292,18 @@ class McpServerTests(unittest.TestCase):
                 "future_extractor",
                 ["identity_unverified", "attachment_match_unverified", "math_extraction_may_be_lossy"],
             ),
+            # Image OCR enriches output an ordinary extractor produced, so it records a composite
+            # tool that keeps the original extractor visible. The math is no longer lossy.
+            ("verified", "mapped_verified", True, "pymupdf4llm.to_markdown+glm-ocr", []),
+            ("verified", "mapped_verified", True, "glm-ocr", []),
+            # An unrecognised component must not be trusted just because it is composite.
+            (
+                "verified",
+                "mapped_verified",
+                True,
+                "pymupdf4llm.to_markdown+future_ocr",
+                ["math_extraction_may_be_lossy"],
+            ),
         ]
         for identity_status, classification, has_math, extraction_tool, expected in cases:
             with self.subTest(identity_status=identity_status, classification=classification):
