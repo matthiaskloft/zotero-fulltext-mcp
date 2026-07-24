@@ -19,6 +19,7 @@ import argparse
 import json
 import sys
 import tempfile
+from dataclasses import replace
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -26,6 +27,21 @@ sys.path.insert(0, str(REPO_ROOT / "src"))
 sys.path.insert(0, str(REPO_ROOT / "benchmarks"))
 
 CORPUS_DIR = REPO_ROOT / "tests" / "fixtures" / "ocr_corpus"
+
+
+def _ocr_settings(model_override, config_path):
+    """Resolve the OCR runtime the same way the ``ocr-images`` command does.
+
+    Honour the user's configured host/port/model/timeout when a project config exists (via the
+    standard resolution contract), and fall back to built-in defaults only when there is none -- a
+    benchmark run without a full project config is legitimate. ``--model`` overrides just that one
+    field, leaving the configured connection settings intact.
+    """
+    from zotero_pdf_text.config import ImageOcrSettings, load_config, resolve_config_path
+
+    path = Path(config_path) if config_path else resolve_config_path()
+    settings = load_config(path).image_ocr if path.exists() else ImageOcrSettings()
+    return replace(settings, model=model_override) if model_override else settings
 
 
 def _crops_by_marker(body: str, refs) -> dict[str, list]:
@@ -44,18 +60,18 @@ def _crops_by_marker(body: str, refs) -> dict[str, list]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", help="override the configured OCR model (e.g. glm-ocr:q4_K_M)")
+    parser.add_argument("--config", help="path to the project config (default: standard resolution)")
     parser.add_argument("--json", action="store_true", help="emit machine-readable results instead of a report")
     args = parser.parse_args(argv)
 
     import pymupdf4llm
 
     from zotero_pdf_text._ollama_client import generate, probe
-    from zotero_pdf_text.config import ImageOcrSettings
     from zotero_pdf_text.image_ocr import TASK_PROMPTS, find_crop_refs
 
-    from recognition import RecognitionReport, corpus_expected_tokens, score_element
+    from recognition import corpus_expected_tokens, score
 
-    settings = ImageOcrSettings(model=args.model) if args.model else ImageOcrSettings()
+    settings = _ocr_settings(args.model, args.config)
     status = probe(settings.base_url, settings.model)
     if not status.ok:
         raise SystemExit(f"model not reachable: {status.detail}")
@@ -72,19 +88,18 @@ def main(argv: list[str] | None = None) -> int:
         )
         by_marker = _crops_by_marker(body, find_crop_refs(body, images))
 
-        results = []
-        for marker, tokens in sorted(expected.items()):
+        outputs = {}
+        for marker in sorted(expected):
             crops = by_marker.get(marker)
             if not crops:
-                continue  # element produced no crop in this conversion; nothing to recognise
-            text = generate(
+                continue  # no crop produced; score() weighs it as a zero-recall miss, not a gap
+            outputs[marker] = generate(
                 settings.base_url, settings.model,
                 TASK_PROMPTS[classes[marker]["expected_class"]],
                 crops[0].png_path, timeout=settings.per_image_timeout_seconds,
             )
-            results.append((score_element(marker, text, tokens), text))
 
-    report = RecognitionReport(tuple(r for r, _ in results))
+    report = score(outputs, expected)
     if args.json:
         print(json.dumps({
             "model": settings.model,
@@ -92,8 +107,8 @@ def main(argv: list[str] | None = None) -> int:
             "macro_recall": report.macro_recall,
             "elements": [
                 {"id": r.element_id, "recall": r.recall, "found": list(r.found),
-                 "missing": list(r.missing), "output": text}
-                for r, text in results
+                 "missing": list(r.missing), "output": outputs.get(r.element_id, "")}
+                for r in report.results
             ],
         }, indent=2))
     else:

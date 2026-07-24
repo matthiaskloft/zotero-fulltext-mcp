@@ -241,7 +241,7 @@ class CorpusRecognitionTests(unittest.TestCase):
         cls._tmp.cleanup()
 
     def test_recognised_text_contains_the_expected_notation(self):
-        from recognition import RecognitionReport, score_element
+        from recognition import corpus_expected_tokens, score
 
         from zotero_pdf_text._ollama_client import generate, probe
         from zotero_pdf_text.config import ImageOcrSettings
@@ -251,29 +251,32 @@ class CorpusRecognitionTests(unittest.TestCase):
         if not status.ok:
             self.skipTest(status.detail)
 
-        results = []
-        for marker, spec in sorted(EXPECTED.items()):
-            tokens = spec.get("expected_tokens") or []
-            if not tokens or marker not in self.by_marker:
-                continue
+        expected = corpus_expected_tokens()
+        outputs = {}
+        for marker in sorted(expected):
+            crops = self.by_marker.get(marker)
+            if not crops:
+                continue  # no crop produced; score() weighs it as a zero-recall failure below
             # Score the primary crop; a fragmented element (e.g. FIG-003) carries its notation in the
             # first crop, and the detached strip has no tokens of its own.
-            text = generate(
+            outputs[marker] = generate(
                 settings.base_url,
                 settings.model,
-                TASK_PROMPTS[spec["expected_class"]],
-                self.by_marker[marker][0].png_path,
+                TASK_PROMPTS[EXPECTED[marker]["expected_class"]],
+                crops[0].png_path,
                 timeout=settings.per_image_timeout_seconds,
             )
-            result = score_element(marker, text, tokens)
-            results.append(result)
-            with self.subTest(marker=marker):
+
+        # score() covers every token-bearing element, so a dropped crop lowers the score rather than
+        # vanishing from the average -- an extraction regression cannot pass by shrinking the set.
+        report = score(outputs, expected)
+        for result in report.results:
+            with self.subTest(marker=result.element_id):
                 self.assertGreaterEqual(
                     result.recall, self.PER_ELEMENT_RECALL_FLOOR,
-                    f"{marker}: recovered only {list(result.found)} of {tokens} from {text!r}",
+                    f"{result.element_id}: recovered only {list(result.found)} of "
+                    f"{list(result.expected)} from {outputs.get(result.element_id)!r}",
                 )
-
-        report = RecognitionReport(tuple(results))
         self.assertGreaterEqual(
             report.macro_recall, self.MACRO_RECALL_FLOOR,
             "corpus-wide recognition regressed:\n" + report.report(),

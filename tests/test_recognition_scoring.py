@@ -93,13 +93,33 @@ class CorpusScoringTests(unittest.TestCase):
         self.assertEqual(result.missing, ())
         self.assertEqual(result.recall, 1.0)
 
-    def test_scoring_only_touches_elements_present_in_both_maps(self):
+    def test_a_missing_output_counts_as_zero_recall_not_silent_exclusion(self):
         expected = corpus_expected_tokens()
         outputs = {"CORPUSMARK-EQ-001": r"\frac{\sum w_j x_j}{\sum w_j}"}
         report = score(outputs, expected)
-        # Only the one supplied output is scored, even though the corpus lists many elements.
-        self.assertEqual([r.element_id for r in report.results], ["CORPUSMARK-EQ-001"])
-        self.assertEqual(report.micro_recall, 1.0)
+        # Every token-bearing element is scored, not just the one supplied -- a dropped crop must
+        # weigh against the score, so an extraction regression cannot hide behind a shrunken average.
+        self.assertEqual(len(report.results), len(expected))
+        eq001 = next(r for r in report.results if r.element_id == "CORPUSMARK-EQ-001")
+        self.assertEqual(eq001.recall, 1.0)
+        self.assertLess(report.micro_recall, 1.0)  # the missing elements drag it down
+        self.assertGreater(report.micro_recall, 0.0)
+
+    def test_an_empty_result_set_scores_zero_not_a_vacuous_hundred(self):
+        report = score({}, corpus_expected_tokens())
+        self.assertEqual(report.micro_recall, 0.0)
+        self.assertEqual(report.macro_recall, 0.0)
+
+    def test_short_tokens_are_not_satisfied_by_unrelated_substrings(self):
+        # EQ-011 expects the \in operator; it must NOT be counted as recovered just because 'in'
+        # appears inside \begin{aligned}. This is the substring-inflation Codex flagged.
+        tokens = corpus_expected_tokens()["CORPUSMARK-EQ-011"]  # ["for all", "geq", "in"]
+        no_operator = r"\begin{aligned} x \geq 0 \text{ for all } x \end{aligned}"
+        result = score_element("CORPUSMARK-EQ-011", no_operator, tokens)
+        self.assertIn("in", result.missing)
+        self.assertEqual(set(result.found), {"for all", "geq"})
+        with_operator = r"x \in S,\ x \geq 0 \text{ for all } x"
+        self.assertEqual(score_element("CORPUSMARK-EQ-011", with_operator, tokens).missing, ())
 
 
 class SearchRecoveryTests(unittest.TestCase):

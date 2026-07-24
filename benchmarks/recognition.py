@@ -39,14 +39,23 @@ def normalize(text: str) -> str:
 
 
 def token_found(token: str, normalized_text: str) -> bool:
-    """True if ``token`` appears in already-normalized OCR text.
+    """True if ``token`` appears in already-normalized OCR text as a bounded fragment.
 
     This is the one policy lever of the whole harness: how forgiving a match counts as "recovered".
-    The default is a normalized substring test -- lenient enough that ``sum`` matches ``\\sum_{j}``
-    but strict on case. Tighten it (word boundaries) to punish spurious substring hits, or loosen
-    it (fuzzy distance) to tolerate single-character OCR slips; every caller routes through here.
+    Normalized matching is lenient enough that ``sum`` matches ``\\sum_{j}`` and stays strict on
+    case -- but a bare substring lets a short token be satisfied by unrelated text: ``in`` lurks
+    inside ``begin{...}`` and a lone ``X`` inside any word, inflating recall past what the model
+    actually preserved. So an *alphanumeric* edge of the token must fall on a word boundary; a
+    structural edge (``_``, ``^``, ``(``, ``/`` ...) is already its own boundary and needs none.
+    Loosen this (fuzzy distance for OCR slips) or tighten it further here; every caller routes
+    through this one function.
     """
-    return normalize(token) in normalized_text
+    needle = normalize(token)
+    if not needle:
+        return False
+    left = r"(?<![A-Za-z0-9])" if needle[0].isalnum() else ""
+    right = r"(?![A-Za-z0-9])" if needle[-1].isalnum() else ""
+    return re.search(left + re.escape(needle) + right, normalized_text) is not None
 
 
 @dataclass(frozen=True)
@@ -107,13 +116,16 @@ class RecognitionReport:
 def score(results_by_element: dict[str, str], expected_tokens: dict[str, list[str]]) -> RecognitionReport:
     """Score a mapping of ``element_id -> OCR text`` against the corpus's expected tokens.
 
-    Only elements present in both maps are scored: a live run may skip crops the extractor did not
-    produce, and the corpus lists elements (figures, no_crop entries) that carry no tokens to score.
+    *Every* token-bearing element is scored. An element with no supplied output scores zero recall
+    -- never silent exclusion. Excluding it would let a dropped crop vanish from the average (and an
+    empty result set score a vacuous 100%), so an extraction regression that sheds hard crops could
+    pass or even *raise* the recognition score. The corpus's token-bearing elements are exactly the
+    ones a faithful run must recover, so a missing one is a real failure and must weigh as zero.
     """
     results = tuple(
-        score_element(eid, results_by_element[eid], tokens)
+        score_element(eid, results_by_element.get(eid, ""), tokens)
         for eid, tokens in sorted(expected_tokens.items())
-        if eid in results_by_element and tokens
+        if tokens
     )
     return RecognitionReport(results)
 
