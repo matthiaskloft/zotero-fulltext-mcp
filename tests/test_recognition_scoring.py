@@ -13,6 +13,7 @@ Two things are proven here without ever calling the OCR model:
      assert the term is unfindable before enrichment and findable after.
 """
 
+import importlib.util
 import json
 import tempfile
 import unittest
@@ -41,6 +42,14 @@ class NormalizationTests(unittest.TestCase):
     def test_whitespace_runs_collapse_but_word_tokens_stay_distinct(self):
         self.assertEqual(normalize("for   all\n x"), "for all x")
         self.assertTrue(token_found("for all", normalize(r"\text{for  all}")))
+
+    def test_adjacent_commands_stay_separate_words(self):
+        # \hat\beta (no braces, no space) is routine LaTeX. Deleting backslashes would glue it into
+        # 'hatbeta', and the word-boundary matcher would then find NEITHER token in a perfectly
+        # faithful output -- so normalization must turn backslashes into spaces, not into nothing.
+        normalized = normalize(r"\hat\beta_1 x_1 + \varepsilon")
+        self.assertTrue(token_found("hat", normalized))
+        self.assertTrue(token_found("beta", normalized))
 
     def test_matching_is_case_sensitive_because_greek_case_is_meaningful(self):
         # \Gamma and \gamma are different symbols; a metric that lowercased would reward the wrong
@@ -93,6 +102,16 @@ class CorpusScoringTests(unittest.TestCase):
         self.assertEqual(result.missing, ())
         self.assertEqual(result.recall, 1.0)
 
+    def test_a_faithful_pmatrix_transcription_of_eq_005_scores_full_recall(self):
+        # The token is 'pmatrix' (the environment corpus.tex actually uses), not 'matrix': with
+        # word-boundary matching, 'matrix' can never match inside \begin{pmatrix}, so that spelling
+        # would make full recall impossible for a faithful transcription.
+        tokens = corpus_expected_tokens()["CORPUSMARK-EQ-005"]
+        faithful = r"A = \begin{pmatrix} a_{11} & a_{12} \\ a_{21} & a_{22} \end{pmatrix}"
+        result = score_element("CORPUSMARK-EQ-005", faithful, tokens)
+        self.assertEqual(result.missing, ())
+        self.assertEqual(result.recall, 1.0)
+
     def test_a_missing_output_counts_as_zero_recall_not_silent_exclusion(self):
         expected = corpus_expected_tokens()
         outputs = {"CORPUSMARK-EQ-001": r"\frac{\sum w_j x_j}{\sum w_j}"}
@@ -120,6 +139,35 @@ class CorpusScoringTests(unittest.TestCase):
         self.assertEqual(set(result.found), {"for all", "geq"})
         with_operator = r"x \in S,\ x \geq 0 \text{ for all } x"
         self.assertEqual(score_element("CORPUSMARK-EQ-011", with_operator, tokens).missing, ())
+
+
+class HarnessConfigTests(unittest.TestCase):
+    """The manual harness's config plumbing (tools/score_recognition.py), tested offline."""
+
+    @classmethod
+    def setUpClass(cls):
+        path = Path(__file__).parent.parent / "tools" / "score_recognition.py"
+        spec = importlib.util.spec_from_file_location("score_recognition", path)
+        cls.harness = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.harness)
+
+    def test_an_explicit_missing_config_is_an_error_not_a_silent_default(self):
+        # A typo'd --config must not quietly benchmark the built-in host/model: the resulting
+        # scores would be attributed to a runtime the user never pointed at.
+        with self.assertRaises(SystemExit):
+            self.harness._ocr_settings(None, "no/such/config.json")
+
+    def test_model_override_keeps_the_configured_connection_settings(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg = Path(tmp) / "config.json"
+            cfg.write_text(json.dumps({
+                "zotero_root": tmp, "zotero_data_directory": tmp, "linked_attachments": tmp,
+                "output_root": tmp,
+                "image_ocr": {"host": "gpubox", "port": 12345, "model": "glm-ocr:q8_0"},
+            }), encoding="utf-8")
+            settings = self.harness._ocr_settings("glm-ocr:q4_K_M", str(cfg))
+            self.assertEqual(settings.model, "glm-ocr:q4_K_M")
+            self.assertEqual(settings.base_url, "http://gpubox:12345")
 
 
 class SearchRecoveryTests(unittest.TestCase):

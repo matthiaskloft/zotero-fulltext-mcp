@@ -30,12 +30,15 @@ CORPUS_EXPECTED = REPO_ROOT / "tests" / "fixtures" / "ocr_corpus" / "expected.js
 def normalize(text: str) -> str:
     """Erase LaTeX spelling differences that do not change meaning, so matching is robust.
 
-    Removing backslashes lets a bare token like ``frac`` match ``\\frac``; collapsing whitespace
-    runs to a single space lets ``for all`` match ``for  all`` while keeping word tokens distinct.
-    Case is deliberately preserved -- ``\\Gamma`` and ``\\gamma`` are different symbols, and a
-    recognition benchmark that treats them as equal would reward a wrong transcription.
+    Backslashes become spaces (not nothing) so a bare token like ``frac`` matches ``\\frac`` while
+    adjacent commands stay separate words -- deleting them would glue ``\\hat\\beta`` into
+    ``hatbeta``, and the word-boundary matcher would then find *neither* token in a perfectly
+    faithful output. Whitespace runs collapse to a single space so ``for all`` matches ``for  all``
+    while word tokens stay distinct. Case is deliberately preserved -- ``\\Gamma`` and ``\\gamma``
+    are different symbols, and a recognition benchmark that treats them as equal would reward a
+    wrong transcription.
     """
-    return re.sub(r"\s+", " ", text.replace("\\", "")).strip()
+    return re.sub(r"\s+", " ", text.replace("\\", " ")).strip()
 
 
 def token_found(token: str, normalized_text: str) -> bool:

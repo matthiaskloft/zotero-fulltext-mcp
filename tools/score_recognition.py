@@ -34,12 +34,19 @@ def _ocr_settings(model_override, config_path):
 
     Honour the user's configured host/port/model/timeout when a project config exists (via the
     standard resolution contract), and fall back to built-in defaults only when there is none -- a
-    benchmark run without a full project config is legitimate. ``--model`` overrides just that one
-    field, leaving the configured connection settings intact.
+    benchmark run without a full project config is legitimate. An *explicit* ``--config`` that does
+    not exist is an error, not a fallback: silently benchmarking against default host/model when
+    the user pointed at a specific config would misattribute the resulting scores. ``--model``
+    overrides just that one field, leaving the configured connection settings intact.
     """
     from zotero_pdf_text.config import ImageOcrSettings, load_config, resolve_config_path
 
-    path = Path(config_path) if config_path else resolve_config_path()
+    if config_path:
+        path = Path(config_path)
+        if not path.exists():
+            raise SystemExit(f"--config not found: {config_path}")
+    else:
+        path = resolve_config_path()
     settings = load_config(path).image_ocr if path.exists() else ImageOcrSettings()
     return replace(settings, model=model_override) if model_override else settings
 
