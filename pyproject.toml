@@ -36,5 +36,5 @@ test = [
 ]
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
+pythonpath = ["src", "benchmarks"]
 testpaths = ["tests"]

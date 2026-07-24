@@ -1,0 +1,402 @@
+[
+  {
+    "id": "dirichlet_dual_00",
+    "width": 813,
+    "height": 83,
+    "aspect": 9.795,
+    "complexity": 0.0601,
+    "text_before": "_Single-Range Slider (Panel A) and Dual-Range Slider (Panel B)_",
+    "text_after": "_Note._ The sliders were created with the Ion.RangeSlider java plugin (Ineshin, 2021).",
+    "heuristic": "formula"
+  },
+  {
+    "id": "dirichlet_dual_01",
+    "width": 813,
+    "height": 85,
+    "aspect": 9.565,
+    "complexity": 0.0792,
+    "text_before": "_Single-Range Slider (Panel A) and Dual-Range Slider (Panel B)_",
+    "text_after": "_Note._ The sliders were created with the Ion.RangeSlider java plugin (Ineshin, 2021).",
+    "heuristic": "formula"
+  },
+  {
+    "id": "dirichlet_dual_02",
+    "width": 536,
+    "height": 68,
+    "aspect": 7.882,
+    "complexity": 0.0956,
+    "text_before": "In a standard testing scenario, the random variable _Xij_ represents the response of a respondent _i_ = 1 _, . . . , I_ (number of respondents) on item _j_ = 1 _, . . . , J_ (number of items). Noel an",
+    "text_after": "The resulting response variable _Xij_ denotes the degree of agreement on the unit-scale segment. Both _\u03c5ij_<sup>_A_and</sup><sup>_\u03c5_</sup> _ij_<sup>_D_areassumedtobepositivevaluesandaremodeledasgamma-",
+    "heuristic": "formula"
+  },
+  {
+    "id": "dirichlet_dual_03",
+    "width": 155,
+    "height": 70,
+    "aspect": 2.214,
+    "complexity": 0.3589,
+    "text_before": "The resulting response variable _Xij_ denotes the degree of agreement on the unit-scale segment. Both _\u03c5ij_<sup>_A_and</sup><sup>_\u03c5_</sup> _ij_<sup>_D_areassumedtobepositivevaluesandaremodeledasgamma-",
+    "text_after": "This is an arbitrary yet advantageous choice since it implies that the response variable _Xij_ follows a beta distribution (Johnson et al., 1995),",
+    "heuristic": "formula"
+  },
+  {
+    "id": "dirichlet_dual_04",
+    "width": 561,
+    "height": 28,
+    "aspect": 20.036,
+    "complexity": 0.2547,
+    "text_before": "This is an arbitrary yet advantageous choice since it implies that the response variable _Xij_ follows a beta distribution (Johnson et al., 1995),",
+    "text_after": "To transform the beta distribution into an IRT model, the shape parameters _mij_ and _nij_ are reparameterized in terms of a latent person ability _\u03b8i_ , a latent item difficulty _\u03b4j_ , an item precis",
+    "heuristic": "formula"
+  },
+  {
+    "id": "dirichlet_dual_05",
+    "width": 597,
+    "height": 62,
+    "aspect": 9.629,
+    "complexity": 0.2033,
+    "text_before": "To transform the beta distribution into an IRT model, the shape parameters _mij_ and _nij_ are reparameterized in terms of a latent person ability _\u03b8i_ , a latent item difficulty _\u03b4j_ , an item precis",
+    "text_after": "The positive versus negative sign for _\u00b1\u03b1_ has the effect that differences between ability and difficulty parameters (i.e., _\u03b8i \u2212 \u03b4j_ ) result in parameters _mij_ and _nij_ of the beta distribution th",
+    "heuristic": "formula"
+  },
+  {
+    "id": "dirichlet_dual_06",
+    "width": 547,
+    "height": 90,
+    "aspect": 6.078,
+    "complexity": 0.1128,
+    "text_before": "A response interval can be described by two values, namely, _YL_<sup>_\u2217_forthelowerbound</sup> (adjusted via the left slider), and _YU_<sup>_\u2217_for the upper bound (adjusted via the right slider).Due</",
+    "text_after": "In this vector, _YL_ is the proportion to the left of the response interval, _YU \u2212 YL_ is the middle proportion (i.e., the relative width of the response interval), and 1 _\u2212 YU_ is the proportion to t",
+    "heuristic": "formula"
+  },
+  {
+    "id": "dirichlet_dual_07",
+    "width": 801,
+    "height": 78,
+    "aspect": 10.269,
+    "complexity": 0.1906,
+    "text_before": "For the DDRM, we extend the response mechanism assumed by the BRM (Noel & Dauvier, 2007). The response vector **_Y_** _ij_ for respondent _i_ answering item _j_ is modeled by an interpolation mechanis",
+    "text_after": "> 3This becomes evident when parameterizing the beta distribution in terms of the mean _\u00b5ij_ = _mijm_ + _ijnij_<sup>_,_(0</sup><sup>_<_</sup> _\u00b5ij <_ 1) and the sample size _\u03bdij_ = _mij_ + _nij >_ 0 w",
+    "heuristic": "formula"
+  },
+  {
+    "id": "dirichlet_dual_08",
+    "width": 536,
+    "height": 124,
+    "aspect": 4.323,
+    "complexity": 0.1375,
+    "text_before": "Similar to the BRM, the three latent values are assumed to be gamma-distributed with a common scale parameter _s_ (Noel, 2014). Concerning the shape parameters, _aij_ and _dij_ again reflect agreement",
+    "text_after": "Equations (5) and (6) imply that the response vector follows a Dirichlet distribution,",
+    "heuristic": "formula"
+  },
+  {
+    "id": "dirichlet_dual_09",
+    "width": 567,
+    "height": 26,
+    "aspect": 21.808,
+    "complexity": 0.2306,
+    "text_before": "Equations (5) and (6) imply that the response vector follows a Dirichlet distribution,",
+    "text_after": "where the density function of the Dirichlet distribution is given by",
+    "heuristic": "formula"
+  },
+  {
+    "id": "dirichlet_dual_10",
+    "width": 749,
+    "height": 59,
+    "aspect": 12.695,
+    "complexity": 0.2324,
+    "text_before": "where the density function of the Dirichlet distribution is given by",
+    "text_after": "The Dirichlet distribution of the response vector **_Y_** _ij_ is re-parameterized in terms of person and item parameters, thus building an IRT structure on top of the Dirichlet parameters,",
+    "heuristic": "formula"
+  },
+  {
+    "id": "dirichlet_dual_11",
+    "width": 601,
+    "height": 97,
+    "aspect": 6.196,
+    "complexity": 0.1926,
+    "text_before": "The Dirichlet distribution of the response vector **_Y_** _ij_ is re-parameterized in terms of person and item parameters, thus building an IRT structure on top of the Dirichlet parameters,",
+    "text_after": "Note that some of the parameters appear in both the BRM and the DDRM (e.g., _\u03b8i_ or _\u03b4j_ ). Formally, these parameters fulfill different roles depending on the specific model structure. Substantively,",
+    "heuristic": "formula"
+  },
+  {
+    "id": "dirichlet_dual_12",
+    "width": 749,
+    "height": 996,
+    "aspect": 0.752,
+    "complexity": 0.1495,
+    "text_before": "_Response Distributions and Sampled Interval Responses for the DDRM_",
+    "text_after": "<!-- Start of picture text -->",
+    "heuristic": "figure"
+  },
+  {
+    "id": "dirichlet_dual_13",
+    "width": 665,
+    "height": 163,
+    "aspect": 4.08,
+    "complexity": 0.1561,
+    "text_before": "To investigate the model\u2019s sensitivity to changes in the latent parameters, we derived the item-information functions for _\u03b8i_ and _\u03b7i_ based on the expected Fisher information. For a full derivation ",
+    "text_after": "with",
+    "heuristic": "formula"
+  },
+  {
+    "id": "dirichlet_dual_14",
+    "width": 680,
+    "height": 336,
+    "aspect": 2.024,
+    "complexity": 0.1528,
+    "text_before": "with",
+    "text_after": "where _\u03c8_<sup>_\u2032_</sup> ( _x_ ) = _\u2202_<sup>2</sup> ln \u0393( _x_ ) _/\u2202_<sup>2</sup> _x_ is the trigamma function. The item information for _\u03b7i_ is illustrated in of Figure 3B and given by",
+    "heuristic": "formula"
+  },
+  {
+    "id": "dirichlet_dual_15",
+    "width": 663,
+    "height": 118,
+    "aspect": 5.619,
+    "complexity": 0.1413,
+    "text_before": "where _\u03c8_<sup>_\u2032_</sup> ( _x_ ) = _\u2202_<sup>2</sup> ln \u0393( _x_ ) _/\u2202_<sup>2</sup> _x_ is the trigamma function. The item information for _\u03b7i_ is illustrated in of Figure 3B and given by",
+    "text_after": "The item-information curves for the location parameter _\u03b8i_ (Figure 3A) under the condition of small values for the expansion dimension ( _\u03b7i_ + _\u03b3j_ ; Figure 3A, left panel) are unimodal. The shape o",
+    "heuristic": "formula"
+  },
+  {
+    "id": "dirichlet_dual_16",
+    "width": 721,
+    "height": 601,
+    "aspect": 1.2,
+    "complexity": 0.1303,
+    "text_before": "_Item Information for the Person Parameters of the DDRM_",
+    "text_after": "<!-- Start of picture text -->",
+    "heuristic": "figure"
+  },
+  {
+    "id": "dirichlet_dual_17",
+    "width": 530,
+    "height": 26,
+    "aspect": 20.385,
+    "complexity": 0.2331,
+    "text_before": "The model was fitted to all simulated datasets in a Bayesian framework using Stan (Stan Development Team, 2021). To ensure identifiability, we implemented the model with a standard normal prior on the",
+    "text_after": "To limit computation times and avoid divergent transitions of the sampler, we chose weakly informative priors<sup>4</sup> for the remaining parameters,",
+    "heuristic": "formula"
+  },
+  {
+    "id": "dirichlet_dual_18",
+    "width": 653,
+    "height": 232,
+    "aspect": 2.815,
+    "complexity": 0.1358,
+    "text_before": "To limit computation times and avoid divergent transitions of the sampler, we chose weakly informative priors<sup>4</sup> for the remaining parameters,",
+    "text_after": "We fitted the DDRM in R (R Core Team, 2021) with Stan (Stan Development Team, 2021) via the CmdStanR package (Gabry & \u010ce\u0161novar, 2021) by running four chains of the Hamiltonian-Monte-Carlo (HMC; Betanc",
+    "heuristic": "formula"
+  },
+  {
+    "id": "dirichlet_dual_19",
+    "width": 574,
+    "height": 33,
+    "aspect": 17.394,
+    "complexity": 0.2083,
+    "text_before": "We also used the simulated datasets to assess the added value of the rather complex DDRM by comparing the performance of raw mean scores and latent person parameters. Specifically, we focus on a criti",
+    "text_after": "THE DIRICHLET DUAL RESPONSE MODEL",
+    "heuristic": "formula"
+  },
+  {
+    "id": "dirichlet_dual_20",
+    "width": 813,
+    "height": 1084,
+    "aspect": 0.75,
+    "complexity": 0.1072,
+    "text_before": "_Average Performance Measures for the DDRM Parameters_",
+    "text_after": "<!-- Start of picture text -->",
+    "heuristic": "figure"
+  },
+  {
+    "id": "dirichlet_dual_21",
+    "width": 599,
+    "height": 30,
+    "aspect": 19.967,
+    "complexity": 0.2918,
+    "text_before": "To address research questions regarding the correlation of person parameters across different response formats, it is convenient to combine the BRM and the DDRM into a joint model. For this purpose, w",
+    "text_after": "The covariance matrix **\u03a3** was parameterized in terms of a correlation matrix and a vector of standard deviations,",
+    "heuristic": "formula"
+  },
+  {
+    "id": "dirichlet_dual_22",
+    "width": 574,
+    "height": 26,
+    "aspect": 22.077,
+    "complexity": 0.284,
+    "text_before": "The covariance matrix **\u03a3** was parameterized in terms of a correlation matrix and a vector of standard deviations,",
+    "text_after": "The Cholesky factor decomposition of the correlation matrix (Barnard et al., 2000) was used to assume an uninformative LKJ-Cholesky prior (Lewandowski et al., 2009),",
+    "heuristic": "formula"
+  },
+  {
+    "id": "dirichlet_dual_23",
+    "width": 576,
+    "height": 66,
+    "aspect": 8.727,
+    "complexity": 0.1629,
+    "text_before": "The Cholesky factor decomposition of the correlation matrix (Barnard et al., 2000) was used to assume an uninformative LKJ-Cholesky prior (Lewandowski et al., 2009),",
+    "text_after": "To ensure the identifiability of the hierarchical model, we fixed the group-level means to **_\u00b5_** = **0** and the standard deviations to **_\u03c3_** = **1** .",
+    "heuristic": "formula"
+  },
+  {
+    "id": "dirichlet_dual_24",
+    "width": 665,
+    "height": 268,
+    "aspect": 2.481,
+    "complexity": 0.1814,
+    "text_before": "For the item parameters, we assigned normal priors to _\u03b4j_ and _\u03b3j_ , and truncated normal priors to _\u03c4j_ along with weakly informative hyperpriors. For all _\u03b1_ parameters we specified a weakly inform",
+    "text_after": "We fitted the Bayesian hierarchical model using the same software as for the simulation study (see Section 4).<sup>10</sup> We ran 4 chains of Stan\u2019s HMC NUTS sampler, each with 4,000 burn-in and 4,00",
+    "heuristic": "formula"
+  },
+  {
+    "id": "dirichlet_dual_25",
+    "width": 893,
+    "height": 598,
+    "aspect": 1.493,
+    "complexity": 0.1319,
+    "text_before": "_Marginal Posterior Predictive Checks for the DDRM (Panels A to D) and the BRM (Panel E)_",
+    "text_after": "<!-- Start of picture text -->",
+    "heuristic": "figure"
+  },
+  {
+    "id": "dirichlet_dual_26",
+    "width": 893,
+    "height": 597,
+    "aspect": 1.496,
+    "complexity": 0.4101,
+    "text_before": "_Posterior Predictive Checks: Aggregated Interval Responses on the Respondent Level_",
+    "text_after": "<!-- Start of picture text -->",
+    "heuristic": "figure"
+  },
+  {
+    "id": "dirichlet_dual_27",
+    "width": 899,
+    "height": 555,
+    "aspect": 1.62,
+    "complexity": 0.2467,
+    "text_before": "_Posterior Estimates for the BRM and DDRM Person Parameters_",
+    "text_after": "<!-- Start of picture text -->",
+    "heuristic": "figure"
+  },
+  {
+    "id": "dirichlet_dual_28",
+    "width": 899,
+    "height": 415,
+    "aspect": 2.166,
+    "complexity": 0.1664,
+    "text_before": "_Posterior Estimates for the BRM and DDRM Item Parameters_",
+    "text_after": "<!-- Start of picture text -->",
+    "heuristic": "figure"
+  },
+  {
+    "id": "dirichlet_dual_29",
+    "width": 824,
+    "height": 168,
+    "aspect": 4.905,
+    "complexity": 0.1232,
+    "text_before": "The log-likelihood of the DDRM is",
+    "text_after": "### **First Derivatives**",
+    "heuristic": "formula"
+  },
+  {
+    "id": "dirichlet_dual_30",
+    "width": 753,
+    "height": 153,
+    "aspect": 4.922,
+    "complexity": 0.1799,
+    "text_before": "In the following, we derive the first partial derivatives of the log-likelihood function for a fixed item _j_ . Note that _\u03c8_ ( _x_ ) = _\u2202_ ln \u0393( _x_ ) _/\u2202x_ is the digamma function. The first partial",
+    "text_after": "The first partial derivative of the person expansion parameter _\u03b7i_ is",
+    "heuristic": "formula"
+  },
+  {
+    "id": "dirichlet_dual_31",
+    "width": 734,
+    "height": 105,
+    "aspect": 6.99,
+    "complexity": 0.17,
+    "text_before": "The first partial derivative of the person expansion parameter _\u03b7i_ is",
+    "text_after": "### **Second Derivatives and Item Information**",
+    "heuristic": "formula"
+  },
+  {
+    "id": "dirichlet_dual_32",
+    "width": 774,
+    "height": 157,
+    "aspect": 4.93,
+    "complexity": 0.2141,
+    "text_before": "In the following, we derive the second partial derivatives of the log-likelihood function. In doing so, _\u03c8_<sup>_\u2032_</sup> ( _x_ ) = _\u2202\u03c8_ ( _x_ ) _/\u2202x_ is the trigamma function. The second partial deri",
+    "text_after": "THE DIRICHLET DUAL RESPONSE MODEL",
+    "heuristic": "formula"
+  },
+  {
+    "id": "dirichlet_dual_33",
+    "width": 678,
+    "height": 339,
+    "aspect": 2.0,
+    "complexity": 0.1537,
+    "text_before": "with",
+    "text_after": "Since the second derivative is a linear combination of ln( _yij_ 1) and ln( _yij_ 3) (see (23) and (24)), the expectation of the second derivative of the joint log-density can be obtained by replacing",
+    "heuristic": "formula"
+  },
+  {
+    "id": "dirichlet_dual_34",
+    "width": 667,
+    "height": 150,
+    "aspect": 4.447,
+    "complexity": 0.1667,
+    "text_before": "Since the second derivative is a linear combination of ln( _yij_ 1) and ln( _yij_ 3) (see (23) and (24)), the expectation of the second derivative of the joint log-density can be obtained by replacing",
+    "text_after": "The second partial derivative of the person expansion parameter _\u03b7i_ is",
+    "heuristic": "formula"
+  },
+  {
+    "id": "dirichlet_dual_35",
+    "width": 640,
+    "height": 149,
+    "aspect": 4.295,
+    "complexity": 0.1703,
+    "text_before": "The second partial derivative of the person expansion parameter _\u03b7i_ is",
+    "text_after": "with",
+    "heuristic": "formula"
+  },
+  {
+    "id": "dirichlet_dual_36",
+    "width": 676,
+    "height": 103,
+    "aspect": 6.563,
+    "complexity": 0.175,
+    "text_before": "with",
+    "text_after": "The item information of _\u03b7i_ is thus",
+    "heuristic": "formula"
+  },
+  {
+    "id": "dirichlet_dual_37",
+    "width": 607,
+    "height": 184,
+    "aspect": 3.299,
+    "complexity": 0.142,
+    "text_before": "The item information of _\u03b7i_ is thus",
+    "text_after": "THE DIRICHLET DUAL RESPONSE MODEL",
+    "heuristic": "formula"
+  },
+  {
+    "id": "dirichlet_dual_38",
+    "width": 867,
+    "height": 107,
+    "aspect": 8.103,
+    "complexity": 0.2004,
+    "text_before": "The cross partial derivative for the person location parameter _\u03b8i_ and the person expansion parameter _\u03b7i_ is",
+    "text_after": "The corresponding Fisher information is",
+    "heuristic": "formula"
+  },
+  {
+    "id": "dirichlet_dual_39",
+    "width": 692,
+    "height": 136,
+    "aspect": 5.088,
+    "complexity": 0.1691,
+    "text_before": "The corresponding Fisher information is",
+    "text_after": "",
+    "heuristic": "formula"
+  }
+]

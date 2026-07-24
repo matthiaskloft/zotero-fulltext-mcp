@@ -1,0 +1,42 @@
+{
+  "_comment": "Open first-author preprints by M. Kloft, used with the author's permission as the real-article benchmark tier. Source PDFs are fetched on first use into ./.cache/ (gitignored, never committed); only the derived crops (crops/<key>/) and hand-reviewed labels (labels.json) are tracked, so CI is self-contained and needs no network. Regenerate crops with: python tools/build_preprint_benchmark.py [--key <key>]. osf_id null means the open preprint id still needs to be filled in before that paper can be fetched.",
+  "papers": {
+    "interval_truth": {
+      "title": "The Interval Truth / Consensus Model (continuous bounded interval responses)",
+      "authors": "Kloft, M., Siepe, B. S., & Heck, D. W.",
+      "year": 2024,
+      "venue": "PsyArXiv / Psychometrika (open preprint)",
+      "doi": "10.1017/psy.2025.10058",
+      "osf_id": "dzvw2",
+      "note": "One evolving OSF preprint: early versions are titled 'Interval Truth Model', the latest (v5) 'Interval Consensus Model'. osf.io/dzvw2/download returns the latest version, so this single key covers both titles of the Psychometrika-trio pair.",
+      "license": "author preprint; crops redistributed with author's permission"
+    },
+    "dirichlet_dual": {
+      "title": "The Dirichlet Dual Response Model: An Item Response Model for Continuous Bounded Interval Responses",
+      "authors": "Kloft, M., Hartmann, R., Voss, A., & Heck, D. W.",
+      "year": 2023,
+      "venue": "Psychometrika (open preprint)",
+      "doi": "10.1007/s11336-023-09924-7",
+      "osf_id": "h4f8a",
+      "license": "author preprint; crops redistributed with author's permission"
+    },
+    "discriminant_validity": {
+      "title": "Discriminant validity of interval response formats: Investigating the dimensional structure of interval widths",
+      "authors": "Kloft, M., & Heck, D. W.",
+      "year": 2025,
+      "venue": "Educational and Psychological Measurement (open preprint)",
+      "doi": "10.1177/00131644241283400",
+      "osf_id": "esvxk",
+      "license": "author preprint; crops redistributed with author's permission"
+    },
+    "dual_range_slider": {
+      "title": "Measuring the variability of personality traits with interval responses: Psychometric properties of the dual-range slider response format",
+      "authors": "Kloft, M., Snijder, J., & Heck, D. W.",
+      "year": 2024,
+      "venue": "Behavior Research Methods (open preprint)",
+      "doi": "10.3758/s13428-024-02394-4",
+      "osf_id": "pa4m3",
+      "license": "author preprint; crops redistributed with author's permission"
+    }
+  }
+}

@@ -36,10 +36,31 @@ All notable changes to this project are documented here. Format loosely follows
   or "Figure N" mention is treated as a caption only for a blockier crop, so a thin single-line
   equation strip beside a running-prose cross-reference (e.g. "Table 4 shows the coefficients")
   stays a formula rather than being mislabelled — a false positive observed on real documents.
+- Synthetic OCR validation corpus (`tests/fixtures/ocr_corpus/`, built by
+  `tools/build_ocr_corpus.py`). The suite previously had no real PDF at all — every test wrote
+  `b"%PDF"` and mocked the extractor — so nothing exercised real PDF → real crops. The corpus is a
+  LaTeX document covering equation varieties (numbered, unnumbered, multi-line aligned, matrix,
+  cases, quantifier- and Greek-heavy), a table, a captioned vector figure, and adversarial
+  negatives: a decorative separator band whose proportions match a display equation, a publisher
+  spine bar, and a solid logo block. Elements are tied to their observed crops through marker
+  tokens in the text layer rather than by ordering or filename, and the generated PDF is committed
+  so CI needs no LaTeX toolchain. Ground truth is recorded from an observed conversion run rather
+  than assumed, since whether a construct becomes a crop is a property of the extractor.
 - `ocr-images` re-roots converted-output paths recorded by a previous machine, matching the
   deepest suffix that exists under `output_root`, and resolves crop PNGs by filename rather than
   by the absolute image link embedded in the Markdown. A library that moved between machines
   keeps working instead of reporting that it has no images.
+- Real-article classification benchmark tier (`benchmarks/preprints/`) plus a reusable scoring
+  harness (`benchmarks/scoring.py`) and CI test (`tests/test_benchmark_preprints.py`). It scores
+  `classify_crop` on 103 crops from open first-author preprints (used with the author's
+  permission; see `benchmarks/preprints/ATTRIBUTION.md`), complementing the synthetic corpus with
+  real-world content. The benchmark freezes the classifier's *inputs* — each crop's geometry and
+  the two neighbouring Markdown lines it reads — not a stale prediction, so CI re-runs the current
+  algorithm offline with no PDF, model or network. Source PDFs are fetched on first use into a
+  git-ignored cache and never redistributed; only the small crops, labels and short caption
+  snippets are tracked. Assertions are invariants rather than a per-crop table (accuracy floor,
+  every equation reaches the formula prompt, mistakes are only figures conservatively over-routed
+  to formula), so the tier can grow with harder examples without churn.
 
 ### Fixed
 
