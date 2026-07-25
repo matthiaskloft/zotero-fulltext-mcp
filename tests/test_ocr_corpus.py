@@ -220,9 +220,17 @@ class CorpusClassificationTests(unittest.TestCase):
 class CorpusRecognitionTests(unittest.TestCase):
     """Opt-in: scores what the OCR model actually returns for each known element.
 
-    Loose token matching rather than exact LaTeX comparison -- there are many correct ways to
-    write the same expression, and asserting one of them would fail on a better answer.
+    Token-recall scoring (benchmarks/recognition.py) rather than exact LaTeX comparison -- there are
+    many correct ways to write the same expression, so we measure how much of the expected notation
+    survived, not whether one exact spelling was produced. The metric itself is unit-tested offline
+    in tests/test_recognition_scoring.py; here it scores real model output.
     """
+
+    # A single crop losing most of its notation is a real failure; the corpus-wide floor guards
+    # against a model that scrapes by on easy crops while mangling the hard ones. Both sit below the
+    # observed level so ordinary corpus growth does not trip them, while a regression still does.
+    PER_ELEMENT_RECALL_FLOOR = 0.5
+    MACRO_RECALL_FLOOR = 0.7
 
     @classmethod
     def setUpClass(cls):
@@ -233,6 +241,8 @@ class CorpusRecognitionTests(unittest.TestCase):
         cls._tmp.cleanup()
 
     def test_recognised_text_contains_the_expected_notation(self):
+        from recognition import corpus_expected_tokens, score
+
         from zotero_pdf_text._ollama_client import generate, probe
         from zotero_pdf_text.config import ImageOcrSettings
 
@@ -241,25 +251,36 @@ class CorpusRecognitionTests(unittest.TestCase):
         if not status.ok:
             self.skipTest(status.detail)
 
-        for marker, spec in sorted(EXPECTED.items()):
-            tokens = spec.get("expected_tokens") or []
-            if not tokens or marker not in self.by_marker:
-                continue
-            with self.subTest(marker=marker):
-                # Score the primary crop; a fragmented element (e.g. FIG-003) carries its notation
-                # in the first crop, and the detached strip has no tokens of its own.
-                text = generate(
-                    settings.base_url,
-                    settings.model,
-                    TASK_PROMPTS[spec["expected_class"]],
-                    self.by_marker[marker][0].png_path,
-                    timeout=settings.per_image_timeout_seconds,
+        expected = corpus_expected_tokens()
+        outputs = {}
+        for marker in sorted(expected):
+            crops = self.by_marker.get(marker)
+            if not crops:
+                continue  # no crop produced; score() weighs it as a zero-recall failure below
+            # Score the primary crop; a fragmented element (e.g. FIG-003) carries its notation in the
+            # first crop, and the detached strip has no tokens of its own.
+            outputs[marker] = generate(
+                settings.base_url,
+                settings.model,
+                TASK_PROMPTS[EXPECTED[marker]["expected_class"]],
+                crops[0].png_path,
+                timeout=settings.per_image_timeout_seconds,
+            )
+
+        # score() covers every token-bearing element, so a dropped crop lowers the score rather than
+        # vanishing from the average -- an extraction regression cannot pass by shrinking the set.
+        report = score(outputs, expected)
+        for result in report.results:
+            with self.subTest(marker=result.element_id):
+                self.assertGreaterEqual(
+                    result.recall, self.PER_ELEMENT_RECALL_FLOOR,
+                    f"{result.element_id}: recovered only {list(result.found)} of "
+                    f"{list(result.expected)} from {outputs.get(result.element_id)!r}",
                 )
-                lowered = text.lower()
-                self.assertTrue(
-                    any(token.lower() in lowered for token in tokens),
-                    f"{marker}: none of {tokens} appeared in {text!r}",
-                )
+        self.assertGreaterEqual(
+            report.macro_recall, self.MACRO_RECALL_FLOOR,
+            "corpus-wide recognition regressed:\n" + report.report(),
+        )
 
 
 if __name__ == "__main__":

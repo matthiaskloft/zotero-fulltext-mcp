@@ -14,7 +14,7 @@
     "CORPUSMARK-EQ-002": {"expected_class": "formula", "note": "partial-derivative fraction with an improper integral", "expected_tokens": ["frac", "partial", "int"]},
     "CORPUSMARK-EQ-003": {"expected_class": "formula", "note": "nested sub/superscripts, sample variance", "expected_tokens": ["sum", "frac", "sigma"]},
     "CORPUSMARK-EQ-004": {"expected_class": "formula", "note": "multi-line align environment; taller than one line", "expected_tokens": ["x^", "2x"]},
-    "CORPUSMARK-EQ-005": {"expected_class": "formula", "note": "3x3 pmatrix; tall relative to width", "expected_tokens": ["matrix", "a_"]},
+    "CORPUSMARK-EQ-005": {"expected_class": "formula", "note": "3x3 pmatrix; tall relative to width", "expected_tokens": ["pmatrix", "a_"]},
     "CORPUSMARK-EQ-006": {"expected_class": "formula", "note": "piecewise cases environment", "expected_tokens": ["cases", "if"]},
     "CORPUSMARK-EQ-007": {"expected_class": "formula", "note": "quantifiers and implication; aspect ~30, shape-identical to a decorative bar, separable only by compression", "expected_tokens": ["forall", "exists", "delta"]},
     "CORPUSMARK-EQ-008": {"expected_class": "formula", "note": "Greek letters and set operators", "expected_tokens": ["alpha", "beta", "Gamma"]},
