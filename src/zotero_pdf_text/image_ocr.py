@@ -90,6 +90,30 @@ _CAPTION_LEAD = r"^[\s*_#>]*"
 CAPTION_FIGURE_RE = re.compile(_CAPTION_LEAD + r"(?:figure|fig\.?|abb\.?|abbildung)\s*\d", re.IGNORECASE)
 CAPTION_TABLE_RE = re.compile(_CAPTION_LEAD + r"(?:table|tab\.?|tabelle)\s*\d", re.IGNORECASE)
 
+# An APA-style caption block puts its label two lines above the crop, out of reach of the single
+# neighbouring line the classifier sees:
+#
+#     Figure 3                       <- the label CAPTION_FIGURE_RE wants, never visible
+#
+#     _Estimated Consensus …_        <- text_before: matched by CAPTION_TITLE_RE
+#
+#     ![](page12-img03.png)          <- the crop
+#
+#     _Note._ Black horizontal …     <- text_after: matched by CAPTION_NOTE_RE
+#
+# Only these two lines are reachable, and *both* are needed. A trailing note alone is ambiguous:
+# "Note" terminates a caption in this style, but a textbook uses "**_Note:_**" for a pedagogical
+# aside that can follow anything -- measured across the converted library, two of the crops a
+# note-only rule would have claimed were display equations, whose notation the figure path would
+# have destroyed. The title line disambiguates them, because nothing places a bare italicised
+# title directly above an equation; that slot belongs to captions.
+#
+# CAPTION_TITLE_RE therefore requires the *whole* line to be the title. "Contains emphasis" is not
+# enough -- both equations above were preceded by emphasis inside a numbered step and a heading.
+# Note blocks caption tables as well as figures, so CAPTION_TABLE_RE keeps first refusal.
+CAPTION_NOTE_RE = re.compile(_CAPTION_LEAD + r"note[.:_]", re.IGNORECASE)
+CAPTION_TITLE_RE = re.compile(r"^_[^_][^\n]*?_[.:]?$")
+
 # pymupdf4llm annotates text it recovered from inside a picture region with this HTML comment.
 # It is a direct statement from the extractor that the neighbouring crop is a picture, which no
 # geometric heuristic can match for reliability -- crops it marks are figures regardless of shape.
@@ -257,7 +281,9 @@ def classify_crop(ref: CropRef, *, has_math: bool) -> str:
         PICTURE_TEXT_MARKER appearing there is the extractor's own assertion that the crop is a
         picture, and is the single most reliable signal available. CAPTION_FIGURE_RE and
         CAPTION_TABLE_RE match "Fig. 3" / "Table 2" style labels in English and German, including
-        through the emphasis markers converted output wraps them in.
+        through the emphasis markers converted output wraps them in. CAPTION_TITLE_RE with
+        CAPTION_NOTE_RE together recognise a caption block that encloses the crop, which is the
+        only reachable evidence for a figure whose label sits two lines above it.
       - ``has_math`` -- whether the document as a whole was detected as containing mathematics.
 
     The measured bands (EQUATION_MIN_ASPECT, FIGURE_ASPECT_RANGE, FURNITURE_MAX_ASPECT) are
@@ -299,6 +325,15 @@ def classify_crop(ref: CropRef, *, has_math: bool) -> str:
             return CLASS_FIGURE
         if CAPTION_TABLE_RE.search(before) or CAPTION_TABLE_RE.search(after):
             return CLASS_TABLE
+
+    # A crop enclosed by both halves of a caption block is a captioned element whatever its shape.
+    # This deliberately runs outside the aspect guard above: that guard defends against a
+    # cross-reference in running prose, while an enclosing title/note pair is document structure.
+    # It is what recovers the wide figure strips -- slider screenshots, balance-beam diagrams,
+    # density curves -- that are geometrically indistinguishable from display equations and carry
+    # no picture annotation. Requiring both halves is what keeps equations out; see CAPTION_NOTE_RE.
+    if CAPTION_TITLE_RE.match(before.strip()) and CAPTION_NOTE_RE.search(after):
+        return CLASS_FIGURE
 
     # Uncaptioned crops in the figure aspect band are plots; everything else -- wide equation
     # strips and the ambiguous middle band alike -- defaults to formula, since display equations

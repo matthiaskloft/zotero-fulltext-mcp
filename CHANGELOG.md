@@ -104,6 +104,20 @@ All notable changes to this project are documented here. Format loosely follows
 
 ### Fixed
 
+- Figures whose caption label sits two lines above them are no longer routed to the formula
+  prompt, where the splice replaced their image link with LaTeX invented from a plot. In the
+  common journal layout the label (`Figure 3`) is separated from the crop by an italicised title
+  line, so the label the classifier looks for is never on a line it can see; only the title above
+  and the closing `Note.` line below are reachable. Recognising that pair as a caption block
+  raises real-article routing accuracy from 85.4% to 100% (103 labelled crops), recovering 15
+  figures — slider screenshots, balance-beam diagrams and density curves — that geometry alone
+  cannot distinguish from wide display equations. Both halves are required: measured across the
+  whole converted library (75,205 crops), a rule keyed on the note line alone would have claimed
+  two real display equations, because a note line terminates a caption in one document style but
+  opens a pedagogical aside in another. `tests/test_image_ocr.py` carries both shapes as
+  regression cases, since the benchmark tier now scores 100% either way and can no longer tell the
+  two rules apart.
+
 - Records whose math was recovered by a math-capable pass no longer carry a spurious
   `math_extraction_may_be_lossy` warning in MCP responses. The check was an equality test against
   a single extractor name (`marker`); it is now a per-component membership test, so a composite

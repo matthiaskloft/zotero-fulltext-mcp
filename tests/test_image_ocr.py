@@ -17,6 +17,7 @@ from zotero_pdf_text.image_ocr import (
     CropPlan,
     _cache_key,
     _run_ocr,
+    classify_crop,
     composite_extraction_tool,
     enriched_path_for,
     find_crop_refs,
@@ -360,6 +361,72 @@ class TableAndCrossReferenceTests(unittest.TestCase):
 
         captioned = self._ref(340, 300, 30000, after="Fig. 3  Estimated response surface")
         self.assertEqual(classify_crop(captioned, has_math=True), CLASS_FIGURE)
+
+
+class CaptionBlockTests(unittest.TestCase):
+    """The caption-block rule: an italicised title line before AND a note line after.
+
+    Both conjuncts are load-bearing, and the reason is a homograph. A note line terminates a caption
+    in APA style, but a textbook uses "**_Note:_**" to open a pedagogical aside that can follow
+    anything -- including a display equation. Measured across the converted library, a note-only
+    version of this rule claimed two real display equations and would have replaced their rendered
+    notation with LaTeX invented from the image. The shapes below are those two cases plus the
+    figures the rule must still recover; geometry is taken from the real crops.
+    """
+
+    # Re-wrapped: accessing a staticmethod off its class yields a plain function, which would
+    # rebind as an instance method here and swallow the first argument as self.
+    _ref = staticmethod(TableAndCrossReferenceTests._ref)
+
+    def test_a_wide_strip_inside_a_caption_block_is_a_figure(self):
+        """A slider screenshot: aspect ~9.8, no picture marker, geometrically an equation. Before
+        the rule this had its image link replaced by LaTeX hallucinated from a UI widget."""
+        strip = self._ref(
+            813, 83, 4050,
+            before="_Single-Range Slider (Panel A) and Dual-Range Slider (Panel B)_",
+            after="_Note._ The sliders were created with a range slider plugin.",
+        )
+        self.assertEqual(classify_crop(strip, has_math=True), CLASS_FIGURE)
+
+    def test_an_equation_followed_by_a_textbook_note_stays_a_formula(self):
+        """The first counterexample: prose flows into the crop, so there is no title line. A
+        note-only rule sends this to the figure prompt and the notation is lost."""
+        equation = self._ref(
+            291, 32, 3750,
+            before="3. **_Fit an ARMA (p_** , **_q) model:_** the variance is estimated by",
+            after="**_Note:_** The increased variability is concerning.",
+        )
+        self.assertEqual(classify_crop(equation, has_math=True), CLASS_FORMULA)
+
+    def test_an_equation_under_a_heading_and_before_a_note_stays_a_formula(self):
+        """The second counterexample: the line before contains emphasis but is a heading, not a
+        title. 'Contains italics' would misroute this; 'is italics' does not."""
+        equation = self._ref(
+            465, 34, 5730,
+            before="###### (4) **_The final fitted model is_**",
+            after="**_Note:_** The above sequence of commands illustrates the steps.",
+        )
+        self.assertEqual(classify_crop(equation, has_math=True), CLASS_FORMULA)
+
+    def test_a_note_under_a_table_row_does_not_make_a_strip_a_figure(self):
+        """A table note is not a figure caption. The line before is a pipe row, so the rule
+        declines rather than guessing -- the crop keeps whatever the geometry decided."""
+        strip = self._ref(
+            354, 15, 4230,
+            before="|3|3.633|.892|.059|.097||",
+            after="Note. In all runs the same optimization function was used.",
+        )
+        self.assertNotEqual(classify_crop(strip, has_math=True), CLASS_FIGURE)
+
+    def test_a_title_alone_does_not_make_a_thin_strip_a_figure(self):
+        """Half a caption block is not a caption block: an italicised line can also be running
+        emphasis. Without the closing note the rule must not fire."""
+        strip = self._ref(
+            813, 83, 4050,
+            before="_Single-Range Slider (Panel A) and Dual-Range Slider (Panel B)_",
+            after="where the weights are normalised to sum to one",
+        )
+        self.assertEqual(classify_crop(strip, has_math=True), CLASS_FORMULA)
 
 
 class PictureMarkerTests(unittest.TestCase):

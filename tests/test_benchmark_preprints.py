@@ -17,6 +17,11 @@ without churn:
   4. bounded failure shape -- the only mistakes are figures conservatively over-routed to the math
      prompt. A table or equation misroute, or a brand-new error shape, fails loudly.
 
+The tier now scores 100%, which means it can no longer distinguish a good rule from a lucky one --
+passing here is necessary, not sufficient. The caption-block rule that closed the last gap was
+settled against the whole converted library, where a note-only version of it would have destroyed
+two real display equations; test_image_ocr.py carries those two shapes as regression cases.
+
 Regenerate the tier (needs the cached PDFs) with tools/build_preprint_benchmark.py.
 """
 
@@ -32,10 +37,12 @@ PREPRINT_LABELS = json.loads(
     (TIER_ROOT / "preprints" / "labels.json").read_text(encoding="utf-8")
 )["crops"]
 
-# The heuristic's measured real-world accuracy is 85% (88/103); it never misroutes an equation and
-# its misses are all conservative figure->formula over-routing. The floor sits a little below the
-# measured value so ordinary label growth doesn't trip it, while a genuine regression still does.
-ACCURACY_FLOOR = 0.80
+# The heuristic routes all 103 labelled crops correctly. The floor sits below the measured value so
+# ordinary label growth -- adding harder crops -- does not trip it, while a genuine regression does.
+# It was 0.80 while 15 figures were over-routed to the formula prompt; the caption-block rule closed
+# that gap, so the floor rises with it. Keep them moving together: a floor left behind the measured
+# value silently permits the regression it exists to catch.
+ACCURACY_FLOOR = 0.95
 
 
 class PreprintClassificationTests(unittest.TestCase):
@@ -69,17 +76,29 @@ class PreprintClassificationTests(unittest.TestCase):
             "an equation was misrouted (its notation would be lost):\n" + self.score.report(),
         )
 
-    def test_the_only_mistakes_are_figures_over_routed_to_formula(self):
-        """Pins the heuristic's known, bounded weakness. A new error shape -- a misrouted table, a
-        figure dropped to skip, an equation misroute -- is a different failure and must surface."""
-        unexpected = [
-            (key, exp, got) for key, exp, got in self.score.errors
-            if not (exp == "figure" and got == CLASS_FORMULA)
-        ]
+    def test_no_figure_is_over_routed_to_the_formula_prompt(self):
+        """The blind spot this tier was built to expose, now asserted closed rather than bounded.
+
+        Formerly 15 of 38 figures landed here, and the assertion merely required every mistake to
+        have that shape -- which the caption-block rule made vacuous by leaving no mistakes at all.
+        Stating it as an absence keeps it load-bearing: a figure arriving at the formula prompt has
+        its image link replaced by LaTeX invented from a plot, so this is the expensive direction.
+        """
+        over_routed = [key for key, exp, got in self.score.errors
+                       if exp == "figure" and got == CLASS_FORMULA]
         self.assertFalse(
-            unexpected,
-            "a mistake outside the documented figure->formula blind spot appeared:\n"
-            + "\n".join(f"  {k}: labelled {e!r}, routed {g!r}" for k, e, g in unexpected),
+            over_routed,
+            "figures reached the formula prompt (their links would be replaced by invented "
+            f"LaTeX): {over_routed}\n" + self.score.report(),
+        )
+
+    def test_no_new_failure_shape_appears(self):
+        """Any error at all is now a regression, whatever its shape -- but report the shape, since
+        a misrouted table and a figure dropped to skip need different fixes."""
+        self.assertFalse(
+            self.score.errors,
+            "the tier no longer routes cleanly:\n"
+            + "\n".join(f"  {k}: labelled {e!r}, routed {g!r}" for k, e, g in self.score.errors),
         )
 
 
