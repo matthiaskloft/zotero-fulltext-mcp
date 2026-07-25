@@ -137,3 +137,13 @@ def corpus_expected_tokens() -> dict[str, list[str]]:
     """Load the ``expected_tokens`` of every corpus element that has notation to recognise."""
     elements = json.loads(CORPUS_EXPECTED.read_text(encoding="utf-8"))["elements"]
     return {eid: spec["expected_tokens"] for eid, spec in elements.items() if spec.get("expected_tokens")}
+
+
+def corpus_element_ids() -> tuple[str, ...]:
+    """Every corpus element id, including the ones carrying no expected tokens.
+
+    ``corpus_expected_tokens`` deliberately drops elements with nothing to recognise, which is right
+    for scoring. Anything that needs to *locate* elements in a document needs the full set: the
+    figures and no-crop elements still occupy space on the page, so leaving them out leaves gaps.
+    """
+    return tuple(json.loads(CORPUS_EXPECTED.read_text(encoding="utf-8"))["elements"])
