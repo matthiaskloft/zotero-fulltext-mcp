@@ -1,8 +1,10 @@
 import csv
+import itertools
 import json
 import subprocess
 import tempfile
 import unittest
+from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
@@ -341,15 +343,41 @@ class ConverterTests(unittest.TestCase):
             output_root = root / "output"
             config = ProjectConfig(root, root, root, output_root)
 
-            with patch("zotero_pdf_text.converter.subprocess.run", side_effect=_timeout_primary_then_write_fallback):
+            master_path = output_root / "index" / "timeout_candidates.jsonl"
+
+            def read_master():
+                lines = master_path.read_text(encoding="utf-8").splitlines()
+                return [json.loads(line) for line in lines]
+
+            # Detection timestamps come from the wall clock, so pin them: the invariant under test
+            # is that a re-detection KEEPS first_detected_at while refreshing last_detected_at, and
+            # that is only observable when the two runs carry *different* timestamps. Reading the
+            # real clock leaves the assertion at the mercy of whether the runs straddle a second
+            # boundary -- it passes on a fast machine whether the code is right or not, and the
+            # original equality assertion failed on macOS for exactly that reason.
+            # The clock advances a day on every reading, so run 2's detection can never share a
+            # timestamp with run 1's. The converter calls now() for other things too (run summaries),
+            # hence an advancing clock rather than a fixed pair of values.
+            ticks = itertools.count()
+            def advancing_now():
+                return datetime(2026, 1, 1, 9, 0, 0) + timedelta(days=next(ticks))
+
+            with (
+                patch("zotero_pdf_text.converter.subprocess.run", side_effect=_timeout_primary_then_write_fallback),
+                patch("zotero_pdf_text.converter.datetime") as clock,
+            ):
+                clock.now.side_effect = advancing_now
                 convert_sample(config, report, limit=1, timeout_seconds=600, output_dir=root / "run1")
+                first_run = read_master()[0]
                 convert_sample(config, report, limit=1, timeout_seconds=600, output_dir=root / "run2")
 
-            master_path = output_root / "index" / "timeout_candidates.jsonl"
-            master_records = [json.loads(line) for line in master_path.read_text(encoding="utf-8").splitlines()]
+            master_records = read_master()
             self.assertEqual(len(master_records), 1)
             self.assertEqual(master_records[0]["occurrence_count"], 2)
-            self.assertEqual(master_records[0]["first_detected_at"], master_records[0]["last_detected_at"])
+            self.assertEqual(master_records[0]["first_detected_at"], first_run["first_detected_at"])
+            self.assertLess(
+                master_records[0]["first_detected_at"], master_records[0]["last_detected_at"]
+            )
 
     def test_convert_unverified_targets_unverified_rows(self):
         with tempfile.TemporaryDirectory() as tmp:
