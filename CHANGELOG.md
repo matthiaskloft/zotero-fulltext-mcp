@@ -94,8 +94,11 @@ All notable changes to this project are documented here. Format loosely follows
   ground-truth offsets. Comparison logic and hardware-verdict parsing are pure and unit-tested
   offline (`tests/test_engine_comparison.py`); the runner detects the GPU through `nvidia-smi` (no
   new dependency, no `torch` import), takes `--config` so the crop path is benchmarked against the
-  model actually configured, distinguishes *unavailable* (never asked) from *timed out* (a cost
-  result), and exits non-zero when nothing ran rather than emitting an empty comparison. The
+  model actually configured, and exits non-zero when nothing was attempted rather than emitting an
+  empty comparison. An engine that is *absent* is reported and omitted — there is nothing to say
+  about it — while one that *ran* and then failed or timed out stays in the comparison scoring zero,
+  with the reason beside it, so a broken engine places last in the ranking instead of vanishing from
+  it and leaving the survivor looking unopposed. The
   GPU-aware selection policy (`recommend_engine`) is a documented stub with its trade-off written
   out; three tests are staged against its contract and skip until it exists.
 

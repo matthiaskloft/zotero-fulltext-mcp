@@ -12,8 +12,10 @@ measures wall time, which is a property of the machine rather than of the code.
 
 An engine that is not installed is reported as unavailable and left OUT of the comparison -- never
 silently scored zero, which would read as "this engine is bad" instead of "this engine was absent".
-An engine that ran but overran its timeout is reported separately again: that is a cost result, not
-an absence. If nothing ran at all, this exits non-zero rather than emitting an empty comparison.
+An engine that RAN and then failed or timed out is a different case: it answered, so it stays in the
+comparison with an empty document and scores zero, with the reason reported beside it. Omitting it
+would let a failing engine vanish from the ranking instead of placing last in it. If no engine was
+even attempted, this exits non-zero rather than emitting an empty comparison.
 """
 
 from __future__ import annotations
@@ -55,13 +57,23 @@ class EngineUnavailable(RuntimeError):
     """
 
 
-class EngineTimedOut(RuntimeError):
-    """The engine ran but did not finish in time.
+class EngineAttempted(RuntimeError):
+    """The engine was present, started, and produced no usable document.
 
-    Distinct from EngineUnavailable: a timeout is a *cost* result, which is half of what this
-    harness measures. Filing it under "unavailable" would report an installed, working engine as
-    absent and hide the very slowness that should count against it.
+    Distinct from EngineUnavailable, and the distinction decides whether the engine stays in the
+    comparison. An absent engine is omitted -- there is nothing to say about it. An engine that ran
+    and failed has answered: it cannot do this job on this machine, which is a result, and omitting
+    it would let a failing engine vanish from the ranking instead of scoring the zero it earned.
+    Subclasses name how it failed, so the report can say which without inspecting strings.
     """
+
+
+class EngineFailed(EngineAttempted):
+    """The engine ran and errored -- a broken install, a CUDA failure, a crash mid-document."""
+
+
+class EngineTimedOut(EngineAttempted):
+    """The engine ran and overran its timeout, which is a cost result and cost is half the point."""
 
 
 def parse_nvidia_smi(returncode: int, stdout: str):
@@ -191,7 +203,10 @@ def run_marker(hardware_mode: str):
                 raise EngineUnavailable(
                     "marker-pdf is not installed; install the reconvert extra to compare it"
                 ) from exc
-            raise EngineUnavailable(f"marker-pdf failed: {stderr[-500:] or exc}") from exc
+            # Present but broken is an ATTEMPT, not an absence: it stays in the comparison and
+            # scores zero. Filing it under "unavailable" would drop a failing engine from the
+            # ranking altogether, which flatters it.
+            raise EngineFailed(f"marker-pdf failed: {stderr[-500:] or exc}") from exc
         document = output.read_text(encoding="utf-8")
     return EngineRun(ENGINE_MARKER, document, time.monotonic() - started, hardware_mode)
 
@@ -243,7 +258,7 @@ def main(argv: list[str] | None = None) -> int:
 
     runs: list = []
     unavailable: dict[str, str] = {}
-    timed_out: dict[str, str] = {}
+    failed: dict[str, str] = {}
     for name in args.engine or sorted(runners):
         runner = runners[name]
         try:
@@ -252,8 +267,12 @@ def main(argv: list[str] | None = None) -> int:
             )
         except EngineUnavailable as exc:
             unavailable[name] = str(exc)
-        except EngineTimedOut as exc:
-            timed_out[name] = str(exc)
+        except EngineAttempted as exc:
+            # It ran and delivered nothing, so it stays in the comparison with an empty document and
+            # scores zero -- the outcome EngineRun documents for a crash. Dropping it here would let
+            # a failing engine disappear from the ranking rather than place last in it.
+            failed[name] = f"{type(exc).__name__}: {exc}"
+            runs.append(EngineRun(name, "", 0.0, hardware_mode))
 
     comparison = compare(runs, corpus_expected_tokens())
     recommendation: str | None = None
@@ -269,7 +288,8 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps({
             "hardware": {"gpu_available": hardware.gpu_available, "gpu_vram_gb": hardware.gpu_vram_gb},
             "unavailable": unavailable,
-            "timed_out": timed_out,
+            # Ran and produced nothing. These DO appear in "engines" below, scoring zero.
+            "failed": failed,
             # False when any engine failed to locate an element, which inflates its neighbour's
             # recall by an unknown amount -- the scores below cannot be ranked against each other.
             "comparable": comparison.comparable,
@@ -290,8 +310,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"hardware: {hardware_mode}{vram}")
         for name, reason in sorted(unavailable.items()):
             print(f"skipped {name}: {reason}")
-        for name, reason in sorted(timed_out.items()):
-            print(f"timed out {name}: {reason}")
+        for name, reason in sorted(failed.items()):
+            print(f"failed {name} (scored zero, not omitted): {reason}")
         print(comparison.report())
         print(f"recommended: {recommendation or f'(none) {recommendation_blocked}'}")
 
