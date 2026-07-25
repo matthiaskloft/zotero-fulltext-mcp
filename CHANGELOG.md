@@ -76,6 +76,31 @@ All notable changes to this project are documented here. Format loosely follows
   proves a term that lived *only* inside an equation image is unfindable before enrichment and
   findable after. This promotes the plan's manual "search now hits" verification into an automated,
   offline (no model, no network) invariant — the payoff of the whole feature, guarded in CI.
+- Engine comparison harness (`benchmarks/engines.py`, `tools/compare_engines.py`) that scores whole
+  *engines* against each other rather than pieces of one: the crop path (`crop-mvp`), the
+  whole-document path (`marker`), and MinerU as a declared-but-unwired candidate. All three are
+  judged on the one axis they share — the final Markdown a reader searches — so a crop engine that
+  splices and a whole-document engine that re-renders become commensurable. Per-element scoring
+  inside a foreign engine's output works by anchoring on the corpus's `CORPUSMARK` tokens, which
+  survive any engine that reads the page, so a token only counts where its element actually is: an
+  engine that swapped two elements' content scores zero where a document-wide search would have
+  scored it 100%. An element whose anchor is missing, or repeated (a duplicated text layer, a
+  contents block), is reported *and* scored zero — dropping the prose around an element is itself an
+  extraction defect. The harness reports its own **comparability** rather than overstating its
+  numbers: because a missing anchor widens its neighbour's window, a lost anchor inflates that
+  neighbour's recall — and where the lost element carried no expected tokens, both aggregate figures
+  invert in favour of the *worse* engine. That limitation is measured, pinned by a test, printed in
+  the report and exposed as `comparable` in the JSON, since it cannot be scored away without
+  ground-truth offsets. Comparison logic and hardware-verdict parsing are pure and unit-tested
+  offline (`tests/test_engine_comparison.py`); the runner detects the GPU through `nvidia-smi` (no
+  new dependency, no `torch` import), takes `--config` so the crop path is benchmarked against the
+  model actually configured, and exits non-zero when nothing was attempted rather than emitting an
+  empty comparison. An engine that is *absent* is reported and omitted — there is nothing to say
+  about it — while one that *ran* and then failed or timed out stays in the comparison scoring zero,
+  with the reason beside it, so a broken engine places last in the ranking instead of vanishing from
+  it and leaving the survivor looking unopposed. The
+  GPU-aware selection policy (`recommend_engine`) is a documented stub with its trade-off written
+  out; three tests are staged against its contract and skip until it exists.
 
 ### Fixed
 
