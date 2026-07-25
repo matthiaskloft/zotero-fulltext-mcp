@@ -82,14 +82,22 @@ All notable changes to this project are documented here. Format loosely follows
   judged on the one axis they share — the final Markdown a reader searches — so a crop engine that
   splices and a whole-document engine that re-renders become commensurable. Per-element scoring
   inside a foreign engine's output works by anchoring on the corpus's `CORPUSMARK` tokens, which
-  survive any engine that reads the page, so a token only counts where its element actually is; an
-  engine that scrambled the page cannot score well. A lost anchor is reported *and* scored zero,
-  because dropping the prose around an element is itself an extraction defect. Comparison logic and
-  hardware-verdict parsing are pure and unit-tested offline
-  (`tests/test_engine_comparison.py`); the runner detects the GPU through `nvidia-smi` (no new
-  dependency, no `torch` import) and reports an uninstalled engine as *unavailable* rather than
-  scoring it zero. The GPU-aware selection policy (`recommend_engine`) is a documented stub with
-  its trade-off written out and its contract already under test.
+  survive any engine that reads the page, so a token only counts where its element actually is: an
+  engine that swapped two elements' content scores zero where a document-wide search would have
+  scored it 100%. An element whose anchor is missing, or repeated (a duplicated text layer, a
+  contents block), is reported *and* scored zero — dropping the prose around an element is itself an
+  extraction defect. The harness reports its own **comparability** rather than overstating its
+  numbers: because a missing anchor widens its neighbour's window, a lost anchor inflates that
+  neighbour's recall — and where the lost element carried no expected tokens, both aggregate figures
+  invert in favour of the *worse* engine. That limitation is measured, pinned by a test, printed in
+  the report and exposed as `comparable` in the JSON, since it cannot be scored away without
+  ground-truth offsets. Comparison logic and hardware-verdict parsing are pure and unit-tested
+  offline (`tests/test_engine_comparison.py`); the runner detects the GPU through `nvidia-smi` (no
+  new dependency, no `torch` import), takes `--config` so the crop path is benchmarked against the
+  model actually configured, distinguishes *unavailable* (never asked) from *timed out* (a cost
+  result), and exits non-zero when nothing ran rather than emitting an empty comparison. The
+  GPU-aware selection policy (`recommend_engine`) is a documented stub with its trade-off written
+  out; three tests are staged against its contract and skip until it exists.
 
 ### Fixed
 

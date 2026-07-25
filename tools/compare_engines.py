@@ -7,10 +7,13 @@ measures wall time, which is a property of the machine rather than of the code.
 
     python tools/compare_engines.py                          # every engine available here
     python tools/compare_engines.py --engine crop-mvp        # just one
+    python tools/compare_engines.py --config path/to/config.json
     python tools/compare_engines.py --json > comparison.json
 
 An engine that is not installed is reported as unavailable and left OUT of the comparison -- never
 silently scored zero, which would read as "this engine is bad" instead of "this engine was absent".
+An engine that ran but overran its timeout is reported separately again: that is a cost result, not
+an absence. If nothing ran at all, this exits non-zero rather than emitting an empty comparison.
 """
 
 from __future__ import annotations
@@ -27,6 +30,17 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
 sys.path.insert(0, str(REPO_ROOT / "benchmarks"))
 
+from engines import (  # noqa: E402  (path set up above)
+    ENGINE_CROP_MVP,
+    ENGINE_MARKER,
+    ENGINE_MINERU,
+    EngineRun,
+    Hardware,
+    compare,
+    recommend_engine,
+)
+from recognition import corpus_expected_tokens  # noqa: E402
+
 CORPUS_DIR = REPO_ROOT / "tests" / "fixtures" / "ocr_corpus"
 CORPUS_PDF = CORPUS_DIR / "corpus.pdf"
 
@@ -35,7 +49,19 @@ MARKER_TIMEOUT_SECONDS = 1800
 
 
 class EngineUnavailable(RuntimeError):
-    """The engine is not usable on this machine, with an actionable reason."""
+    """The engine is absent or unusable on this machine, with an actionable reason.
+
+    Strictly "was never asked", never "answered badly" -- the difference the comparison turns on.
+    """
+
+
+class EngineTimedOut(RuntimeError):
+    """The engine ran but did not finish in time.
+
+    Distinct from EngineUnavailable: a timeout is a *cost* result, which is half of what this
+    harness measures. Filing it under "unavailable" would report an installed, working engine as
+    absent and hide the very slowness that should count against it.
+    """
 
 
 def parse_nvidia_smi(returncode: int, stdout: str):
@@ -45,8 +71,6 @@ def parse_nvidia_smi(returncode: int, stdout: str):
     a clean run with at least one numeric line reads as "no usable GPU": a driver that answers but
     errors, or answers with ``[N/A]``, cannot be relied on to hold a layout model.
     """
-    from engines import Hardware
-
     sizes = [line.strip() for line in stdout.splitlines() if line.strip().isdigit()]
     if returncode != 0 or not sizes:
         return Hardware(gpu_available=False)
@@ -61,8 +85,6 @@ def detect_hardware():
     reading for the recommendation it feeds: both whole-document engines target CUDA, so a machine
     without the CUDA tooling behaves like a CPU machine whatever else it has.
     """
-    from engines import Hardware
-
     try:
         completed = subprocess.run(
             ["nvidia-smi", "--query-gpu=memory.total", "--format=csv,noheader,nounits"],
@@ -90,11 +112,8 @@ def run_crop_mvp(settings, hardware_mode: str):
     the comparison is to measure the engine that actually ships, so any divergence between what is
     benchmarked and what runs would quietly make the numbers meaningless.
     """
-    from engines import ENGINE_CROP_MVP, EngineRun
-
-    from zotero_pdf_text._ollama_client import generate, probe
+    from zotero_pdf_text._ollama_client import OllamaError, generate, probe
     from zotero_pdf_text.image_ocr import (
-        CLASS_SKIP,
         TASK_PROMPTS,
         plan_crops,
         render_replacement,
@@ -113,17 +132,26 @@ def run_crop_mvp(settings, hardware_mode: str):
         body = _convert_crops(images_dir)
         replacements = []
         for plan in plan_crops(body, images_dir, has_math=True):
-            if plan.crop_class == CLASS_SKIP:
+            # Mirror the two guards _run_ocr applies: a class with no prompt (skip) and a crop whose
+            # PNG did not resolve both keep their placeholder rather than reaching the model.
+            prompt = TASK_PROMPTS.get(plan.crop_class)
+            if prompt is None or plan.ref.png_path is None:
                 continue
-            ocr_text = sanitize_ocr_output(
-                generate(
-                    settings.base_url, settings.model, TASK_PROMPTS[plan.crop_class],
+            try:
+                raw = generate(
+                    settings.base_url, settings.model, prompt,
                     plan.ref.png_path, timeout=settings.per_image_timeout_seconds,
                 )
-            )
-            replacements.append(
-                (plan.ref.span, render_replacement(plan.crop_class, ocr_text, plan.ref.markup))
-            )
+            except OllamaError:
+                # Production leaves the placeholder and carries on, so the benchmark must too: one
+                # flaky crop out of forty aborting the run would void the whole comparison, and
+                # crop-mvp runs first, so it would take the other engines down with it. The lost
+                # crop then scores as recall the engine did not achieve, which is the honest result.
+                continue
+            replacements.append((
+                plan.ref.span,
+                render_replacement(plan.crop_class, sanitize_ocr_output(raw), plan.ref.markup),
+            ))
         document = splice(body, replacements)
     return EngineRun(ENGINE_CROP_MVP, document, time.monotonic() - started, hardware_mode)
 
@@ -135,8 +163,6 @@ def run_marker(hardware_mode: str):
     is why the shipped code never imports it in-process. Benchmarking it any other way would measure
     a cost profile the pipeline does not have.
     """
-    from engines import ENGINE_MARKER, EngineRun
-
     started = time.monotonic()
     with tempfile.TemporaryDirectory() as tmp:
         output = Path(tmp) / "output.md"
@@ -153,12 +179,15 @@ def run_marker(hardware_mode: str):
         except FileNotFoundError as exc:  # no interpreter/module at all
             raise EngineUnavailable(str(exc)) from exc
         except subprocess.TimeoutExpired as exc:
-            raise EngineUnavailable(f"marker-pdf timed out after {MARKER_TIMEOUT_SECONDS}s") from exc
+            raise EngineTimedOut(f"marker-pdf did not finish within {MARKER_TIMEOUT_SECONDS}s") from exc
         except subprocess.CalledProcessError as exc:
             stderr = (exc.stderr or "").strip()
-            # An absent marker-pdf surfaces as an ImportError from the extractor module. That is an
-            # availability problem, not a quality one, so it must not be scored as a bad engine.
-            if "marker" in stderr and ("ModuleNotFoundError" in stderr or "ImportError" in stderr):
+            # Match the missing module by name. Testing for "marker" anywhere in stderr cannot work:
+            # the subprocess IS zotero_pdf_text._extract_markdown_marker, so its own path appears in
+            # every traceback it raises -- an installed marker-pdf whose CUDA chain fails to load
+            # would be reported as not installed, advising the user to install what they already
+            # have. Anything else falls through to the failure branch, which reports the real stderr.
+            if "No module named 'marker" in stderr:
                 raise EngineUnavailable(
                     "marker-pdf is not installed; install the reconvert extra to compare it"
                 ) from exc
@@ -179,48 +208,80 @@ def run_mineru(hardware_mode: str):
     )
 
 
-RUNNERS = {"crop-mvp": run_crop_mvp, "marker": run_marker, "mineru": run_mineru}
+def _ocr_settings(config_path: str | None):
+    """Resolve the crop path's OCR runtime the way the ``ocr-images`` command does.
+
+    Benchmarking the crop engine against a default host and model when the user runs a different
+    one would measure something they never use. An explicit ``--config`` that does not exist is an
+    error rather than a fallback, for the same reason: the scores would be misattributed. Mirrors
+    tools/score_recognition.py.
+    """
+    from zotero_pdf_text.config import ImageOcrSettings, load_config, resolve_config_path
+
+    if config_path:
+        path = Path(config_path)
+        if not path.exists():
+            raise SystemExit(f"--config not found: {config_path}")
+    else:
+        path = resolve_config_path()
+    return load_config(path).image_ocr if path.exists() else ImageOcrSettings()
 
 
 def main(argv: list[str] | None = None) -> int:
+    runners = {ENGINE_CROP_MVP: run_crop_mvp, ENGINE_MARKER: run_marker, ENGINE_MINERU: run_mineru}
+
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--engine", action="append", choices=sorted(RUNNERS),
+    parser.add_argument("--engine", action="append", choices=sorted(runners),
                         help="run only this engine (repeatable; default: all)")
+    parser.add_argument("--config", help="path to the project config (default: standard resolution)")
     parser.add_argument("--json", action="store_true", help="machine-readable output")
     args = parser.parse_args(argv)
 
-    from engines import compare, recommend_engine
-    from recognition import corpus_expected_tokens
-
-    from zotero_pdf_text.config import ImageOcrSettings
-
     hardware = detect_hardware()
     hardware_mode = "gpu" if hardware.gpu_available else "cpu"
-    settings = ImageOcrSettings()
+    settings = _ocr_settings(args.config)
 
-    runs, unavailable = [], {}
-    for name in args.engine or sorted(RUNNERS):
-        runner = RUNNERS[name]
+    runs: list = []
+    unavailable: dict[str, str] = {}
+    timed_out: dict[str, str] = {}
+    for name in args.engine or sorted(runners):
+        runner = runners[name]
         try:
-            runs.append(runner(settings, hardware_mode) if name == "crop-mvp" else runner(hardware_mode))
+            runs.append(
+                runner(settings, hardware_mode) if name == ENGINE_CROP_MVP else runner(hardware_mode)
+            )
         except EngineUnavailable as exc:
             unavailable[name] = str(exc)
+        except EngineTimedOut as exc:
+            timed_out[name] = str(exc)
 
     comparison = compare(runs, corpus_expected_tokens())
+    recommendation: str | None = None
+    recommendation_blocked = ""
     try:
         recommendation = recommend_engine(comparison, hardware)
-    except (NotImplementedError, ValueError) as exc:
-        recommendation = f"unavailable: {exc}"
+    except NotImplementedError as exc:
+        recommendation_blocked = str(exc)
+    except ValueError as exc:  # documented: an empty comparison has nothing to recommend from
+        recommendation_blocked = str(exc)
 
     if args.json:
         print(json.dumps({
             "hardware": {"gpu_available": hardware.gpu_available, "gpu_vram_gb": hardware.gpu_vram_gb},
             "unavailable": unavailable,
+            "timed_out": timed_out,
+            # False when any engine failed to locate an element, which inflates its neighbour's
+            # recall by an unknown amount -- the scores below cannot be ranked against each other.
+            "comparable": comparison.comparable,
+            # Kept apart so a consumer never has to tell an engine name from an error message by
+            # sniffing the string.
             "recommendation": recommendation,
+            "recommendation_blocked": recommendation_blocked,
             "engines": [
                 {"engine": s.engine, "macro_recall": s.macro_recall, "micro_recall": s.micro_recall,
                  "wall_seconds": s.wall_seconds, "seconds_per_element": s.seconds_per_element,
-                 "hardware": s.hardware, "unanchored": list(s.unanchored)}
+                 "hardware": s.hardware, "unanchored": list(s.unanchored),
+                 "ambiguous": list(s.ambiguous)}
                 for s in comparison.by_recall()
             ],
         }, indent=2))
@@ -229,8 +290,16 @@ def main(argv: list[str] | None = None) -> int:
         print(f"hardware: {hardware_mode}{vram}")
         for name, reason in sorted(unavailable.items()):
             print(f"skipped {name}: {reason}")
+        for name, reason in sorted(timed_out.items()):
+            print(f"timed out {name}: {reason}")
         print(comparison.report())
-        print(f"recommended: {recommendation}")
+        print(f"recommended: {recommendation or f'(none) {recommendation_blocked}'}")
+
+    if not runs:
+        # Nothing was measured. Exiting 0 here would hand a caller redirecting --json to a file an
+        # artifact that looks valid and says nothing.
+        print("no engine produced a document; nothing was compared", file=sys.stderr)
+        return 1
     return 0
 
 
