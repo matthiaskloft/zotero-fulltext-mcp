@@ -76,6 +76,20 @@ All notable changes to this project are documented here. Format loosely follows
   proves a term that lived *only* inside an equation image is unfindable before enrichment and
   findable after. This promotes the plan's manual "search now hits" verification into an automated,
   offline (no model, no network) invariant — the payoff of the whole feature, guarded in CI.
+- Engine comparison harness (`benchmarks/engines.py`, `tools/compare_engines.py`) that scores whole
+  *engines* against each other rather than pieces of one: the crop path (`crop-mvp`), the
+  whole-document path (`marker`), and MinerU as a declared-but-unwired candidate. All three are
+  judged on the one axis they share — the final Markdown a reader searches — so a crop engine that
+  splices and a whole-document engine that re-renders become commensurable. Per-element scoring
+  inside a foreign engine's output works by anchoring on the corpus's `CORPUSMARK` tokens, which
+  survive any engine that reads the page, so a token only counts where its element actually is; an
+  engine that scrambled the page cannot score well. A lost anchor is reported *and* scored zero,
+  because dropping the prose around an element is itself an extraction defect. Comparison logic and
+  hardware-verdict parsing are pure and unit-tested offline
+  (`tests/test_engine_comparison.py`); the runner detects the GPU through `nvidia-smi` (no new
+  dependency, no `torch` import) and reports an uninstalled engine as *unavailable* rather than
+  scoring it zero. The GPU-aware selection policy (`recommend_engine`) is a documented stub with
+  its trade-off written out and its contract already under test.
 
 ### Fixed
 
