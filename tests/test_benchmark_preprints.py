@@ -11,16 +11,19 @@ Assertions are invariants, not a frozen per-crop table, so the tier can grow wit
 without churn:
 
   1. reconstruction works -- every committed crop resolves to real pixels;
-  2. floor -- overall routing accuracy stays at or above a documented minimum;
-  3. equation safety -- every equation is routed to the formula prompt (a misrouted equation is the
+  2. equation safety -- every equation is routed to the formula prompt (a misrouted equation is the
      one unrecoverable error: its notation is lost, never OCR'd);
-  4. bounded failure shape -- the only mistakes are figures conservatively over-routed to the math
-     prompt. A table or equation misroute, or a brand-new error shape, fails loudly.
+  3. no figure reaches the formula prompt, where the splice would replace its image link;
+  4. clean routing -- no error of any shape. See the note on the removed accuracy floor below.
 
 The tier now scores 100%, which means it can no longer distinguish a good rule from a lucky one --
-passing here is necessary, not sufficient. The caption-block rule that closed the last gap was
-settled against the whole converted library, where a note-only version of it would have destroyed
-two real display equations; test_image_ocr.py carries those two shapes as regression cases.
+passing here is necessary, not sufficient. Two gaps are worth knowing about:
+
+  - The caption-block rule that closed the last gap was settled against the whole converted
+    library, where a note-only version of it would have destroyed two real display equations.
+    test_image_ocr.py carries those shapes as regression cases; this tier scores both rules alike.
+  - The tier has no crop labelled ``table`` (103 = 65 equation + 38 figure), so the caption label's
+    table branch has no coverage here at all and rests entirely on the unit tests.
 
 Regenerate the tier (needs the cached PDFs) with tools/build_preprint_benchmark.py.
 """
@@ -37,12 +40,16 @@ PREPRINT_LABELS = json.loads(
     (TIER_ROOT / "preprints" / "labels.json").read_text(encoding="utf-8")
 )["crops"]
 
-# The heuristic routes all 103 labelled crops correctly. The floor sits below the measured value so
-# ordinary label growth -- adding harder crops -- does not trip it, while a genuine regression does.
-# It was 0.80 while 15 figures were over-routed to the formula prompt; the caption-block rule closed
-# that gap, so the floor rises with it. Keep them moving together: a floor left behind the measured
-# value silently permits the regression it exists to catch.
-ACCURACY_FLOOR = 0.95
+# There is deliberately no accuracy floor any more. One existed (0.80, then 0.95) to leave slack
+# for label growth while 15 figures were over-routed to the formula prompt. The caption-block rule
+# closed that gap, and once the tier routes cleanly a floor is unreachable: the zero-error
+# assertion below subsumes any floor under 100%. Keeping both would have left a comment promising
+# slack that its sibling assertion refuses to give. A newly added crop that misroutes now fails
+# loudly, which is the point -- it forces a decision instead of being absorbed by slack.
+#
+# The two named-direction assertions are also subsumed by the zero-error one. They are kept for
+# their messages: "an equation was misrouted" and "figures reached the formula prompt" name the
+# specific loss, which a generic list of errors does not.
 
 
 class PreprintClassificationTests(unittest.TestCase):
@@ -62,12 +69,6 @@ class PreprintClassificationTests(unittest.TestCase):
         self.assertGreaterEqual(len(self.crops), 100, "preprint tier unexpectedly small")
         unreadable = [c.key for c in self.crops if not c.ref.exists]
         self.assertFalse(unreadable, f"crops did not resolve to pixels: {unreadable}")
-
-    def test_routing_accuracy_stays_above_the_floor(self):
-        self.assertGreaterEqual(
-            self.score.accuracy, ACCURACY_FLOOR,
-            "real-article routing accuracy regressed:\n" + self.score.report(),
-        )
 
     def test_every_equation_reaches_the_formula_prompt(self):
         """An equation sent to any other prompt loses its notation for good -- never acceptable."""

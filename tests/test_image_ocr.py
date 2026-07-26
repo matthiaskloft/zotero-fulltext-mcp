@@ -432,7 +432,9 @@ class CaptionBlockTests(unittest.TestCase):
 
     def test_an_equation_under_a_heading_and_before_a_note_stays_a_formula(self):
         """The second counterexample: the line before contains emphasis but is a heading, not a
-        title. 'Contains italics' would misroute this; 'is italics' does not."""
+        title. Rejected because the title pattern is anchored -- the line starts with '#', not with
+        the emphasis marker -- so a rule keyed on "contains emphasis" would misroute it.
+        """
         equation = self._ref(
             465, 34, 5730,
             before="###### (4) **_The final fitted model is_**",
@@ -463,27 +465,61 @@ class CaptionBlockTests(unittest.TestCase):
         self.assertGreater(wide_table.aspect, CAPTION_MAX_ASPECT)
         self.assertEqual(classify_crop(wide_table, has_math=True), CLASS_TABLE)
 
-    def test_a_wide_captioned_figure_keeps_the_figure_prompt(self):
-        """The same shape with a figure label, to show the lead line discriminates rather than
-        simply diverting every captioned crop to the table prompt."""
-        wide_figure = self._ref(
-            860, 98, 5060,
-            lead="Figure 7",
-            before="_Estimated Consensus Intervals for Verbal Quantifiers_",
-            after="_Note._ Black horizontal interval: the estimated consensus.",
-        )
-        self.assertEqual(classify_crop(wide_figure, has_math=True), CLASS_FIGURE)
+    def test_only_a_table_label_diverts_a_caption_block_from_the_figure_prompt(self):
+        """The lead line can divert to the table prompt and nothing else: a figure label and an
+        absent label both take the figure prior, so these cases share one assertion rather than
+        pretending to test different code paths.
+        """
+        for lead in ("Figure 7", "", "as reported by Anders et al. in the preceding section"):
+            with self.subTest(lead=lead):
+                crop = self._ref(
+                    860, 98, 5060,
+                    lead=lead,
+                    before="_Estimated Consensus Intervals for Verbal Quantifiers_",
+                    after="_Note._ Black horizontal interval: the estimated consensus.",
+                )
+                self.assertEqual(classify_crop(crop, has_math=True), CLASS_FIGURE)
 
-    def test_a_caption_block_with_no_reachable_label_defaults_to_figure(self):
-        """Documents the prior: figure crops outnumber table crops by two orders of magnitude in
-        converted output, and a figure keeps its image link, so the description is additive."""
-        unlabelled = self._ref(
+    def test_a_table_cross_reference_on_the_lead_line_is_not_a_table_label(self):
+        """The lead label must *be* the line. CAPTION_TABLE_RE is anchored only at the start, so it
+        also matches "Table 4 shows the coefficients" -- a running-prose cross-reference, which is
+        what CAPTION_MAX_ASPECT exists to reject. This rule runs outside that guard, so accepting a
+        sentence here would send a figure to the table prompt and replace its image link with cells
+        invented from a plot -- the expensive direction this whole rule exists to close.
+        """
+        strip = self._ref(
             860, 98, 5060,
-            before="_Estimated Consensus Intervals for Verbal Quantifiers_",
-            after="_Note._ Black horizontal interval: the estimated consensus.",
+            lead="Table 2 summarizes the fitted coefficients.",
+            before="_Recall the Estimator Used Throughout_",
+            after="_Note._ Shaded band is the 95% interval.",
         )
-        self.assertEqual(unlabelled.text_lead, "")
-        self.assertEqual(classify_crop(unlabelled, has_math=True), CLASS_FIGURE)
+        self.assertEqual(classify_crop(strip, has_math=True), CLASS_FIGURE)
+
+    def test_prose_that_merely_opens_and_closes_with_emphasis_is_not_a_caption_title(self):
+        """A line can start and end with emphasis without being a title. Combined with a bare
+        "Note." line this would carry an equation into the figure prompt, where it is described
+        rather than transcribed and its notation never reaches the index.
+        """
+        for before in ("_See_ the appendix for _details_",
+                       "_x_ is defined as follows, where _y_"):
+            with self.subTest(before=before):
+                equation = self._ref(
+                    397, 98, 2300,
+                    before=before,
+                    after="Note. Values are rounded to two decimals.",
+                )
+                self.assertEqual(classify_crop(equation, has_math=True), CLASS_FORMULA)
+
+    def test_a_title_carrying_inline_markup_is_still_a_title(self):
+        """Why "no interior underscores" is the wrong rule: real caption titles contain markup, and
+        rejecting them would send the figure to the formula prompt -- destroying its image link."""
+        titled = self._ref(
+            860, 98, 5060,
+            lead="Figure 2",
+            before="_Population Relationships Among MLM R_<sup>_2_</sup> _Measures_",
+            after="_Note._ Adapted from the cited framework.",
+        )
+        self.assertEqual(classify_crop(titled, has_math=True), CLASS_FIGURE)
 
     def test_a_table_labelled_block_without_a_closing_note_stays_a_formula(self):
         """The real-article tier contains a "Table 1" caption over a grid of prior distributions

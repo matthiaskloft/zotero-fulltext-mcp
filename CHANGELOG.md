@@ -120,7 +120,13 @@ All notable changes to this project are documented here. Format loosely follows
   previously looked (`CropRef.text_lead`), because the same layout carries tables — so the block
   establishes only that a crop is *captioned*, and the label decides whether it reaches the figure
   or the table prompt. Without that, a wide table would have been forced through the figure prompt,
-  keeping its image and gaining prose instead of its cells.
+  keeping its image and gaining prose instead of its cells. The label must *be* the lead line rather
+  than open it, since the existing caption patterns are anchored only at the start and so also match
+  a running-prose cross-reference ("Table 4 shows the coefficients") — the very shape the aspect
+  guard exists to reject, and which this rule deliberately runs outside of. A caption title is
+  likewise required to be one emphasised span filling its line, which is not the same as carrying no
+  interior emphasis: real titles contain inline markup such as a superscript, so what disqualifies a
+  line is prose *resuming* between spans.
 
 - Records whose math was recovered by a math-capable pass no longer carry a spurious
   `math_extraction_may_be_lossy` warning in MCP responses. The check was an equality test against
