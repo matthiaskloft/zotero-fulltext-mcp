@@ -74,8 +74,14 @@ class BenchmarkCrop:
         return f"{self.tier}/{self.crop_id}.png"
 
 
-def _reconstruct_ref(png_path: Path, text_before: str, text_after: str) -> CropRef:
-    """Rebuild the CropRef classify_crop sees: real dimensions/bytes + the stored text context."""
+def _reconstruct_ref(
+    png_path: Path, text_before: str, text_after: str, text_lead: str = ""
+) -> CropRef:
+    """Rebuild the CropRef classify_crop sees: real dimensions/bytes + the stored text context.
+
+    ``text_lead`` defaults to empty so a tier captured before the lead line was recorded still
+    reconstructs; regenerate that tier to exercise the caption label.
+    """
     size = read_png_size(png_path)
     width, height = size if size else (0, 0)
     try:
@@ -92,6 +98,7 @@ def _reconstruct_ref(png_path: Path, text_before: str, text_after: str) -> CropR
         text_before=text_before,
         text_after=text_after,
         byte_size=byte_size,
+        text_lead=text_lead,
     )
 
 
@@ -161,6 +168,7 @@ def load_tier(tier: str, *, strict: bool = True) -> list[BenchmarkCrop]:
             key_dir / f"{entry['id']}.png",
             entry.get("text_before", ""),
             entry.get("text_after", ""),
+            entry.get("text_lead", ""),
         )
         crops.append(BenchmarkCrop(entry["id"], key_dir.name, expected, ref))
     return crops

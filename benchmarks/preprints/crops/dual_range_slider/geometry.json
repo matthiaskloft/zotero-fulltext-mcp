@@ -7,7 +7,8 @@
     "complexity": 0.0437,
     "text_before": "_Visual Analog Scale (Panel A) and Dual-Range Slider (Panel B)_",
     "text_after": "_Note._ Slider response scales as implemented in the survey software _SoSci Survey_ (Leiner, 2019).",
-    "heuristic": "formula"
+    "text_lead": "# **Figure 1**",
+    "heuristic": "figure"
   },
   {
     "id": "dual_range_slider_01",
@@ -17,7 +18,8 @@
     "complexity": 0.0676,
     "text_before": "_Visual Analog Scale (Panel A) and Dual-Range Slider (Panel B)_",
     "text_after": "_Note._ Slider response scales as implemented in the survey software _SoSci Survey_ (Leiner, 2019).",
-    "heuristic": "formula"
+    "text_lead": "# **Figure 1**",
+    "heuristic": "figure"
   },
   {
     "id": "dual_range_slider_02",
@@ -27,6 +29,7 @@
     "complexity": 0.2163,
     "text_before": "_Design of the Longitudinal Multitrait-Multimethod Study_",
     "text_after": "<!-- Start of picture text -->",
+    "text_lead": "# **Figure 2**",
     "heuristic": "figure"
   },
   {
@@ -37,6 +40,7 @@
     "complexity": 0.5486,
     "text_before": "T1 T2<br>VAS DRS VAS DRS<br>\u03b8 V \u03b8 D \u03b8 V \u03b8 D<br>Research Questions<br>\u03b7 D \u03b7 D RQ1: Test-Retest Reliability<br>RQ2: Convergent Validity<br>\u03b8 V \u03b8 D \u03b8 V \u03b8 D<br>RQ3: Discriminant Validity<br>\u03b7 D \u03b7 D<br>Loc",
     "text_after": "<!-- Start of picture text -->",
+    "text_lead": "<!-- Start of picture text -->",
     "heuristic": "figure"
   },
   {
@@ -47,6 +51,7 @@
     "complexity": 0.6186,
     "text_before": "RQ1: Test-Retest Reliability<br><!-- End of picture text -->",
     "text_after": "<!-- Start of picture text -->",
+    "text_lead": "<!-- Start of picture text -->",
     "heuristic": "figure"
   },
   {
@@ -57,6 +62,7 @@
     "complexity": 0.2567,
     "text_before": "To investigate our three research questions, we estimate a correlation matrix of person parameters (i.e., factor scores) for different response formats, personality scales, and measurement occasions. ",
     "text_after": "The first six elements of the vector **_\u00b5_** of factor-score means correspond to the first measurement occasion and are set to zero to ensure identifiability of the model. The six remaining means corr",
+    "text_lead": "# **_2.5.1 Estimation of a Joint Bayesian Hierarchical Model",
     "heuristic": "formula"
   },
   {
@@ -67,6 +73,7 @@
     "complexity": 0.102,
     "text_before": "_Densities for Cumulative Intervals for Randomly Drawn Respondents_",
     "text_after": "<!-- Start of picture text -->",
+    "text_lead": "# **Figure 3**",
     "heuristic": "figure"
   },
   {
@@ -77,6 +84,7 @@
     "complexity": 0.2162,
     "text_before": "Let us further consider the response _Xij_ of respondent _i_ = 1 _, . . . , I_ (number of respondents) on item _j_ = 1 _, . . . , J_ (number of items). This response is modeled by a beta distribution,",
     "text_after": "The two parameters of the beta distribution are further re-parameterized in terms of latent person and item parameters:",
+    "text_lead": "If we want to fit the beta response model (BRM; Noel & Dauvi",
     "heuristic": "formula"
   },
   {
@@ -87,6 +95,7 @@
     "complexity": 0.1678,
     "text_before": "The two parameters of the beta distribution are further re-parameterized in terms of latent person and item parameters:",
     "text_after": "We use the same parameter names in the BRM and the DDRM for parameters that have an analog meaning (e.g., _\u03b8i_ or _\u03b4j_ ). These parameters are additionally indexed by the superscript _V_ for the VAS/B",
+    "text_lead": "Let us further consider the response _Xij_ of respondent _i_",
     "heuristic": "formula"
   },
   {
@@ -97,6 +106,7 @@
     "complexity": 0.0732,
     "text_before": "Similar to the BRM, we first have to transform the original response values _YL_<sup>_\u2217_</sup> and _YU_<sup>_\u2217_(hereonthescalefrom0to100)toensurethatnoneofthecomponentscanbe</sup> zero and consequentl",
     "text_after": "The response vector of proportions **_Y_** _ij_ , i.e., respondent _i_ \u2019s response on item _j_ , is then modeled by a Dirichlet distribution:",
+    "text_lead": "The DDRM (Kloft et al., 2023) is a straight forward extensio",
     "heuristic": "formula"
   },
   {
@@ -107,6 +117,7 @@
     "complexity": 0.2475,
     "text_before": "The response vector of proportions **_Y_** _ij_ , i.e., respondent _i_ \u2019s response on item _j_ , is then modeled by a Dirichlet distribution:",
     "text_after": "This Dirichlet distribution is further re-parameterized with latent IRT parameters:",
+    "text_lead": "Similar to the BRM, we first have to transform the original ",
     "heuristic": "formula"
   },
   {
@@ -117,6 +128,7 @@
     "complexity": 0.1417,
     "text_before": "This Dirichlet distribution is further re-parameterized with latent IRT parameters:",
     "text_after": "MEASURING VARIABILITY WITH INTERVAL RESPONSES",
+    "text_lead": "The response vector of proportions **_Y_** _ij_ , i.e., resp",
     "heuristic": "formula"
   },
   {
@@ -127,6 +139,7 @@
     "complexity": 0.2534,
     "text_before": "To investigate our research questions, we estimate a correlation matrix of person parameters (i.e., factor scores) for different response formats, personality scales, and measurement occasions. More s",
     "text_after": "The first six elements of the vector **_\u00b5_** of factor-score means correspond to the first measurement occasion and are set to zero to ensure identifiability of the model. The six remaining means corr",
+    "text_lead": "# **Bayesian Parameter Estimation**",
     "heuristic": "formula"
   },
   {
@@ -137,6 +150,7 @@
     "complexity": 0.1934,
     "text_before": "The first six elements of the vector **_\u00b5_** of factor-score means correspond to the first measurement occasion and are set to zero to ensure identifiability of the model. The six remaining means corr",
     "text_after": "The Cholesky factor decomposition of the correlation matrix (Barnard et al., 2000) is used to assume an uninformative LKJ-Cholesky prior (Lewandowski et al., 2009):",
+    "text_lead": "To investigate our research questions, we estimate a correla",
     "heuristic": "formula"
   },
   {
@@ -147,6 +161,7 @@
     "complexity": 0.1223,
     "text_before": "The Cholesky factor decomposition of the correlation matrix (Barnard et al., 2000) is used to assume an uninformative LKJ-Cholesky prior (Lewandowski et al., 2009):",
     "text_after": "Similarly to the means, the six standard deviations for the first measurement occasion are fixed to one to ensure identifiability, whereas the six standard deviations for the second measurement occasi",
+    "text_lead": "The first six elements of the vector **_\u00b5_** of factor-score",
     "heuristic": "formula"
   },
   {
@@ -157,6 +172,7 @@
     "complexity": 0.1604,
     "text_before": "Similarly to the means, the six standard deviations for the first measurement occasion are fixed to one to ensure identifiability, whereas the six standard deviations for the second measurement occasi",
     "text_after": "MEASURING VARIABILITY WITH INTERVAL RESPONSES",
+    "text_lead": "The Cholesky factor decomposition of the correlation matrix ",
     "heuristic": "formula"
   },
   {
@@ -167,6 +183,7 @@
     "complexity": 0.1194,
     "text_before": "For all item parameters, we also assign weakly informative priors:",
     "text_after": "Note that the prior for _\u03c4j_ is truncated at zero, although negative values for this parameter are technically admissible. However, negative values can lead to multi-modal densities of the Dirichlet d",
+    "text_lead": "47",
     "heuristic": "formula"
   }
 ]

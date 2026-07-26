@@ -101,6 +101,12 @@ def extract(key: str, pdf: Path, montage: bool) -> int:
                 # test_benchmark_preprints.py. Kept short so no meaningful prose is redistributed.
                 "text_before": ref.text_before[:200],
                 "text_after": ref.text_after[:200],
+                # One line further back than text_before: where a caption label sits when the title
+                # displaces it. Most crops have ordinary prose here rather than a label, so this is
+                # truncated far harder than its neighbours -- the classifier only ever reads a
+                # line-start-anchored label from it, so a short prefix loses no signal while keeping
+                # each stored fragment too short to be a sentence from the source paper.
+                "text_lead": ref.text_lead[:60],
                 "heuristic": io.classify_crop(ref, has_math=True),
             })
         (out / "geometry.json").write_text(json.dumps(geometry, indent=2), encoding="utf-8")

@@ -7,6 +7,7 @@ from unittest.mock import patch
 from zotero_pdf_text.config import ImageOcrSettings
 from zotero_pdf_text.image_ocr import (
     CAPTION_FIGURE_RE,
+    CAPTION_MAX_ASPECT,
     CAPTION_TABLE_RE,
     CLASS_FIGURE,
     CLASS_FORMULA,
@@ -17,6 +18,7 @@ from zotero_pdf_text.image_ocr import (
     CropPlan,
     _cache_key,
     _run_ocr,
+    classify_crop,
     composite_extraction_tool,
     enriched_path_for,
     find_crop_refs,
@@ -95,6 +97,36 @@ class FindCropRefsTests(unittest.TestCase):
             self.assertTrue(refs[0].exists)
             self.assertEqual(refs[0].png_path, images_dir / "crop-01.png")
             self.assertEqual((refs[0].width, refs[0].height), (537, 28))
+
+    def test_collects_the_caption_label_from_two_lines_back(self):
+        """The lead line must come out of real Markdown, not merely be accepted by the constructor:
+        it is the only place a caption label appears once the title sits between it and the crop."""
+        with tempfile.TemporaryDirectory() as tmp:
+            images_dir = Path(tmp) / "images" / "doc"
+            _write_png(images_dir, "crop-01.png", 860, 98)
+            body = (
+                "Preceding paragraph of prose.\n\n"
+                "Table 1\n\n"
+                "_Descriptive Statistics for the Response Formats_\n\n"
+                "![](crop-01.png)\n\n"
+                "_Note._ Standard deviations appear in parentheses.\n"
+            )
+
+            ref = find_crop_refs(body, images_dir)[0]
+
+            self.assertEqual(ref.text_before, "_Descriptive Statistics for the Response Formats_")
+            self.assertEqual(ref.text_lead, "Table 1")
+            self.assertTrue(ref.text_after.startswith("_Note._"))
+
+    def test_the_lead_line_is_empty_when_nothing_precedes_the_nearest_line(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            images_dir = Path(tmp) / "images" / "doc"
+            _write_png(images_dir, "crop-01.png", 537, 28)
+
+            ref = find_crop_refs("Only one line\n\n![](crop-01.png)\n", images_dir)[0]
+
+            self.assertEqual(ref.text_before, "Only one line")
+            self.assertEqual(ref.text_lead, "")
 
     def test_resolves_backslash_links_on_every_platform(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -326,12 +358,13 @@ class TableAndCrossReferenceTests(unittest.TestCase):
     text), so it is exercised here over CropRef values with geometry taken from the real library."""
 
     @staticmethod
-    def _ref(width, height, byte_size, *, before="", after=""):
+    def _ref(width, height, byte_size, *, before="", after="", lead=""):
         from zotero_pdf_text.image_ocr import CropRef
 
         return CropRef(
             span=(0, 0), markup="", link="", png_path=Path("x.png"),
             width=width, height=height, text_before=before, text_after=after, byte_size=byte_size,
+            text_lead=lead,
         )
 
     def test_blocky_crop_under_a_table_caption_is_a_table(self):
@@ -360,6 +393,159 @@ class TableAndCrossReferenceTests(unittest.TestCase):
 
         captioned = self._ref(340, 300, 30000, after="Fig. 3  Estimated response surface")
         self.assertEqual(classify_crop(captioned, has_math=True), CLASS_FIGURE)
+
+
+class CaptionBlockTests(unittest.TestCase):
+    """The caption-block rule: an italicised title line before AND a note line after.
+
+    Both conjuncts are load-bearing, and the reason is a homograph. A note line terminates a caption
+    in APA style, but a textbook uses "**_Note:_**" to open a pedagogical aside that can follow
+    anything -- including a display equation. Measured across the converted library, a note-only
+    version of this rule claimed two real display equations and would have replaced their rendered
+    notation with LaTeX invented from the image. The shapes below are those two cases plus the
+    figures the rule must still recover; geometry is taken from the real crops.
+    """
+
+    # Re-wrapped: accessing a staticmethod off its class yields a plain function, which would
+    # rebind as an instance method here and swallow the first argument as self.
+    _ref = staticmethod(TableAndCrossReferenceTests._ref)
+
+    def test_a_wide_strip_inside_a_caption_block_is_a_figure(self):
+        """A slider screenshot: aspect ~9.8, no picture marker, geometrically an equation. Before
+        the rule this had its image link replaced by LaTeX hallucinated from a UI widget."""
+        strip = self._ref(
+            813, 83, 4050,
+            before="_Single-Range Slider (Panel A) and Dual-Range Slider (Panel B)_",
+            after="_Note._ The sliders were created with a range slider plugin.",
+        )
+        self.assertEqual(classify_crop(strip, has_math=True), CLASS_FIGURE)
+
+    def test_an_equation_followed_by_a_textbook_note_stays_a_formula(self):
+        """The first counterexample: prose flows into the crop, so there is no title line. A
+        note-only rule sends this to the figure prompt and the notation is lost."""
+        equation = self._ref(
+            291, 32, 3750,
+            before="3. **_Fit an ARMA (p_** , **_q) model:_** the variance is estimated by",
+            after="**_Note:_** The increased variability is concerning.",
+        )
+        self.assertEqual(classify_crop(equation, has_math=True), CLASS_FORMULA)
+
+    def test_an_equation_under_a_heading_and_before_a_note_stays_a_formula(self):
+        """The second counterexample: the line before contains emphasis but is a heading, not a
+        title. Rejected because the title pattern is anchored -- the line starts with '#', not with
+        the emphasis marker -- so a rule keyed on "contains emphasis" would misroute it.
+        """
+        equation = self._ref(
+            465, 34, 5730,
+            before="###### (4) **_The final fitted model is_**",
+            after="**_Note:_** The above sequence of commands illustrates the steps.",
+        )
+        self.assertEqual(classify_crop(equation, has_math=True), CLASS_FORMULA)
+
+    def test_a_note_under_a_table_row_does_not_make_a_strip_a_figure(self):
+        """A table note is not a figure caption. The line before is a pipe row, so the rule
+        declines rather than guessing -- the crop keeps whatever the geometry decided."""
+        strip = self._ref(
+            354, 15, 4230,
+            before="|3|3.633|.892|.059|.097||",
+            after="Note. In all runs the same optimization function was used.",
+        )
+        self.assertNotEqual(classify_crop(strip, has_math=True), CLASS_FIGURE)
+
+    def test_a_wide_captioned_table_reaches_the_table_prompt_not_the_figure_prompt(self):
+        """The table layout is the figure layout with a different label, and a wide table skips the
+        aspect-guarded table check entirely -- so without the lead line this crop would be forced
+        through the figure prompt, keeping its image and gaining prose instead of its cells."""
+        wide_table = self._ref(
+            860, 98, 5060,
+            lead="Table 1",
+            before="_Descriptive Statistics for the Response Formats_",
+            after="_Note._ Standard deviations appear in parentheses.",
+        )
+        self.assertGreater(wide_table.aspect, CAPTION_MAX_ASPECT)
+        self.assertEqual(classify_crop(wide_table, has_math=True), CLASS_TABLE)
+
+    def test_only_a_table_label_diverts_a_caption_block_from_the_figure_prompt(self):
+        """The lead line can divert to the table prompt and nothing else: a figure label and an
+        absent label both take the figure prior, so these cases share one assertion rather than
+        pretending to test different code paths.
+        """
+        for lead in ("Figure 7", "", "as reported by Anders et al. in the preceding section"):
+            with self.subTest(lead=lead):
+                crop = self._ref(
+                    860, 98, 5060,
+                    lead=lead,
+                    before="_Estimated Consensus Intervals for Verbal Quantifiers_",
+                    after="_Note._ Black horizontal interval: the estimated consensus.",
+                )
+                self.assertEqual(classify_crop(crop, has_math=True), CLASS_FIGURE)
+
+    def test_a_table_cross_reference_on_the_lead_line_is_not_a_table_label(self):
+        """The lead label must *be* the line. CAPTION_TABLE_RE is anchored only at the start, so it
+        also matches "Table 4 shows the coefficients" -- a running-prose cross-reference, which is
+        what CAPTION_MAX_ASPECT exists to reject. This rule runs outside that guard, so accepting a
+        sentence here would send a figure to the table prompt and replace its image link with cells
+        invented from a plot -- the expensive direction this whole rule exists to close.
+        """
+        strip = self._ref(
+            860, 98, 5060,
+            lead="Table 2 summarizes the fitted coefficients.",
+            before="_Recall the Estimator Used Throughout_",
+            after="_Note._ Shaded band is the 95% interval.",
+        )
+        self.assertEqual(classify_crop(strip, has_math=True), CLASS_FIGURE)
+
+    def test_prose_that_merely_opens_and_closes_with_emphasis_is_not_a_caption_title(self):
+        """A line can start and end with emphasis without being a title. Combined with a bare
+        "Note." line this would carry an equation into the figure prompt, where it is described
+        rather than transcribed and its notation never reaches the index.
+        """
+        for before in ("_See_ the appendix for _details_",
+                       "_x_ is defined as follows, where _y_"):
+            with self.subTest(before=before):
+                equation = self._ref(
+                    397, 98, 2300,
+                    before=before,
+                    after="Note. Values are rounded to two decimals.",
+                )
+                self.assertEqual(classify_crop(equation, has_math=True), CLASS_FORMULA)
+
+    def test_a_title_carrying_inline_markup_is_still_a_title(self):
+        """Why "no interior underscores" is the wrong rule: real caption titles contain markup, and
+        rejecting them would send the figure to the formula prompt -- destroying its image link."""
+        titled = self._ref(
+            860, 98, 5060,
+            lead="Figure 2",
+            before="_Population Relationships Among MLM R_<sup>_2_</sup> _Measures_",
+            after="_Note._ Adapted from the cited framework.",
+        )
+        self.assertEqual(classify_crop(titled, has_math=True), CLASS_FIGURE)
+
+    def test_a_table_labelled_block_without_a_closing_note_stays_a_formula(self):
+        """The real-article tier contains a "Table 1" caption over a grid of prior distributions
+        that is labelled *equation*: for search the notation is the content, not the grid holding
+        it. It reaches the formula prompt only because the following line is prose rather than a
+        note, so the note requirement -- not the label logic -- is what protects it. A paper closing
+        the same block with a note would send notation to the table prompt, which is why loosening
+        that requirement must fail here rather than silently degrade the math path.
+        """
+        notation_under_a_table_label = self._ref(
+            807, 411, 65000,
+            lead="# **Table 1**",
+            before="_Default Prior Distributions for the Consensus Model_",
+            after="the means for reasons of identifiability:",
+        )
+        self.assertEqual(classify_crop(notation_under_a_table_label, has_math=True), CLASS_FORMULA)
+
+    def test_a_title_alone_does_not_make_a_thin_strip_a_figure(self):
+        """Half a caption block is not a caption block: an italicised line can also be running
+        emphasis. Without the closing note the rule must not fire."""
+        strip = self._ref(
+            813, 83, 4050,
+            before="_Single-Range Slider (Panel A) and Dual-Range Slider (Panel B)_",
+            after="where the weights are normalised to sum to one",
+        )
+        self.assertEqual(classify_crop(strip, has_math=True), CLASS_FORMULA)
 
 
 class PictureMarkerTests(unittest.TestCase):
