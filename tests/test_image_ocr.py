@@ -7,6 +7,7 @@ from unittest.mock import patch
 from zotero_pdf_text.config import ImageOcrSettings
 from zotero_pdf_text.image_ocr import (
     CAPTION_FIGURE_RE,
+    CAPTION_MAX_ASPECT,
     CAPTION_TABLE_RE,
     CLASS_FIGURE,
     CLASS_FORMULA,
@@ -96,6 +97,36 @@ class FindCropRefsTests(unittest.TestCase):
             self.assertTrue(refs[0].exists)
             self.assertEqual(refs[0].png_path, images_dir / "crop-01.png")
             self.assertEqual((refs[0].width, refs[0].height), (537, 28))
+
+    def test_collects_the_caption_label_from_two_lines_back(self):
+        """The lead line must come out of real Markdown, not merely be accepted by the constructor:
+        it is the only place a caption label appears once the title sits between it and the crop."""
+        with tempfile.TemporaryDirectory() as tmp:
+            images_dir = Path(tmp) / "images" / "doc"
+            _write_png(images_dir, "crop-01.png", 860, 98)
+            body = (
+                "Preceding paragraph of prose.\n\n"
+                "Table 1\n\n"
+                "_Descriptive Statistics for the Response Formats_\n\n"
+                "![](crop-01.png)\n\n"
+                "_Note._ Standard deviations appear in parentheses.\n"
+            )
+
+            ref = find_crop_refs(body, images_dir)[0]
+
+            self.assertEqual(ref.text_before, "_Descriptive Statistics for the Response Formats_")
+            self.assertEqual(ref.text_lead, "Table 1")
+            self.assertTrue(ref.text_after.startswith("_Note._"))
+
+    def test_the_lead_line_is_empty_when_nothing_precedes_the_nearest_line(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            images_dir = Path(tmp) / "images" / "doc"
+            _write_png(images_dir, "crop-01.png", 537, 28)
+
+            ref = find_crop_refs("Only one line\n\n![](crop-01.png)\n", images_dir)[0]
+
+            self.assertEqual(ref.text_before, "Only one line")
+            self.assertEqual(ref.text_lead, "")
 
     def test_resolves_backslash_links_on_every_platform(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -327,12 +358,13 @@ class TableAndCrossReferenceTests(unittest.TestCase):
     text), so it is exercised here over CropRef values with geometry taken from the real library."""
 
     @staticmethod
-    def _ref(width, height, byte_size, *, before="", after=""):
+    def _ref(width, height, byte_size, *, before="", after="", lead=""):
         from zotero_pdf_text.image_ocr import CropRef
 
         return CropRef(
             span=(0, 0), markup="", link="", png_path=Path("x.png"),
             width=width, height=height, text_before=before, text_after=after, byte_size=byte_size,
+            text_lead=lead,
         )
 
     def test_blocky_crop_under_a_table_caption_is_a_table(self):
@@ -417,6 +449,57 @@ class CaptionBlockTests(unittest.TestCase):
             after="Note. In all runs the same optimization function was used.",
         )
         self.assertNotEqual(classify_crop(strip, has_math=True), CLASS_FIGURE)
+
+    def test_a_wide_captioned_table_reaches_the_table_prompt_not_the_figure_prompt(self):
+        """The table layout is the figure layout with a different label, and a wide table skips the
+        aspect-guarded table check entirely -- so without the lead line this crop would be forced
+        through the figure prompt, keeping its image and gaining prose instead of its cells."""
+        wide_table = self._ref(
+            860, 98, 5060,
+            lead="Table 1",
+            before="_Descriptive Statistics for the Response Formats_",
+            after="_Note._ Standard deviations appear in parentheses.",
+        )
+        self.assertGreater(wide_table.aspect, CAPTION_MAX_ASPECT)
+        self.assertEqual(classify_crop(wide_table, has_math=True), CLASS_TABLE)
+
+    def test_a_wide_captioned_figure_keeps_the_figure_prompt(self):
+        """The same shape with a figure label, to show the lead line discriminates rather than
+        simply diverting every captioned crop to the table prompt."""
+        wide_figure = self._ref(
+            860, 98, 5060,
+            lead="Figure 7",
+            before="_Estimated Consensus Intervals for Verbal Quantifiers_",
+            after="_Note._ Black horizontal interval: the estimated consensus.",
+        )
+        self.assertEqual(classify_crop(wide_figure, has_math=True), CLASS_FIGURE)
+
+    def test_a_caption_block_with_no_reachable_label_defaults_to_figure(self):
+        """Documents the prior: figure crops outnumber table crops by two orders of magnitude in
+        converted output, and a figure keeps its image link, so the description is additive."""
+        unlabelled = self._ref(
+            860, 98, 5060,
+            before="_Estimated Consensus Intervals for Verbal Quantifiers_",
+            after="_Note._ Black horizontal interval: the estimated consensus.",
+        )
+        self.assertEqual(unlabelled.text_lead, "")
+        self.assertEqual(classify_crop(unlabelled, has_math=True), CLASS_FIGURE)
+
+    def test_a_table_labelled_block_without_a_closing_note_stays_a_formula(self):
+        """The real-article tier contains a "Table 1" caption over a grid of prior distributions
+        that is labelled *equation*: for search the notation is the content, not the grid holding
+        it. It reaches the formula prompt only because the following line is prose rather than a
+        note, so the note requirement -- not the label logic -- is what protects it. A paper closing
+        the same block with a note would send notation to the table prompt, which is why loosening
+        that requirement must fail here rather than silently degrade the math path.
+        """
+        notation_under_a_table_label = self._ref(
+            807, 411, 65000,
+            lead="# **Table 1**",
+            before="_Default Prior Distributions for the Consensus Model_",
+            after="the means for reasons of identifiability:",
+        )
+        self.assertEqual(classify_crop(notation_under_a_table_label, has_math=True), CLASS_FORMULA)
 
     def test_a_title_alone_does_not_make_a_thin_strip_a_figure(self):
         """Half a caption block is not a caption block: an italicised line can also be running

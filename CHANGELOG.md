@@ -116,7 +116,11 @@ All notable changes to this project are documented here. Format loosely follows
   two real display equations, because a note line terminates a caption in one document style but
   opens a pedagogical aside in another. `tests/test_image_ocr.py` carries both shapes as
   regression cases, since the benchmark tier now scores 100% either way and can no longer tell the
-  two rules apart.
+  two rules apart. The caption label itself is read from one line further back than the classifier
+  previously looked (`CropRef.text_lead`), because the same layout carries tables — so the block
+  establishes only that a crop is *captioned*, and the label decides whether it reaches the figure
+  or the table prompt. Without that, a wide table would have been forced through the figure prompt,
+  keeping its image and gaining prose instead of its cells.
 
 - Records whose math was recovered by a math-capable pass no longer carry a spurious
   `math_extraction_may_be_lossy` warning in MCP responses. The check was an equality test against
