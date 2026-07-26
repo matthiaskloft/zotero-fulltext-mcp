@@ -90,6 +90,54 @@ _CAPTION_LEAD = r"^[\s*_#>]*"
 CAPTION_FIGURE_RE = re.compile(_CAPTION_LEAD + r"(?:figure|fig\.?|abb\.?|abbildung)\s*\d", re.IGNORECASE)
 CAPTION_TABLE_RE = re.compile(_CAPTION_LEAD + r"(?:table|tab\.?|tabelle)\s*\d", re.IGNORECASE)
 
+# An APA-style caption block puts its label two lines above the crop, out of reach of the single
+# neighbouring line the classifier sees:
+#
+#     Figure 3                       <- text_lead: the label, out of reach of text_before
+#
+#     _Estimated Consensus …_        <- text_before: matched by CAPTION_TITLE_RE
+#
+#     ![](page12-img03.png)          <- the crop
+#
+#     _Note._ Black horizontal …     <- text_after: matched by CAPTION_NOTE_RE
+#
+# Only these two lines are reachable, and *both* are needed. A trailing note alone is ambiguous:
+# "Note" terminates a caption in this style, but a textbook uses "**_Note:_**" for a pedagogical
+# aside that can follow anything -- measured across the converted library, two of the crops a
+# note-only rule would have claimed were display equations, whose notation the figure path would
+# have destroyed. The title line disambiguates them, because nothing places a bare italicised
+# title directly above an equation; that slot belongs to captions.
+#
+# The title must therefore be a title rather than a line that merely *contains* emphasis: both
+# equations above were preceded by emphasis inside a numbered step and a heading. See
+# CAPTION_TITLE_RE with CAPTION_PROSE_RUN_RE for what "is a title" is taken to mean.
+#
+# The same layout carries tables ("Table 1" in place of "Figure 3"), so the block alone identifies a
+# captioned element without saying which kind. That is what CropRef.text_lead exists for: the label
+# is read from one line further back, since the title is exactly what displaces it.
+CAPTION_NOTE_RE = re.compile(_CAPTION_LEAD + r"note[.:_]", re.IGNORECASE)
+
+# A caption title is one emphasised span filling the whole line. Two patterns are needed because
+# "one span" cannot be written as "no interior underscores": real titles carry inline markup, e.g.
+# a superscript that renders as ``MLM R_<sup>_2_</sup> _Measures_``. What separates a title from a
+# sentence that merely opens and closes with emphasis is prose *resuming* between spans, so
+# CAPTION_PROSE_RUN_RE disqualifies a closing underscore followed by unemphasised lowercase text:
+#
+#     _Estimated Consensus Intervals for Verbal Quantifiers_   <- title
+#     _See_ the appendix for _details_                          <- prose, disqualified
+CAPTION_TITLE_RE = re.compile(r"^_[^_][^\n]*?_[.:]?$")
+CAPTION_PROSE_RUN_RE = re.compile(r"_\s+[a-z]")
+
+# On the lead line the label has to *be* the line. CAPTION_FIGURE_RE and CAPTION_TABLE_RE are
+# anchored only at the start, so they also match "Table 4 shows the coefficients" -- a running-prose
+# cross-reference, which is exactly what CAPTION_MAX_ASPECT exists to reject. The caption-block rule
+# runs outside that guard, so it needs labels that cannot be satisfied by a sentence. The trailing
+# class allows the emphasis and punctuation converted output wraps a label in ("# **Table 1**").
+_CAPTION_LABEL_TAIL = r"\s*\d+[\s*_.:)\]]*$"
+CAPTION_TABLE_LABEL_RE = re.compile(
+    _CAPTION_LEAD + r"(?:table|tab\.?|tabelle)" + _CAPTION_LABEL_TAIL, re.IGNORECASE
+)
+
 # pymupdf4llm annotates text it recovered from inside a picture region with this HTML comment.
 # It is a direct statement from the extractor that the neighbouring crop is a picture, which no
 # geometric heuristic can match for reliability -- crops it marks are figures regardless of shape.
@@ -127,6 +175,10 @@ class CropRef:
     text_before: str
     text_after: str
     byte_size: int = 0
+    # The non-blank line before text_before -- where a caption label lives when the title sits
+    # between it and the crop. Optional so a CropRef rebuilt from older stored context still
+    # constructs; an empty lead simply carries no label, never a wrong one.
+    text_lead: str = ""
 
     @property
     def exists(self) -> bool:
@@ -191,16 +243,41 @@ def _link_target(markup: str) -> str:
     return markup[open_paren:-1]
 
 
-def _neighbouring_line(body: str, start: int, end: int, *, forward: bool) -> str:
-    """Return the nearest non-blank line after (or before) a span, for caption detection."""
+def _neighbouring_lines(body: str, start: int, end: int, *, forward: bool, count: int) -> list[str]:
+    """Return up to ``count`` non-blank lines outward from a span, nearest first.
+
+    More than one is needed because a caption label can sit a full line beyond its own title --
+    "Table 1", a blank line, the italicised title, then the crop -- so the label that says which
+    *kind* of element this is falls outside the nearest line. See CAPTION_TITLE_RE.
+    """
     segment = body[end:] if forward else body[:start]
     lines = segment.split("\n")
     ordered = lines if forward else reversed(lines)
+    found: list[str] = []
     for line in ordered:
         stripped = line.strip()
         if stripped and not MARKDOWN_IMAGE_RE.fullmatch(stripped):
-            return stripped
-    return ""
+            found.append(stripped)
+            if len(found) == count:
+                break
+    return found
+
+
+def _neighbouring_line(body: str, start: int, end: int, *, forward: bool) -> str:
+    """Return the nearest non-blank line after (or before) a span, for caption detection."""
+    lines = _neighbouring_lines(body, start, end, forward=forward, count=1)
+    return lines[0] if lines else ""
+
+
+def is_caption_title(line: str) -> bool:
+    """True if the line is a caption title: one emphasised span filling the whole line.
+
+    Two conditions, because "one span" is not the same as "no interior underscores" -- real titles
+    carry inline markup such as a superscript. The disqualifier is prose *resuming* between spans,
+    which is what separates a title from a sentence that happens to open and close with emphasis.
+    """
+    stripped = line.strip()
+    return bool(CAPTION_TITLE_RE.match(stripped)) and not CAPTION_PROSE_RUN_RE.search(stripped)
 
 
 def find_crop_refs(body: str, images_dir: Path) -> list[CropRef]:
@@ -213,6 +290,7 @@ def find_crop_refs(body: str, images_dir: Path) -> list[CropRef]:
     refs: list[CropRef] = []
     for match in MARKDOWN_IMAGE_RE.finditer(body):
         markup = match.group(0)
+        preceding = _neighbouring_lines(body, match.start(), match.end(), forward=False, count=2)
         link = _link_target(markup)
         basename = link_basename(link)
         png_path: Path | None = None
@@ -236,9 +314,10 @@ def find_crop_refs(body: str, images_dir: Path) -> list[CropRef]:
                 png_path=png_path,
                 width=width,
                 height=height,
-                text_before=_neighbouring_line(body, match.start(), match.end(), forward=False),
+                text_before=preceding[0] if preceding else "",
                 text_after=_neighbouring_line(body, match.start(), match.end(), forward=True),
                 byte_size=byte_size,
+                text_lead=preceding[1] if len(preceding) > 1 else "",
             )
         )
     return refs
@@ -253,11 +332,15 @@ def classify_crop(ref: CropRef, *, has_math: bool) -> str:
       - ``ref.width`` / ``ref.height`` / ``ref.aspect`` -- read from the PNG header. Absolute
         size discriminates where aspect alone cannot: a wide-ish crop a few hundred pixels across
         is usually a multi-line equation, while one several hundred pixels tall is usually a plot.
-      - ``ref.text_after`` / ``ref.text_before`` -- the nearest non-blank Markdown lines.
+      - ``ref.text_after`` / ``ref.text_before`` / ``ref.text_lead`` -- the nearest non-blank
+        Markdown lines, ``text_lead`` being one further back than ``text_before``.
         PICTURE_TEXT_MARKER appearing there is the extractor's own assertion that the crop is a
         picture, and is the single most reliable signal available. CAPTION_FIGURE_RE and
         CAPTION_TABLE_RE match "Fig. 3" / "Table 2" style labels in English and German, including
-        through the emphasis markers converted output wraps them in.
+        through the emphasis markers converted output wraps them in. ``is_caption_title`` with
+        CAPTION_NOTE_RE together recognise a caption block that encloses the crop; the block says
+        only that the crop is captioned, and CAPTION_TABLE_LABEL_RE on ``text_lead`` is what can
+        divert it to the table prompt -- which is why the lead line is collected at all.
       - ``has_math`` -- whether the document as a whole was detected as containing mathematics.
 
     The measured bands (EQUATION_MIN_ASPECT, FIGURE_ASPECT_RANGE, FURNITURE_MAX_ASPECT) are
@@ -299,6 +382,33 @@ def classify_crop(ref: CropRef, *, has_math: bool) -> str:
             return CLASS_FIGURE
         if CAPTION_TABLE_RE.search(before) or CAPTION_TABLE_RE.search(after):
             return CLASS_TABLE
+
+    # A crop enclosed by both halves of a caption block is a captioned element whatever its shape.
+    # This deliberately runs outside the aspect guard above: that guard defends against a
+    # cross-reference in running prose, while an enclosing title/note pair is document structure.
+    # It is what recovers the wide figure strips -- slider screenshots, balance-beam diagrams,
+    # density curves -- that are geometrically indistinguishable from display equations and carry
+    # no picture annotation. Requiring both halves is what keeps equations out; see CAPTION_NOTE_RE.
+    #
+    # The block itself says "captioned", not "figure": the table layout is identical apart from its
+    # label ("Table 1" / title / crop / note), and that label is precisely what the title pushes out
+    # of text_before. So the *lead* line is consulted here -- the checks above cannot see it, and a
+    # wide table never even reaches them. The lead can only divert to the table prompt; a figure
+    # label and an absent label both take the figure prompt, which is the prior for a captioned
+    # crop:
+    # figure crops far outnumber table crops in converted output, and a figure keeps its image link,
+    # so the description is additive rather than a replacement that could lose content.
+    #
+    # Known residual: a "Table N" caption does not guarantee tabular *content*. The benchmark tier
+    # holds a table of prior distributions whose ground-truth label is "equation", because the
+    # notation is what a reader searches for. It stays on the formula path only because no note
+    # closes its block; a paper that closed one would route notation to the table prompt. Tightening
+    # this needs a signal for "tabular content" that geometry does not provide -- the aspect bands
+    # overlap -- so the note requirement is doing that work for now.
+    if is_caption_title(before) and CAPTION_NOTE_RE.search(after):
+        if CAPTION_TABLE_LABEL_RE.search(ref.text_lead):
+            return CLASS_TABLE
+        return CLASS_FIGURE
 
     # Uncaptioned crops in the figure aspect band are plots; everything else -- wide equation
     # strips and the ambiguous middle band alike -- defaults to formula, since display equations
