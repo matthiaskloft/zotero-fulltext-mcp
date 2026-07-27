@@ -103,6 +103,47 @@ class PreprintClassificationTests(unittest.TestCase):
         )
 
 
+class ContextProjectionFidelityTests(unittest.TestCase):
+    """The manifest stores only as much of each neighbouring line as classify_crop can read.
+
+    That reduction is only sound if a stored line answers every check exactly as the real line did,
+    and the manifest happens to carry both sides of that comparison: ``heuristic`` is what the
+    classifier returned on the *full* line at extraction time, while the harness re-runs it on the
+    *projected* line. Equality is therefore a direct test of the projection, and the one assertion
+    that fails if a future classifier learns to read deeper into a line than
+    CONTEXT_PREFIX_CHARS keeps -- a change no other test here can see, because the tier's labels
+    would still be met by the truncated answer.
+    """
+
+    def test_projected_context_routes_exactly_as_the_full_line_did(self):
+        geometry = {}
+        for path in sorted((TIER_ROOT / "preprints" / "crops").glob("*/geometry.json")):
+            for entry in json.loads(path.read_text(encoding="utf-8")):
+                geometry[f"{path.parent.name}/{entry['id']}.png"] = entry
+
+        missing = [c.key for c in load_tier("preprints") if c.key not in geometry]
+        self.assertFalse(missing, f"crops absent from geometry manifests: {missing}")
+
+        drift = []
+        for crop in load_tier("preprints"):
+            recorded = geometry[crop.key].get("heuristic")
+            if recorded is None:
+                continue  # manifest predates the field; regenerate to gain the check
+            replayed = classify_crop(crop.ref, has_math=True)
+            if replayed != recorded:
+                drift.append((crop.key, recorded, replayed))
+
+        self.assertFalse(
+            drift,
+            "stored context no longer reproduces the routing taken on the full Markdown line, so "
+            "the manifest has stopped freezing the classifier's real inputs. Either a check now "
+            "reads past CONTEXT_PREFIX_CHARS, or the classifier changed and the tier needs "
+            "regenerating:\n"
+            + "\n".join(f"  {k}: full line gave {r!r}, stored context gives {p!r}"
+                        for k, r, p in drift),
+        )
+
+
 class CorrespondenceDriftTests(unittest.TestCase):
     """The one-to-one check is what makes 'the tier can grow' safe: any drift between geometry,
     PNGs and labels must fail loudly rather than quietly shrink what CI scores."""
