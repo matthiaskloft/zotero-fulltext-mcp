@@ -6,7 +6,7 @@
     "aspect": 8.634,
     "complexity": 0.0797,
     "text_before": "_Dual-Range Slider (DRS) response format._",
-    "text_after": "_Note._ Screenshot of the _noUiSlider_ JavaScript range slider (Gersen, 2024) that we used in the experimental study. The scale ranges from 0% to 100%.",
+    "text_after": "_Note._ Screenshot of the _noUiSlider_ J\u2026",
     "text_lead": "# **Figure 1**",
     "heuristic": "figure"
   },
@@ -17,7 +17,7 @@
     "aspect": 2.0,
     "complexity": 0.3882,
     "text_before": "_Stimulus Examples: Color Dot Estimation Task_",
-    "text_after": "_Note._ Left panel: 66% of the displayed dots are purple. Right panel: 15% of the displayed dots are purple.",
+    "text_after": "_Note._ Left panel: 66% of the displayed\u2026",
     "text_lead": "# **Figure 2**",
     "heuristic": "figure"
   },
@@ -27,9 +27,9 @@
     "height": 47,
     "aspect": 15.745,
     "complexity": 0.1337,
-    "text_before": "Each response interval partitions the response scale into three components through the lower bound _XL_ (left slider) and the upper bound _XU_ (right slider). Assuming that the raw responses are scale",
-    "text_after": "Essentially, _Y_ 1 is the segment between the lower scale limit and the left slider, _Y_ 2 is the segment that resembles the width of the response interval, and _Y_ 3 is the segment between the right ",
-    "text_lead": "Smithson and Broomell (2024) proposed two transformations: (",
+    "text_before": "Each response interval partitions the re\u2026",
+    "text_after": "Essentially, _Y_ 1 is the segment betwee\u2026",
+    "text_lead": "Smithson and Broomell (2024) proposed tw\u2026",
     "heuristic": "formula"
   },
   {
@@ -38,9 +38,9 @@
     "height": 82,
     "aspect": 8.524,
     "complexity": 0.1755,
-    "text_before": "We then transform the interval responses from the compositional format to a bivariate, unbounded space via the isometric log-ratio transformation:",
-    "text_after": "We choose this transformation because it compensates for the fact that interval locations closer to one of the response scale limits will yield smaller interval widths. This is done by considering the",
-    "text_lead": "Essentially, _Y_ 1 is the segment between the lower scale li",
+    "text_before": "We then transform the interval responses\u2026",
+    "text_after": "We choose this transformation because it\u2026",
+    "text_lead": "Essentially, _Y_ 1 is the segment betwee\u2026",
     "heuristic": "formula"
   },
   {
@@ -93,8 +93,8 @@
     "height": 44,
     "aspect": 16.818,
     "complexity": 0.1488,
-    "text_before": "Let us assume we have our interval response in the compositional format given by:",
-    "text_after": "Either of the three components might be zero if respondents were allowed to set either the lower interval bound to the minimum of the response scale ( _Y_ 1 = 0), the upper interval bound to the maxim",
+    "text_before": "Let us assume we have our interval respo\u2026",
+    "text_after": "Either of the three components might be \u2026",
     "text_lead": "# **Rescaling of Responses**",
     "heuristic": "formula"
   },
@@ -104,9 +104,9 @@
     "height": 57,
     "aspect": 11.193,
     "complexity": 0.1182,
-    "text_before": "Either of the three components might be zero if respondents were allowed to set either the lower interval bound to the minimum of the response scale ( _Y_ 1 = 0), the upper interval bound to the maxim",
-    "text_after": "In this case we have added a padding constant _c_ of 1%, assuming **_Y_** is on the unit scale, which effectively transforms former zero-components to be<sup><u>0</u></sup> 1<sup>_<u>.</u>_</sup> _._<",
-    "text_lead": "Let us assume we have our interval response in the compositi",
+    "text_before": "Either of the three components might be \u2026",
+    "text_after": "In this case we have added a padding con\u2026",
+    "text_lead": "Let us assume we have our interval respo\u2026",
     "heuristic": "formula"
   }
 ]
