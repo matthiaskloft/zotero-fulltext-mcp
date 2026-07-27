@@ -36,6 +36,52 @@ CROPS_DIR = TIER_DIR / "crops"            # tracked: extracted crops + geometry
 SOURCES = TIER_DIR / "sources.json"
 OSF_DOWNLOAD = "https://osf.io/{osf_id}/download"
 
+# How much of a neighbouring Markdown line the manifest keeps when a prefix will do.
+#
+# 40 is measured, not guessed, but it is an observed maximum rather than a proven bound -- and no
+# proof is available, because not every consumer is anchored. Sweeping the converted library
+# (2,101 documents, 125,154 crops) and recording how deep into a line each check has to read gives
+# a floor of 30, set by PICTURE_TEXT_MARKER; the next deepest is CAPTION_FIGURE_RE at 20.
+# Reclassifying every one of those crops against truncated context finds the same boundary from
+# the other side: widths 16-28 change 16k+ routings, 32 and above change none up to the widest
+# width swept (80).
+#
+# The marker is what makes 30 a floor and also what stops it being a guarantee: classify_crop tests
+# it with ``PICTURE_TEXT_MARKER in before``, a plain containment check with no anchor at all
+# (image_ocr.py). Its 30 characters bound the read only because pymupdf4llm emits the marker on a
+# line of its own -- true for all 27,220 occurrences in the sweep, but a property of the extractor's
+# output, not of the check. A marker starting at offset 11 or later would be cut in half here.
+# The ten characters of headroom over 30 are aimed squarely at that, and at CAPTION_FIGURE_RE,
+# whose _CAPTION_LEAD accepts arbitrary ``[\s*_#>]*`` before the label.
+CONTEXT_PREFIX_CHARS = 40
+
+# Appended to any line the projection cut. Truncation is not neutral for a check anchored at the
+# line *end*: cutting a line asserts "the line stops here", a claim about the source text that the
+# cut itself invented, and it can flip an end-anchored match in either direction. Measured on the
+# library, the committed ``[:200]`` rule already got 229 title decisions wrong that way -- 214
+# real titles it severed, and 15 stretches of prose it cut into looking like titles.
+#
+# The sentinel restores the distinction between "the line ended" and "we stopped copying". It only
+# has to be a character outside every end-anchored pattern's accepted trailing class
+# (CAPTION_TITLE_RE's ``_[.:]?$`` and CAPTION_LABEL_TAIL's ``[\s*_.:)\]]*$``), which makes a cut
+# line unable to satisfy either by accident.
+CONTEXT_TRUNCATED_MARK = "…"
+
+# Ceiling on the one branch that has to keep a whole line (see _project_context). The candidate
+# test -- "the line starts with an underscore" -- cannot miss a title, but on maths-heavy papers it
+# also admits body prose, because inline italic variables make an ordinary sentence *begin* with an
+# underscore ("_i_ = 1 _, . . . , I_ (number of respondents) to item _j_ ..."). Unbounded, that put
+# a 1,381-character methods paragraph in the manifest.
+#
+# 200 is the smallest bound that changed no routing anywhere in the library sweep (125,154 crops);
+# 150 and 100 each cost one crop. It clears every real caption title in the tier by a wide margin
+# -- the longest is 119 characters -- so here it truncates only the false candidates the
+# ``startswith`` test lets through. Unlike CONTEXT_PREFIX_CHARS this bound is not lossless by
+# construction, only by measurement; should a genuine title ever exceed it, the effect is a lost
+# figure routing rather than a wrong one, and ContextProjectionFidelityTests fails loudly on
+# regeneration instead of freezing the wrong answer.
+CONTEXT_TITLE_MAX_CHARS = 200
+
 
 def load_papers() -> dict:
     return json.loads(SOURCES.read_text(encoding="utf-8"))["papers"]
@@ -61,6 +107,58 @@ def fetch(key: str, meta: dict) -> Path:
     pdf.write_bytes(data)
     print(f"{key}: cached {len(data)} bytes")
     return pdf
+
+
+def _cut(line: str, width: int) -> str:
+    """A line prefix that admits to being one. See CONTEXT_TRUNCATED_MARK.
+
+    The width is always passed explicitly: the two call sites use different ones for reasons worth
+    reading at the call site rather than inferring from a default.
+
+    The mark is a one-way signal, not a decodable one -- a source line that genuinely ends in an
+    ellipsis stores identically to one cut here. Harmless, because both are non-matches for every
+    end-anchored check, which is all the mark has to guarantee.
+    """
+    return line[:width] + CONTEXT_TRUNCATED_MARK if len(line) > width else line
+
+
+def _project_context(before: str, after: str, lead: str) -> tuple[str, str, str]:
+    """Reduce the three neighbouring lines to just what classify_crop can read from them.
+
+    The manifest freezes the classifier's *inputs* so CI can re-run the current classifier offline
+    (see extract). That only works if a stored line answers every check exactly as the real line
+    would -- which a plain character cap does not, because one check is anchored at the line end.
+
+    Consumers fall into three groups, only one of which a prefix serves outright:
+
+      Read near the line start -- PICTURE_TEXT_MARKER, CAPTION_FIGURE_RE, CAPTION_TABLE_RE,
+      CAPTION_NOTE_RE. None was observed reading past CONTEXT_PREFIX_CHARS, so a marked prefix
+      stands in for the line and no prose beyond it need be kept.
+
+      Anchored at the line end, on text_before -- is_caption_title, whose CAPTION_TITLE_RE requires
+      the closing emphasis to *be* the end of the line. No prefix can answer for it, so a title
+      candidate is kept whole up to CONTEXT_TITLE_MAX_CHARS. ``startswith("_")`` is a deliberate
+      over-approximation: every line CAPTION_TITLE_RE can match starts with an underscore, so the
+      candidate set cannot miss one, and a non-title caught by it is merely stored longer than it
+      needed to be rather than misread.
+
+      Anchored at the line end, on text_lead -- CAPTION_TABLE_LABEL_RE, whose _CAPTION_LABEL_TAIL
+      ends in ``$``. This one is knowingly left to the prefix. Every label line that matched it in
+      the sweep was at most 18 characters, well inside the cut, but a longer one ("> > **Tabelle
+      12.**") would lose its match and take the figure prompt instead of the table prompt. That
+      direction is the safe one -- the sentinel guarantees a *lost* match rather than an invented
+      one, a figure keeps its image link where a table splice would replace content, and
+      ContextProjectionFidelityTests fails on regeneration rather than freezing the wrong answer.
+      Widening the cut would not close it either, since the anchor needs the whole line however
+      long it is; only a candidate branch like text_before's would, and no observed line needs it.
+
+    Dropping the title branch entirely would be simpler and would store no prose at all, but it
+    costs real accuracy: across the library sweep it moved 55 crops from the figure prompt to the
+    formula prompt, which replaces a plot's image link with LaTeX invented from it.
+    """
+    is_title_candidate = before.strip().startswith("_")
+    kept_before = _cut(before, CONTEXT_TITLE_MAX_CHARS if is_title_candidate else CONTEXT_PREFIX_CHARS)
+    return kept_before, _cut(after, CONTEXT_PREFIX_CHARS), _cut(lead, CONTEXT_PREFIX_CHARS)
 
 
 def extract(key: str, pdf: Path, montage: bool) -> int:
@@ -91,22 +189,21 @@ def extract(key: str, pdf: Path, montage: bool) -> int:
         for i, ref in enumerate(refs):
             gid = f"{key}_{i:02d}"
             (out / f"{gid}.png").write_bytes(ref.png_path.read_bytes())
+            # The three neighbouring Markdown lines are classify_crop's text signals (picture-text
+            # marker, caption label, caption block). Persisting them lets the CI harness rebuild a
+            # faithful CropRef and re-run the *current* classifier offline -- the benchmark freezes
+            # the classifier's inputs, not a stale prediction. See tests/test_benchmark_preprints.py.
+            # _project_context is what keeps "faithful" true while storing as little prose as the
+            # checks allow; a plain character cap does neither reliably.
+            before, after, lead = _project_context(
+                ref.text_before, ref.text_after, ref.text_lead
+            )
             geometry.append({
                 "id": gid, "width": ref.width, "height": ref.height,
                 "aspect": round(ref.aspect, 3), "complexity": round(ref.complexity, 4),
-                # The two neighbouring Markdown lines are classify_crop's text signals
-                # (picture-text marker, caption). Persisting them lets the CI harness rebuild a
-                # faithful CropRef and re-run the *current* classifier offline -- the benchmark
-                # freezes the classifier's inputs, not a stale prediction. See tests/
-                # test_benchmark_preprints.py. Kept short so no meaningful prose is redistributed.
-                "text_before": ref.text_before[:200],
-                "text_after": ref.text_after[:200],
-                # One line further back than text_before: where a caption label sits when the title
-                # displaces it. Most crops have ordinary prose here rather than a label, so this is
-                # truncated far harder than its neighbours -- the classifier only ever reads a
-                # line-start-anchored label from it, so a short prefix loses no signal while keeping
-                # each stored fragment too short to be a sentence from the source paper.
-                "text_lead": ref.text_lead[:60],
+                "text_before": before,
+                "text_after": after,
+                "text_lead": lead,
                 "heuristic": io.classify_crop(ref, has_math=True),
             })
         (out / "geometry.json").write_text(json.dumps(geometry, indent=2), encoding="utf-8")
