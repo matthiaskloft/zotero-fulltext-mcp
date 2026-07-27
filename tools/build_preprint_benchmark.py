@@ -36,18 +36,23 @@ CROPS_DIR = TIER_DIR / "crops"            # tracked: extracted crops + geometry
 SOURCES = TIER_DIR / "sources.json"
 OSF_DOWNLOAD = "https://osf.io/{osf_id}/download"
 
-# How much of a neighbouring Markdown line the manifest keeps. Every classifier check that reads
-# these lines is anchored at the line *start*, so a prefix is all that has to survive -- with one
-# exception handled by _project_context below.
+# How much of a neighbouring Markdown line the manifest keeps when a prefix will do.
 #
-# 40 is not a guess. Sweeping the converted library (2,101 documents, 125,154 crops) and recording
-# where each anchored match ends gives a hard floor of 30, set by the length of
-# PICTURE_TEXT_MARKER; the next deepest consumer is CAPTION_FIGURE_RE at 20. Reclassifying every
-# one of those crops against truncated context confirms the same boundary from the other side:
-# widths 16-28 change 16k+ routings, 32 and above change none. 40 leaves ten characters of
-# headroom over the floor rather than sitting on the cliff edge, because _CAPTION_LEAD accepts
-# arbitrary ``[\s*_#>]*`` -- an indented or blockquoted marker would push its extent past 30, and
-# no width above 40 buys any further correctness.
+# 40 is measured, not guessed, but it is an observed maximum rather than a proven bound -- and no
+# proof is available, because not every consumer is anchored. Sweeping the converted library
+# (2,101 documents, 125,154 crops) and recording how deep into a line each check has to read gives
+# a floor of 30, set by PICTURE_TEXT_MARKER; the next deepest is CAPTION_FIGURE_RE at 20.
+# Reclassifying every one of those crops against truncated context finds the same boundary from
+# the other side: widths 16-28 change 16k+ routings, 32 and above change none up to the widest
+# width swept (80).
+#
+# The marker is what makes 30 a floor and also what stops it being a guarantee: classify_crop tests
+# it with ``PICTURE_TEXT_MARKER in before``, a plain containment check with no anchor at all
+# (image_ocr.py). Its 30 characters bound the read only because pymupdf4llm emits the marker on a
+# line of its own -- true for all 27,220 occurrences in the sweep, but a property of the extractor's
+# output, not of the check. A marker starting at offset 11 or later would be cut in half here.
+# The ten characters of headroom over 30 are aimed squarely at that, and at CAPTION_FIGURE_RE,
+# whose _CAPTION_LEAD accepts arbitrary ``[\s*_#>]*`` before the label.
 CONTEXT_PREFIX_CHARS = 40
 
 # Appended to any line the projection cut. Truncation is not neutral for a check anchored at the
@@ -70,8 +75,9 @@ CONTEXT_TRUNCATED_MARK = "…"
 #
 # 200 is the smallest bound that changed no routing anywhere in the library sweep (125,154 crops);
 # 150 and 100 each cost one crop. It clears every real caption title in the tier by a wide margin
-# -- the longest is 119 characters -- so the bound only ever truncates the false candidates the
-# ``startswith`` test lets through. Should a genuine title ever exceed it, the effect is a lost
+# -- the longest is 119 characters -- so here it truncates only the false candidates the
+# ``startswith`` test lets through. Unlike CONTEXT_PREFIX_CHARS this bound is not lossless by
+# construction, only by measurement; should a genuine title ever exceed it, the effect is a lost
 # figure routing rather than a wrong one, and ContextProjectionFidelityTests fails loudly on
 # regeneration instead of freezing the wrong answer.
 CONTEXT_TITLE_MAX_CHARS = 200
@@ -103,8 +109,16 @@ def fetch(key: str, meta: dict) -> Path:
     return pdf
 
 
-def _cut(line: str, width: int = CONTEXT_PREFIX_CHARS) -> str:
-    """A line prefix that admits to being one. See CONTEXT_TRUNCATED_MARK."""
+def _cut(line: str, width: int) -> str:
+    """A line prefix that admits to being one. See CONTEXT_TRUNCATED_MARK.
+
+    The width is always passed explicitly: the two call sites use different ones for reasons worth
+    reading at the call site rather than inferring from a default.
+
+    The mark is a one-way signal, not a decodable one -- a source line that genuinely ends in an
+    ellipsis stores identically to one cut here. Harmless, because both are non-matches for every
+    end-anchored check, which is all the mark has to guarantee.
+    """
     return line[:width] + CONTEXT_TRUNCATED_MARK if len(line) > width else line
 
 
@@ -115,26 +129,36 @@ def _project_context(before: str, after: str, lead: str) -> tuple[str, str, str]
     (see extract). That only works if a stored line answers every check exactly as the real line
     would -- which a plain character cap does not, because one check is anchored at the line end.
 
-    Two kinds of consumer, handled differently:
+    Consumers fall into three groups, only one of which a prefix serves outright:
 
-      Anchored at the line start -- PICTURE_TEXT_MARKER, CAPTION_FIGURE_RE, CAPTION_TABLE_RE,
-      CAPTION_NOTE_RE, CAPTION_TABLE_LABEL_RE's head. None can read past CONTEXT_PREFIX_CHARS, so
-      a marked prefix is a faithful stand-in and no prose beyond it need be kept.
+      Read near the line start -- PICTURE_TEXT_MARKER, CAPTION_FIGURE_RE, CAPTION_TABLE_RE,
+      CAPTION_NOTE_RE. None was observed reading past CONTEXT_PREFIX_CHARS, so a marked prefix
+      stands in for the line and no prose beyond it need be kept.
 
-      Anchored at the line end -- is_caption_title, whose CAPTION_TITLE_RE requires the closing
-      emphasis to *be* the end of the line. No prefix can answer for it, so a title candidate is
-      kept whole up to CONTEXT_TITLE_MAX_CHARS. ``startswith("_")`` is a deliberate
+      Anchored at the line end, on text_before -- is_caption_title, whose CAPTION_TITLE_RE requires
+      the closing emphasis to *be* the end of the line. No prefix can answer for it, so a title
+      candidate is kept whole up to CONTEXT_TITLE_MAX_CHARS. ``startswith("_")`` is a deliberate
       over-approximation: every line CAPTION_TITLE_RE can match starts with an underscore, so the
       candidate set cannot miss one, and a non-title caught by it is merely stored longer than it
       needed to be rather than misread.
+
+      Anchored at the line end, on text_lead -- CAPTION_TABLE_LABEL_RE, whose _CAPTION_LABEL_TAIL
+      ends in ``$``. This one is knowingly left to the prefix. Every label line that matched it in
+      the sweep was at most 18 characters, well inside the cut, but a longer one ("> > **Tabelle
+      12.**") would lose its match and take the figure prompt instead of the table prompt. That
+      direction is the safe one -- the sentinel guarantees a *lost* match rather than an invented
+      one, a figure keeps its image link where a table splice would replace content, and
+      ContextProjectionFidelityTests fails on regeneration rather than freezing the wrong answer.
+      Widening the cut would not close it either, since the anchor needs the whole line however
+      long it is; only a candidate branch like text_before's would, and no observed line needs it.
 
     Dropping the title branch entirely would be simpler and would store no prose at all, but it
     costs real accuracy: across the library sweep it moved 55 crops from the figure prompt to the
     formula prompt, which replaces a plot's image link with LaTeX invented from it.
     """
     is_title_candidate = before.strip().startswith("_")
-    kept_before = _cut(before, CONTEXT_TITLE_MAX_CHARS) if is_title_candidate else _cut(before)
-    return kept_before, _cut(after), _cut(lead)
+    kept_before = _cut(before, CONTEXT_TITLE_MAX_CHARS if is_title_candidate else CONTEXT_PREFIX_CHARS)
+    return kept_before, _cut(after, CONTEXT_PREFIX_CHARS), _cut(lead, CONTEXT_PREFIX_CHARS)
 
 
 def extract(key: str, pdf: Path, montage: bool) -> int:

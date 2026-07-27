@@ -29,12 +29,28 @@ Regenerate the tier (needs the cached PDFs) with tools/build_preprint_benchmark.
 """
 
 import json
+import sys
 import unittest
 from pathlib import Path
 
-from zotero_pdf_text.image_ocr import CLASS_FORMULA, classify_crop
+from zotero_pdf_text.image_ocr import (
+    CAPTION_TABLE_LABEL_RE,
+    CLASS_FORMULA,
+    PICTURE_TEXT_MARKER,
+    classify_crop,
+    is_caption_title,
+)
 
 from scoring import TIER_ROOT, load_tier, one_to_one_problems, score
+
+# The builder is a tool, not a package: tools/ is not on the import path the way src/ is.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
+from build_preprint_benchmark import (  # noqa: E402
+    CONTEXT_PREFIX_CHARS,
+    CONTEXT_TITLE_MAX_CHARS,
+    CONTEXT_TRUNCATED_MARK,
+    _project_context,
+)
 
 PREPRINT_LABELS = json.loads(
     (TIER_ROOT / "preprints" / "labels.json").read_text(encoding="utf-8")
@@ -103,6 +119,68 @@ class PreprintClassificationTests(unittest.TestCase):
         )
 
 
+class ContextProjectionRuleTests(unittest.TestCase):
+    """Pin _project_context's semantics directly, independent of what the tier happens to hold.
+
+    ContextProjectionFidelityTests only exercises the rule through the committed manifests, and
+    those contain no truncated *genuine* caption title, no mid-line picture marker and no table
+    label at all -- so the cases most likely to break are exactly the ones it cannot see.
+    """
+
+    def test_a_short_line_is_stored_untouched(self):
+        before, after, lead = _project_context("Figure 1", "_Note._ Values are means.", "intro")
+        self.assertEqual(before, "Figure 1")
+        self.assertEqual(after, "_Note._ Values are means.")
+        self.assertEqual(lead, "intro")
+
+    def test_a_long_non_candidate_is_cut_to_the_prefix_and_marked(self):
+        line = "The estimator is consistent under the stated regularity conditions, and " * 3
+        before, _, _ = _project_context(line, "", "")
+        self.assertEqual(before, line[:CONTEXT_PREFIX_CHARS] + CONTEXT_TRUNCATED_MARK)
+        self.assertLess(len(before), len(line))
+
+    def test_a_title_candidate_survives_past_the_prefix(self):
+        title = "_" + "Estimated Consensus Intervals for Verbal Quantifiers" + "_"
+        self.assertGreater(len(title), CONTEXT_PREFIX_CHARS)
+        before, _, _ = _project_context(title, "", "")
+        self.assertEqual(before, title)
+        self.assertTrue(
+            is_caption_title(before),
+            "a caption title must still read as one after projection, or the caption-block rule "
+            "cannot be replayed offline",
+        )
+
+    def test_a_title_candidate_is_still_bounded(self):
+        runaway = "_" + "x" * (CONTEXT_TITLE_MAX_CHARS * 2) + "_"
+        before, _, _ = _project_context(runaway, "", "")
+        self.assertEqual(len(before), CONTEXT_TITLE_MAX_CHARS + len(CONTEXT_TRUNCATED_MARK))
+        self.assertFalse(
+            is_caption_title(before),
+            "a cut line must not still satisfy the end anchor -- that is what the mark prevents",
+        )
+
+    def test_the_mark_cannot_manufacture_an_end_anchored_match(self):
+        """The failure the sentinel exists to stop: a cut landing where prose looks like a label."""
+        prose = "Table 1 shows the coefficients for every condition in the design."
+        self.assertFalse(CAPTION_TABLE_LABEL_RE.search(prose))
+        self.assertTrue(
+            CAPTION_TABLE_LABEL_RE.search(prose[:8]),
+            "precondition: an unmarked cut at 8 chars really does fake a table label",
+        )
+        _, _, lead = _project_context("", "", prose)
+        self.assertFalse(
+            CAPTION_TABLE_LABEL_RE.search(lead),
+            f"projection manufactured a table label out of running prose: {lead!r}",
+        )
+
+    def test_a_picture_marker_on_its_own_line_survives(self):
+        """The marker is an unanchored containment test; the prefix only covers it because
+        pymupdf4llm emits it alone on a line. Pin the case the manifest relies on."""
+        self.assertLessEqual(len(PICTURE_TEXT_MARKER), CONTEXT_PREFIX_CHARS)
+        _, after, _ = _project_context("", PICTURE_TEXT_MARKER, "")
+        self.assertIn(PICTURE_TEXT_MARKER, after)
+
+
 class ContextProjectionFidelityTests(unittest.TestCase):
     """The manifest stores only as much of each neighbouring line as classify_crop can read.
 
@@ -121,17 +199,30 @@ class ContextProjectionFidelityTests(unittest.TestCase):
             for entry in json.loads(path.read_text(encoding="utf-8")):
                 geometry[f"{path.parent.name}/{entry['id']}.png"] = entry
 
-        missing = [c.key for c in load_tier("preprints") if c.key not in geometry]
+        crops = load_tier("preprints")
+        missing = [c.key for c in crops if c.key not in geometry]
         self.assertFalse(missing, f"crops absent from geometry manifests: {missing}")
 
         drift = []
-        for crop in load_tier("preprints"):
+        compared = 0
+        for crop in crops:
             recorded = geometry[crop.key].get("heuristic")
             if recorded is None:
-                continue  # manifest predates the field; regenerate to gain the check
+                continue  # manifest predates the field; the count assertion below catches a gap
+            compared += 1
             replayed = classify_crop(crop.ref, has_math=True)
             if replayed != recorded:
                 drift.append((crop.key, recorded, replayed))
+
+        # Without this the test is one dropped/renamed field away from passing vacuously: every
+        # entry would skip, drift would stay empty, and the projection would go unchecked while
+        # reporting green. The comparison must cover the whole tier, not merely find no mismatch.
+        self.assertEqual(
+            compared, len(crops),
+            f"only {compared} of {len(crops)} crops carry a 'heuristic' to compare against; the "
+            "fidelity check is not covering the tier. Regenerate with "
+            "tools/build_preprint_benchmark.py.",
+        )
 
         self.assertFalse(
             drift,
