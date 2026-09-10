@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 from zotero_pdf_text.fts import (
     ChunkNotFoundError,
+    DuplicateAttachmentKeyError,
     StaleLocatorError,
     check_chunk_freshness,
     check_locator_freshness,
@@ -581,6 +582,96 @@ class FtsTests(unittest.TestCase):
                 get_item_context(sqlite_db)
             with self.assertRaises(ValueError):
                 get_item_context(sqlite_db, parent_key="SHARED_PARENT", attachment_key="ATTACH0")
+
+
+class DuplicateAttachmentKeyTests(unittest.TestCase):
+    """A duplicate key must stop the build, and must not damage the index already in place.
+
+    `get_fulltext` resolves an attachment to exactly one metadata row, so two rows sharing a key
+    would make it return an arbitrary one -- silently, and differently depending on row order.
+    The guard exists for that; these tests are what hold it there.
+    """
+
+    def _records(self) -> list[dict]:
+        return [
+            {
+                "zotero_parent_key": "PARENT1",
+                "zotero_attachment_key": "ATTACH1",
+                "title": "First",
+                "creators": "Jane Smith",
+                "year": "2024",
+                "doi": "",
+                "citation_key": "first2024",
+                "source_path": "one.pdf",
+                "markdown_path": "one.md",
+                "markdown_sha256": "abc",
+                "extraction_tool": "pymupdf4llm.to_markdown",
+                "char_count": 20,
+                "word_count": 4,
+                "page_count": "1",
+                "classification": "mapped_verified",
+                "identity_status": "verified",
+                "identity_rule": "doi_exact",
+                "has_math": False,
+                "text": "Consensus modelling of shared knowledge.",
+            }
+        ]
+
+    def _write(self, path: Path, records: list[dict]) -> None:
+        path.write_text(
+            "".join(json.dumps(record) + "\n" for record in records), encoding="utf-8"
+        )
+
+    def test_duplicate_key_is_rejected_with_an_actionable_message(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            jsonl = root / "index.jsonl"
+            duplicated = self._records()
+            duplicated.append(dict(duplicated[0], title="Second", markdown_path="two.md"))
+            self._write(jsonl, duplicated)
+
+            with self.assertRaises(DuplicateAttachmentKeyError) as caught:
+                build_fts_index(jsonl, root / "index.sqlite")
+
+            message = str(caught.exception)
+            self.assertIn("ATTACH1", message)
+            # The guard is only useful if it says how to resolve the duplicate it found.
+            self.assertIn("find-duplicate-attachments", message)
+
+    def test_rejected_rebuild_leaves_the_published_index_queryable(self):
+        """The rejection happens mid-build, so the previous index must survive it untouched."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            jsonl = root / "index.jsonl"
+            sqlite_db = root / "index.sqlite"
+            self._write(jsonl, self._records())
+            build_fts_index(jsonl, sqlite_db)
+            self.assertTrue(search_fts(sqlite_db, "consensus", limit=1))
+            published_bytes = sqlite_db.read_bytes()
+
+            duplicated = self._records()
+            duplicated.append(dict(duplicated[0], title="Second"))
+            self._write(jsonl, duplicated)
+            with self.assertRaises(DuplicateAttachmentKeyError):
+                build_fts_index(jsonl, sqlite_db)
+
+            self.assertEqual(sqlite_db.read_bytes(), published_bytes)
+            self.assertTrue(search_fts(sqlite_db, "consensus", limit=1))
+            # A failed build must not leave its scratch database behind either.
+            self.assertEqual(list(root.glob(".index.sqlite.tmp-*")), [])
+
+    def test_blank_attachment_keys_do_not_collide_with_each_other(self):
+        """Only real keys are deduplicated; the guard skips empty ones rather than merging them."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            jsonl = root / "index.jsonl"
+            keyless = [
+                dict(self._records()[0], zotero_attachment_key="", citation_key="a2024"),
+                dict(self._records()[0], zotero_attachment_key="", citation_key="b2024"),
+            ]
+            self._write(jsonl, keyless)
+            summary = build_fts_index(jsonl, root / "index.sqlite")
+            self.assertEqual(summary.records, 2)
 
 
 class LocatorFreshnessTests(unittest.TestCase):

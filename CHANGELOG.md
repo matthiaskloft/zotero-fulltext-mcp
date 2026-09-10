@@ -40,6 +40,28 @@ All notable changes to this project are documented here. Format loosely follows
   verify something. No schema change and no rebuild: `chunks.text` is already stored, so the hash is
   derived at read time, computed inside the query that already reads stored text for the rows a
   search actually returns.
+- Adversarial and containment tests over the guards that protect derived artifacts
+  (`tests/test_containment.py`, plus additions to `tests/test_lock.py`, `tests/test_fts.py` and
+  `tests/test_mcp_server.py`). Surveying first showed query-size limits, untrusted instruction text
+  and attachment-key validation were already covered, so this adds only what was not. Three gaps
+  had no coverage at all. Duplicate attachment keys: the build refuses them because two rows sharing
+  a key would make retrieval return an arbitrary one, and the tests now also pin that a rejected
+  rebuild leaves the previously published index byte-identical and queryable, since the refusal
+  happens mid-build. Lock ownership: twelve threads released from one barrier contend for the write
+  lock and exactly one proceeds, which is the atomicity a sequential acquire-then-refuse test cannot
+  observe, alongside the retry branch for a holder that vanishes between a failed create and the
+  read of its file, and proof that a live holder's lock is never overwritten. Tampered index
+  pointers reaching MCP reads: `index_pointer_invalid` had no test in either of the two places it is
+  raised, so hostile `current.json` values are now driven through the tool boundary and asserted to
+  answer that stable code while leaking no local path -- the internal artifact error contains
+  absolute paths, and the redaction was previously an untested claim -- and a repaired pointer is
+  shown to recover without restarting the server, since resolution happens per request.
+  Containment itself is tested through `resolve_generation_dir` against traversal, separator,
+  absolute, UNC, NUL and newline identifiers, including with the escape target present and readable
+  so that refusal cannot be an accident of a missing path. One boundary is pinned as a known limit
+  rather than left as an assumed guarantee: replacing `generations/` itself with a symlink is not
+  caught, because the check resolves both sides and they still match. Symlink cases skip where the
+  platform refuses to create one, so they run on CI's Linux and macOS legs.
 
 
 - `ocr-images --key <ATTACHMENT_KEY>`: recover the equations, tables and figure content that

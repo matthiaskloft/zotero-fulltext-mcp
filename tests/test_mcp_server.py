@@ -1015,3 +1015,92 @@ def _write_config(path: Path, config: ProjectConfig) -> None:
         ),
         encoding="utf-8",
     )
+
+
+class TamperedPointerMcpReadTests(unittest.TestCase):
+    """The pointer is untrusted input, and a tool boundary must not leak while rejecting it.
+
+    `current.json` is an ordinary file: a sync client, an editor, or a user can rewrite it. When it
+    names something unresolvable, the internal artifact error carries local absolute paths, so the
+    boundary has to answer a stable public code and drop the diagnostic. Both halves matter --
+    a leaked path tells a caller where this library lives on disk.
+    """
+
+    def _managed_index(self, root: Path) -> Path:
+        _, sqlite_path, _ = _build_index(root)
+        return sqlite_path
+
+    def test_traversal_pointer_answers_a_public_code_without_leaking_paths(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "library"
+            sqlite_path = self._managed_index(root)
+            server = create_server(sqlite_path, mcp_factory=FakeFastMCP)
+            self.assertTrue(server.tools["search_fulltext"]("searchable")["results"])
+
+            (sqlite_path.parent / "current.json").write_text(
+                json.dumps({"current_generation": "../../evil"}), encoding="utf-8"
+            )
+
+            for tool, call in (
+                ("search_fulltext", lambda: server.tools["search_fulltext"]("searchable")),
+                ("get_fulltext_chunk", lambda: server.tools["get_fulltext_chunk"]("ATTACH1")),
+                ("get_item_context", lambda: server.tools["get_item_context"](attachment_key="ATTACH1")),
+            ):
+                with self.subTest(tool=tool):
+                    with self.assertRaises(PublicMcpError) as raised:
+                        call()
+                    self.assertEqual(raised.exception.code, "index_pointer_invalid")
+                    message = str(raised.exception)
+                    self.assertNotIn(tmp, message)
+                    self.assertNotIn("evil", message)
+                    self.assertNotIn("current.json", message)
+                    self.assertIn("rebuild-index", message)
+
+    def test_a_range_of_hostile_pointers_all_answer_the_same_public_code(self):
+        """No pointer value may produce a raw OSError, a SQLite error, or a wrong database."""
+        hostile = [
+            {"current_generation": "../../evil"},
+            {"current_generation": ""},
+            {"current_generation": None},
+            {"current_generation": 17},
+            {"current_generation": "generations/../../escape"},
+            {"current_generation": r"\\server\share"},
+            {"current_generation": "C:\\Windows"},
+            {"missing_key": True},
+        ]
+        for pointer in hostile:
+            with self.subTest(pointer=pointer):
+                with tempfile.TemporaryDirectory() as tmp:
+                    root = Path(tmp) / "library"
+                    sqlite_path = self._managed_index(root)
+                    server = create_server(sqlite_path, mcp_factory=FakeFastMCP)
+                    (sqlite_path.parent / "current.json").write_text(
+                        json.dumps(pointer), encoding="utf-8"
+                    )
+                    with self.assertRaises(PublicMcpError) as raised:
+                        server.tools["search_fulltext"]("searchable")
+                    self.assertEqual(raised.exception.code, "index_pointer_invalid")
+                    self.assertNotIn(tmp, str(raised.exception))
+
+    def test_repointing_at_a_valid_generation_recovers_without_a_restart(self):
+        """Rejection must be per-request state, not a latched failure.
+
+        _resolve_request_db resolves per request precisely so a server survives a pointer being
+        repaired underneath it; if a tampered pointer poisoned the process, fixing the file would
+        require restarting every connected client.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "library"
+            sqlite_path = self._managed_index(root)
+            server = create_server(sqlite_path, mcp_factory=FakeFastMCP)
+            pointer_path = sqlite_path.parent / "current.json"
+            good_pointer = pointer_path.read_text(encoding="utf-8")
+
+            pointer_path.write_text(
+                json.dumps({"current_generation": "../../evil"}), encoding="utf-8"
+            )
+            with self.assertRaises(PublicMcpError):
+                server.tools["search_fulltext"]("searchable")
+
+            pointer_path.write_text(good_pointer, encoding="utf-8")
+            self.assertTrue(server.tools["search_fulltext"]("searchable")["results"])
