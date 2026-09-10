@@ -65,8 +65,12 @@ as primary library records.
   context over converted Markdown. It never launches Zotero or exposes local paths; returned
   library material is labelled untrusted. Search results identify the fields that matched, and
   search/passage locators bind attachment/chunk/character identity to the converted Markdown
-  SHA-256. Exact passage reads expose bounded chunk navigation and distinguish the returned span
-  from a larger stored chunk; leading previews are explicitly not exact chunk cursors. Listing
+  SHA-256 and to a per-chunk SHA-256 derived at read time. Those hashes are not only descriptive:
+  passing one back to `get_fulltext_chunk` has it verified against the index, and a passage
+  replaced since the locator was issued answers `stale_locator` rather than returning different
+  text under a citation the caller already formed. Exact passage reads expose bounded chunk
+  navigation and distinguish the returned span from a larger stored chunk; leading previews are
+  explicitly not exact chunk cursors, and carry no chunk hash because they span several. Listing
   timeout candidates (`list_timeout_candidates`) and orphan-parent candidates
   (`list_orphan_candidates`) is always available and read-only; both identify the underlying PDF
   by hash/attachment key rather than local path, and neither tool ever triggers discovery,

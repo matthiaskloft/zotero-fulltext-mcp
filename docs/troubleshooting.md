@@ -43,6 +43,38 @@ This snapshots the current (or legacy) JSONL sidecar into a validated generation
 repoints `current.json` at it. A corrupt/hand-edited `current.json` is never silently ignored in
 favor of stale data — readers fail loudly until a valid generation is re-published.
 
+## MCP Retrieval Reports `stale_locator`
+
+A locator carries the hash of the converted text its offsets were measured against.
+`get_fulltext_chunk` answers `stale_locator` when that text has been replaced since the locator
+was issued -- by `ocr-images`, `reconvert-math`, or an ordinary reconversion of that attachment.
+
+Unlike the errors above, **nothing is broken and there is nothing to repair.** The index is
+healthy; the cited passage simply no longer exists in the form it was cited. Search again for that
+attachment and use the fresh locator the hit returns. There is no command to run.
+
+Refusal is deliberate: retrieving the chunk at the same index out of replaced content would return
+different text under a citation already formed, and no later check could detect that. If a caller
+does not need the guarantee, omitting the hash retrieves unverified.
+
+Two things make this fire more often than expected:
+
+- **Document-level over-refusal.** `content_sha256` covers the whole converted document, so any
+  reconversion invalidates locators into *all* of its chunks, including passages that did not
+  change. Pass `chunk_sha256` instead -- it refuses only the passage that actually changed.
+- **A locator held across a rebuild.** An ordinary `rebuild-index` from unchanged Markdown changes
+  neither hash: chunking parameters are inherited from the current generation, so chunk boundaries
+  and therefore chunk hashes are reproduced exactly. Passing `--chunk-chars` or `--overlap-chars`
+  is the exception — it re-chunks the same text, so chunk hashes may change while `content_sha256`
+  stays the same. Not all of them necessarily do: an overlap-only change leaves the first chunk
+  untouched, and a document short enough to be a single chunk stays identical.
+
+  Search again and use the new locator. **Do not fall back to `content_sha256` here.** An unchanged
+  document hash verifies the document's content, but it does not validate an old `chunk_index`
+  after re-chunking: the same index can now select a different passage, and the document hash will
+  accept it. That is the failure this verification exists to prevent, so the refusal is the correct
+  answer even though the document text never changed.
+
 ## Fresh Build Cannot Import the Converter or PDF Dependencies
 
 Use the project environment configured as `$python`, not a system Python, a generic assistant

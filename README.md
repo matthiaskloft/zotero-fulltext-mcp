@@ -301,8 +301,9 @@ endpoints, exception representations, or traceback. A disabled optional tool is 
 tool list and therefore uses the MCP client's ordinary unknown-tool behavior.
 
 A typical evidence workflow is: search, inspect `matched_fields`, retrieve the returned
-`source_locator.chunk_index`, then cite the human-readable title/creator/year/DOI (or citation key)
-while retaining the locator for traceability. The attachment key is a retrieval handle, not a
+`source_locator.chunk_index` while passing its `chunk_sha256` so the passage is verified to be the
+one the hit contained, then cite the human-readable title/creator/year/DOI (or citation key) while
+retaining the locator for traceability. The attachment key is a retrieval handle, not a
 bibliographic citation.
 
 ## Companion MCP server: pairing with the official Zotero MCP

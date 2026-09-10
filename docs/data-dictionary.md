@@ -312,8 +312,8 @@ MCP search, passage, and context results never include `source_path` or `markdow
 record containing converted-paper material carries a `provenance` object with
 `content_trust: "untrusted_source"`, `source_kind: "converted_pdf"`, attachment key, extraction
 tool, classification, and identity status. Search and passage results also include a stable
-`source_locator` with `attachment_key`, `content_sha256`, `chunk_index`, `char_start`, `char_end`,
-`truncated`, `stored_chunk_char_start`, and `stored_chunk_char_end`. `content_sha256` is the
+`source_locator` with `attachment_key`, `content_sha256`, `chunk_sha256`, `chunk_index`,
+`char_start`, `char_end`, `truncated`, `stored_chunk_char_start`, and `stored_chunk_char_end`. `content_sha256` is the
 converted Markdown SHA-256: it detects changed content after reconversion or rebuild but is not an
 index-generation identifier or a PDF-page locator.
 
@@ -327,7 +327,11 @@ compared against what the index holds now, and a mismatch answers `stale_locator
 retrieving the chunk. `chunk_sha256` requires an exact `chunk_index` and is the precise check —
 it refuses only when the cited passage itself was replaced. `content_sha256` covers the whole
 converted document, so it also refuses locators into chunks whose text did not change; supplying a
-chunk hash therefore takes precedence and the document hash is not additionally enforced. What a
+chunk hash therefore takes precedence and the document hash is not additionally enforced. It is
+also the weaker check in a way that matters: it verifies document content, not the meaning of a
+`chunk_index`. Re-chunking the same text -- `rebuild-index --chunk-chars`/`--overlap-chars` --
+moves chunk boundaries while leaving `content_sha256` identical, so an old index can select a
+different passage and the document hash will accept it. Only `chunk_sha256` refuses that. What a
 chunk hash guarantees is textual rather than positional: the passage returned is the passage cited,
 while the surrounding document may have shifted, which is why character offsets in the response are
 always the current ones rather than the request's. Verification is opt-in — a caller that omits both
