@@ -76,10 +76,13 @@ after changing `pyproject.toml` dependencies; commit the updated lockfile in the
 1. Update `CHANGELOG.md`: move relevant `[Unreleased]` entries under a new `## [X.Y.Z] - YYYY-MM-DD`
    heading, and add the corresponding link reference at the bottom of the file.
 2. Bump `version` in `pyproject.toml` to match.
-3. Run `uv lock` if dependencies changed since the last release; commit the updated `uv.lock`.
-4. Once merged to `master` and CI is green, tag the release and push the tag:
+3. Update the pinned install tag in `README.md` (the `git+https://…@vX.Y.Z` line). README
+   tells users to install a pinned tag rather than `HEAD`, so that pin is part of the release
+   artifact — leaving it stale points every new installer at the previous version.
+4. Run `uv lock` if dependencies changed since the last release; commit the updated `uv.lock`.
+5. Once merged to `master` and CI is green, tag the release and push the tag:
    `git tag vX.Y.Z && git push origin vX.Y.Z`.
-5. Anyone not actively developing this project should install a pinned tag rather than `HEAD` —
+6. Anyone not actively developing this project should install a pinned tag rather than `HEAD` —
    see README's install section for the exact command.
 
 ## Implementation Guidelines

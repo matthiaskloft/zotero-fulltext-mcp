@@ -7,6 +7,7 @@ All notable changes to this project are documented here. Format loosely follows
 
 ### Added
 
+
 - `ocr-images --key <ATTACHMENT_KEY>`: recover the equations, tables and figure content that
   conversion left stranded in extracted PNGs. `pymupdf4llm` pulls vector-drawn display equations
   out of a PDF into their own crop files and leaves an opaque `![](…png)` placeholder behind, so
@@ -134,6 +135,15 @@ All notable changes to this project are documented here. Format loosely follows
   provenance label such as `pymupdf4llm.to_markdown+glm-ocr` is recognised while an unknown
   extractor still warns.
 
+## [0.3.0] - 2026-09-10
+
+Hardening and installability release: transactional index generations, a read-only-by-default
+MCP surface with native schemas and safety hints, timeout and orphan-PDF triage workflows, and
+identity-classification precision fixes. Local image OCR (`ocr-images`) is present but
+unreleased and unannounced -- it ships under its own later tag once stress-tested.
+
+### Added
+
 - Transactional derived-index artifacts (hardening-plan Package 2, reduced scope): the JSONL
   sidecar and SQLite FTS database are now published together as immutable, checksummed *index
   generations* under `<output_root>/index/generations/<id>/`, behind a single atomically replaced
@@ -148,17 +158,6 @@ All notable changes to this project are documented here. Format loosely follows
   next to the configured `--db` path, which now acts purely as the index-root anchor, so
   existing registrations keep working unchanged after the one-time migration. There is no
   legacy standalone-database fallback: an unmigrated root fails loudly naming `rebuild-index`.
-- Index builds now reject duplicate `zotero_attachment_key` values with an actionable error
-  (previously a duplicate silently made full-text retrieval return an arbitrary row), and
-  readers detect a foreign/legacy SQLite schema and name the `rebuild-index` recovery command
-  instead of surfacing a low-level "no such table" error (`index_schema_unsupported`, and
-  `index_pointer_invalid` for a corrupt/tampered pointer, as MCP startup/tool error codes).
-
-- Conversion timeouts now scale with page count and a cheap vector-drawing-density scan (long or
-  diagram-dense books no longer lose structure/images to the plain-text fallback needlessly), and
-  every genuine primary-extractor timeout is recorded as a "timeout candidate" (per-run
-  `timeout_candidates.csv`/`.jsonl` plus a persistent, deduped master file) instead of only a manifest
-  `error` note.
 - New `retry-timeout` CLI command resolves a pending timeout candidate: `--skip` permanently routes
   that attachment straight to the plain-text fallback (recorded in `timeout_skip_list.json`, not
   hardcoded in source), or `--retry` reconverts it with a longer budget and promotes a successful
@@ -185,6 +184,12 @@ All notable changes to this project are documented here. Format loosely follows
   `list_timeout_candidates` for this workflow.
 
 ### Changed
+
+- Conversion timeouts now scale with page count and a cheap vector-drawing-density scan (long or
+  diagram-dense books no longer lose structure/images to the plain-text fallback needlessly), and
+  every genuine primary-extractor timeout is recorded as a "timeout candidate" (per-run
+  `timeout_candidates.csv`/`.jsonl` plus a persistent, deduped master file) instead of only a manifest
+  `error` note.
 
 - **Removed** `build-index`, `append-index`, and `build-fts` (and their `indexer.py` writer
   functions): each could publish a half-updated index (JSONL and SQLite replaced separately).
@@ -225,6 +230,13 @@ All notable changes to this project are documented here. Format loosely follows
   in `identity.py` as a single shared helper; `math_ocr.py` was updated to import it from there too.
 
 ### Fixed
+
+- Index builds now reject duplicate `zotero_attachment_key` values with an actionable error
+  (previously a duplicate silently made full-text retrieval return an arbitrary row), and
+  readers detect a foreign/legacy SQLite schema and name the `rebuild-index` recovery command
+  instead of surfacing a low-level "no such table" error (`index_schema_unsupported`, and
+  `index_pointer_invalid` for a corrupt/tampered pointer, as MCP startup/tool error codes).
+
 
 - `classify_identity` no longer lets an embedded Markdown image filename (e.g.
   `![](.../A-Candidate-Title.png)`) inflate `title_score` into false-positive full-text evidence;
@@ -281,5 +293,6 @@ author's own machine.
 
 Initial import of the Zotero full-text conversion pipeline, CLI, and MCP server. Not tagged.
 
-[Unreleased]: https://github.com/matthiaskloft/zotero-fulltext-mcp/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/matthiaskloft/zotero-fulltext-mcp/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.3.0
 [0.2.0]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.2.0

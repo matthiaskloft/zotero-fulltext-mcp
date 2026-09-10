@@ -31,7 +31,7 @@ floating `HEAD` — a tag is a known-good, CI-verified snapshot; `HEAD` on `mast
 mid-change:
 
 ```powershell
-C:\Users\you\.venvs\zotero_fulltext_mcp\Scripts\python.exe -m pip install "git+https://github.com/matthiaskloft/zotero-fulltext-mcp@v0.2.0#egg=zotero-fulltext-mcp[mcp]"
+C:\Users\you\.venvs\zotero_fulltext_mcp\Scripts\python.exe -m pip install "git+https://github.com/matthiaskloft/zotero-fulltext-mcp@v0.3.0#egg=zotero-fulltext-mcp[mcp]"
 ```
 
 Substitute the latest tag from the
@@ -64,7 +64,12 @@ needed for `reconvert-math` and the opt-in `reconvert_with_math_ocr` MCP tool, G
 `[test]` (pytest, needed to run the test suite — `pip install -e .[mcp,test]`). A plain
 `pip install -e .` with no extras gets you the conversion pipeline and CLI but not the MCP server.
 
-### Optional: local image OCR for equations and figures
+### Experimental: local image OCR for equations and figures
+
+> **Not part of a tagged release yet.** This feature is present in the source but has not
+> been stress-tested against a large library, and its `image_ocr` config shape and output
+> conventions may still change. It is inert unless you configure and invoke it explicitly.
+> It will ship, and be documented as stable, under its own later tag.
 
 Conversion pulls display equations, tables and figures that a PDF drew as vector graphics into
 their own PNGs, leaving an opaque `![](…png)` placeholder in the Markdown — so that notation is
@@ -83,8 +88,9 @@ file (`<stem>_ocr_eq.md` by default) and the index points at it, so search retur
 equations while the original stays put.
 
 Ollama runs on Windows, macOS and Linux and falls back to CPU automatically when no GPU is
-available. On a GPU the model is a few hundred megabytes of VRAM and a document takes well under a
-minute; on CPU it is usable but slow enough to leave running. Point the command at a different
+available. On a GPU the model is a few hundred megabytes of VRAM; on CPU expect it to be slow
+enough to leave running as a background job (measured at roughly a minute or more per crop on
+a laptop CPU, so plan whole-document runs accordingly). Point the command at a different
 host, port or model — and change the sibling suffix — through the optional `image_ocr` block in
 your config (see `config.example.json`). Verify the runtime with `zotero-pdf-text check-setup`.
 
