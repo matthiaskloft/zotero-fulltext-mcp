@@ -345,6 +345,46 @@ without them.
   constrained to the tested v1 API (`>=1.28,<2`) until a separate v2 migration. `uv.lock` pins
   exact resolved versions for reproducible installs — see "Reproducible install with `uv`" above.
 
+## Contributing hygiene
+
+This repository must never contain anyone's real identity, machine, or credentials. After cloning,
+enable the guard hook once:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+Before each commit it does two things. It checks the author and committer address, because a
+history rewrite can replace file contents while leaving every identity header untouched -- an
+address committed here outlives the text that prompted the rewrite. Then it runs
+`tests/test_no_personal_data.py`, which scans tracked text files for real home directories, real
+email addresses, institutional identifiers and credential shapes. It reads both the working tree
+and, where they differ, the staged blob, since a commit publishes the index rather than whatever
+happens to be on disk. The same
+test runs in CI, but CI runs after the push -- and a push to a public repository is the moment the
+content becomes public. Removing something afterwards means rewriting history, which is why the
+cheap local check is worth the second it costs.
+
+Documentation examples should use obviously fake placeholders (`C:\Users\you\...`, `jsmith`,
+`someone@example.com`). The guard allows a short list of such names and rejects anything else, so
+add new placeholders to `PLACEHOLDER_NAMES` rather than choosing realistic-looking ones.
+
+## Repository history
+
+This repository's history was rewritten on 2026-09-10 to remove personal identifiers, and the
+GitHub repository was recreated so that pull-request refs could not keep pinning the old commits.
+Two consequences are worth knowing when reading older commits:
+
+- **Pull-request numbers restart at #1.** References like `(#31)` or `(#37)` inside commit messages
+  point at pull requests in the *previous* repository, not the current one. As new pull requests are
+  opened, those numbers will come to refer to unrelated changes. Read them as historical labels, not
+  as links.
+- **Commit SHAs changed**, so any SHA recorded elsewhere before that date will not resolve here, and
+  commits before it are unsigned.
+
+The pull-request and review history from before the rewrite was archived rather than lost. It is
+kept privately by the maintainer, since it also contains the identifiers that were removed.
+
 ## License
 
 MIT — see `LICENSE`.

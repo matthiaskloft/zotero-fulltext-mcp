@@ -1,0 +1,90 @@
+#!/bin/sh
+# Refuse commits that carry a real identity, personal path, or credential.
+#
+# CI runs the same check, but CI runs after the push -- and the push is the moment the content
+# becomes public. Recovering from that costs a history rewrite; recovering from a blocked commit
+# costs one edit. This hook is the cheap end of that trade.
+#
+# Enable it once per clone:
+#
+#   git config core.hooksPath .githooks
+#
+# Bypass, for the rare case where the guard is wrong and you know it:
+#
+#   git commit --no-verify
+#
+# Prefer widening PLACEHOLDER_NAMES in tests/test_no_personal_data.py over habitual --no-verify. A
+# bypass that becomes routine is the same as no hook at all.
+
+set -e
+
+# --- Commit identity -------------------------------------------------------------------------
+#
+# The scan below reads files. It cannot see the author and committer headers, which are just as
+# public and just as permanent -- a history rewrite can replace file contents while leaving every
+# identity untouched, so an address committed here outlives the text that prompted the rewrite.
+#
+# This lives in the hook rather than in the pytest guard on purpose. Identity belongs to the commit
+# being made, not to the tree, so as a test it would pass or fail on whoever's git config happened
+# to be present and would redden the suite for a contributor whose change is fine.
+#
+# Widen ALLOWED_IDENTITY_DOMAINS if a project legitimately needs another domain.
+
+ALLOWED_IDENTITY_DOMAINS="users.noreply.github.com noreply.github.com example.com"
+
+identity_email() {
+    git var "$1" | sed -n 's/.*<\(.*\)>.*/\1/p'
+}
+
+check_identity() {
+    role="$1"
+    email="$2"
+    if [ -z "$email" ]; then
+        return 0    # No identity to judge; git itself will object if it needs one.
+    fi
+    for domain in $ALLOWED_IDENTITY_DOMAINS; do
+        case "$email" in
+            *"@$domain") return 0 ;;
+        esac
+    done
+    echo "pre-commit: refused -- the $role address '$email' is not one this project commits under." >&2
+    echo "  Allowed domains: $ALLOWED_IDENTITY_DOMAINS" >&2
+    echo "  Set your GitHub noreply address for this repository:" >&2
+    echo "    git config user.email 'ID+USERNAME@users.noreply.github.com'" >&2
+    echo "  Find it under GitHub Settings > Emails > 'Keep my email addresses private'." >&2
+    return 1
+}
+
+check_identity author "$(identity_email GIT_AUTHOR_IDENT)"
+check_identity committer "$(identity_email GIT_COMMITTER_IDENT)"
+
+# --- Committed content -----------------------------------------------------------------------
+
+if [ -x ".venv/Scripts/python.exe" ]; then
+    PYTHON=".venv/Scripts/python.exe"          # Windows
+elif [ -x ".venv/bin/python" ]; then
+    PYTHON=".venv/bin/python"                  # POSIX
+elif command -v python3 >/dev/null 2>&1; then
+    PYTHON="python3"
+elif command -v python >/dev/null 2>&1; then
+    PYTHON="python"
+else
+    echo "pre-commit: no Python found; skipping the personal-data guard." >&2
+    echo "            Install the project environment so this check can run." >&2
+    exit 0
+fi
+
+if ! "$PYTHON" -c "import pytest" >/dev/null 2>&1; then
+    echo "pre-commit: pytest is not installed; skipping the personal-data guard." >&2
+    echo "            Run: $PYTHON -m pip install -e \".[test]\"" >&2
+    exit 0
+fi
+
+if ! "$PYTHON" -m pytest tests/test_no_personal_data.py -q; then
+    echo >&2
+    echo "pre-commit: refused -- the personal-data guard failed." >&2
+    echo "  The failure message above names the file and the string." >&2
+    echo "  Replace it with a placeholder, or, if it genuinely is one, add it to" >&2
+    echo "  PLACEHOLDER_NAMES in tests/test_no_personal_data.py." >&2
+    exit 1
+fi
