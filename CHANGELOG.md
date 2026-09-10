@@ -142,8 +142,14 @@ dated section once it has been stress-tested against a large library.
 
 ## [0.4.0] - 2026-09-10
 
-Citation binding for retrieved evidence, plus test coverage for the guards that protect the derived
-index.
+Hardening, installability and citation binding. Transactional index generations, a
+read-only-by-default MCP surface with native schemas and safety hints, timeout and orphan-PDF
+triage workflows, identity-classification precision fixes, and locator verification that binds
+a retrieved passage to the text the citation was formed against.
+
+This release supersedes 0.3.0, which was withdrawn; everything it contained is included here.
+Local image OCR (`ocr-images`) is packaged and callable but unannounced and unsupported -- see
+the note under [Unreleased].
 
 ### Added
 
@@ -224,15 +230,6 @@ index.
   rather than left as an assumed guarantee: replacing `generations/` itself with a symlink is not
   caught, because the check resolves both sides and they still match. Symlink cases skip where the
   platform refuses to create one, so they run on CI's Linux and macOS legs.
-
-## [0.3.0] - 2026-09-10
-
-Hardening and installability release: transactional index generations, a read-only-by-default
-MCP surface with native schemas and safety hints, timeout and orphan-PDF triage workflows, and
-identity-classification precision fixes. Local image OCR (`ocr-images`) is present but
-unreleased and unannounced -- it ships under its own later tag once stress-tested.
-
-### Added
 
 - Transactional derived-index artifacts (hardening-plan Package 2, reduced scope): the JSONL
   sidecar and SQLite FTS database are now published together as immutable, checksummed *index
@@ -385,5 +382,4 @@ Initial import of the Zotero full-text conversion pipeline, CLI, and MCP server.
 
 [Unreleased]: https://github.com/matthiaskloft/zotero-fulltext-mcp/compare/v0.4.0...HEAD
 [0.4.0]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.4.0
-[0.3.0]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.3.0
 [0.2.0]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.2.0
