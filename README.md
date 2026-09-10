@@ -354,8 +354,13 @@ enable the guard hook once:
 git config core.hooksPath .githooks
 ```
 
-It runs `tests/test_no_personal_data.py` before each commit, which scans tracked text files for real
-home directories, real email addresses, institutional identifiers and credential shapes. The same
+Before each commit it does two things. It checks the author and committer address, because a
+history rewrite can replace file contents while leaving every identity header untouched -- an
+address committed here outlives the text that prompted the rewrite. Then it runs
+`tests/test_no_personal_data.py`, which scans tracked text files for real home directories, real
+email addresses, institutional identifiers and credential shapes. It reads both the working tree
+and, where they differ, the staged blob, since a commit publishes the index rather than whatever
+happens to be on disk. The same
 test runs in CI, but CI runs after the push -- and a push to a public repository is the moment the
 content becomes public. Removing something afterwards means rewriting history, which is why the
 cheap local check is worth the second it costs.

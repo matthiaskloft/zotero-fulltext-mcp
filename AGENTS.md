@@ -60,8 +60,11 @@ this repo. Treat it accordingly:
   (`you`, `jsmith`, `someone`, ...) and rejects everything else in that position, so introducing a
   new placeholder means adding it to `PLACEHOLDER_NAMES` rather than picking a realistic-looking
   name. Enable the matching pre-commit hook once per clone with
-  `git config core.hooksPath .githooks` -- CI runs the same check, but only after a push, and a
-  push is what makes the content public.
+  `git config core.hooksPath .githooks` -- CI runs the same scan, but only after a push, and a push
+  is what makes the content public. The hook also refuses a commit whose author or committer address
+  is outside `users.noreply.github.com`, `noreply.github.com` or `example.com`; identity headers are
+  as public and as permanent as file contents, and a content-only history rewrite does not touch
+  them.
 
 ## Development Commands
 
@@ -69,7 +72,11 @@ this repo. Treat it accordingly:
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
-If the virtual environment is unavailable, use Python 3.11+ and install dependencies from
+Set the environment up with `uv sync --extra mcp --extra test --locked`, the same command CI runs.
+Prefer it over `pip install -e`, which ignores `uv.lock` and resolves newer versions -- that has
+produced local-only failures that look like regressions and are not.
+
+If uv is unavailable, use Python 3.11+ and install dependencies from
 `pyproject.toml` (`pip install -e .[mcp,test]` for MCP support plus pytest, add
 `[zotero-write]`/`[marker]` as needed).
 
