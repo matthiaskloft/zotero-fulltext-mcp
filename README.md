@@ -247,11 +247,13 @@ The safe default server exposes:
   contained; omitting the index reads from the beginning of the converted document, and omitting
   the hashes skips verification. If that passage was replaced in between (a math or image OCR pass,
   or a plain reconversion), the call answers `stale_locator` rather than returning different text
-  under a citation you already formed — search again for a current locator. `content_sha256` is the
-  coarser alternative, verifying the whole converted document instead of one passage: prefer
-  `chunk_sha256`, since a document-level check also refuses passages that did not themselves
-  change. Exact chunks report previous/next navigation and whether a `max_chars` limit truncated
-  the stored chunk.
+  under a citation you already formed — search again for a current locator. `chunk_sha256` is the
+  hash that verifies an exact chunk. For an exact `chunk_index`, `content_sha256` *on its own* is
+  rejected as `invalid_content_sha256`, because it verifies the converted document and cannot tell
+  whether that text was re-divided under it; passing both is valid, and the chunk hash then decides
+  while the document hash is not compared. Without `chunk_index`, `content_sha256` verifies the
+  document the bounded leading preview came from. Exact chunks report previous/next navigation and
+  whether a `max_chars` limit truncated the stored chunk.
 - `get_item_context(parent_key | attachment_key)` — path-free bibliographic, extraction, and
   identity context for the supplied key.
 - `list_timeout_candidates(status="pending")` — attachments whose primary extractor exceeded its

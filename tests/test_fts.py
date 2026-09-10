@@ -797,10 +797,19 @@ class LocatorFreshnessTests(unittest.TestCase):
             self._write_document(jsonl, self._REVISED)
             build_fts_index(jsonl, sqlite_db, chunk_chars=40, overlap_chars=5)
 
-            # The document hash genuinely moved, so it refuses the untouched early chunk too.
+            # The document hash genuinely moved, so it refuses a read of the whole document.
             after = get_fulltext(sqlite_db, attachment_key="ATTACH1", chunk_index=0)
             self.assertNotEqual(after.markdown_sha256, cited_document_hash)
             with self.assertRaises(StaleLocatorError):
+                get_fulltext(
+                    sqlite_db,
+                    attachment_key="ATTACH1",
+                    expected_content_sha256=cited_document_hash,
+                )
+            # It cannot be aimed at the untouched early chunk at all: see
+            # test_a_document_hash_cannot_verify_an_exact_chunk for why that combination is
+            # refused rather than answered by the coarser check.
+            with self.assertRaises(ValueError):
                 get_fulltext(
                     sqlite_db,
                     attachment_key="ATTACH1",
@@ -829,6 +838,87 @@ class LocatorFreshnessTests(unittest.TestCase):
             self.assertIn(
                 "REVISED", get_fulltext(sqlite_db, attachment_key="ATTACH1", chunk_index=4).text
             )
+
+    def test_a_document_hash_cannot_verify_an_exact_chunk(self):
+        """The combination is refused because it is unsound, not merely imprecise.
+
+        Calling the document hash "coarser" suggests it over-refuses in the safe direction. For an
+        exact chunk request it does the opposite. ``markdown_sha256`` covers the converted text and
+        nothing about how that text was divided, so re-indexing the *same* document at a different
+        chunk size leaves the document hash matching while chunk N now holds a different passage.
+        The check would pass and the wrong text would be returned under the caller's citation --
+        the precise failure the locator exists to prevent, arriving with a success response.
+
+        This test rebuilds from byte-identical source text, so nothing but the chunking changed.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            jsonl = root / "index.jsonl"
+            sqlite_db = root / "index.sqlite"
+            self._write_document(jsonl, self._DOCUMENT)
+            build_fts_index(jsonl, sqlite_db, chunk_chars=40, overlap_chars=5)
+
+            cited = get_fulltext(sqlite_db, attachment_key="ATTACH1", chunk_index=1)
+            document_hash = cited.markdown_sha256
+
+            # Same text, different chunking: exactly what re-running the pipeline with another
+            # chunk size does.
+            build_fts_index(jsonl, sqlite_db, chunk_chars=20, overlap_chars=5)
+            now_at_the_same_index = get_fulltext(sqlite_db, attachment_key="ATTACH1", chunk_index=1)
+
+            # The premise: the document hash is unchanged, and the passage at that index is not.
+            self.assertEqual(now_at_the_same_index.markdown_sha256, document_hash)
+            self.assertNotEqual(now_at_the_same_index.text, cited.text)
+
+            # So the document hash is refused for this request rather than allowed to pass.
+            with self.assertRaises(ValueError) as caught:
+                get_fulltext(
+                    sqlite_db,
+                    attachment_key="ATTACH1",
+                    chunk_index=1,
+                    expected_content_sha256=document_hash,
+                )
+            self.assertIn("chunk_sha256", str(caught.exception))
+
+            # The chunk hash is the sound path, and it refuses this correctly.
+            with self.assertRaises(StaleLocatorError):
+                get_fulltext(
+                    sqlite_db,
+                    attachment_key="ATTACH1",
+                    chunk_index=1,
+                    expected_chunk_sha256=cited.chunk_sha256,
+                )
+
+    def test_a_document_hash_still_verifies_a_whole_document_read(self):
+        """The guard narrows where the document hash applies; it does not remove it.
+
+        Without an exact chunk_index there is no chunk boundary to be wrong about, so the check is
+        sound there and stays available for a caller reading a document it never searched.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            jsonl = root / "index.jsonl"
+            sqlite_db = root / "index.sqlite"
+            self._write_document(jsonl, self._DOCUMENT)
+            build_fts_index(jsonl, sqlite_db, chunk_chars=40, overlap_chars=5)
+            cited = get_fulltext(sqlite_db, attachment_key="ATTACH1")
+
+            self.assertTrue(
+                get_fulltext(
+                    sqlite_db,
+                    attachment_key="ATTACH1",
+                    expected_content_sha256=cited.markdown_sha256,
+                ).text
+            )
+
+            self._write_document(jsonl, self._REVISED)
+            build_fts_index(jsonl, sqlite_db, chunk_chars=40, overlap_chars=5)
+            with self.assertRaises(StaleLocatorError):
+                get_fulltext(
+                    sqlite_db,
+                    attachment_key="ATTACH1",
+                    expected_content_sha256=cited.markdown_sha256,
+                )
 
     def test_chunk_hash_takes_precedence_over_a_stale_document_hash(self):
         """Both supplied: the chunk hash decides, and the document hash is not also enforced.

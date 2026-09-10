@@ -5,6 +5,23 @@ All notable changes to this project are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Changed
+
+- `get_fulltext_chunk` now refuses `content_sha256` as the *only* verification of an exact
+  `chunk_index`, answering `invalid_content_sha256` and naming `chunk_sha256` as the value to pass
+  instead. Sending both hashes is unaffected: the chunk hash decides and the document hash is not
+  compared, as before. The combination
+  was previously accepted and described as the coarser of two checks, which was wrong in the
+  harmful direction: `markdown_sha256` covers the converted text and nothing about how that text
+  was divided, so re-indexing the same document at a different chunk size leaves it matching while
+  the cited `chunk_index` now addresses a different passage. The check passed and other text came
+  back under the caller's citation with a success response — the one outcome locator verification
+  exists to make impossible, and one that no later step in the chain could detect. Refusing the
+  request shape rather than documenting the hazard is what makes it enforceable: a caller holding a
+  real locator already has `chunk_sha256`, since search returns both hashes together. The document
+  hash keeps its meaning for a whole-document read, where there is no chunk boundary to be wrong
+  about.
+
 ### Added
 
 - `get_fulltext_chunk` accepts a locator's `content_sha256` and verifies it against the index

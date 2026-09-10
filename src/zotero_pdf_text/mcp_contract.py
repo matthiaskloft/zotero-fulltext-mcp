@@ -467,22 +467,29 @@ def create_server(
         with that locator's chunk_sha256 so the passage is verified to be the one the search hit
         actually contained; if it has been replaced since, this answers stale_locator instead of
         silently returning different text under the citation you already formed, and you should
-        search again. content_sha256 is the coarser alternative, verifying that the whole converted
-        document is unchanged -- prefer chunk_sha256, which does not refuse a passage merely
-        because some other part of the document was reconverted. Omitting chunk_index returns a
-        bounded passage from the beginning of the converted document; omitting both hashes skips
-        verification.
+        search again. chunk_sha256 is the hash that verifies an exact chunk. For an exact
+        chunk_index, content_sha256 on its own is rejected as invalid_content_sha256, because it
+        covers the converted document and cannot tell whether that text was re-divided under a
+        stable document; supply chunk_sha256. Supplying both is valid: the chunk hash decides and
+        the document hash is not compared. Omitting chunk_index returns a bounded passage from the
+        beginning of the converted document, and content_sha256 verifies that document; omitting
+        both hashes skips verification.
         """
         def operation() -> PassageResponse:
             validated_chunk_index = _validate_chunk_index(chunk_index)
             validated_chunk_sha256 = _validate_chunk_sha256(chunk_sha256, validated_chunk_index)
+            validated_content_sha256 = _validate_content_sha256(
+                content_sha256,
+                chunk_index=validated_chunk_index,
+                chunk_sha256=validated_chunk_sha256,
+            )
             return serialize_fulltext_result(
                 get_fulltext(
                     _resolve_request_db(db_path),
                     attachment_key=_validate_attachment_key(attachment_key),
                     max_chars=_validate_max_chars(max_chars),
                     chunk_index=validated_chunk_index,
-                    expected_content_sha256=_validate_content_sha256(content_sha256),
+                    expected_content_sha256=validated_content_sha256,
                     expected_chunk_sha256=validated_chunk_sha256,
                 )
             )
@@ -1191,7 +1198,13 @@ def _validate_chunk_sha256(value: object | None, chunk_index: int | None) -> str
     return validated
 
 
-def _validate_content_sha256(value: object | None, *, field: str = "content_sha256") -> str | None:
+def _validate_content_sha256(
+    value: object | None,
+    *,
+    field: str = "content_sha256",
+    chunk_index: int | None = None,
+    chunk_sha256: str | None = None,
+) -> str | None:
     """Validate a locator's content hash, or None when the caller supplied no locator.
 
     Checked as a bounded non-empty string rather than as 64 hex characters, even though that is
@@ -1209,6 +1222,19 @@ def _validate_content_sha256(value: object | None, *, field: str = "content_sha2
     normalized = value.strip()
     if not normalized or len(normalized) > MAX_CITATION_KEY_CHARS:
         raise PublicMcpError(f"invalid_{field}", f"{field} must be a non-empty bounded string.")
+    if chunk_index is not None and chunk_sha256 is None:
+        # Refused rather than accepted as a weaker check, because it is not a weaker check -- it is
+        # the wrong one. The document hash says the converted text is unchanged and says nothing
+        # about how that text was divided, so a rebuild at a different chunk size passes it while
+        # chunk_index now addresses a different passage. Answering that request would return other
+        # text under the caller's citation and report success, which is exactly the outcome the
+        # locator exists to make impossible. A caller holding a real locator has chunk_sha256.
+        raise PublicMcpError(
+            f"invalid_{field}",
+            f"{field} verifies the whole document, so it cannot verify an exact chunk_index: "
+            "chunk boundaries can change while it stays the same. Pass the locator's chunk_sha256 "
+            "instead, or omit chunk_index to read the document.",
+        )
     return normalized
 
 

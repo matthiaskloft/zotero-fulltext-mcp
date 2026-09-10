@@ -60,8 +60,11 @@ does not need the guarantee, omitting the hash retrieves unverified.
 Two things make this fire more often than expected:
 
 - **Document-level over-refusal.** `content_sha256` covers the whole converted document, so any
-  reconversion invalidates locators into *all* of its chunks, including passages that did not
-  change. Pass `chunk_sha256` instead -- it refuses only the passage that actually changed.
+  reconversion invalidates a whole-document read even when the passage you cited did not change.
+  Pass `chunk_sha256` with the `chunk_index` instead -- it refuses only the passage that actually
+  changed. (For an exact `chunk_index`, `content_sha256` *alone* is refused as
+  `invalid_content_sha256`, for the reason in the next item; sending it alongside `chunk_sha256` is
+  fine, and the chunk hash decides.)
 - **A locator held across a rebuild.** An ordinary `rebuild-index` from unchanged Markdown changes
   neither hash: chunking parameters are inherited from the current generation, so chunk boundaries
   and therefore chunk hashes are reproduced exactly. Passing `--chunk-chars` or `--overlap-chars`
@@ -69,11 +72,14 @@ Two things make this fire more often than expected:
   stays the same. Not all of them necessarily do: an overlap-only change leaves the first chunk
   untouched, and a document short enough to be a single chunk stays identical.
 
-  Search again and use the new locator. **Do not fall back to `content_sha256` here.** An unchanged
-  document hash verifies the document's content, but it does not validate an old `chunk_index`
-  after re-chunking: the same index can now select a different passage, and the document hash will
-  accept it. That is the failure this verification exists to prevent, so the refusal is the correct
-  answer even though the document text never changed.
+  Search again and use the new locator. Falling back to `content_sha256` is not an option here, and
+  the server enforces that rather than trusting callers to know it: an unchanged document hash
+  verifies the document's content but says nothing about what an old `chunk_index` now addresses, so
+  after re-chunking the same index can select a different passage while the hash still matches. That
+  would return other text under a citation you already formed *and report success* -- the exact
+  failure this verification exists to prevent. So a document hash offered as the *only* check on an
+  exact chunk is rejected up front as `invalid_content_sha256`, and the `stale_locator` refusal you
+  get from `chunk_sha256` is the correct answer even though the document text never changed.
 
 ## Fresh Build Cannot Import the Converter or PDF Dependencies
 

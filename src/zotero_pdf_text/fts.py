@@ -448,6 +448,10 @@ def check_locator_freshness(
     equation, say -- invalidates locators into every chunk of that document, including chunks whose
     text is byte-identical. ``check_chunk_freshness`` is the precise counterpart; a caller that
     supplies a chunk hash is verified by that instead.
+
+    It is also not a substitute for that counterpart. ``get_fulltext`` calls this only for
+    whole-document reads, and rejects a document hash paired with an exact ``chunk_index`` outright,
+    because a document hash cannot decide a question about chunk boundaries -- see the guard there.
     """
     if expected_content_sha256 is None:
         return
@@ -509,6 +513,18 @@ def get_fulltext(
     if expected_chunk_sha256 is not None and chunk_index is None:
         # A preview spans several chunks, so there is no single chunk whose hash could be checked.
         raise ValueError("expected_chunk_sha256 requires an exact chunk_index")
+    if expected_content_sha256 is not None and expected_chunk_sha256 is None and chunk_index is not None:
+        # Refused rather than answered coarsely, because the document hash does not verify what an
+        # exact chunk request asks about. ``markdown_sha256`` covers the converted text and nothing
+        # about how it was divided, so a rebuild at a different chunk size leaves the document hash
+        # matching while chunk N now holds an entirely different passage -- the check passes and the
+        # wrong text is returned under the caller's citation. That is the one outcome this whole
+        # mechanism exists to prevent, so the combination cannot be allowed to look like
+        # verification. Callers reach the sound path by passing the locator's chunk_sha256.
+        raise ValueError(
+            "expected_content_sha256 cannot verify an exact chunk_index, because chunk boundaries "
+            "can change while the document hash stays the same; pass expected_chunk_sha256 instead"
+        )
 
     con = connect_readonly(db_path)
     con.row_factory = sqlite3.Row
@@ -526,11 +542,13 @@ def get_fulltext(
         if metadata is None:
             raise KeyError(f"No record found for attachment key {attachment_key}")
         if expected_content_sha256 is not None and expected_chunk_sha256 is None:
-            # Checked before any chunk is read: a stale locator's offsets address text this index
-            # no longer holds, so there is nothing worth fetching for it. Skipped when a chunk hash
-            # was supplied -- that check is strictly more precise, and enforcing both would refuse
-            # a chunk whose own text is intact merely because some other part of the document was
-            # rewritten, which is the over-refusal the chunk hash exists to remove.
+            # Reached only for whole-document reads: the guard above rejects a document hash paired
+            # with an exact chunk_index. Checked before any chunk is read, because a stale locator's
+            # offsets address text this index no longer holds, so there is nothing worth fetching
+            # for it. Skipped when a chunk hash was supplied -- that check is strictly more precise,
+            # and enforcing both would refuse a chunk whose own text is intact merely because some
+            # other part of the document was rewritten, which is the over-refusal the chunk hash
+            # exists to remove.
             check_locator_freshness(
                 expected_content_sha256,
                 metadata["markdown_sha256"] or "",

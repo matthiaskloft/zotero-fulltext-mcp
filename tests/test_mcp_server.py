@@ -270,7 +270,6 @@ class McpServerTests(unittest.TestCase):
             locator = server.tools["search_fulltext"]("searchable")["results"][0]["source_locator"]
             passage = server.tools["get_fulltext_chunk"](
                 locator["attachment_key"],
-                chunk_index=locator["chunk_index"],
                 content_sha256=locator["content_sha256"],
             )
             self.assertEqual(passage["source_locator"]["content_sha256"], locator["content_sha256"])
@@ -283,6 +282,59 @@ class McpServerTests(unittest.TestCase):
             )
             self.assertEqual(by_chunk["source_locator"]["chunk_sha256"], locator["chunk_sha256"])
             self.assertIn("Searchable source text", by_chunk["text"])
+
+    def test_document_hash_with_an_exact_chunk_index_is_refused_at_the_boundary(self):
+        """The unsound combination is rejected by the tool, not just by the library beneath it.
+
+        A caller that reaches for content_sha256 on an exact chunk is asking for a check that
+        cannot answer its question -- chunk boundaries can move while the document hash holds
+        still. The refusal has to name the fix, because the caller almost always has the right
+        value already: search hands out chunk_sha256 in the same locator.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            _, sqlite_path, _ = _build_index(Path(tmp) / "library")
+            server = create_server(sqlite_path, mcp_factory=FakeFastMCP)
+            locator = server.tools["search_fulltext"]("searchable")["results"][0]["source_locator"]
+
+            error = _assert_tool_error(
+                self,
+                lambda: server.tools["get_fulltext_chunk"](
+                    locator["attachment_key"],
+                    chunk_index=locator["chunk_index"],
+                    content_sha256=locator["content_sha256"],
+                ),
+                "invalid_content_sha256",
+            )
+            self.assertIn("chunk_sha256", str(error))
+
+            # Refused as a request shape, so a correct document hash fares no better than a stale
+            # one: the point is that neither answer would have meant anything.
+            _assert_tool_error(
+                self,
+                lambda: server.tools["get_fulltext_chunk"](
+                    locator["attachment_key"],
+                    chunk_index=locator["chunk_index"],
+                    content_sha256="superseded-by-a-reconversion",
+                ),
+                "invalid_content_sha256",
+            )
+
+            # Both alternatives the message points at remain available.
+            self.assertIn(
+                "Searchable source text",
+                server.tools["get_fulltext_chunk"](
+                    locator["attachment_key"],
+                    chunk_index=locator["chunk_index"],
+                    chunk_sha256=locator["chunk_sha256"],
+                )["text"],
+            )
+            self.assertIn(
+                "Searchable source text",
+                server.tools["get_fulltext_chunk"](
+                    locator["attachment_key"],
+                    content_sha256=locator["content_sha256"],
+                )["text"],
+            )
 
     def test_chunk_hash_decides_when_both_hashes_are_supplied(self):
         """Precedence at the tool boundary, in both directions.
@@ -856,10 +908,14 @@ class ReconvertRateLimiterConcurrencyTests(unittest.TestCase):
         self.assertEqual(len(failures), 19)
 
 
-def _assert_tool_error(test: unittest.TestCase, operation: Callable[[], object], code: str) -> None:
+def _assert_tool_error(
+    test: unittest.TestCase, operation: Callable[[], object], code: str
+) -> PublicMcpError:
+    """Assert the tool refuses with ``code``, returning the error so callers can check its text."""
     with test.assertRaises(PublicMcpError) as raised:
         operation()
     test.assertEqual(raised.exception.code, code)
+    return raised.exception
 
 
 def _build_index(root: Path) -> tuple[Path, Path, ProjectConfig]:

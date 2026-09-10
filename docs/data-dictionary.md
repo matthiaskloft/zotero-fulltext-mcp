@@ -324,14 +324,20 @@ is assembled from several stored chunks and so has no single chunk hash.
 
 Passing either hash back to `get_fulltext_chunk` makes that detection enforceable: the value is
 compared against what the index holds now, and a mismatch answers `stale_locator` instead of
-retrieving the chunk. `chunk_sha256` requires an exact `chunk_index` and is the precise check —
-it refuses only when the cited passage itself was replaced. `content_sha256` covers the whole
-converted document, so it also refuses locators into chunks whose text did not change; supplying a
-chunk hash therefore takes precedence and the document hash is not additionally enforced. It is
-also the weaker check in a way that matters: it verifies document content, not the meaning of a
-`chunk_index`. Re-chunking the same text -- `rebuild-index --chunk-chars`/`--overlap-chars` --
-moves chunk boundaries while leaving `content_sha256` identical, so an old index can select a
-different passage and the document hash will accept it. Only `chunk_sha256` refuses that. What a
+retrieving the chunk. `chunk_sha256` requires an exact `chunk_index` and is the only hash that
+verifies one: it refuses exactly when the cited passage was replaced, and it takes precedence when
+both are supplied, so the document hash is not additionally enforced.
+
+`content_sha256` covers the whole converted document. For an exact `chunk_index` it is rejected
+**on its own** as `invalid_content_sha256` rather than answered, because for that request it is not
+a coarser check but the wrong one. Sending both hashes stays valid -- the chunk hash decides, as
+above -- and without a `chunk_index` the document hash verifies the document the bounded leading
+preview was taken from. It verifies document
+content, not the meaning of a `chunk_index`. Re-chunking the same text --
+`rebuild-index --chunk-chars`/`--overlap-chars` -- moves chunk boundaries while leaving
+`content_sha256` identical, so an old index would select a different passage and a document-hash
+check would accept it, returning other text under the caller's citation and reporting success. Only
+`chunk_sha256` can answer that question, and search returns it in the same locator. What a
 chunk hash guarantees is textual rather than positional: the passage returned is the passage cited,
 while the surrounding document may have shifted, which is why character offsets in the response are
 always the current ones rather than the request's. Verification is opt-in — a caller that omits both
