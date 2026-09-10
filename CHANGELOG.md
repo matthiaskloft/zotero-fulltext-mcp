@@ -40,6 +40,28 @@ All notable changes to this project are documented here. Format loosely follows
   verify something. No schema change and no rebuild: `chunks.text` is already stored, so the hash is
   derived at read time, computed inside the query that already reads stored text for the rows a
   search actually returns.
+- Schema-compatibility tests (`tests/test_schema_compat.py`) for readers pointed at an index they
+  cannot use. `_assert_supported_schema` exists so that a stale, foreign, empty or truncated
+  database fails with an instruction naming the fix, rather than as the raw `no such table` /
+  `no such column` that whichever query ran first would otherwise raise -- an error naming neither
+  the problem nor the remedy, and identical whether the file is a legacy index, someone else's
+  database, or a half-finished download. Nothing referenced that guard before. Both halves of the
+  contract are now pinned: an unusable index is refused with the recovery command named, and the
+  command it names actually restores a readable index -- exercised through `rebuild-index` itself on
+  a published generation whose database has been replaced with an unsupported schema, not only
+  through the builder it calls last, since locating the sidecar, staging a successor and swapping
+  `current.json` are the steps most likely to break. Covered cases are a legacy schema missing a
+  column that a later release added (the message names the column), a missing table, a foreign
+  SQLite file, a zero-byte file -- which SQLite opens as a valid empty database rather than
+  erroring -- and a file that is not a database at all. One test asserts the guarantee positively
+  by failing if any reader lets a `sqlite3.Error` escape, since `IndexSchemaUnsupportedError` is a
+  `RuntimeError` and a leaked SQLite error would otherwise surface as an unrelated test error. A
+  forward-compatibility case pins that the guard requires a superset rather than an exact match, so
+  an index carrying a column a reader does not know about stays readable and additive schema
+  changes do not break in both directions. At the MCP boundary, `index_schema_unsupported` had no
+  test either: the internal message deliberately names the database file so a CLI user can see
+  which file is wrong, and that same detail is a local path, so the mapping is now asserted to
+  answer the stable code while dropping it and still naming the repair command.
 - Adversarial and containment tests over the guards that protect derived artifacts
   (`tests/test_containment.py`, plus additions to `tests/test_lock.py`, `tests/test_fts.py` and
   `tests/test_mcp_server.py`). Surveying first showed query-size limits, untrusted instruction text
