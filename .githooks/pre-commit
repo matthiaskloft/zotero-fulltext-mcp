@@ -1,0 +1,48 @@
+#!/bin/sh
+# Refuse commits that carry a real identity, personal path, or credential.
+#
+# CI runs the same check, but CI runs after the push -- and the push is the moment the content
+# becomes public. Recovering from that costs a history rewrite; recovering from a blocked commit
+# costs one edit. This hook is the cheap end of that trade.
+#
+# Enable it once per clone:
+#
+#   git config core.hooksPath .githooks
+#
+# Bypass, for the rare case where the guard is wrong and you know it:
+#
+#   git commit --no-verify
+#
+# Prefer widening PLACEHOLDER_NAMES in tests/test_no_personal_data.py over habitual --no-verify. A
+# bypass that becomes routine is the same as no hook at all.
+
+set -e
+
+if [ -x ".venv/Scripts/python.exe" ]; then
+    PYTHON=".venv/Scripts/python.exe"          # Windows
+elif [ -x ".venv/bin/python" ]; then
+    PYTHON=".venv/bin/python"                  # POSIX
+elif command -v python3 >/dev/null 2>&1; then
+    PYTHON="python3"
+elif command -v python >/dev/null 2>&1; then
+    PYTHON="python"
+else
+    echo "pre-commit: no Python found; skipping the personal-data guard." >&2
+    echo "            Install the project environment so this check can run." >&2
+    exit 0
+fi
+
+if ! "$PYTHON" -c "import pytest" >/dev/null 2>&1; then
+    echo "pre-commit: pytest is not installed; skipping the personal-data guard." >&2
+    echo "            Run: $PYTHON -m pip install -e \".[test]\"" >&2
+    exit 0
+fi
+
+if ! "$PYTHON" -m pytest tests/test_no_personal_data.py -q; then
+    echo >&2
+    echo "pre-commit: refused -- the personal-data guard failed." >&2
+    echo "  The failure message above names the file and the string." >&2
+    echo "  Replace it with a placeholder, or, if it genuinely is one, add it to" >&2
+    echo "  PLACEHOLDER_NAMES in tests/test_no_personal_data.py." >&2
+    exit 1
+fi

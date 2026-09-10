@@ -54,7 +54,14 @@ this repo. Treat it accordingly:
   library size or paper count) into source, docstrings, or the MCP server's `instructions`
   string — those are read by everyone who installs this project, not just the original author.
   Prefer resolving such facts at runtime (e.g. via `coverage_report()`) or describing them
-  qualitatively.
+  qualitatively. This rule is enforced by `tests/test_no_personal_data.py`, which scans every
+  tracked text file for real home directories, real email addresses, institutional identifiers and
+  credential shapes. Placeholders must stay obviously fake: the guard allows a short list of names
+  (`you`, `jsmith`, `someone`, ...) and rejects everything else in that position, so introducing a
+  new placeholder means adding it to `PLACEHOLDER_NAMES` rather than picking a realistic-looking
+  name. Enable the matching pre-commit hook once per clone with
+  `git config core.hooksPath .githooks` -- CI runs the same check, but only after a push, and a
+  push is what makes the content public.
 
 ## Development Commands
 
