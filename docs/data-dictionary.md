@@ -317,6 +317,22 @@ tool, classification, and identity status. Search and passage results also inclu
 converted Markdown SHA-256: it detects changed content after reconversion or rebuild but is not an
 index-generation identifier or a PDF-page locator.
 
+`chunk_sha256` is the SHA-256 of one stored chunk's text. It is derived at read time rather than
+stored as a column, so an index built by any version can be verified per chunk without being
+rebuilt; search computes it only for the rows it returns. It is `null` on a preview passage, which
+is assembled from several stored chunks and so has no single chunk hash.
+
+Passing either hash back to `get_fulltext_chunk` makes that detection enforceable: the value is
+compared against what the index holds now, and a mismatch answers `stale_locator` instead of
+retrieving the chunk. `chunk_sha256` requires an exact `chunk_index` and is the precise check —
+it refuses only when the cited passage itself was replaced. `content_sha256` covers the whole
+converted document, so it also refuses locators into chunks whose text did not change; supplying a
+chunk hash therefore takes precedence and the document hash is not additionally enforced. What a
+chunk hash guarantees is textual rather than positional: the passage returned is the passage cited,
+while the surrounding document may have shifted, which is why character offsets in the response are
+always the current ones rather than the request's. Verification is opt-in — a caller that omits both
+hashes retrieves unverified, which is how a document is read without having searched for it first.
+
 A search locator describes the complete stored chunk. An untruncated exact passage has the same
 locator; a truncated exact passage retains attachment/hash/chunk identity, reports the smaller
 returned character range, and preserves the complete stored range separately. A leading preview

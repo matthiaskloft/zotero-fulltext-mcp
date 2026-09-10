@@ -7,6 +7,40 @@ All notable changes to this project are documented here. Format loosely follows
 
 ### Added
 
+- `get_fulltext_chunk` accepts a locator's `content_sha256` and verifies it against the index
+  before retrieving anything. Search already returned that hash in every `source_locator`, but
+  passing it back was ignored, so a passage cited before a reconversion — a math pass, an image-OCR
+  enrichment, or a plain reconversion — would silently return whatever text now sits at the same
+  chunk index. The attachment and the chunk both still exist in that situation, which is why it
+  answers a distinct `stale_locator` code rather than `attachment_not_found` or `chunk_not_found`,
+  and reports the cited and current hashes so the caller can recognise what changed and search
+  again. Verification is opt-in and refusal is strict, an asymmetry that follows from the failure
+  modes rather than from caution: a refusal is loud and recoverable, while serving replaced content
+  under a citation the caller has already formed is shaped exactly like a correct response and
+  cannot be detected downstream. A caller that omits the hash retrieves unverified, which is how a
+  document is read without having searched for it. The hash covers the whole converted document, so
+  any reconversion invalidates locators into all of its chunks, including chunks whose text is
+  unchanged; narrowing that needs a per-chunk hash the index does not store. The value is validated
+  as a bounded non-empty string rather than as 64 hex characters, because it is echoed back from
+  whatever the index holds — validating it more strictly than the server emits it would let the
+  server hand out a locator and then reject that same locator as malformed.
+- `source_locator` also carries `chunk_sha256`, the hash of the one stored chunk a search hit came
+  from, and `get_fulltext_chunk` accepts it as the precise form of the same verification. The
+  document-level hash necessarily over-refuses: it covers the whole converted text, so an image-OCR
+  pass that splices one recovered equation invalidates every locator into that document, including
+  the overwhelming majority of passages it left byte-identical — which is the common case for
+  exactly the enrichment workflow this project runs. A chunk hash refuses only the passage that
+  actually changed, so supplying one takes precedence and the document hash is not additionally
+  enforced. What it guarantees is textual rather than positional: the passage returned is the
+  passage cited, while the surrounding document may have shifted, which is why the response's
+  character offsets are always read back from the index rather than echoed from the request. It is
+  checked against the full stored chunk rather than a `max_chars`-truncated slice, so a smaller
+  window cannot change whether a locator verifies, and it requires an exact `chunk_index` — a
+  preview spans several chunks, so no single hash describes it, and refusing beats appearing to
+  verify something. No schema change and no rebuild: `chunks.text` is already stored, so the hash is
+  derived at read time, computed inside the query that already reads stored text for the rows a
+  search actually returns.
+
 
 - `ocr-images --key <ATTACHMENT_KEY>`: recover the equations, tables and figure content that
   conversion left stranded in extracted PNGs. `pymupdf4llm` pulls vector-drawn display equations

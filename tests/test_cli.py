@@ -1019,6 +1019,7 @@ class SearchCliTests(unittest.TestCase):
             start_char=0,
             end_char=10,
             markdown_sha256="abc123",
+            chunk_sha256="deadbeef",
             matched_fields=["title"],
             source_path="paper.pdf",
             markdown_path="paper.md",
@@ -1038,6 +1039,7 @@ class SearchCliTests(unittest.TestCase):
         payload = json.loads(output.getvalue())
         self.assertEqual(exit_code, 0)
         self.assertEqual(payload["results"][0]["markdown_sha256"], "abc123")
+        self.assertEqual(payload["results"][0]["chunk_sha256"], "deadbeef")
         self.assertEqual(payload["results"][0]["matched_fields"], ["title"])
 
     def test_get_fulltext_reports_out_of_range_chunk_index_as_a_clean_error(self):

@@ -145,6 +145,9 @@ class McpServerTests(unittest.TestCase):
                 {
                     "attachment_key": "ATTACH1",
                     "content_sha256": "abc123",
+                    # Derived from the stored chunk text, not from the index: an index built by any
+                    # version can be verified per chunk without being rebuilt.
+                    "chunk_sha256": 'd29be848b5406b56dd5343455518ae3e3ffa0aa3ab9acb73489ef96fba8f3d07',
                     "chunk_index": 0,
                     "char_start": 2,
                     "char_end": 46,
@@ -215,6 +218,33 @@ class McpServerTests(unittest.TestCase):
                 "invalid_max_chars",
             )
             _assert_tool_error(self, lambda: server.tools["get_fulltext_chunk"]("ATTACH1", chunk_index=1), "chunk_not_found")
+            _assert_tool_error(
+                self,
+                lambda: server.tools["get_fulltext_chunk"]("ATTACH1", content_sha256=""),
+                "invalid_content_sha256",
+            )
+            _assert_tool_error(
+                self,
+                lambda: server.tools["get_fulltext_chunk"]("ATTACH1", content_sha256=123),
+                "invalid_content_sha256",
+            )
+            _assert_tool_error(
+                self,
+                lambda: server.tools["get_fulltext_chunk"]("ATTACH1", content_sha256="superseded-by-a-reconversion"),
+                "stale_locator",
+            )
+            _assert_tool_error(
+                self,
+                lambda: server.tools["get_fulltext_chunk"](
+                    "ATTACH1", chunk_index=0, chunk_sha256="not-this-chunk's-text"
+                ),
+                "stale_locator",
+            )
+            _assert_tool_error(
+                self,
+                lambda: server.tools["get_fulltext_chunk"]("ATTACH1", chunk_sha256="a" * 64),
+                "invalid_chunk_sha256",
+            )
             _assert_tool_error(self, lambda: server.tools["get_item_context"](), "invalid_context_key")
             _assert_tool_error(
                 self,
@@ -227,6 +257,72 @@ class McpServerTests(unittest.TestCase):
                 missing.tools["search_fulltext"]("topic")
             self.assertEqual(unavailable.exception.code, "database_unavailable")
             self.assertNotIn("missing.sqlite", str(unavailable.exception))
+
+    def test_search_locator_round_trips_through_get_fulltext_chunk(self):
+        """A locator handed out by search is accepted verbatim by retrieval on the same index.
+
+        This is the invariant that makes strict staleness safe to ship: verification only refuses
+        content that actually changed, never a caller's own unmodified locator.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            _, sqlite_path, _ = _build_index(Path(tmp) / "library")
+            server = create_server(sqlite_path, mcp_factory=FakeFastMCP)
+            locator = server.tools["search_fulltext"]("searchable")["results"][0]["source_locator"]
+            passage = server.tools["get_fulltext_chunk"](
+                locator["attachment_key"],
+                chunk_index=locator["chunk_index"],
+                content_sha256=locator["content_sha256"],
+            )
+            self.assertEqual(passage["source_locator"]["content_sha256"], locator["content_sha256"])
+            self.assertIn("Searchable source text", passage["text"])
+
+            by_chunk = server.tools["get_fulltext_chunk"](
+                locator["attachment_key"],
+                chunk_index=locator["chunk_index"],
+                chunk_sha256=locator["chunk_sha256"],
+            )
+            self.assertEqual(by_chunk["source_locator"]["chunk_sha256"], locator["chunk_sha256"])
+            self.assertIn("Searchable source text", by_chunk["text"])
+
+    def test_chunk_hash_decides_when_both_hashes_are_supplied(self):
+        """Precedence at the tool boundary, in both directions.
+
+        The contract is that a chunk hash wins and the document hash is not additionally
+        enforced. Testing the two hashes only in isolation would leave that contract free to
+        change -- requiring both, or falling back to the document hash -- without any test
+        noticing.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            _, sqlite_path, _ = _build_index(Path(tmp) / "library")
+            server = create_server(sqlite_path, mcp_factory=FakeFastMCP)
+            locator = server.tools["search_fulltext"]("searchable")["results"][0]["source_locator"]
+
+            # Correct chunk hash + a document hash that no longer matches: retrieval succeeds,
+            # and the locator it returns is the current one rather than the stale request value.
+            passage = server.tools["get_fulltext_chunk"](
+                locator["attachment_key"],
+                chunk_index=locator["chunk_index"],
+                chunk_sha256=locator["chunk_sha256"],
+                content_sha256="superseded-by-a-reconversion",
+            )
+            self.assertIn("Searchable source text", passage["text"])
+            self.assertEqual(
+                passage["source_locator"]["content_sha256"], locator["content_sha256"]
+            )
+            self.assertEqual(passage["source_locator"]["chunk_sha256"], locator["chunk_sha256"])
+
+            # Wrong chunk hash + correct document hash: refused, with no fallback to the
+            # coarser check that would have passed.
+            _assert_tool_error(
+                self,
+                lambda: server.tools["get_fulltext_chunk"](
+                    locator["attachment_key"],
+                    chunk_index=locator["chunk_index"],
+                    chunk_sha256="a" * 64,
+                    content_sha256=locator["content_sha256"],
+                ),
+                "stale_locator",
+            )
 
     def test_attachment_key_rejects_non_alphanumeric_characters(self):
         with tempfile.TemporaryDirectory() as tmp:

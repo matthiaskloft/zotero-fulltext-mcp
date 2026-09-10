@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import json
 import math
 import os
@@ -61,6 +62,7 @@ class SearchResult:
     start_char: int
     end_char: int
     markdown_sha256: str
+    chunk_sha256: str
     matched_fields: list[str]
     source_path: str
     markdown_path: str
@@ -88,6 +90,7 @@ class FullTextResult:
     end_char: int
     total_chars: int
     markdown_sha256: str
+    chunk_sha256: str | None
     chunk_count: int
     previous_chunk_index: int | None
     next_chunk_index: int | None
@@ -112,12 +115,40 @@ class ChunkNotFoundError(LookupError):
     """Raised when an attachment exists but an exact chunk index does not."""
 
 
+class StaleLocatorError(LookupError):
+    """Raised when a caller's source locator names content the index no longer holds.
+
+    A locator carries the ``markdown_sha256`` its character offsets were measured against. If the
+    attachment has since been reconverted -- by a math-OCR pass, an image-OCR enrichment, or a
+    plain reconversion -- those offsets now address different text, and the chunk at that index is
+    no longer the passage the caller cited. The attachment still exists, so this is neither
+    ``KeyError`` nor ``ChunkNotFoundError``: it is a specific, recoverable staleness that the
+    caller repairs by searching again.
+    """
+
+    def __init__(self, message: str, *, expected: str, actual: str) -> None:
+        super().__init__(message)
+        self.expected = expected
+        self.actual = actual
+
+
 class DuplicateAttachmentKeyError(ValueError):
     """Raised when an index build encounters the same zotero_attachment_key twice.
 
     Duplicate keys would make get_fulltext return an arbitrary row for that attachment, so the
     build refuses instead of publishing an ambiguous index.
     """
+
+
+def chunk_sha256(text: str) -> str:
+    """Hash one stored chunk's text, deriving what a document-level hash cannot express.
+
+    Not stored as a column. `chunks.text` is already on disk, so this is computable by any reader
+    from an index built by any version -- adding a column would instead force every existing index
+    to be rebuilt before a caller could use chunk-level verification at all. Search computes it
+    only for the rows it actually returns, inside the query that already reads their stored text.
+    """
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 class IndexSchemaUnsupportedError(RuntimeError):
@@ -303,7 +334,7 @@ def search_fts(
             (match_query, candidate_limit),
         ).fetchall()
         selected_rows = rows[:limit]
-        matched_fields_by_chunk_id = _matched_fields_for_chunks(
+        chunk_facts_by_chunk_id = _chunk_facts_for_chunks(
             con, match_query, [row["chunk_id"] for row in selected_rows]
         )
     finally:
@@ -314,21 +345,33 @@ def search_fts(
         row_dict.pop("record_id")
         row_dict.pop("record_rank")
         row_dict.pop("body_match_marker")
-        row_dict["matched_fields"] = matched_fields_by_chunk_id[row_dict.pop("chunk_id")]
+        facts = chunk_facts_by_chunk_id[row_dict.pop("chunk_id")]
+        row_dict["matched_fields"] = facts.matched_fields
+        row_dict["chunk_sha256"] = facts.text_sha256
         row_dict["has_math"] = bool(row_dict["has_math"])
         results.append(SearchResult(**row_dict))
     return results
 
 
-def _matched_fields_for_chunks(
+@dataclass(frozen=True)
+class _ChunkFacts:
+    matched_fields: list[str]
+    text_sha256: str
+
+
+def _chunk_facts_for_chunks(
     con: sqlite3.Connection, match_query: str, chunk_ids: list[int]
-) -> dict[int, list[str]]:
-    """Compute precise matched_fields for a small, already-selected set of chunks.
+) -> dict[int, _ChunkFacts]:
+    """Compute precise matched_fields and a chunk content hash for already-selected chunks.
 
     Comparing each highlighted value with its source detects FTS-inserted markers without
     mistaking marker-like control characters already present in scholarly text for a match. This
     requires the full stored text of each field, so it is scoped to the caller's final result
     rows (bounded by the search `limit`) rather than the full ranking candidate set.
+
+    The chunk hash is computed here rather than in a query of its own precisely because this one
+    already reads `c.text` for exactly these rows: hashing rides along for free, and the ranking
+    pass upstream keeps avoiding stored text entirely.
     """
     if not chunk_ids:
         return {}
@@ -352,20 +395,102 @@ def _matched_fields_for_chunks(
         """,
         (match_query, *chunk_ids),
     ).fetchall()
-    result: dict[int, list[str]] = {}
+    result: dict[int, _ChunkFacts] = {}
     for row in rows:
         row_dict = dict(row)
-        result[row_dict["chunk_id"]] = [
-            field
-            for field, original_field in (
-                ("title", "title"),
-                ("creators", "creators"),
-                ("text", "stored_text"),
-                ("citation_key", "citation_key"),
-            )
-            if row_dict[f"{field}_highlighted"] != row_dict[original_field]
-        ]
+        result[row_dict["chunk_id"]] = _ChunkFacts(
+            matched_fields=[
+                field
+                for field, original_field in (
+                    ("title", "title"),
+                    ("creators", "creators"),
+                    ("text", "stored_text"),
+                    ("citation_key", "citation_key"),
+                )
+                if row_dict[f"{field}_highlighted"] != row_dict[original_field]
+            ],
+            text_sha256=chunk_sha256(row_dict["stored_text"]),
+        )
     return result
+
+
+def check_locator_freshness(
+    expected_content_sha256: str | None,
+    stored_markdown_sha256: str,
+    *,
+    attachment_key: str,
+) -> None:
+    """Decide whether a caller's locator may still be used to retrieve a passage.
+
+    ``expected_content_sha256`` is what the caller's locator recorded; ``stored_markdown_sha256``
+    is what the index holds for that attachment right now. ``get_fulltext`` calls this only when
+    the caller supplied a hash, so ``None`` should not normally arrive; an unverified request stays
+    legal, because omitting the locator is how a caller reads a document it never searched for.
+
+    Returns normally to allow retrieval; raises ``StaleLocatorError`` to refuse it, which reaches
+    the MCP client as the ``stale_locator`` error code.
+
+    The policy is to refuse, because the two failure modes are not symmetric. A refusal is loud and
+    recoverable. Serving the chunk at the same index out of replaced content is silent and
+    *undetectable downstream*: the response is shaped exactly like a correct one, so a caller that
+    quotes it attributes wording to a source that no longer says it, and nothing later in the chain
+    can notice. For a server whose purpose is supplying evidence for claims, that is the failure
+    worth paying friction to exclude.
+
+    Strictness here is cheap because it is opt-in. Supplying a hash *is* the request to be held to
+    one version; a caller that does not care omits it and is unaffected. It is also the reversible
+    direction -- loosening later, if staleness proves to fire mostly on passages that did not
+    change, breaks no one, whereas shipping lenient and tightening afterwards breaks every caller
+    that came to rely on soft behavior.
+
+    This is the document-level check, which necessarily over-refuses: ``markdown_sha256`` covers
+    the whole document, so a pass that rewrites one region -- image OCR splicing a recovered
+    equation, say -- invalidates locators into every chunk of that document, including chunks whose
+    text is byte-identical. ``check_chunk_freshness`` is the precise counterpart; a caller that
+    supplies a chunk hash is verified by that instead.
+    """
+    if expected_content_sha256 is None:
+        return
+    if expected_content_sha256 == stored_markdown_sha256:
+        return
+    raise StaleLocatorError(
+        f"The converted text for attachment {attachment_key} has been replaced since this locator "
+        "was issued; its character offsets no longer address the cited passage.",
+        expected=expected_content_sha256,
+        actual=stored_markdown_sha256,
+    )
+
+
+def check_chunk_freshness(
+    expected_chunk_sha256: str | None,
+    stored_chunk_text: str,
+    *,
+    attachment_key: str,
+    chunk_index: int,
+) -> None:
+    """Verify one chunk's stored text against the hash a caller's locator recorded.
+
+    Preferred over ``check_locator_freshness`` whenever the caller has a chunk hash, because it
+    refuses exactly what changed. A reconversion that rewrites one equation leaves every other
+    chunk byte-identical, and those citations stay valid under this check while the document hash
+    would have rejected all of them.
+
+    What it guarantees is textual, not positional: the passage returned is the passage cited. The
+    surrounding document may still have shifted, so the response's character offsets are the
+    current ones rather than the locator's -- which is why they are read back from the index on
+    every call instead of being echoed from the request.
+    """
+    if expected_chunk_sha256 is None:
+        return
+    actual = chunk_sha256(stored_chunk_text)
+    if expected_chunk_sha256 == actual:
+        return
+    raise StaleLocatorError(
+        f"Chunk {chunk_index} of attachment {attachment_key} no longer holds the text this "
+        "locator cited; it has been replaced since the locator was issued.",
+        expected=expected_chunk_sha256,
+        actual=actual,
+    )
 
 
 def get_fulltext(
@@ -374,11 +499,16 @@ def get_fulltext(
     attachment_key: str,
     max_chars: int = 12000,
     chunk_index: int | None = None,
+    expected_content_sha256: str | None = None,
+    expected_chunk_sha256: str | None = None,
 ) -> FullTextResult:
     if not attachment_key:
         raise ValueError("attachment_key is required")
     if max_chars < 1:
         raise ValueError("max_chars must be at least 1")
+    if expected_chunk_sha256 is not None and chunk_index is None:
+        # A preview spans several chunks, so there is no single chunk whose hash could be checked.
+        raise ValueError("expected_chunk_sha256 requires an exact chunk_index")
 
     con = connect_readonly(db_path)
     con.row_factory = sqlite3.Row
@@ -395,6 +525,17 @@ def get_fulltext(
         ).fetchone()
         if metadata is None:
             raise KeyError(f"No record found for attachment key {attachment_key}")
+        if expected_content_sha256 is not None and expected_chunk_sha256 is None:
+            # Checked before any chunk is read: a stale locator's offsets address text this index
+            # no longer holds, so there is nothing worth fetching for it. Skipped when a chunk hash
+            # was supplied -- that check is strictly more precise, and enforcing both would refuse
+            # a chunk whose own text is intact merely because some other part of the document was
+            # rewritten, which is the over-refusal the chunk hash exists to remove.
+            check_locator_freshness(
+                expected_content_sha256,
+                metadata["markdown_sha256"] or "",
+                attachment_key=attachment_key,
+            )
         if chunk_index is None:
             chunk_rows = _fetch_covering_chunks(con, metadata["record_id"], max_chars)
         else:
@@ -415,12 +556,15 @@ def get_fulltext(
         raise ChunkNotFoundError(f"Chunk {chunk_index} does not exist for attachment {attachment_key}")
 
     if not chunk_rows:
+        result_chunk_sha256 = None
         text = ""
         start_char = end_char = 0
         stored_chunk_char_start = stored_chunk_char_end = None
         truncated = end_char < int(metadata["char_count"] or 0)
         previous_chunk_index = next_chunk_index = has_more = None
     elif chunk_index is None:
+        # A preview is assembled from several stored chunks, so no single chunk hash describes it.
+        result_chunk_sha256 = None
         parts: list[str] = []
         start_char = int(chunk_rows[0]["start_char"])
         end_char = int(chunk_rows[0]["end_char"])
@@ -441,6 +585,15 @@ def get_fulltext(
         previous_chunk_index = next_chunk_index = has_more = None
     else:
         row = chunk_rows[0]
+        # Verified against the full stored chunk, never the max_chars-truncated slice below: the
+        # hash identifies the stored passage, so a smaller window must not change the answer.
+        check_chunk_freshness(
+            expected_chunk_sha256,
+            row["text"],
+            attachment_key=attachment_key,
+            chunk_index=chunk_index,
+        )
+        result_chunk_sha256 = chunk_sha256(row["text"])
         stored_chunk_char_start = start_char = int(row["start_char"])
         stored_chunk_char_end = int(row["end_char"])
         text = row["text"][:max_chars]
@@ -463,6 +616,7 @@ def get_fulltext(
         end_char=end_char,
         total_chars=int(metadata["char_count"] or 0),
         markdown_sha256=metadata["markdown_sha256"],
+        chunk_sha256=result_chunk_sha256,
         chunk_count=chunk_count,
         previous_chunk_index=previous_chunk_index,
         next_chunk_index=next_chunk_index,

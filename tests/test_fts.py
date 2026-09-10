@@ -8,6 +8,10 @@ from unittest.mock import patch
 
 from zotero_pdf_text.fts import (
     ChunkNotFoundError,
+    StaleLocatorError,
+    check_chunk_freshness,
+    check_locator_freshness,
+    chunk_sha256,
     DEFAULT_CONTEXT_RECORD_LIMIT,
     _chunk_text,
     build_fts_index,
@@ -577,6 +581,272 @@ class FtsTests(unittest.TestCase):
                 get_item_context(sqlite_db)
             with self.assertRaises(ValueError):
                 get_item_context(sqlite_db, parent_key="SHARED_PARENT", attachment_key="ATTACH0")
+
+
+class LocatorFreshnessTests(unittest.TestCase):
+    """A locator must not silently retrieve text from a different document version.
+
+    The policy is refusal: a caller that supplies its locator's content hash is asking to be held
+    to one version of the document, and serving the chunk at that index out of replaced content
+    would return different text under a citation the caller has already formed.
+    """
+
+    def _index(self, tmp: str) -> Path:
+        root = Path(tmp)
+        jsonl = root / "index.jsonl"
+        sqlite_db = root / "index.sqlite"
+        _write_jsonl(jsonl)
+        build_fts_index(jsonl, sqlite_db, chunk_chars=40, overlap_chars=5)
+        return sqlite_db
+
+    def test_omitted_hash_retrieves_without_verification(self):
+        """Reading a document you never searched for stays legal -- no locator, no check."""
+        with tempfile.TemporaryDirectory() as tmp:
+            sqlite_db = self._index(tmp)
+            fulltext = get_fulltext(sqlite_db, attachment_key="ATTACH1", max_chars=50)
+            self.assertEqual(fulltext.markdown_sha256, "abc")
+
+    def test_matching_hash_is_checked_against_stored_content(self):
+        """The stored hash is what the check receives, not the caller's own value echoed back."""
+        with tempfile.TemporaryDirectory() as tmp:
+            sqlite_db = self._index(tmp)
+            seen: list[tuple[str | None, str]] = []
+            with patch(
+                "zotero_pdf_text.fts.check_locator_freshness",
+                side_effect=lambda expected, actual, **kwargs: seen.append((expected, actual)),
+            ):
+                get_fulltext(
+                    sqlite_db,
+                    attachment_key="ATTACH1",
+                    max_chars=50,
+                    expected_content_sha256="abc",
+                )
+            self.assertEqual(seen, [("abc", "abc")])
+
+    def test_stale_hash_refuses_retrieval(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sqlite_db = self._index(tmp)
+            with self.assertRaises(StaleLocatorError):
+                get_fulltext(
+                    sqlite_db,
+                    attachment_key="ATTACH1",
+                    max_chars=50,
+                    expected_content_sha256="stale-hash-from-a-previous-conversion",
+                )
+
+    def test_stale_error_carries_both_hashes(self):
+        """The MCP layer reports cited-vs-current, so both must survive on the exception."""
+        with self.assertRaises(StaleLocatorError) as caught:
+            check_locator_freshness("cited", "current", attachment_key="ATTACH1")
+        self.assertEqual(caught.exception.expected, "cited")
+        self.assertEqual(caught.exception.actual, "current")
+
+    def test_matching_hash_is_permitted(self):
+        check_locator_freshness("same", "same", attachment_key="ATTACH1")
+
+    # A document whose early chunks stay byte-identical when only its tail is rewritten:
+    # chunk 0 spans characters 0-40 and chunk 3 ends at 145, so an edit from index 153 onward
+    # touches the final chunk alone. That is what makes "changed elsewhere" a real condition
+    # here rather than a stipulated one.
+    _DOCUMENT = (
+        "STABLE opening passage about cultural consensus theory and shared knowledge. "
+        "Middle section carries additional prose for padding purposes here. "
+        "TAILMARK original closing sentence."
+    )
+    _REVISED = _DOCUMENT.replace(
+        "original closing sentence.", "REVISED closing sentence recovered by an OCR pass."
+    )
+
+    def _write_document(self, path: Path, text: str) -> None:
+        record = {
+            "zotero_parent_key": "PARENT1",
+            "zotero_attachment_key": "ATTACH1",
+            "title": "Cultural consensus theory",
+            "creators": "Jane Smith",
+            "year": "2024",
+            "doi": "10.1000/one",
+            "citation_key": "smithConsensus2024",
+            "source_path": "one.pdf",
+            "markdown_path": "one.md",
+            # A real digest of the body, so rebuilding after an edit changes it the way a
+            # reconversion would, instead of the test asserting a hand-written value.
+            "markdown_sha256": chunk_sha256(text),
+            "extraction_tool": "pymupdf4llm.to_markdown",
+            "char_count": len(text),
+            "word_count": len(text.split()),
+            "page_count": "1",
+            "classification": "mapped_verified",
+            "identity_status": "verified",
+            "identity_rule": "doi_exact",
+            "has_math": False,
+            "text": text,
+        }
+        path.write_text(json.dumps(record) + "\n", encoding="utf-8")
+
+    def test_chunk_hash_survives_a_reconversion_elsewhere_in_the_document(self):
+        """The point of chunk-level hashing: an unchanged passage stays citable.
+
+        The document's tail really is rewritten here and its recorded hash really does change, so
+        the document-level check refuses every locator into the record -- including locators into
+        chunks the edit never touched. Verifying by chunk hash must still allow those, and must
+        still refuse the chunk that actually changed.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            jsonl = root / "index.jsonl"
+            sqlite_db = root / "index.sqlite"
+            self._write_document(jsonl, self._DOCUMENT)
+            build_fts_index(jsonl, sqlite_db, chunk_chars=40, overlap_chars=5)
+
+            cited_early = get_fulltext(sqlite_db, attachment_key="ATTACH1", chunk_index=0)
+            cited_tail = get_fulltext(sqlite_db, attachment_key="ATTACH1", chunk_index=4)
+            cited_document_hash = cited_early.markdown_sha256
+            self.assertIn("TAILMARK original", cited_tail.text)
+
+            self._write_document(jsonl, self._REVISED)
+            build_fts_index(jsonl, sqlite_db, chunk_chars=40, overlap_chars=5)
+
+            # The document hash genuinely moved, so it refuses the untouched early chunk too.
+            after = get_fulltext(sqlite_db, attachment_key="ATTACH1", chunk_index=0)
+            self.assertNotEqual(after.markdown_sha256, cited_document_hash)
+            with self.assertRaises(StaleLocatorError):
+                get_fulltext(
+                    sqlite_db,
+                    attachment_key="ATTACH1",
+                    chunk_index=0,
+                    expected_content_sha256=cited_document_hash,
+                )
+
+            # The early chunk is byte-identical, so its locator still verifies and returns it.
+            self.assertEqual(after.text, cited_early.text)
+            recovered = get_fulltext(
+                sqlite_db,
+                attachment_key="ATTACH1",
+                chunk_index=0,
+                expected_chunk_sha256=cited_early.chunk_sha256,
+            )
+            self.assertEqual(recovered.text, cited_early.text)
+
+            # The chunk that was actually rewritten is refused by its own hash.
+            with self.assertRaises(StaleLocatorError):
+                get_fulltext(
+                    sqlite_db,
+                    attachment_key="ATTACH1",
+                    chunk_index=4,
+                    expected_chunk_sha256=cited_tail.chunk_sha256,
+                )
+            self.assertIn(
+                "REVISED", get_fulltext(sqlite_db, attachment_key="ATTACH1", chunk_index=4).text
+            )
+
+    def test_chunk_hash_takes_precedence_over_a_stale_document_hash(self):
+        """Both supplied: the chunk hash decides, and the document hash is not also enforced.
+
+        Without this, changing retrieval to require both would still pass every other test while
+        silently breaking the documented contract.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            jsonl = root / "index.jsonl"
+            sqlite_db = root / "index.sqlite"
+            self._write_document(jsonl, self._DOCUMENT)
+            build_fts_index(jsonl, sqlite_db, chunk_chars=40, overlap_chars=5)
+            cited_early = get_fulltext(sqlite_db, attachment_key="ATTACH1", chunk_index=0)
+            stale_document_hash = cited_early.markdown_sha256
+
+            self._write_document(jsonl, self._REVISED)
+            build_fts_index(jsonl, sqlite_db, chunk_chars=40, overlap_chars=5)
+
+            passage = get_fulltext(
+                sqlite_db,
+                attachment_key="ATTACH1",
+                chunk_index=0,
+                expected_chunk_sha256=cited_early.chunk_sha256,
+                expected_content_sha256=stale_document_hash,
+            )
+            self.assertEqual(passage.text, cited_early.text)
+            # The response carries the current document hash, not the stale one it was handed.
+            self.assertNotEqual(passage.markdown_sha256, stale_document_hash)
+
+    def test_a_wrong_chunk_hash_is_not_rescued_by_a_correct_document_hash(self):
+        """The other direction of precedence: no fallback to the coarser check."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            jsonl = root / "index.jsonl"
+            sqlite_db = root / "index.sqlite"
+            self._write_document(jsonl, self._DOCUMENT)
+            build_fts_index(jsonl, sqlite_db, chunk_chars=40, overlap_chars=5)
+            current = get_fulltext(sqlite_db, attachment_key="ATTACH1", chunk_index=0)
+
+            with self.assertRaises(StaleLocatorError):
+                get_fulltext(
+                    sqlite_db,
+                    attachment_key="ATTACH1",
+                    chunk_index=0,
+                    expected_chunk_sha256=chunk_sha256("text this chunk never held"),
+                    expected_content_sha256=current.markdown_sha256,
+                )
+
+    def test_chunk_hash_refuses_replaced_chunk_text(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sqlite_db = self._index(tmp)
+            with self.assertRaises(StaleLocatorError) as caught:
+                get_fulltext(
+                    sqlite_db,
+                    attachment_key="ATTACH1",
+                    chunk_index=0,
+                    expected_chunk_sha256=chunk_sha256("text this chunk never held"),
+                )
+            self.assertEqual(caught.exception.expected, chunk_sha256("text this chunk never held"))
+            self.assertNotEqual(caught.exception.actual, caught.exception.expected)
+
+    def test_chunk_hash_is_checked_against_untruncated_stored_text(self):
+        """A smaller max_chars window must not change whether the locator verifies."""
+        with tempfile.TemporaryDirectory() as tmp:
+            sqlite_db = self._index(tmp)
+            full = get_fulltext(sqlite_db, attachment_key="ATTACH1", chunk_index=0)
+            narrow = get_fulltext(
+                sqlite_db,
+                attachment_key="ATTACH1",
+                chunk_index=0,
+                max_chars=5,
+                expected_chunk_sha256=full.chunk_sha256,
+            )
+            self.assertTrue(narrow.truncated)
+            self.assertEqual(narrow.chunk_sha256, full.chunk_sha256)
+
+    def test_chunk_hash_requires_an_exact_chunk_index(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sqlite_db = self._index(tmp)
+            with self.assertRaises(ValueError):
+                get_fulltext(
+                    sqlite_db,
+                    attachment_key="ATTACH1",
+                    expected_chunk_sha256=chunk_sha256("anything"),
+                )
+
+    def test_preview_reports_no_chunk_hash(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sqlite_db = self._index(tmp)
+            self.assertIsNone(get_fulltext(sqlite_db, attachment_key="ATTACH1").chunk_sha256)
+
+    def test_chunk_freshness_accepts_matching_text(self):
+        check_chunk_freshness(
+            chunk_sha256("a passage"), "a passage", attachment_key="ATTACH1", chunk_index=0
+        )
+
+    def test_search_locator_round_trips_into_retrieval(self):
+        """The payoff: a locator handed out by search is accepted verbatim by retrieval."""
+        with tempfile.TemporaryDirectory() as tmp:
+            sqlite_db = self._index(tmp)
+            hit = search_fts(sqlite_db, "cultural consensus", limit=1)[0]
+            passage = get_fulltext(
+                sqlite_db,
+                attachment_key=hit.zotero_attachment_key,
+                max_chars=50,
+                expected_content_sha256=hit.markdown_sha256,
+            )
+            self.assertEqual(passage.markdown_sha256, hit.markdown_sha256)
 
 
 def _write_jsonl(path: Path) -> None:

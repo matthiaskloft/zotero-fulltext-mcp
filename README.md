@@ -241,10 +241,17 @@ The safe default server exposes:
   indexed title/creator/citation-key metadata, with bounded snippets and `matched_fields` showing
   which indexed fields actually matched. `any_terms` is the broader fallback and `phrase`
   requires normalized words in order.
-- `get_fulltext_chunk(attachment_key, chunk_index)` — a bounded converted-text passage. Pass the
-  `source_locator.chunk_index` from a search hit to inspect its evidence; omitting the index reads
-  from the beginning of the converted document. Exact chunks report previous/next navigation and
-  whether a `max_chars` limit truncated the stored chunk.
+- `get_fulltext_chunk(attachment_key, chunk_index, chunk_sha256, content_sha256)` — a bounded
+  converted-text passage. Pass the `source_locator.chunk_index` from a search hit to inspect its
+  evidence, along with that locator's `chunk_sha256` to verify the passage is still the one the hit
+  contained; omitting the index reads from the beginning of the converted document, and omitting
+  the hashes skips verification. If that passage was replaced in between (a math or image OCR pass,
+  or a plain reconversion), the call answers `stale_locator` rather than returning different text
+  under a citation you already formed — search again for a current locator. `content_sha256` is the
+  coarser alternative, verifying the whole converted document instead of one passage: prefer
+  `chunk_sha256`, since a document-level check also refuses passages that did not themselves
+  change. Exact chunks report previous/next navigation and whether a `max_chars` limit truncated
+  the stored chunk.
 - `get_item_context(parent_key | attachment_key)` — path-free bibliographic, extraction, and
   identity context for the supplied key.
 - `list_timeout_candidates(status="pending")` — attachments whose primary extractor exceeded its
