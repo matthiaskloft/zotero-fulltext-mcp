@@ -330,14 +330,14 @@ both are supplied, so the document hash is not additionally enforced.
 
 `content_sha256` covers the whole converted document. For an exact `chunk_index` it is rejected
 **on its own** as `invalid_content_sha256` rather than answered, because for that request it is not
-a coarser check but the wrong one. Sending both hashes stays valid -- the chunk hash decides, as
-above -- and without a `chunk_index` the document hash verifies the document the bounded leading
-preview was taken from. It verifies document
-content, not the meaning of a `chunk_index`. Re-chunking the same text --
-`rebuild-index --chunk-chars`/`--overlap-chars` -- moves chunk boundaries while leaving
-`content_sha256` identical, so an old index would select a different passage and a document-hash
-check would accept it, returning other text under the caller's citation and reporting success. Only
-`chunk_sha256` can answer that question, and search returns it in the same locator. What a
+a coarser check but the wrong one: it verifies document content, not the meaning of a `chunk_index`.
+Re-chunking the same text -- `rebuild-index --chunk-chars`/`--overlap-chars` -- moves chunk
+boundaries while leaving `content_sha256` identical, so an old index would select a different
+passage and a document-hash check would accept it, returning other text under the caller's citation
+and reporting success. Only `chunk_sha256` can answer that question, and search returns it in the
+same locator. Sending both hashes stays valid -- the chunk hash decides, as above -- and without a
+`chunk_index` the document hash verifies the document the bounded leading preview was taken from.
+What a
 chunk hash guarantees is textual rather than positional: the passage returned is the passage cited,
 while the surrounding document may have shifted, which is why character offsets in the response are
 always the current ones rather than the request's. Verification is opt-in — a caller that omits both

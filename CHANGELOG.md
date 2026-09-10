@@ -5,103 +5,13 @@ All notable changes to this project are documented here. Format loosely follows
 
 ## [Unreleased]
 
-### Changed
-
-- `get_fulltext_chunk` now refuses `content_sha256` as the *only* verification of an exact
-  `chunk_index`, answering `invalid_content_sha256` and naming `chunk_sha256` as the value to pass
-  instead. Sending both hashes is unaffected: the chunk hash decides and the document hash is not
-  compared, as before. The combination
-  was previously accepted and described as the coarser of two checks, which was wrong in the
-  harmful direction: `markdown_sha256` covers the converted text and nothing about how that text
-  was divided, so re-indexing the same document at a different chunk size leaves it matching while
-  the cited `chunk_index` now addresses a different passage. The check passed and other text came
-  back under the caller's citation with a success response — the one outcome locator verification
-  exists to make impossible, and one that no later step in the chain could detect. Refusing the
-  request shape rather than documenting the hazard is what makes it enforceable: a caller holding a
-  real locator already has `chunk_sha256`, since search returns both hashes together. The document
-  hash keeps its meaning for a whole-document read, where there is no chunk boundary to be wrong
-  about.
+Local image OCR is held back from the release notes, not from the release artifact. The code below
+is packaged with every tagged install and `ocr-images` is a registered CLI command, so it is
+unannounced rather than absent: present, inert unless explicitly configured and invoked, and not yet
+validated for general use. Its config shape and output conventions may still change. It moves into a
+dated section once it has been stress-tested against a large library.
 
 ### Added
-
-- `get_fulltext_chunk` accepts a locator's `content_sha256` and verifies it against the index
-  before retrieving anything. Search already returned that hash in every `source_locator`, but
-  passing it back was ignored, so a passage cited before a reconversion — a math pass, an image-OCR
-  enrichment, or a plain reconversion — would silently return whatever text now sits at the same
-  chunk index. The attachment and the chunk both still exist in that situation, which is why it
-  answers a distinct `stale_locator` code rather than `attachment_not_found` or `chunk_not_found`,
-  and reports the cited and current hashes so the caller can recognise what changed and search
-  again. Verification is opt-in and refusal is strict, an asymmetry that follows from the failure
-  modes rather than from caution: a refusal is loud and recoverable, while serving replaced content
-  under a citation the caller has already formed is shaped exactly like a correct response and
-  cannot be detected downstream. A caller that omits the hash retrieves unverified, which is how a
-  document is read without having searched for it. The hash covers the whole converted document, so
-  any reconversion invalidates locators into all of its chunks, including chunks whose text is
-  unchanged; narrowing that needs a per-chunk hash the index does not store. The value is validated
-  as a bounded non-empty string rather than as 64 hex characters, because it is echoed back from
-  whatever the index holds — validating it more strictly than the server emits it would let the
-  server hand out a locator and then reject that same locator as malformed.
-- `source_locator` also carries `chunk_sha256`, the hash of the one stored chunk a search hit came
-  from, and `get_fulltext_chunk` accepts it as the precise form of the same verification. The
-  document-level hash necessarily over-refuses: it covers the whole converted text, so an image-OCR
-  pass that splices one recovered equation invalidates every locator into that document, including
-  the overwhelming majority of passages it left byte-identical — which is the common case for
-  exactly the enrichment workflow this project runs. A chunk hash refuses only the passage that
-  actually changed, so supplying one takes precedence and the document hash is not additionally
-  enforced. What it guarantees is textual rather than positional: the passage returned is the
-  passage cited, while the surrounding document may have shifted, which is why the response's
-  character offsets are always read back from the index rather than echoed from the request. It is
-  checked against the full stored chunk rather than a `max_chars`-truncated slice, so a smaller
-  window cannot change whether a locator verifies, and it requires an exact `chunk_index` — a
-  preview spans several chunks, so no single hash describes it, and refusing beats appearing to
-  verify something. No schema change and no rebuild: `chunks.text` is already stored, so the hash is
-  derived at read time, computed inside the query that already reads stored text for the rows a
-  search actually returns.
-- Schema-compatibility tests (`tests/test_schema_compat.py`) for readers pointed at an index they
-  cannot use. `_assert_supported_schema` exists so that a stale, foreign, empty or truncated
-  database fails with an instruction naming the fix, rather than as the raw `no such table` /
-  `no such column` that whichever query ran first would otherwise raise -- an error naming neither
-  the problem nor the remedy, and identical whether the file is a legacy index, someone else's
-  database, or a half-finished download. Nothing referenced that guard before. Both halves of the
-  contract are now pinned: an unusable index is refused with the recovery command named, and the
-  command it names actually restores a readable index -- exercised through `rebuild-index` itself on
-  a published generation whose database has been replaced with an unsupported schema, not only
-  through the builder it calls last, since locating the sidecar, staging a successor and swapping
-  `current.json` are the steps most likely to break. Covered cases are a legacy schema missing a
-  column that a later release added (the message names the column), a missing table, a foreign
-  SQLite file, a zero-byte file -- which SQLite opens as a valid empty database rather than
-  erroring -- and a file that is not a database at all. One test asserts the guarantee positively
-  by failing if any reader lets a `sqlite3.Error` escape, since `IndexSchemaUnsupportedError` is a
-  `RuntimeError` and a leaked SQLite error would otherwise surface as an unrelated test error. A
-  forward-compatibility case pins that the guard requires a superset rather than an exact match, so
-  an index carrying a column a reader does not know about stays readable and additive schema
-  changes do not break in both directions. At the MCP boundary, `index_schema_unsupported` had no
-  test either: the internal message deliberately names the database file so a CLI user can see
-  which file is wrong, and that same detail is a local path, so the mapping is now asserted to
-  answer the stable code while dropping it and still naming the repair command.
-- Adversarial and containment tests over the guards that protect derived artifacts
-  (`tests/test_containment.py`, plus additions to `tests/test_lock.py`, `tests/test_fts.py` and
-  `tests/test_mcp_server.py`). Surveying first showed query-size limits, untrusted instruction text
-  and attachment-key validation were already covered, so this adds only what was not. Three gaps
-  had no coverage at all. Duplicate attachment keys: the build refuses them because two rows sharing
-  a key would make retrieval return an arbitrary one, and the tests now also pin that a rejected
-  rebuild leaves the previously published index byte-identical and queryable, since the refusal
-  happens mid-build. Lock ownership: twelve threads released from one barrier contend for the write
-  lock and exactly one proceeds, which is the atomicity a sequential acquire-then-refuse test cannot
-  observe, alongside the retry branch for a holder that vanishes between a failed create and the
-  read of its file, and proof that a live holder's lock is never overwritten. Tampered index
-  pointers reaching MCP reads: `index_pointer_invalid` had no test in either of the two places it is
-  raised, so hostile `current.json` values are now driven through the tool boundary and asserted to
-  answer that stable code while leaking no local path -- the internal artifact error contains
-  absolute paths, and the redaction was previously an untested claim -- and a repaired pointer is
-  shown to recover without restarting the server, since resolution happens per request.
-  Containment itself is tested through `resolve_generation_dir` against traversal, separator,
-  absolute, UNC, NUL and newline identifiers, including with the escape target present and readable
-  so that refusal cannot be an accident of a missing path. One boundary is pinned as a known limit
-  rather than left as an assumed guarantee: replacing `generations/` itself with a symlink is not
-  caught, because the check resolves both sides and they still match. Symlink cases skip where the
-  platform refuses to create one, so they run on CI's Linux and macOS legs.
-
 
 - `ocr-images --key <ATTACHMENT_KEY>`: recover the equations, tables and figure content that
   conversion left stranded in extracted PNGs. `pymupdf4llm` pulls vector-drawn display equations
@@ -229,6 +139,91 @@ All notable changes to this project are documented here. Format loosely follows
   a single extractor name (`marker`); it is now a per-component membership test, so a composite
   provenance label such as `pymupdf4llm.to_markdown+glm-ocr` is recognised while an unknown
   extractor still warns.
+
+## [0.4.0] - 2026-09-10
+
+Citation binding for retrieved evidence, plus test coverage for the guards that protect the derived
+index.
+
+### Added
+
+- Locator verification on `get_fulltext_chunk`. Search has always returned a `source_locator`
+  carrying a content hash, but passing it back was ignored, so a passage cited before a reconversion
+  -- a math pass, an image-OCR enrichment, or a plain rebuild -- would silently return whatever text
+  now sits at the same chunk index. Retrieval now checks the caller's locator against what the index
+  holds and answers a distinct `stale_locator` code, reporting the cited and current hashes so the
+  caller can recognise what changed and search again. It is distinct from `attachment_not_found` and
+  `chunk_not_found` because in this situation both the attachment and the chunk still exist.
+  Verification is opt-in and refusal is strict, an asymmetry that follows from the failure modes
+  rather than from caution: a refusal is loud and recoverable, while serving replaced content under
+  a citation the caller has already formed is shaped exactly like a correct response and cannot be
+  detected anywhere downstream. A caller that omits the hashes retrieves unverified, which is how a
+  document is read without having searched for it first.
+- Two hashes in `source_locator`, and which one applies depends on what is being retrieved.
+  `chunk_sha256` verifies one exact chunk and is the hash to use for a cited passage: it refuses
+  only the passage that actually changed, so an OCR pass that splices a single recovered equation no
+  longer invalidates every other citation into that document -- the common case for exactly the
+  enrichment workflow this project runs. `content_sha256` covers the whole converted document and
+  applies to a whole-document read. For an exact `chunk_index` it is rejected *on its own* as
+  `invalid_content_sha256`, because it verifies document content and not the meaning of a
+  `chunk_index`: re-indexing the same text at a different chunk size leaves it matching while that
+  index now addresses a different passage, so the check would pass and hand back other text under
+  the caller's citation with a success response. Supplying both is valid -- the chunk hash decides
+  and the document hash is not compared.
+- What a chunk hash guarantees is textual rather than positional: the passage returned is the
+  passage cited, while the surrounding document may have shifted, which is why the response's
+  character offsets are always read back from the index rather than echoed from the request. It is
+  checked against the full stored chunk rather than a `max_chars`-truncated slice, so a smaller
+  window cannot change whether a locator verifies. Adding it needed no schema change and no rebuild:
+  `chunks.text` is already stored, so the hash is derived at read time inside the query that already
+  reads stored text for the rows a search returns. `content_sha256` is validated as a bounded
+  non-empty string rather than as 64 hex characters, because it is echoed back from whatever the
+  index holds -- validating it more strictly than the server emits it would let the server hand out
+  a locator and then reject that same locator as malformed.
+- Schema-compatibility tests (`tests/test_schema_compat.py`) for readers pointed at an index they
+  cannot use. `_assert_supported_schema` exists so that a stale, foreign, empty or truncated
+  database fails with an instruction naming the fix, rather than as the raw `no such table` /
+  `no such column` that whichever query ran first would otherwise raise -- an error naming neither
+  the problem nor the remedy, and identical whether the file is a legacy index, someone else's
+  database, or a half-finished download. Nothing referenced that guard before. Both halves of the
+  contract are now pinned: an unusable index is refused with the recovery command named, and the
+  command it names actually restores a readable index -- exercised through `rebuild-index` itself on
+  a published generation whose database has been replaced with an unsupported schema, not only
+  through the builder it calls last, since locating the sidecar, staging a successor and swapping
+  `current.json` are the steps most likely to break. Covered cases are a legacy schema missing a
+  column that a later release added (the message names the column), a missing table, a foreign
+  SQLite file, a zero-byte file -- which SQLite opens as a valid empty database rather than
+  erroring -- and a file that is not a database at all. One test asserts the guarantee positively
+  by failing if any reader lets a `sqlite3.Error` escape, since `IndexSchemaUnsupportedError` is a
+  `RuntimeError` and a leaked SQLite error would otherwise surface as an unrelated test error. A
+  forward-compatibility case pins that the guard requires a superset rather than an exact match, so
+  an index carrying a column a reader does not know about stays readable and additive schema
+  changes do not break in both directions. At the MCP boundary, `index_schema_unsupported` had no
+  test either: the internal message deliberately names the database file so a CLI user can see
+  which file is wrong, and that same detail is a local path, so the mapping is now asserted to
+  answer the stable code while dropping it and still naming the repair command.
+- Adversarial and containment tests over the guards that protect derived artifacts
+  (`tests/test_containment.py`, plus additions to `tests/test_lock.py`, `tests/test_fts.py` and
+  `tests/test_mcp_server.py`). Surveying first showed query-size limits, untrusted instruction text
+  and attachment-key validation were already covered, so this adds only what was not. Three gaps
+  had no coverage at all. Duplicate attachment keys: the build refuses them because two rows sharing
+  a key would make retrieval return an arbitrary one, and the tests now also pin that a rejected
+  rebuild leaves the previously published index byte-identical and queryable, since the refusal
+  happens mid-build. Lock ownership: twelve threads released from one barrier contend for the write
+  lock and exactly one proceeds, which is the atomicity a sequential acquire-then-refuse test cannot
+  observe, alongside the retry branch for a holder that vanishes between a failed create and the
+  read of its file, and proof that a live holder's lock is never overwritten. Tampered index
+  pointers reaching MCP reads: `index_pointer_invalid` had no test in either of the two places it is
+  raised, so hostile `current.json` values are now driven through the tool boundary and asserted to
+  answer that stable code while leaking no local path -- the internal artifact error contains
+  absolute paths, and the redaction was previously an untested claim -- and a repaired pointer is
+  shown to recover without restarting the server, since resolution happens per request.
+  Containment itself is tested through `resolve_generation_dir` against traversal, separator,
+  absolute, UNC, NUL and newline identifiers, including with the escape target present and readable
+  so that refusal cannot be an accident of a missing path. One boundary is pinned as a known limit
+  rather than left as an assumed guarantee: replacing `generations/` itself with a symlink is not
+  caught, because the check resolves both sides and they still match. Symlink cases skip where the
+  platform refuses to create one, so they run on CI's Linux and macOS legs.
 
 ## [0.3.0] - 2026-09-10
 
@@ -388,6 +383,7 @@ author's own machine.
 
 Initial import of the Zotero full-text conversion pipeline, CLI, and MCP server. Not tagged.
 
-[Unreleased]: https://github.com/matthiaskloft/zotero-fulltext-mcp/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/matthiaskloft/zotero-fulltext-mcp/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.4.0
 [0.3.0]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.3.0
 [0.2.0]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.2.0

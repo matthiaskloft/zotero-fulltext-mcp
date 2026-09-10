@@ -78,10 +78,6 @@ class PipelineLockTests(unittest.TestCase):
             self.assertEqual(lock_path.read_text(encoding="utf-8"), "not json")
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class LockOwnershipRaceTests(unittest.TestCase):
     """Concurrency tests for the ownership guarantee sequential tests cannot reach.
 
@@ -233,3 +229,7 @@ class LockOwnershipRaceTests(unittest.TestCase):
             # The refusal names the holder, which is what makes it actionable.
             self.assertIn("other-machine", str(caught.exception))
             self.assertIn("4242", str(caught.exception))
+
+
+if __name__ == "__main__":
+    unittest.main()

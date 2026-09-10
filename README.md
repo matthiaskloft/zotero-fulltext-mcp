@@ -31,7 +31,7 @@ floating `HEAD` — a tag is a known-good, CI-verified snapshot; `HEAD` on `mast
 mid-change:
 
 ```powershell
-C:\Users\you\.venvs\zotero_fulltext_mcp\Scripts\python.exe -m pip install "git+https://github.com/matthiaskloft/zotero-fulltext-mcp@v0.3.0#egg=zotero-fulltext-mcp[mcp]"
+C:\Users\you\.venvs\zotero_fulltext_mcp\Scripts\python.exe -m pip install "git+https://github.com/matthiaskloft/zotero-fulltext-mcp@v0.4.0#egg=zotero-fulltext-mcp[mcp]"
 ```
 
 Substitute the latest tag from the
@@ -66,10 +66,12 @@ needed for `reconvert-math` and the opt-in `reconvert_with_math_ocr` MCP tool, G
 
 ### Experimental: local image OCR for equations and figures
 
-> **Not part of a tagged release yet.** This feature is present in the source but has not
-> been stress-tested against a large library, and its `image_ocr` config shape and output
-> conventions may still change. It is inert unless you configure and invoke it explicitly.
-> It will ship, and be documented as stable, under its own later tag.
+> **Present in the install, but not yet supported.** This command is packaged with every
+> release and `ocr-images --help` will work, so treat its availability as no guarantee: it
+> has not been stress-tested against a large library, and its `image_ocr` config shape and
+> output conventions may still change without a deprecation cycle. It is inert unless you
+> configure and invoke it explicitly. It will be announced, and documented as stable, under
+> a later tag; until then it is unannounced rather than absent.
 
 Conversion pulls display equations, tables and figures that a PDF drew as vector graphics into
 their own PNGs, leaving an opaque `![](…png)` placeholder in the Markdown — so that notation is
