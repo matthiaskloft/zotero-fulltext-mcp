@@ -177,6 +177,8 @@ _REQUIRED_METADATA_COLUMNS = frozenset(
         "identity_status",
         "identity_rule",
         "has_math",
+        "source_sha256",
+        "indexed_at",
     }
 )
 
@@ -757,7 +759,9 @@ def _create_schema(con: sqlite3.Connection) -> None:
             classification TEXT NOT NULL,
             identity_status TEXT NOT NULL,
             identity_rule TEXT NOT NULL,
-            has_math INTEGER NOT NULL DEFAULT 0
+            has_math INTEGER NOT NULL DEFAULT 0,
+            source_sha256 TEXT NOT NULL DEFAULT '',
+            indexed_at TEXT NOT NULL DEFAULT ''
         );
         CREATE INDEX metadata_attachment_key_idx ON metadata(zotero_attachment_key);
         CREATE INDEX metadata_parent_key_idx ON metadata(zotero_parent_key);
@@ -803,11 +807,22 @@ def _insert_metadata(con: sqlite3.Connection, record: dict[str, object]) -> int:
         "identity_status",
         "identity_rule",
         "has_math",
+        "source_sha256",
+        "indexed_at",
     ]
-    values = [_string(record.get(column)) for column in columns]
-    values[11] = int(record.get("char_count") or 0)
-    values[12] = int(record.get("word_count") or 0)
-    values[17] = int(bool(record.get("has_math", False)))
+    # Coerce by column name, not by position. The previous positional form (values[11], values[17])
+    # silently bound the wrong value to the wrong column the moment a column was inserted anywhere
+    # above it -- which is exactly what adding source_sha256/indexed_at would have done.
+    integer_columns = {"char_count", "word_count"}
+    boolean_columns = {"has_math"}
+    values: list[object] = []
+    for column in columns:
+        if column in integer_columns:
+            values.append(int(record.get(column) or 0))
+        elif column in boolean_columns:
+            values.append(int(bool(record.get(column, False))))
+        else:
+            values.append(_string(record.get(column)))
     cursor = con.execute(
         f"INSERT INTO metadata ({','.join(columns)}) VALUES ({','.join('?' for _ in columns)})",
         values,

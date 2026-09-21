@@ -13,6 +13,23 @@ dated section once it has been stress-tested against a large library.
 
 ### Added
 
+- `audit-library --mapping-report <snapshot>`: a read-only drift report. It compares three
+  independent views of the same library -- the `dry-run` mapping snapshot, the files on disk, and
+  the published index generation's JSONL -- and reports where they disagree. It moves, renames
+  and rewrites nothing. Statuses are a **set**, not a bucket: an attachment can
+  hold several at once, so the reported counts overlap and do not sum to the attachment total,
+  and the output says so. Two counts sit outside the status vocabulary to keep it honest --
+  `ineligible_items` explains why correctly-quarantined attachments report nothing at all, and
+  `source_provenance_unknown` states how many records cannot be checked for source drift yet.
+  `--full` re-hashes every source PDF from disk; without it `source_changed` is still evaluated,
+  against the hashes the mapper recorded during `dry-run`, so the default mode is current as of
+  the snapshot rather than blind. Also adds `library_status()` as a data function for
+  later CLI/MCP use, reporting health categories and last successful publication rather than
+  calling index row counts "coverage".
+- `unverified_indexed`: an audit status beyond the nine originally planned, naming an attachment
+  whose identity was never verified but which is nonetheless in the published index and being
+  returned by search. Distinct from `orphaned_index` because the repair differs: verify the
+  identity, rather than drop a row Zotero no longer represents.
 - `ocr-images --key <ATTACHMENT_KEY>`: recover the equations, tables and figure content that
   conversion left stranded in extracted PNGs. `pymupdf4llm` pulls vector-drawn display equations
   out of a PDF into their own crop files and leaves an opaque `![](…png)` placeholder behind, so
@@ -108,8 +125,34 @@ dated section once it has been stress-tested against a large library.
   GPU-aware selection policy (`recommend_engine`) is a documented stub with its trade-off written
   out; three tests are staged against its contract and skip until it exists.
 
+### Changed
+
+- **Breaking (index schema).** Index records now carry `source_sha256` -- the SHA-256 of the
+  source PDF the text was extracted from, hashed at conversion time -- and `indexed_at`. Without
+  recorded source provenance, "the source differs from what was indexed" was not computable at
+  all, and `audit-library` could not report `source_changed` honestly. Readers reject an index
+  built before this change with a named error pointing at `rebuild-index`, rather than failing on
+  a missing column deep inside a query. Two consequences worth stating plainly: every existing
+  index needs one `rebuild-index`, and because a rebuild re-reads conversion manifests that carry
+  no source hash, existing records keep an empty `source_sha256` until they are reconverted. Until
+  then a low `source_changed` count means *not measured*, not *not drifted* -- which is what
+  `source_provenance_unknown` exists to report.
+- `reconvert-math` and `ocr-images` preserve an attachment's recorded `source_sha256` through
+  their index upsert instead of dropping it. Both re-derive text from the same PDF, so the
+  recorded provenance stays accurate; losing it would have permanently disabled `source_changed`
+  for every attachment either command touched.
+- `source_sha256` is deliberately empty for `skipped_existing` conversions. That row reused
+  Markdown converted from whatever the PDF was at the time, so hashing the file now would record
+  confident provenance for text that may predate it. Empty means *not known*, and is never read
+  as *unchanged*.
+
 ### Fixed
 
+- Metadata rows were bound to SQLite columns by hard-coded position (`values[11]`, `values[17]`),
+  so inserting any column above one of those indices would have silently bound an integer into
+  the wrong column with no error. Now coerced by column name. This was latent: with the previous
+  18 columns those indices were correct, so no shipped index ever held wrong data. Found while
+  adding the provenance columns, which is exactly the edit that would have triggered it.
 - Figures whose caption label sits two lines above them are no longer routed to the formula
   prompt, where the splice replaced their image link with LaTeX invented from a plot. In the
   common journal layout the label (`Figure 3`) is separated from the crop by an italicised title

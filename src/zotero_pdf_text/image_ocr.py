@@ -21,7 +21,7 @@ import re
 import struct
 import urllib.parse
 from dataclasses import asdict, dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from ._atomic import replace_with_retry
@@ -1008,6 +1008,12 @@ def _commit(
                 # Preserved, not recomputed: has_math gates the lossy-math warning, and the
                 # document still contains the mathematics it did before enrichment.
                 has_math=has_math,
+                # Also preserved. Enrichment rewrites the derived Markdown, never the source PDF,
+                # so the recorded source hash is still accurate. Dropping it would erase the only
+                # evidence `audit-library` has for source_changed and move the attachment into
+                # source_provenance_unknown with nothing recording why.
+                source_sha256=record.get("source_sha256", ""),
+                indexed_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
                 text=new_text,
             )
             stage_and_publish(

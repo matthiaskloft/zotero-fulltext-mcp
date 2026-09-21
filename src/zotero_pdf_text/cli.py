@@ -45,6 +45,7 @@ from .fts import (
 )
 from .ingestion import dry_run_ingest, ingest_approved
 from .indexer import load_indexed_keys
+from .library import ALL_STATUSES, LibraryAudit, LibraryAuditError, audit_library
 from .lock import PipelineLockedError, pipeline_write_lock
 from .mapper import run_dry_run
 from .mcp_contract import (
@@ -316,6 +317,45 @@ def build_parser() -> argparse.ArgumentParser:
     coverage = subparsers.add_parser("coverage-report", help="Summarize SQLite FTS coverage.")
     coverage.add_argument("--db", type=Path, default=DEFAULT_FTS_DB, help="SQLite FTS database path.")
     coverage.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+    audit_library_parser = subparsers.add_parser(
+        "audit-library",
+        help="Compare the Zotero mapping, converted files on disk, and the published index.",
+        description=(
+            "Read-only drift report. Consumes an existing dry-run mapping snapshot and compares "
+            "it against the filesystem and the published index generation's JSONL. Moves, "
+            "renames and rewrites nothing. An attachment can hold several statuses at once, so "
+            "the reported counts overlap and do not sum to the item total."
+        ),
+    )
+    audit_library_parser.add_argument(
+        "--config", type=Path, default=resolve_config_path(), help="Path to project config JSON. Default: resolved for this machine."
+    )
+    audit_library_parser.add_argument(
+        "--mapping-report",
+        type=Path,
+        required=True,
+        help="Existing mapping_report.jsonl, or the run directory containing it. Produce one with 'dry-run'.",
+    )
+    audit_library_parser.add_argument(
+        "--full",
+        action="store_true",
+        help=(
+            "Re-hash every source PDF from disk. source_changed is evaluated either way -- the "
+            "dry-run snapshot already carries a hash per PDF -- so this makes the comparison "
+            "current rather than possible, and additionally covers index-only rows."
+        ),
+    )
+    audit_library_parser.add_argument(
+        "--status",
+        action="append",
+        choices=sorted(ALL_STATUSES),
+        default=None,
+        help="Only list items holding this status. Repeatable. Summary counts always cover the whole library.",
+    )
+    audit_library_parser.add_argument(
+        "--output", type=Path, default=None, help="Write the full JSON report here instead of listing items on stdout."
+    )
+    audit_library_parser.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
     bibtex_check = subparsers.add_parser("bibtex-check", help="Check Better BibTeX JSON-RPC availability.")
     bibtex_check.add_argument("--endpoint", default=DEFAULT_BBT_ENDPOINT, help="Better BibTeX JSON-RPC endpoint.")
     bibtex_export = subparsers.add_parser("bibtex-export", help="Export Better BibTeX/BibLaTeX entries by citation key.")
@@ -841,6 +881,32 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(report, ensure_ascii=False, indent=2))
         else:
             _print_coverage_report(report)
+        return 0
+    if args.command == "audit-library":
+        config = load_config(args.config)
+        validate_config(config)
+        try:
+            audit = audit_library(config, args.mapping_report, full_audit=args.full)
+        except (LibraryAuditError, ArtifactError, IndexSchemaUnsupportedError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        payload = audit.to_dict()
+        if args.output is not None:
+            # --output means the report goes to the file, not to stdout, whatever --json says.
+            # Printing both would leave stdout holding a status line followed by the whole
+            # report: neither readable nor parseable.
+            args.output.parent.mkdir(parents=True, exist_ok=True)
+            args.output.write_text(
+                json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8", newline="\n"
+            )
+            if not args.json:
+                print(f"Audit report written: {args.output}")
+                _print_library_audit(audit, statuses=args.status, list_items=False)
+            return 0
+        if args.json:
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+        else:
+            _print_library_audit(audit, statuses=args.status)
         return 0
     if args.command == "bibtex-check":
         print(json.dumps(check_better_bibtex(args.endpoint), ensure_ascii=False, indent=2))
@@ -1393,6 +1459,56 @@ def _print_coverage_report(report: dict[str, object]) -> None:
         print(field + ":")
         for key, count in sorted(dict(report[field]).items()):
             print(f"- {key}: {count}")
+
+
+def _print_library_audit(
+    audit: LibraryAudit, *, statuses: list[str] | None = None, list_items: bool = True
+) -> None:
+    """Render an audit, leading with what the numbers do and do not mean.
+
+    The overlap note is not decoration. Every other count this CLI prints partitions its
+    population, so a reader has every reason to assume these do too and to conclude the audit
+    lost items when they fail to add up.
+    """
+    print(f"Snapshot: {audit.snapshot_time}")
+    print(f"Mapping report: {audit.mapping_report}")
+    print(f"Published generation: {audit.generation_id or '(none published)'}")
+    print(f"Mode: {'full (source PDFs hashed)' if audit.full_audit else 'metadata only'}")
+    print(f"Attachments: {audit.total_items}")
+    print("")
+    print("Status counts (an attachment can hold several; these overlap and do not sum):")
+    for status in ALL_STATUSES:
+        print(f"- {status}: {audit.status_counts.get(status, 0)}")
+    print("")
+    if audit.ineligible_items:
+        print(
+            f"{audit.ineligible_items} attachment(s) are unverified or unmapped and are correctly "
+            "absent from the library; they report no status."
+        )
+    if audit.source_provenance_unknown:
+        print(
+            f"{audit.source_provenance_unknown} indexed record(s) carry no source hash, so "
+            "source_changed cannot be evaluated for them. Reconvert to establish provenance."
+        )
+    if not audit.full_audit:
+        print(
+            "source_changed was compared against the mapping snapshot's hashes, so it reflects "
+            "the library as of that dry-run. Re-run with --full to hash source PDFs as of now."
+        )
+    if not list_items:
+        return
+    selected = [
+        item
+        for item in audit.items
+        if item.statuses and (not statuses or any(item.has(s) for s in statuses))
+    ]
+    if not selected:
+        return
+    print("")
+    print("Items:")
+    for item in selected:
+        flag = "" if item.canonical_eligible else " [not library-eligible]"
+        print(f"- {item.attachment_key}: {', '.join(item.statuses)}{flag}")
 
 
 @dataclass(frozen=True)

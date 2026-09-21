@@ -391,6 +391,23 @@ Coverage:
   --db $data\index\zotero_text_index.sqlite
 ```
 
+Audit the library for drift (read-only; moves and rewrites nothing):
+
+```powershell
+& $python -m zotero_pdf_text audit-library `
+  --config .\config.json `
+  --mapping-report $data\runs\<run-id>\mapping_report.jsonl
+```
+
+The audit consumes an existing `dry-run` snapshot, so produce one first if none is current. Add
+`--full` to also hash every source PDF -- without it `source_changed` is never evaluated and
+reads as zero. Add `--status <name>` to list only items holding a given status, or `--output
+<path>` to write the full JSON report.
+
+An attachment can hold several statuses at once, so the reported counts overlap and do not sum
+to the attachment total. See the Library Audit section of `docs/data-dictionary.md` for what each
+status means.
+
 ## Better BibTeX For LaTeX
 
 LLMs should use the `citation_key` from full-text search results in LaTeX, then

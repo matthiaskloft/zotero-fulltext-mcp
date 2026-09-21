@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 import os
 import re
@@ -77,6 +78,12 @@ class ConversionResult:
     identity_rule: str
     has_math: str = "false"
     error: str = ""
+    # SHA-256 of the source PDF this text was actually extracted from, hashed at conversion time.
+    # Empty means "not known", which is not the same as "unchanged": a `skipped_existing` row
+    # reused Markdown converted from whatever the PDF was back then, and hashing the file now
+    # would record confident provenance for text that may predate it. An audit reports an empty
+    # hash as unverifiable rather than treating the source as current.
+    source_sha256: str = ""
 
 
 def convert_sample(
@@ -335,7 +342,15 @@ def _convert_row(
         output_path.write_text(
             _with_front_matter(row, markdown, extraction_tool, has_math=has_math), encoding="utf-8", newline="\n"
         )
-        result = _result(row, output_path, "converted", extraction_tool=extraction_tool, has_math=has_math, error=fallback_note)
+        result = _result(
+            row,
+            output_path,
+            "converted",
+            extraction_tool=extraction_tool,
+            has_math=has_math,
+            error=fallback_note,
+            source_sha256=_source_sha256(source_path),
+        )
         candidate = (
             _build_timeout_candidate(row, source_path, effective_timeout, "fallback_used", "converted")
             if primary_timed_out
@@ -586,6 +601,22 @@ def _existing_markdown_body(output_path: Path) -> str:
     return markdown[end + len("\n---\n") :].lstrip("\n").rstrip()
 
 
+def _source_sha256(source_path: Path) -> str:
+    """Hash the source PDF, returning "" if it cannot be read.
+
+    A hash failure must not fail a conversion that otherwise succeeded, so this degrades to
+    "not known" rather than raising. Callers treat "" as unverifiable, never as unchanged.
+    """
+    try:
+        digest = hashlib.sha256()
+        with source_path.open("rb") as handle:
+            for block in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(block)
+        return digest.hexdigest()
+    except OSError:
+        return ""
+
+
 def _result(
     row: dict[str, str],
     output_path: Path,
@@ -593,11 +624,13 @@ def _result(
     error: str = "",
     extraction_tool: str = EXTRACTION_TOOL,
     has_math: bool = False,
+    source_sha256: str = "",
 ) -> ConversionResult:
     return ConversionResult(
         status=status,
         extraction_tool=extraction_tool,
         has_math="true" if has_math else "false",
+        source_sha256=source_sha256,
         zotero_parent_key=row.get("zotero_parent_key", ""),
         zotero_attachment_key=row.get("zotero_attachment_key", ""),
         item_type=row.get("item_type", ""),

@@ -29,6 +29,11 @@ Each converted Markdown file starts with front matter:
 - `identity_status`
 - `identity_rule`
 - `has_math`: `true`/`false`, auto-detected from math fonts and Unicode math-symbol density.
+- `source_sha256`: SHA-256 of the source PDF this text was extracted from, hashed at conversion
+  time. Empty means *not known*, which is not the same as unchanged: a `skipped_existing` row
+  reused Markdown converted from whatever the PDF was at the time, so hashing the file now would
+  record confident provenance for text that may predate it. `audit-library` treats an empty value
+  as unverifiable and never as evidence that the source is current.
 - `error`
 
 ### Extraction Timeout and Fallback
@@ -220,6 +225,9 @@ contains one record per available converted full text:
 - page count
 - mapping classification and identity status
 - `has_math`: boolean, carried from the manifest
+- `source_sha256`: carried through from the conversion manifest, never recomputed at index time.
+  Re-hashing the PDF here would record today's file against text extracted from an older one.
+- `indexed_at`: UTC timestamp of when this record was built
 - full Markdown-derived `text`
 
 Reconvert a single paper with `reconvert-math --key <attachment_key>` when `has_math` is true and
@@ -245,6 +253,50 @@ navigation, but does not claim that the query occurs in that chunk's body text.
 
 Search normalizes query text into at most 20 word terms. `all_terms` is the default mode,
 `any_terms` matches any normalized term, and `phrase` requires the normalized terms in order.
+
+## Library Audit
+
+`audit-library` compares three independent views of the same library -- the mapper snapshot, the
+filesystem, and the published index generation's JSONL -- and reports where they disagree. It is
+read-only: it moves, renames and rewrites nothing.
+
+The canonical layout is recorded per item as evidence (`canonical_markdown_exists`) but is not
+classified, because nothing writes to `library/` yet and a status derived from it would fire on
+every attachment while meaning nothing. The audit reads the generation JSONL only and never
+opens the SQLite index, so a JSONL/FTS divergence within one generation is out of its scope.
+
+**Statuses are a set, not a bucket.** An attachment can hold several at once (a PDF that moved
+*and* whose metadata changed *and* whose Markdown predates the current source holds three), so
+the reported counts overlap and do not sum to the attachment total. Only `total_items` partitions
+the library.
+
+- `current`: indexed, eligible, source and Markdown present, no other status. The only status
+  that excludes all the others.
+- `unindexed`: mapped and library-eligible, but absent from the published index.
+- `stale_markdown`: the Markdown on disk differs from what the index holds, so search returns
+  text that no longer matches the file.
+- `source_changed`: the source PDF differs from the one this text was extracted from. Compared
+  against the mapping snapshot's hash by default and against a freshly computed hash under
+  `--full`; either way it fires only when the indexed record actually carries a source hash.
+- `metadata_changed`: title, DOI or citation key differ between Zotero and the index. Creators
+  and year are deliberately excluded -- they change during ordinary bibliographic tidying and
+  would fire across a large share of the library without indicating real drift.
+- `missing_source`: the source PDF is gone from disk.
+- `missing_markdown`: the converted Markdown is gone from disk.
+- `orphaned_index`: the index holds a row for an attachment Zotero no longer represents.
+- `unverified_indexed`: Zotero represents the attachment but its identity was never verified, yet
+  it is in the published index and is being returned by search. Distinct from `orphaned_index`:
+  the repair is to verify the identity, not to drop the row.
+- `duplicate_key`: more than one index row shares an attachment key.
+
+Two counts sit outside the status vocabulary and explain it:
+
+- `ineligible_items`: attachments that are unverified or unmapped and therefore correctly absent
+  from the library. They report no status at all, and this count is what distinguishes that
+  intended silence from a broken rule.
+- `source_provenance_unknown`: indexed records carrying no `source_sha256`, for which
+  `source_changed` cannot be evaluated at all. Until those records are reconverted, a low
+  `source_changed` count means *not measured*, not *not drifted*.
 
 ## Confidence Fields
 

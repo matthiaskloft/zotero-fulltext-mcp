@@ -7,7 +7,7 @@ import subprocess
 import sys
 import tempfile
 from dataclasses import asdict, dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from ._atomic import replace_with_retry
@@ -222,6 +222,13 @@ def reconvert_with_marker(
                     identity_status=record["identity_status"],
                     identity_rule=record["identity_rule"],
                     has_math=has_math,
+                    # Carry the existing source provenance forward. This reconversion re-extracts
+                    # the same PDF, so the source hash is still accurate -- dropping it would
+                    # permanently erase the only evidence `audit-library` has for source_changed,
+                    # and the attachment would silently move into source_provenance_unknown with
+                    # nothing recording why. Older rows predating the field yield "".
+                    source_sha256=record.get("source_sha256", ""),
+                    indexed_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
                     text=new_text_for_index,
                 )
                 stage_and_publish(
