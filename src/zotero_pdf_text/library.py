@@ -202,6 +202,12 @@ class ItemObservation:
     # Zotero no longer represents something it still does.
     in_zotero: bool = False
 
+    # Whether `in_zotero` is an answer or a shrug. False means the inventory could not be read,
+    # so `in_zotero=False` carries no information and membership must fall back to the snapshot.
+    # Without this flag the two cases are indistinguishable and the fallback can never be
+    # switched off, which is what let a deleted-from-Zotero item keep its mapping-row membership.
+    inventory_available: bool = False
+
     # --- mapper snapshot: what the last dry-run matched on disk ---
     in_mapping: bool = False
     classification: str = ""
@@ -332,9 +338,23 @@ def classify_item(observation: ItemObservation) -> frozenset[str]:
     obs = observation
     statuses: set[str] = set()
     eligible = is_canonical_eligible(obs)
-    # A mapping row implies Zotero represents the attachment, but the converse does not hold:
-    # an attachment whose PDF is missing never reaches the snapshot. Membership is the union.
-    represented = obs.in_zotero or obs.in_mapping
+    # Who decides whether the library still contains this attachment.
+    #
+    # When the live inventory was read, it is the authority outright: it is current, whereas a
+    # mapping row only proves membership as of the last dry-run. Unioning the two would let a
+    # stale row vouch for an attachment the user has since deleted from Zotero, reporting it
+    # `current` when the honest answer is `orphaned_index`.
+    #
+    # When the inventory could not be read, `in_zotero` is False for everything and means
+    # nothing, so the snapshot is all there is. The fallback is weaker in the other direction --
+    # an attachment whose PDF vanished never reached the snapshot -- which is why the audit
+    # reports `inventory_available` rather than quietly picking one.
+    #
+    # Written so that positive evidence is never discarded: only the *fallback* is switched off
+    # by a successful read, never `in_zotero` itself. A plain conditional would answer "not
+    # represented" for the contradictory state `in_zotero=True, inventory_available=False`,
+    # which production cannot produce but a hand-built observation can.
+    represented = obs.in_zotero or (obs.in_mapping and not obs.inventory_available)
 
     # 1. Structural facts. Reported for quarantine rows too -- a duplicate key or a vanished PDF
     #    is a fact about the library, not a judgement about whether the item belongs in it.
@@ -445,6 +465,7 @@ def audit_library(
         mapping_rows=mapping_rows,
         index_rows=index_rows,
         inventory=inventory,
+        inventory_available=inventory_available,
         full_audit=full_audit,
     )
 
@@ -495,6 +516,7 @@ def build_observations(
     mapping_rows: dict[str, dict[str, object]],
     index_rows: dict[str, list[dict[str, object]]],
     inventory: dict[str, AttachmentRecord] | None = None,
+    inventory_available: bool = False,
     full_audit: bool = False,
 ) -> list[ItemObservation]:
     """Join the views on attachment key, hashing only what the audit mode asks for.
@@ -534,6 +556,7 @@ def build_observations(
             ItemObservation(
                 attachment_key=key,
                 in_zotero=attachment is not None,
+                inventory_available=inventory_available,
                 in_mapping=mapping is not None,
                 classification=_text(mapping, "classification") or _text(indexed, "classification"),
                 identity_status=_text(mapping, "identity_status") or _text(indexed, "identity_status"),
@@ -644,14 +667,16 @@ def load_attachment_inventory(zotero_sqlite: Path) -> dict[str, AttachmentRecord
     attachment with a vanished PDF as `orphaned_index` -- claiming Zotero dropped it when Zotero
     still lists it and the file is what went missing.
     """
-    # Check before connecting. `load_attachment_records` opens read-write (the one function in
-    # zotero_db that does not use mode=ro&immutable=1), and sqlite3.connect on a path that does
-    # not exist *creates* it -- which for this argument means creating a file inside someone's
-    # Zotero data directory. An audit must never do that, so a missing database is "inventory
-    # unavailable", not something to hand to sqlite.
+    # Check before connecting: sqlite3.connect on a path that does not exist *creates* it, and
+    # for this argument that means writing a file into someone's Zotero data directory. A
+    # missing database is "inventory unavailable", not something to hand to sqlite.
     if not Path(zotero_sqlite).is_file():
         raise LibraryAuditError(f"No Zotero database at {zotero_sqlite}")
-    records = load_attachment_records(zotero_sqlite)
+    # read_only is not optional here. This is the *live* database, and a read-write connection
+    # lets SQLite checkpoint or recover on open and on close -- rewriting the main file and
+    # discarding the WAL -- even when every statement issued is a SELECT. The audit promises to
+    # touch nothing; that promise has to live in the connection, not in the queries.
+    records = load_attachment_records(zotero_sqlite, read_only=True)
     inventory: dict[str, AttachmentRecord] = {}
     for record in records:
         key = (record.attachment_key or "").strip()

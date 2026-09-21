@@ -11,14 +11,31 @@ unannounced rather than absent: present, inert unless explicitly configured and 
 validated for general use. Its config shape and output conventions may still change. It moves into a
 dated section once it has been stress-tested against a large library.
 
+### Fixed
+
+- Conversion now hashes the source PDF before *and* after extraction and refuses to publish the
+  Markdown if the bytes changed in between. Hashing only afterwards would attach the new file's
+  hash to the old file's text — worse than recording no hash, because `audit-library` would
+  then read `source_changed` as clean and the drift would never surface. `reconvert-math`
+  carries the same guard; `ocr-images` keeps the original hash, which is correct there because
+  it operates on already-extracted images rather than on the PDF.
+
 ### Added
 
-- `audit-library --mapping-report <snapshot>`: a read-only drift report. It compares three
+- `audit-library --mapping-report <snapshot>`: a read-only drift report. It compares four
   independent views of the same library -- Zotero's attachment inventory, the `dry-run` mapping
   snapshot, the files on disk, and the published index generation's JSONL -- and reports where
-  they disagree. It moves, renames
-  and rewrites nothing. Statuses are a **set**, not a bucket: an attachment can
-  hold several at once, so the reported counts overlap and do not sum to the attachment total,
+  they disagree. Zotero's inventory, not the snapshot, is the authority on membership: the
+  mapper walks files on disk, so an attachment whose PDF is already gone never reaches the
+  snapshot at all. When the inventory cannot be read the audit falls back to snapshot
+  membership and reports `inventory_available: false`, rather than silently answering a
+  different question. It moves, renames and rewrites nothing, and it reads the live
+  `zotero.sqlite` through a `mode=ro` connection so that SQLite cannot checkpoint or recover
+  into it either — a read-write handle rewrites the main database and discards an outstanding
+  WAL on close even when every statement issued is a `SELECT`. `mode=ro` rather than the
+  `immutable=1` used elsewhere in the codebase, so that attachments Zotero committed since its
+  last checkpoint stay visible. Statuses are a **set**, not a bucket: an attachment can hold
+  several at once, so the reported counts overlap and do not sum to the attachment total,
   and the output says so. Two counts sit outside the status vocabulary to keep it honest --
   `ineligible_items` explains why correctly-quarantined attachments report nothing at all, and
   `source_provenance_unknown` states how many records cannot be checked for source drift yet.

@@ -334,9 +334,32 @@ def _convert_row(
         if force:
             shutil.rmtree(images_dir, ignore_errors=True)
         skip_primary = row.get("zotero_attachment_key") in skip_keys
+        # Hash before and after extraction, not only after. The extractor reads the PDF at
+        # `source_path` over a long window; if the file is replaced while it runs, hashing only
+        # afterwards pairs PDF A's text with PDF B's hash. That is worse than no provenance,
+        # because `source_changed` then reads as clean and no audit can ever surface the drift.
+        # This detects the race rather than preventing it -- a replace-and-restore inside the
+        # window still slips through -- but it narrows "silently wrong forever" to a
+        # pathological write pattern.
+        source_sha256_before = _source_sha256(source_path)
         extraction_tool, fallback_note, primary_timed_out = _extract_markdown(
             source_path, raw_output_path, images_dir, effective_timeout, skip_primary=skip_primary
         )
+        source_sha256 = _source_sha256(source_path)
+        if source_sha256 != source_sha256_before:
+            # Return before writing output_path. An error row is retried; a written Markdown
+            # file is accepted, so publishing text whose source is unknown is the worse failure.
+            # The enclosing `finally` removes the raw and sidecar temporaries either way.
+            return (
+                _result(
+                    row,
+                    output_path,
+                    "error",
+                    f"The source PDF changed while {extraction_tool} was extracting it; "
+                    "no Markdown was written. Re-run the conversion for this attachment.",
+                ),
+                None,
+            )
         markdown = raw_output_path.read_text(encoding="utf-8")
         has_math = _read_math_sidecar(math_sidecar_path)
         output_path.write_text(
@@ -349,7 +372,7 @@ def _convert_row(
             extraction_tool=extraction_tool,
             has_math=has_math,
             error=fallback_note,
-            source_sha256=_source_sha256(source_path),
+            source_sha256=source_sha256,
         )
         candidate = (
             _build_timeout_candidate(row, source_path, effective_timeout, "fallback_used", "converted")

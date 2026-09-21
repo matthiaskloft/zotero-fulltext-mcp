@@ -258,14 +258,23 @@ Search normalizes query text into at most 20 word terms. `all_terms` is the defa
 
 `audit-library` compares four independent views of the same library -- Zotero's own attachment
 inventory, the mapper snapshot, the filesystem, and the published index generation's JSONL --
-and reports where they disagree. It is read-only: it moves, renames and rewrites nothing.
+and reports where they disagree. It is read-only: it moves, renames and rewrites nothing, and it
+opens the live `zotero.sqlite` with `mode=ro`. That last part is not a formality — a read-write
+connection lets SQLite run recovery or a checkpoint on open and on close, rewriting the main
+database and deleting an outstanding WAL even when every statement issued is a `SELECT`. The mode
+is `mode=ro` rather than the `mode=ro&immutable=1` used by this codebase's other readers, because
+`immutable=1` would also hide everything Zotero has committed since its last checkpoint.
 
 Membership comes from Zotero, not from the snapshot. The mapper walks source *files*, so an
 attachment whose PDF has been moved or deleted produces no mapping row at all; reading membership
 off the snapshot would make `missing_source` nearly unreachable and would report such an
 attachment as `orphaned_index`, claiming Zotero dropped it when the file is what went missing.
-If Zotero's database cannot be read the audit still runs, reports `inventory_available: false`,
-and says that those two statuses are understated.
+A successfully read inventory is the authority *outright*, not merely an additional source: a
+mapping row proves membership as of the last `dry-run`, so unioning the two would let a stale row
+vouch for an attachment the user has since deleted from Zotero and report it `current` when the
+honest answer is `orphaned_index`. If Zotero's database cannot be read the audit still runs, falls
+back to snapshot membership, reports `inventory_available: false`, and says that `missing_source`
+and `orphaned_index` are understated.
 
 The canonical layout is recorded per item as evidence (`canonical_markdown_exists`) but is not
 classified, because nothing writes to `library/` yet and a status derived from it would fire on

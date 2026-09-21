@@ -937,6 +937,7 @@ class ZoteroInventoryTests(unittest.TestCase):
             mapping_rows={},
             index_rows={},
             inventory={"AAAA1111": _attachment_record("AAAA1111")},
+            inventory_available=True,
         )
         self.assertEqual(len(observations), 1)
         observation = observations[0]
@@ -971,10 +972,132 @@ class ZoteroInventoryTests(unittest.TestCase):
             mapping_rows={},
             index_rows={"AAAA1111": [_index_record("AAAA1111")]},
             inventory={"AAAA1111": _attachment_record("AAAA1111")},
+            inventory_available=True,
         )
         self.assertTrue(is_canonical_eligible(observations[0]))
         self.assertNotIn(STATUS_UNVERIFIED_INDEXED, classify_item(observations[0]))
 
+
+    def test_a_stale_mapping_row_cannot_vouch_for_a_deleted_attachment(self):
+        """The snapshot proves membership as of the dry-run, not membership now.
+
+        An attachment deleted from Zotero after the snapshot is still in `mapping_report.jsonl`
+        and still in the index. Unioning the two sources would call it `current` -- the one
+        answer that is certainly wrong, because search can return a document the library no
+        longer contains.
+        """
+        observation = _observation(
+            in_zotero=False,
+            inventory_available=True,
+            in_mapping=True,
+            mapping_metadata={},
+            indexed_metadata={},
+        )
+        statuses = classify_item(observation)
+        self.assertIn(STATUS_ORPHANED_INDEX, statuses)
+        self.assertNotIn(STATUS_CURRENT, statuses)
+
+    def test_mapping_membership_still_counts_when_the_inventory_is_unavailable(self):
+        """Without a readable inventory `in_zotero=False` is a shrug, not a denial."""
+        observation = _observation(
+            in_zotero=False,
+            inventory_available=False,
+            in_mapping=True,
+            mapping_metadata={},
+            indexed_metadata={},
+        )
+        statuses = classify_item(observation)
+        self.assertNotIn(STATUS_ORPHANED_INDEX, statuses)
+        self.assertIn(STATUS_CURRENT, statuses)
+
+    def test_positive_zotero_membership_survives_a_missing_availability_flag(self):
+        """`in_zotero=True` is evidence in its own right; only the fallback is conditional."""
+        observation = _observation(
+            in_zotero=True,
+            inventory_available=False,
+            in_mapping=False,
+            mapping_metadata={},
+            indexed_metadata={},
+        )
+        self.assertNotIn(STATUS_ORPHANED_INDEX, classify_item(observation))
+
+
+class InventoryReadOnlyTests(unittest.TestCase):
+    """Reading the live inventory must not rewrite the database or discard its WAL.
+
+    `mode=ro` is not a formality here. A read-write connection lets SQLite checkpoint or recover
+    on open and on close, so a connection that only ever issues SELECTs can still change the
+    main database file and delete the -wal sidecar -- in a user's live Zotero library.
+
+    What read-only does *not* promise is that no file appears: SQLite creates an empty -wal and
+    a -shm for any reader of a WAL database, exactly as Zotero itself does. The claim under test
+    is that the database and its WAL contents are never modified, not that nothing is created.
+    """
+
+    def _database_with_orphaned_wal(self, destination: Path) -> Path:
+        """A database whose -wal is on disk with no connection owning it.
+
+        This is what a crashed or force-quit Zotero leaves behind, and it is the only state in
+        which the bug is visible: SQLite runs *recovery* when a read-write connection opens such
+        a database, rewriting the main file and deleting the WAL. Holding a live connection open
+        instead would hide it, because SQLite only checkpoints when the last connection closes.
+
+        Built by copying the files out from under a still-open connection, which is
+        deterministic where crashing a subprocess is not.
+        """
+        import shutil
+        import sqlite3
+
+        source_dir = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, source_dir, True)
+        source = source_dir / "zotero.sqlite"
+        keeper = sqlite3.connect(source)
+        try:
+            keeper.execute("PRAGMA journal_mode=WAL")
+            keeper.execute("PRAGMA wal_autocheckpoint=0")
+            keeper.execute("CREATE TABLE t (a INTEGER)")
+            keeper.execute("INSERT INTO t VALUES (1)")
+            keeper.commit()
+            for suffix in ("", "-wal", "-shm"):
+                sidecar = source.with_name(source.name + suffix)
+                if sidecar.exists():
+                    shutil.copy2(sidecar, destination.with_name(destination.name + suffix))
+        finally:
+            keeper.close()
+        return destination
+
+    def test_loading_the_inventory_leaves_the_database_and_wal_untouched(self):
+        from zotero_pdf_text.library import load_attachment_inventory
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db = self._database_with_orphaned_wal(Path(tmp) / "zotero.sqlite")
+            wal = db.with_name(db.name + "-wal")
+            self.assertTrue(wal.exists(), "fixture failed to leave an orphaned WAL")
+            before = db.read_bytes()
+            wal_before = wal.read_bytes()
+
+            # The schema is not Zotero's, so the query fails. That is deliberate: recovery
+            # happens on open and on close, so the failure path must be as read-only as the
+            # success path. A read-write connection rewrites the database here even though
+            # nothing but a failing SELECT was ever issued.
+            with self.assertRaises(Exception):
+                load_attachment_inventory(db)
+
+            self.assertEqual(db.read_bytes(), before, "main database was rewritten")
+            self.assertTrue(wal.exists(), "the WAL was discarded")
+            self.assertEqual(wal.read_bytes(), wal_before, "the WAL was rewritten")
+
+    def test_a_missing_database_is_never_created(self):
+        from zotero_pdf_text.library import load_attachment_inventory
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / "zotero.sqlite"
+            with self.assertRaises(LibraryAuditError):
+                load_attachment_inventory(db)
+            self.assertFalse(db.exists())
+
+
+class InventoryAvailabilityReportingTests(unittest.TestCase):
     def test_audit_reports_when_the_inventory_could_not_be_read(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

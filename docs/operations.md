@@ -391,7 +391,8 @@ Coverage:
   --db $data\index\zotero_text_index.sqlite
 ```
 
-Audit the library for drift (read-only; moves and rewrites nothing):
+Audit the library for drift (read-only; moves and rewrites nothing, and opens
+`zotero.sqlite` with `mode=ro`):
 
 ```powershell
 & $python -m zotero_pdf_text audit-library `
