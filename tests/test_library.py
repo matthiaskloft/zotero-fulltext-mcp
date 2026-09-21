@@ -1,4 +1,5 @@
 import json
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -1107,6 +1108,108 @@ class InventoryAvailabilityReportingTests(unittest.TestCase):
             audit = audit_library(_config(root), snapshot, index_root=root / "index")
             self.assertFalse(audit.inventory_available)
             self.assertFalse(audit.to_dict()["inventory_available"])
+
+
+class RelinkedAttachmentTests(unittest.TestCase):
+    """Zotero's current path wins over the one the snapshot and index remember.
+
+    Relinking an attachment to a different PDF leaves the old path in both older views. Auditing
+    there answers a question nobody asked: with the old file still present the source change is
+    missed entirely, and with it gone the audit invents `missing_source` while the new PDF sits
+    on disk intact.
+    """
+
+    def _observe(self, *, old_present: bool):
+        from zotero_pdf_text.library import build_observations
+
+        root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, root, True)
+        linked = root / "linked"
+        linked.mkdir()
+        old_pdf = linked / "old.pdf"
+        new_pdf = linked / "new.pdf"
+        new_pdf.write_bytes(b"%PDF new")
+        if old_present:
+            old_pdf.write_bytes(b"%PDF old")
+
+        config = ProjectConfig(
+            zotero_root=root / "zotero",
+            zotero_data_directory=root / "zotero" / "data",
+            linked_attachments=linked,
+            output_root=root / "out",
+        )
+        # Zotero now points the key at new.pdf; both older views still name old.pdf.
+        attachment = _attachment_record("AAAA1111", zotero_path="attachments:new.pdf")
+        indexed = _index_record(
+            "AAAA1111",
+            source_path=str(old_pdf),
+            source_sha256=_sha256_text("%PDF old"),
+        )
+        observations = build_observations(
+            config,
+            mapping_rows={
+                "AAAA1111": {
+                    "zotero_attachment_key": "AAAA1111",
+                    "source_path": str(old_pdf),
+                    "sha256": _sha256_text("%PDF old"),
+                    **ELIGIBLE,
+                }
+            },
+            index_rows={"AAAA1111": [indexed]},
+            inventory={"AAAA1111": attachment},
+            inventory_available=True,
+            full_audit=True,
+        )
+        self.assertEqual(len(observations), 1)
+        return observations[0], new_pdf, old_pdf
+
+    def test_a_relinked_attachment_is_audited_at_its_current_path(self):
+        observation, new_pdf, old_pdf = self._observe(old_present=True)
+        self.assertEqual(observation.source_path, str(new_pdf))
+        self.assertEqual(observation.indexed_source_path, str(old_pdf))
+        self.assertIs(observation.source_exists, True)
+        self.assertEqual(observation.source_sha256_current, _sha256_text("%PDF new"))
+        statuses = classify_item(observation)
+        self.assertIn(STATUS_SOURCE_CHANGED, statuses)
+        self.assertNotIn(STATUS_CURRENT, statuses)
+        self.assertNotIn(STATUS_MISSING_SOURCE, statuses)
+
+    def test_a_relink_is_not_reported_as_a_missing_source(self):
+        observation, new_pdf, _old = self._observe(old_present=False)
+        self.assertEqual(observation.source_path, str(new_pdf))
+        self.assertIs(observation.source_exists, True)
+        self.assertNotIn(STATUS_MISSING_SOURCE, classify_item(observation))
+
+    def test_the_snapshot_hash_does_not_vouch_for_a_different_file(self):
+        """Without --full the snapshot hash is the fallback -- but not across a relink.
+
+        It describes the old PDF. Matching it against `indexed_source_sha256` would report the
+        item clean at exactly the moment it changed most, so it is dropped and the answer
+        degrades to "unknown", which `source_provenance_unknown` already counts.
+        """
+        observation, _new, _old = self._observe(old_present=True)
+        self.assertEqual(observation.source_sha256_mapping, "")
+
+    def test_a_storage_attachment_keeps_the_recorded_path(self):
+        """`storage:` paths do not resolve on disk, so there is no current path to prefer."""
+        from zotero_pdf_text.library import build_observations
+
+        observations = build_observations(
+            _config(Path("/nonexistent")),
+            mapping_rows={
+                "AAAA1111": {
+                    "zotero_attachment_key": "AAAA1111",
+                    "source_path": "recorded.pdf",
+                    "sha256": "src-hash",
+                    **ELIGIBLE,
+                }
+            },
+            index_rows={},
+            inventory={"AAAA1111": _attachment_record("AAAA1111", zotero_path="storage:x.pdf")},
+            inventory_available=True,
+        )
+        self.assertEqual(observations[0].source_path, "recorded.pdf")
+        self.assertEqual(observations[0].source_sha256_mapping, "src-hash")
 
 
 class SnapshotHashFallbackTests(unittest.TestCase):

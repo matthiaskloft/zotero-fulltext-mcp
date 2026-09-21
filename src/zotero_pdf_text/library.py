@@ -216,6 +216,10 @@ class ItemObservation:
     parent_key: str = ""
     title: str = ""
     mapping_metadata: dict[str, str] = field(default_factory=dict)
+    # The path the audit actually checked and hashed: Zotero's current one when the inventory
+    # could supply it, otherwise the snapshot's or the index's. Not necessarily the path the
+    # indexed text came from -- `indexed_source_path` keeps that, and the two differ after a
+    # relink.
     source_path: str = ""
     source_sha256_mapping: str = ""
 
@@ -535,11 +539,31 @@ def build_observations(
         indexed = rows[0] if rows else None
         attachment = inventory.get(key)
 
-        source_path = _text(mapping, "source_path") or _text(indexed, "source_path")
-        if not source_path and attachment is not None:
-            source_path = _inventory_source_path(attachment, config.linked_attachments)
+        # Where the snapshot and the index believe the PDF lives. Kept as provenance: it is
+        # what the indexed text was extracted from, and it is what `indexed_source_path`
+        # reports even after Zotero has been pointed somewhere else.
+        recorded_source_path = _text(mapping, "source_path") or _text(indexed, "source_path")
+        # Where Zotero says it lives *now*. This wins when Zotero can tell us, because an
+        # attachment relinked to a different PDF must be audited at its current location: the
+        # old path answers a question nobody asked. Auditing the stale path misses the source
+        # change outright when the old file is still there, and invents `missing_source` when
+        # it is not, while the new PDF sits on disk perfectly intact.
+        current_source_path = (
+            _inventory_source_path(attachment, config.linked_attachments)
+            if attachment is not None
+            else ""
+        )
+        source_path = current_source_path or recorded_source_path
         source_file = Path(source_path) if source_path else None
         source_exists = source_file.is_file() if source_file else None
+        # The snapshot hash stands in for a fresh one only when it describes the same file.
+        # After a relink it describes a different PDF entirely, and letting it match
+        # `indexed_source_sha256` would report the item clean precisely when it changed most.
+        # Dropping it degrades the default mode to "unknown", which `source_provenance_unknown`
+        # already counts, rather than to a confident wrong answer.
+        snapshot_hash = _text(mapping, "sha256")
+        if recorded_source_path and source_path != recorded_source_path:
+            snapshot_hash = ""
 
         markdown_path = _text(indexed, "markdown_path")
         markdown_file = Path(markdown_path) if markdown_path else None
@@ -567,7 +591,7 @@ def build_observations(
                 title=_text(mapping, "title") or _text(indexed, "title") or (attachment.title if attachment else ""),
                 mapping_metadata=_metadata(mapping),
                 source_path=source_path,
-                source_sha256_mapping=_text(mapping, "sha256"),
+                source_sha256_mapping=snapshot_hash,
                 source_exists=source_exists,
                 source_sha256_current=(
                     _sha256_file(source_file)

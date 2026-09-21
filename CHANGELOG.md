@@ -19,6 +19,19 @@ dated section once it has been stress-tested against a large library.
   then read `source_changed` as clean and the drift would never surface. `reconvert-math`
   carries the same guard; `ocr-images` keeps the original hash, which is correct there because
   it operates on already-extracted images rather than on the PDF.
+- Every read-only connection to `zotero.sqlite` now builds its `file:` URI with `as_uri()`
+  instead of interpolating the path. A `#` anywhere in the path — a legal directory name —
+  ended the URI and turned `?mode=ro` into a fragment, so SQLite opened the *truncated* path
+  under its default read-write/create mode: a stray file appeared in the user's Zotero folder
+  and the read-only guarantee was silently dropped, surfacing only as a `no such table` error.
+  This affected the three pre-existing `mode=ro&immutable=1` readers as well, not just the
+  audit's new one.
+- `audit-library` now audits an attachment at the path Zotero currently gives it, rather than
+  the one the snapshot and index remember. After a relink those disagree, and auditing the old
+  path missed the source change when the old file was still present and reported a spurious
+  `missing_source` when it was not. The snapshot hash is no longer used as a fallback across a
+  relink either, since it describes the previous file and would report the item clean at
+  exactly the moment it changed most.
 
 ### Added
 
