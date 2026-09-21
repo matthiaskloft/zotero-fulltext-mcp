@@ -980,6 +980,11 @@ def _metadata_dict(row: sqlite3.Row) -> dict[str, object]:
         "identity_status",
         "identity_rule",
         "has_math",
+        # Provenance must survive the projection. Both OCR paths rebuild their index record from
+        # this dict, so a field omitted here is a field they silently republish as empty --
+        # erasing the source hash on disk even though SQLite and the JSONL both hold it.
+        "source_sha256",
+        "indexed_at",
     ]
     result = {key: row[key] for key in keys}
     result["has_math"] = bool(result["has_math"])

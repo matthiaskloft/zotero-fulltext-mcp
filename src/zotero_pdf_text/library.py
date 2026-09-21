@@ -42,6 +42,8 @@ from .artifacts import (
     read_current_pointer,
 )
 from .config import ProjectConfig
+from .identity import resolve_attachment_paths
+from .zotero_db import AttachmentRecord, load_attachment_records
 
 # --------------------------------------------------------------------------------------
 # Status vocabulary
@@ -192,7 +194,15 @@ class ItemObservation:
 
     attachment_key: str
 
-    # --- mapper snapshot: what Zotero says should exist ---
+    # --- Zotero's own attachment inventory: what Zotero represents ---
+    # Distinct from `in_mapping` and load-bearing. A mapping snapshot is built by walking files
+    # on disk, so an attachment whose PDF is already gone produces no mapping row at all. Reading
+    # membership off the snapshot alone would make `missing_source` nearly unreachable and would
+    # mislabel a previously-indexed attachment with a vanished PDF as `orphaned_index`, asserting
+    # Zotero no longer represents something it still does.
+    in_zotero: bool = False
+
+    # --- mapper snapshot: what the last dry-run matched on disk ---
     in_mapping: bool = False
     classification: str = ""
     identity_status: str = ""
@@ -274,6 +284,12 @@ class LibraryAudit:
     # actually informative yet.
     ineligible_items: int = 0
     source_provenance_unknown: int = 0
+    # Whether Zotero's attachment inventory could be read. When it could not, membership falls
+    # back to the mapping snapshot, and an attachment whose PDF is missing is invisible rather
+    # than reported -- so missing_source and orphaned_index are both understated. Reported
+    # rather than raised: a partial audit that says which question it could not answer beats
+    # refusing to run because Zotero happened to be mid-sync.
+    inventory_available: bool = False
 
     def items_with(self, status: str) -> tuple[AuditItem, ...]:
         return tuple(item for item in self.items if item.has(status))
@@ -287,6 +303,7 @@ class LibraryAudit:
             "total_items": self.total_items,
             "status_counts": dict(self.status_counts),
             "counts_overlap": True,
+            "inventory_available": self.inventory_available,
             "ineligible_items": self.ineligible_items,
             "source_provenance_unknown": self.source_provenance_unknown,
         }
@@ -315,12 +332,15 @@ def classify_item(observation: ItemObservation) -> frozenset[str]:
     obs = observation
     statuses: set[str] = set()
     eligible = is_canonical_eligible(obs)
+    # A mapping row implies Zotero represents the attachment, but the converse does not hold:
+    # an attachment whose PDF is missing never reaches the snapshot. Membership is the union.
+    represented = obs.in_zotero or obs.in_mapping
 
     # 1. Structural facts. Reported for quarantine rows too -- a duplicate key or a vanished PDF
     #    is a fact about the library, not a judgement about whether the item belongs in it.
     if obs.index_row_count > 1:
         statuses.add(STATUS_DUPLICATE_KEY)
-    if obs.in_index and not obs.in_mapping:
+    if obs.in_index and not represented:
         statuses.add(STATUS_ORPHANED_INDEX)
     # `is False`, not a falsy test. Both fields are None when never checked, and an unindexed
     # item has no indexed markdown_path to check at all. Treating None as False here would report
@@ -347,18 +367,18 @@ def classify_item(observation: ItemObservation) -> frozenset[str]:
     #    `unverified_indexed` requires `in_mapping`, which is what separates it from
     #    `orphaned_index`: the two name different repairs -- verify the identity, versus drop a
     #    row for an attachment Zotero no longer represents.
-    if obs.in_mapping and obs.in_index and not eligible:
+    if represented and obs.in_index and not eligible:
         statuses.add(STATUS_UNVERIFIED_INDEXED)
     #    An ineligible item is never `unindexed`. It is correctly absent from the library, and
     #    reporting it as a gap would manufacture a backlog that should not be worked -- the exact
     #    false signal that would wrongly push the gated migration forward.
-    if obs.in_mapping and eligible and not obs.in_index:
+    if represented and eligible and not obs.in_index:
         statuses.add(STATUS_UNINDEXED)
 
     # 4. `current` last, defined as the absence of every other finding rather than by restating
     #    the conditions. A status added later then narrows `current` automatically, instead of
     #    leaving a second definition to remember to update.
-    if obs.in_mapping and eligible and obs.in_index and not statuses:
+    if represented and eligible and obs.in_index and not statuses:
         statuses.add(STATUS_CURRENT)
 
     return frozenset(statuses)
@@ -408,10 +428,23 @@ def audit_library(
     mapping_rows = load_mapping_snapshot(mapping_report)
     generation_id, index_rows = load_index_records(root)
 
+    # Zotero is the authority on which attachments exist. A snapshot cannot be, because the
+    # mapper only sees attachments whose files it found. Read-only, and never fatal: an audit
+    # that refuses to run because Zotero is mid-sync is less useful than one that runs and says
+    # which question it could not answer.
+    inventory: dict[str, AttachmentRecord] = {}
+    inventory_available = False
+    try:
+        inventory = load_attachment_inventory(config.zotero_sqlite)
+        inventory_available = True
+    except Exception:
+        inventory = {}
+
     observations = build_observations(
         config,
         mapping_rows=mapping_rows,
         index_rows=index_rows,
+        inventory=inventory,
         full_audit=full_audit,
     )
 
@@ -446,6 +479,7 @@ def audit_library(
         total_items=len(items),
         status_counts=counts,
         items=tuple(items),
+        inventory_available=inventory_available,
         ineligible_items=sum(1 for item in items if not item.canonical_eligible),
         source_provenance_unknown=sum(
             1
@@ -460,21 +494,28 @@ def build_observations(
     *,
     mapping_rows: dict[str, dict[str, object]],
     index_rows: dict[str, list[dict[str, object]]],
+    inventory: dict[str, AttachmentRecord] | None = None,
     full_audit: bool = False,
 ) -> list[ItemObservation]:
-    """Join the three views on attachment key, hashing only what the audit mode asks for.
+    """Join the views on attachment key, hashing only what the audit mode asks for.
 
-    The key set is the *union* of mapping and index keys, not the mapping alone -- an index row
-    for an attachment Zotero no longer represents (`orphaned_index`) exists on exactly one side,
-    and iterating the mapping would make it invisible.
+    The key set is the *union* of all three sources, never any one of them. Each contributes a
+    case the others cannot see: the index alone holds a row for an attachment Zotero dropped
+    (`orphaned_index`); Zotero alone holds an attachment whose PDF is gone, which never reaches
+    the file-walking mapper at all (`missing_source`); the snapshot alone carries the identity
+    decisions the other two do not record.
     """
+    inventory = inventory or {}
     observations: list[ItemObservation] = []
-    for key in sorted(set(mapping_rows) | set(index_rows)):
+    for key in sorted(set(mapping_rows) | set(index_rows) | set(inventory)):
         mapping = mapping_rows.get(key)
         rows = index_rows.get(key, [])
         indexed = rows[0] if rows else None
+        attachment = inventory.get(key)
 
         source_path = _text(mapping, "source_path") or _text(indexed, "source_path")
+        if not source_path and attachment is not None:
+            source_path = _inventory_source_path(attachment, config.linked_attachments)
         source_file = Path(source_path) if source_path else None
         source_exists = source_file.is_file() if source_file else None
 
@@ -492,14 +533,15 @@ def build_observations(
         observations.append(
             ItemObservation(
                 attachment_key=key,
+                in_zotero=attachment is not None,
                 in_mapping=mapping is not None,
-                classification=_text(mapping, "classification"),
-                identity_status=_text(mapping, "identity_status"),
-                identity_rule=_text(mapping, "identity_rule"),
+                classification=_text(mapping, "classification") or _text(indexed, "classification"),
+                identity_status=_text(mapping, "identity_status") or _text(indexed, "identity_status"),
+                identity_rule=_text(mapping, "identity_rule") or _text(indexed, "identity_rule"),
                 parent_key=(
                     _text(mapping, "zotero_parent_key") or _text(indexed, "zotero_parent_key")
                 ),
-                title=_text(mapping, "title") or _text(indexed, "title"),
+                title=_text(mapping, "title") or _text(indexed, "title") or (attachment.title if attachment else ""),
                 mapping_metadata=_metadata(mapping),
                 source_path=source_path,
                 source_sha256_mapping=_text(mapping, "sha256"),
@@ -552,6 +594,7 @@ def library_status(
         "full_audit": audit.full_audit,
         "total_items": audit.total_items,
         "health": dict(audit.status_counts),
+        "inventory_available": audit.inventory_available,
         "ineligible_items": audit.ineligible_items,
         "source_provenance_unknown": audit.source_provenance_unknown,
         "counts_overlap": True,
@@ -589,6 +632,46 @@ def load_mapping_snapshot(mapping_report: Path) -> dict[str, dict[str, object]]:
         if key:
             rows[key] = row
     return rows
+
+
+def load_attachment_inventory(zotero_sqlite: Path) -> dict[str, AttachmentRecord]:
+    """Every PDF attachment Zotero represents, keyed by attachment key.
+
+    Read-only, and the authority on membership. The mapping snapshot cannot serve that role: the
+    mapper walks source files on disk and emits a row per *file*, so an attachment whose PDF has
+    been moved or deleted simply never appears in it. Inferring membership from the snapshot
+    would make `missing_source` almost unreachable and would report a previously-indexed
+    attachment with a vanished PDF as `orphaned_index` -- claiming Zotero dropped it when Zotero
+    still lists it and the file is what went missing.
+    """
+    # Check before connecting. `load_attachment_records` opens read-write (the one function in
+    # zotero_db that does not use mode=ro&immutable=1), and sqlite3.connect on a path that does
+    # not exist *creates* it -- which for this argument means creating a file inside someone's
+    # Zotero data directory. An audit must never do that, so a missing database is "inventory
+    # unavailable", not something to hand to sqlite.
+    if not Path(zotero_sqlite).is_file():
+        raise LibraryAuditError(f"No Zotero database at {zotero_sqlite}")
+    records = load_attachment_records(zotero_sqlite)
+    inventory: dict[str, AttachmentRecord] = {}
+    for record in records:
+        key = (record.attachment_key or "").strip()
+        if key and _is_pdf_attachment(record):
+            inventory[key] = record
+    return inventory
+
+
+def _is_pdf_attachment(record: AttachmentRecord) -> bool:
+    if (record.content_type or "").casefold() == "application/pdf":
+        return True
+    zotero_path = record.zotero_path or ""
+    name = Path(zotero_path.split(":", 1)[1]).name if ":" in zotero_path else Path(zotero_path).name
+    return name.casefold().endswith(".pdf")
+
+
+def _inventory_source_path(record: AttachmentRecord, linked_root: Path) -> str:
+    """Where Zotero says this attachment's PDF should be, whether or not it is there."""
+    paths = resolve_attachment_paths(record.zotero_path or "", linked_root)
+    return str(paths[0]) if paths else ""
 
 
 def load_index_records(index_root: Path) -> tuple[str | None, dict[str, list[dict[str, object]]]]:

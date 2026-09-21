@@ -14,8 +14,9 @@ dated section once it has been stress-tested against a large library.
 ### Added
 
 - `audit-library --mapping-report <snapshot>`: a read-only drift report. It compares three
-  independent views of the same library -- the `dry-run` mapping snapshot, the files on disk, and
-  the published index generation's JSONL -- and reports where they disagree. It moves, renames
+  independent views of the same library -- Zotero's attachment inventory, the `dry-run` mapping
+  snapshot, the files on disk, and the published index generation's JSONL -- and reports where
+  they disagree. It moves, renames
   and rewrites nothing. Statuses are a **set**, not a bucket: an attachment can
   hold several at once, so the reported counts overlap and do not sum to the attachment total,
   and the output says so. Two counts sit outside the status vocabulary to keep it honest --
@@ -137,10 +138,17 @@ dated section once it has been stress-tested against a large library.
   no source hash, existing records keep an empty `source_sha256` until they are reconverted. Until
   then a low `source_changed` count means *not measured*, not *not drifted* -- which is what
   `source_provenance_unknown` exists to report.
-- `reconvert-math` and `ocr-images` preserve an attachment's recorded `source_sha256` through
-  their index upsert instead of dropping it. Both re-derive text from the same PDF, so the
-  recorded provenance stays accurate; losing it would have permanently disabled `source_changed`
-  for every attachment either command touched.
+- `ocr-images` preserves an attachment's recorded `source_sha256` through its index upsert, and
+  `reconvert-math` records the hash of the PDF it actually extracted, verified unchanged across
+  the extraction. The distinction matters: enrichment rewrites derived Markdown from images
+  already extracted, so the recorded hash still describes the right PDF, while a full
+  reconversion reads whatever is at the source path now and must name that file. Publishing
+  either way requires the provenance fields to survive `get_item_context`, so they are now part
+  of its metadata projection -- without that, both paths republished an empty hash even when the
+  index held a valid one.
+- `load_attachment_records` closes its SQLite connection on every path, not only on success. A
+  failing query previously leaked the handle until garbage collection, which on Windows holds a
+  lock on a live Zotero database.
 - `source_sha256` is deliberately empty for `skipped_existing` conversions. That row reused
   Markdown converted from whatever the PDF was at the time, so hashing the file now would record
   confident provenance for text that may predate it. Empty means *not known*, and is never read

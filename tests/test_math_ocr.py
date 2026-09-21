@@ -263,6 +263,85 @@ class ReconvertWithMarkerTests(unittest.TestCase):
             self.assertEqual(markdown_path.read_text(encoding="utf-8"), original_markdown)
 
 
+class SourceProvenanceTests(unittest.TestCase):
+    """A full reconversion must publish the hash of the PDF it actually read."""
+
+    @staticmethod
+    def _published_record(index_root: Path) -> dict:
+        jsonl_path = current_generation_jsonl(index_root)
+        lines = jsonl_path.read_text(encoding="utf-8").splitlines()
+        return json.loads(lines[0])
+
+    def test_publishes_the_hash_of_the_pdf_it_extracted_not_the_recorded_one(self):
+        import hashlib
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source_path, _, index_root = _build_fixture(root)
+            # The PDF on disk is not the one the indexed text came from.
+            source_path.write_bytes(b"%PDF replaced since the last conversion")
+            expected = hashlib.sha256(source_path.read_bytes()).hexdigest()
+
+            def _write_marker_output(args, **kwargs):
+                Path(args[4]).write_text("# Better body", encoding="utf-8")
+
+            with patch("zotero_pdf_text.math_ocr.subprocess.run", side_effect=_write_marker_output):
+                result = reconvert_with_marker(
+                    "ATTACH1", index_root=index_root, lock_root=root, timeout_seconds=60
+                )
+
+            self.assertTrue(result.ok, result.error)
+            self.assertEqual(self._published_record(index_root)["source_sha256"], expected)
+
+    def test_reconversion_establishes_provenance_for_a_record_that_had_none(self):
+        import hashlib
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source_path, _, index_root = _build_fixture(root)
+            expected = hashlib.sha256(source_path.read_bytes()).hexdigest()
+
+            def _write_marker_output(args, **kwargs):
+                Path(args[4]).write_text("# Better body", encoding="utf-8")
+
+            with patch("zotero_pdf_text.math_ocr.subprocess.run", side_effect=_write_marker_output):
+                result = reconvert_with_marker(
+                    "ATTACH1", index_root=index_root, lock_root=root, timeout_seconds=60
+                )
+
+            self.assertTrue(result.ok, result.error)
+            published = self._published_record(index_root)
+            self.assertEqual(published["source_sha256"], expected)
+            self.assertTrue(published["indexed_at"])
+
+    def test_a_source_replaced_mid_extraction_publishes_nothing(self):
+        """Neither hash describes the text, so there is no honest provenance to record."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source_path, markdown_path, index_root = _build_fixture(root)
+            generation_before = read_current_pointer(index_root)["current_generation"]
+            markdown_before = markdown_path.read_text(encoding="utf-8")
+
+            def _swap_source_during_extraction(args, **kwargs):
+                Path(args[4]).write_text("# Better body", encoding="utf-8")
+                source_path.write_bytes(b"%PDF swapped while marker was running")
+
+            with patch(
+                "zotero_pdf_text.math_ocr.subprocess.run",
+                side_effect=_swap_source_during_extraction,
+            ):
+                result = reconvert_with_marker(
+                    "ATTACH1", index_root=index_root, lock_root=root, timeout_seconds=60
+                )
+
+            self.assertFalse(result.ok)
+            self.assertIn("changed while", result.error)
+            self.assertEqual(
+                read_current_pointer(index_root)["current_generation"], generation_before
+            )
+            self.assertEqual(markdown_path.read_text(encoding="utf-8"), markdown_before)
+
+
 def _build_fixture(root: Path, *, publish_generation: bool = True) -> tuple[Path, Path, Path]:
     source_path = root / "paper.pdf"
     source_path.write_bytes(b"%PDF")

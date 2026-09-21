@@ -443,6 +443,31 @@ class SnapshotLoadingTests(unittest.TestCase):
             self.assertEqual(rows, {})
 
 
+def _attachment_record(attachment_key: str, **overrides: object):
+    """A Zotero attachment whose linked PDF is not on disk."""
+    from zotero_pdf_text.zotero_db import AttachmentRecord
+
+    fields: dict[str, object] = {
+        "attachment_item_id": 1,
+        "attachment_key": attachment_key,
+        "parent_item_id": 2,
+        "parent_key": f"P{attachment_key}",
+        "link_mode": 2,
+        "content_type": "application/pdf",
+        "zotero_path": f"attachments:{attachment_key}.pdf",
+        "item_type": "journalArticle",
+        "title": "A title",
+        "doi": "10.1000/x",
+        "citation_key": f"key-{attachment_key}",
+        "year": "2024",
+        "venue": "A journal",
+        "creators": ["Jane Smith"],
+        "creator_surnames": ["Smith"],
+    }
+    fields.update(overrides)
+    return AttachmentRecord(**fields)  # type: ignore[arg-type]
+
+
 def _index_record(attachment_key: str, **overrides: object) -> dict[str, object]:
     record: dict[str, object] = {
         "zotero_parent_key": f"P{attachment_key}",
@@ -776,14 +801,21 @@ class ReadOnlyTests(unittest.TestCase):
 
 
 class ProvenancePreservationTests(unittest.TestCase):
-    """A reconvert must not erase the source hash it was handed.
+    """Neither OCR path may publish a record with no source provenance.
 
     Losing it permanently disables source_changed for that attachment, and because absence is
     correctly not read as drift, the loss is silent -- the attachment just moves into
     source_provenance_unknown with nothing recording why.
+
+    The two paths reach that guarantee differently, and the difference is not cosmetic.
+    `ocr-images` rewrites derived Markdown from images already extracted, so the recorded hash
+    still describes the PDF the text came from and is carried forward. `reconvert-math` re-runs
+    the extractor against whatever is at source_path now, so it must hash that file instead --
+    carrying the old hash forward would attribute new text to the wrong PDF. This test asserts
+    only that both supply the fields; see tests/test_math_ocr.py for the behaviour.
     """
 
-    def test_reconvert_math_and_image_ocr_carry_source_sha256_through_the_upsert(self):
+    def test_both_ocr_paths_supply_source_sha256_and_indexed_at(self):
         import ast
         import inspect
 
@@ -823,6 +855,135 @@ class ProvenancePreservationTests(unittest.TestCase):
             source_sha256_current="src-hash-changed",
         )
         self.assertNotIn(STATUS_SOURCE_CHANGED, classify_item(erased))
+
+
+class MetadataProjectionTests(unittest.TestCase):
+    """Provenance must survive the SQLite -> dict projection both OCR paths read through.
+
+    A structural check that the keyword is passed is not enough: the value it passes came from
+    `get_item_context`, and a field missing from that projection makes the keyword bind "".
+    """
+
+    def test_get_item_context_exposes_provenance_fields(self):
+        from zotero_pdf_text.fts import build_fts_index, get_item_context
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            jsonl = root / "index.jsonl"
+            jsonl.write_text(
+                json.dumps(_index_record("AAAA1111", source_sha256="real-source-hash"))
+                + "\n",
+                encoding="utf-8",
+            )
+            db = root / "index.sqlite"
+            build_fts_index(jsonl, db)
+
+            context = get_item_context(db, attachment_key="AAAA1111")
+            record = context["records"][0]
+            self.assertEqual(record.get("source_sha256"), "real-source-hash")
+            self.assertIn("indexed_at", record)
+
+    def test_projection_round_trip_preserves_a_real_hash(self):
+        """The loss this guards against was invisible end to end, not at the call site."""
+        from zotero_pdf_text.fts import build_fts_index, get_item_context
+        from zotero_pdf_text.indexer import TextIndexRecord
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            jsonl = root / "index.jsonl"
+            jsonl.write_text(
+                json.dumps(_index_record("AAAA1111", source_sha256="real-source-hash")) + "\n",
+                encoding="utf-8",
+            )
+            db = root / "index.sqlite"
+            build_fts_index(jsonl, db)
+            record = get_item_context(db, attachment_key="AAAA1111")["records"][0]
+
+            # Exactly what image_ocr does when it rebuilds the record for its upsert.
+            rebuilt = TextIndexRecord(
+                zotero_parent_key=record["zotero_parent_key"],
+                zotero_attachment_key=record["zotero_attachment_key"],
+                title=record["title"],
+                creators=record["creators"],
+                year=record["year"],
+                doi=record["doi"],
+                citation_key=record["citation_key"],
+                source_path=record["source_path"],
+                markdown_path=record["markdown_path"],
+                markdown_sha256=record["markdown_sha256"],
+                extraction_tool=record["extraction_tool"],
+                char_count=1,
+                word_count=1,
+                page_count=record["page_count"],
+                classification=record["classification"],
+                identity_status=record["identity_status"],
+                identity_rule=record["identity_rule"],
+                has_math=record["has_math"],
+                source_sha256=record.get("source_sha256", ""),
+                indexed_at="2026-01-01T00:00:00+00:00",
+                text="text",
+            )
+            self.assertEqual(rebuilt.source_sha256, "real-source-hash")
+
+
+class ZoteroInventoryTests(unittest.TestCase):
+    """Membership comes from Zotero, not from the file-walking mapping snapshot."""
+
+    def test_attachment_with_a_missing_pdf_is_reported_not_invisible(self):
+        from zotero_pdf_text.library import build_observations
+
+        observations = build_observations(
+            _config(Path("/nonexistent")),
+            mapping_rows={},
+            index_rows={},
+            inventory={"AAAA1111": _attachment_record("AAAA1111")},
+        )
+        self.assertEqual(len(observations), 1)
+        observation = observations[0]
+        self.assertTrue(observation.in_zotero)
+        self.assertFalse(observation.in_mapping)
+        self.assertIs(observation.source_exists, False)
+        self.assertIn(STATUS_MISSING_SOURCE, classify_item(observation))
+
+    def test_indexed_attachment_with_a_missing_pdf_is_not_called_orphaned(self):
+        """Zotero still represents it; the PDF is what went missing."""
+        observation = _observation(
+            in_zotero=True,
+            in_mapping=False,
+            source_exists=False,
+            source_sha256_current=None,
+            mapping_metadata={},
+        )
+        statuses = classify_item(observation)
+        self.assertIn(STATUS_MISSING_SOURCE, statuses)
+        self.assertNotIn(STATUS_ORPHANED_INDEX, statuses)
+
+    def test_index_row_absent_from_zotero_is_still_orphaned(self):
+        observation = _observation(in_zotero=False, in_mapping=False, mapping_metadata={})
+        self.assertIn(STATUS_ORPHANED_INDEX, classify_item(observation))
+
+    def test_eligibility_falls_back_to_the_indexed_record(self):
+        """A verified attachment that drops out of the snapshot must not read as unverified."""
+        from zotero_pdf_text.library import build_observations
+
+        observations = build_observations(
+            _config(Path("/nonexistent")),
+            mapping_rows={},
+            index_rows={"AAAA1111": [_index_record("AAAA1111")]},
+            inventory={"AAAA1111": _attachment_record("AAAA1111")},
+        )
+        self.assertTrue(is_canonical_eligible(observations[0]))
+        self.assertNotIn(STATUS_UNVERIFIED_INDEXED, classify_item(observations[0]))
+
+    def test_audit_reports_when_the_inventory_could_not_be_read(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            snapshot = root / "mapping_report.jsonl"
+            snapshot.write_text("", encoding="utf-8")
+            # No zotero.sqlite exists under this config.
+            audit = audit_library(_config(root), snapshot, index_root=root / "index")
+            self.assertFalse(audit.inventory_available)
+            self.assertFalse(audit.to_dict()["inventory_available"])
 
 
 class SnapshotHashFallbackTests(unittest.TestCase):

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import shutil
+import contextlib
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
@@ -216,7 +217,14 @@ def snapshot_database(source: Path, run_dir: Path) -> Path:
 
 
 def load_attachment_records(db_path: Path) -> list[AttachmentRecord]:
-    con = sqlite3.connect(db_path)
+    # Closed on every path, not just the happy one. A query that raises here -- an empty file, a
+    # schema this build does not know -- previously leaked the handle until garbage collection,
+    # which on Windows keeps a lock on someone's live Zotero database.
+    with contextlib.closing(sqlite3.connect(db_path)) as con:
+        return _load_attachment_records(con)
+
+
+def _load_attachment_records(con: sqlite3.Connection) -> list[AttachmentRecord]:
     con.row_factory = sqlite3.Row
     cur = con.cursor()
     rows = cur.execute(
@@ -247,7 +255,6 @@ def load_attachment_records(db_path: Path) -> list[AttachmentRecord]:
     parent_ids = sorted({row["parent_item_id"] for row in rows if row["parent_item_id"] is not None})
     fields = _load_fields(cur, parent_ids)
     creators = _load_creators(cur, parent_ids)
-    con.close()
 
     records: list[AttachmentRecord] = []
     for row in rows:

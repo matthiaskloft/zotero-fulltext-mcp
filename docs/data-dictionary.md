@@ -256,9 +256,16 @@ Search normalizes query text into at most 20 word terms. `all_terms` is the defa
 
 ## Library Audit
 
-`audit-library` compares three independent views of the same library -- the mapper snapshot, the
-filesystem, and the published index generation's JSONL -- and reports where they disagree. It is
-read-only: it moves, renames and rewrites nothing.
+`audit-library` compares four independent views of the same library -- Zotero's own attachment
+inventory, the mapper snapshot, the filesystem, and the published index generation's JSONL --
+and reports where they disagree. It is read-only: it moves, renames and rewrites nothing.
+
+Membership comes from Zotero, not from the snapshot. The mapper walks source *files*, so an
+attachment whose PDF has been moved or deleted produces no mapping row at all; reading membership
+off the snapshot would make `missing_source` nearly unreachable and would report such an
+attachment as `orphaned_index`, claiming Zotero dropped it when the file is what went missing.
+If Zotero's database cannot be read the audit still runs, reports `inventory_available: false`,
+and says that those two statuses are understated.
 
 The canonical layout is recorded per item as evidence (`canonical_markdown_exists`) but is not
 classified, because nothing writes to `library/` yet and a status derived from it would fire on
@@ -283,7 +290,9 @@ the library.
   would fire across a large share of the library without indicating real drift.
 - `missing_source`: the source PDF is gone from disk.
 - `missing_markdown`: the converted Markdown is gone from disk.
-- `orphaned_index`: the index holds a row for an attachment Zotero no longer represents.
+- `orphaned_index`: the index holds a row for an attachment Zotero no longer represents. Decided
+  against Zotero's inventory, so an attachment Zotero still lists whose PDF has vanished is
+  reported as `missing_source` instead.
 - `unverified_indexed`: Zotero represents the attachment but its identity was never verified, yet
   it is in the published index and is being returned by search. Distinct from `orphaned_index`:
   the repair is to verify the identity, not to drop the row.

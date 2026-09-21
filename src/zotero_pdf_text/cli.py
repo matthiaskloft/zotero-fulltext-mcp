@@ -1480,6 +1480,12 @@ def _print_library_audit(
     for status in ALL_STATUSES:
         print(f"- {status}: {audit.status_counts.get(status, 0)}")
     print("")
+    if not audit.inventory_available:
+        print(
+            "Zotero's attachment inventory could not be read, so membership fell back to the "
+            "mapping snapshot. An attachment whose PDF is missing never reaches that snapshot, "
+            "so missing_source and orphaned_index are understated."
+        )
     if audit.ineligible_items:
         print(
             f"{audit.ineligible_items} attachment(s) are unverified or unmapped and are correctly "
