@@ -1499,7 +1499,9 @@ def _print_library_audit(
     if not audit.full_audit:
         print(
             "source_changed was compared against the mapping snapshot's hashes, so it reflects "
-            "the library as of that dry-run. Re-run with --full to hash source PDFs as of now."
+            "the library as of that dry-run. Anything the snapshot could not answer for is "
+            "counted as source_unchecked rather than assumed current. Re-run with --full to "
+            "hash source PDFs as of now."
         )
     if not list_items:
         return

@@ -22,6 +22,7 @@ from zotero_pdf_text.library import (
     STATUS_MISSING_SOURCE,
     STATUS_ORPHANED_INDEX,
     STATUS_SOURCE_CHANGED,
+    STATUS_SOURCE_UNCHECKED,
     STATUS_STALE_MARKDOWN,
     STATUS_UNINDEXED,
     STATUS_UNVERIFIED_INDEXED,
@@ -250,13 +251,29 @@ class ClassifyItemTests(unittest.TestCase):
         meant to justify a high-risk migration.
         """
         cases = [
-            ("no full audit", {"source_sha256_current": None}),
-            ("pre-upgrade record", {"indexed_source_sha256": ""}),
-            ("neither known", {"source_sha256_current": None, "indexed_source_sha256": ""}),
+            (
+                "no full audit, snapshot hash available",
+                {"source_sha256_current": None, "source_sha256_mapping": "src-hash"},
+                {STATUS_CURRENT},
+            ),
+            ("pre-upgrade record", {"indexed_source_sha256": ""}, {STATUS_CURRENT}),
+            (
+                "neither known",
+                {"source_sha256_current": None, "indexed_source_sha256": ""},
+                {STATUS_CURRENT},
+            ),
+            # Nothing to compare, but the index does record a hash. Reporting `current` here
+            # would certify a file the audit never looked at, so it is `source_unchecked` --
+            # still not `source_changed`, which is the false positive this test guards.
+            (
+                "no full audit, no snapshot hash",
+                {"source_sha256_current": None},
+                {STATUS_SOURCE_UNCHECKED},
+            ),
         ]
-        for name, overrides in cases:
+        for name, overrides, expected in cases:
             with self.subTest(case=name):
-                self.assertStatuses(_observation(**overrides), {STATUS_CURRENT})
+                self.assertStatuses(_observation(**overrides), expected)
 
     def test_missing_source_cannot_also_be_source_changed(self):
         """Falls out of the evidence model rather than needing a suppression rule."""
@@ -1119,7 +1136,7 @@ class RelinkedAttachmentTests(unittest.TestCase):
     on disk intact.
     """
 
-    def _observe(self, *, old_present: bool):
+    def _observe(self, *, old_present: bool, full: bool = True):
         from zotero_pdf_text.library import build_observations
 
         root = Path(tempfile.mkdtemp())
@@ -1158,7 +1175,7 @@ class RelinkedAttachmentTests(unittest.TestCase):
             index_rows={"AAAA1111": [indexed]},
             inventory={"AAAA1111": attachment},
             inventory_available=True,
-            full_audit=True,
+            full_audit=full,
         )
         self.assertEqual(len(observations), 1)
         return observations[0], new_pdf, old_pdf
@@ -1179,6 +1196,27 @@ class RelinkedAttachmentTests(unittest.TestCase):
         self.assertEqual(observation.source_path, str(new_pdf))
         self.assertIs(observation.source_exists, True)
         self.assertNotIn(STATUS_MISSING_SOURCE, classify_item(observation))
+
+    def test_a_known_relink_is_never_reported_as_current(self):
+        """The default audit must not certify what it could not check.
+
+        Clearing the stale snapshot hash stops the wrong bytes being compared, but silence is
+        not neutral here: with no status at all the item falls through to `current`, which is
+        the one answer known to be wrong. The path mismatch is known without hashing anything.
+        """
+        observation, _new, _old = self._observe(old_present=True, full=False)
+        statuses = classify_item(observation)
+        self.assertNotIn(STATUS_CURRENT, statuses)
+        self.assertIn(STATUS_SOURCE_UNCHECKED, statuses)
+        self.assertNotIn(STATUS_SOURCE_CHANGED, statuses)
+
+    def test_a_full_audit_resolves_the_relink_to_source_changed(self):
+        """`--full` hashes the file the audit can actually see, so it need not say "unknown"."""
+        observation, _new, _old = self._observe(old_present=True, full=True)
+        statuses = classify_item(observation)
+        self.assertIn(STATUS_SOURCE_CHANGED, statuses)
+        self.assertNotIn(STATUS_SOURCE_UNCHECKED, statuses)
+        self.assertNotIn(STATUS_CURRENT, statuses)
 
     def test_the_snapshot_hash_does_not_vouch_for_a_different_file(self):
         """Without --full the snapshot hash is the fallback -- but not across a relink.
@@ -1210,6 +1248,99 @@ class RelinkedAttachmentTests(unittest.TestCase):
         )
         self.assertEqual(observations[0].source_path, "recorded.pdf")
         self.assertEqual(observations[0].source_sha256_mapping, "src-hash")
+
+
+class LiveMetadataTests(unittest.TestCase):
+    """`metadata_changed` compares against Zotero, not against the snapshot's memory of it.
+
+    The snapshot's copy is only as current as the last dry-run, so a title, DOI or citation key
+    edited in Zotero afterwards is invisible to it -- and an attachment that never reached the
+    mapper carries no snapshot metadata to compare at all.
+    """
+
+    def _observe(self, *, in_mapping: bool, **attachment_overrides: object):
+        from zotero_pdf_text.library import build_observations
+
+        root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, root, True)
+        linked = root / "linked"
+        linked.mkdir()
+        pdf = linked / "p.pdf"
+        pdf.write_bytes(b"%PDF")
+        config = ProjectConfig(
+            zotero_root=root / "zotero",
+            zotero_data_directory=root / "zotero" / "data",
+            linked_attachments=linked,
+            output_root=root / "out",
+        )
+        snapshot_metadata = {"title": "A title", "doi": "10.1000/x", "citation_key": "key-AAAA1111"}
+        mapping_rows = {}
+        if in_mapping:
+            mapping_rows = {
+                "AAAA1111": {
+                    "zotero_attachment_key": "AAAA1111",
+                    "source_path": str(pdf),
+                    "sha256": _sha256_text("%PDF"),
+                    **snapshot_metadata,
+                    **ELIGIBLE,
+                }
+            }
+        indexed = _index_record(
+            "AAAA1111",
+            source_path=str(pdf),
+            source_sha256=_sha256_text("%PDF"),
+            markdown_path="",
+            markdown_sha256="",
+            **snapshot_metadata,
+        )
+        observations = build_observations(
+            config,
+            mapping_rows=mapping_rows,
+            index_rows={"AAAA1111": [indexed]},
+            inventory={
+                "AAAA1111": _attachment_record(
+                    "AAAA1111", zotero_path="attachments:p.pdf", **attachment_overrides
+                )
+            },
+            inventory_available=True,
+            full_audit=True,
+        )
+        return observations[0]
+
+    def test_metadata_edited_after_the_snapshot_is_detected(self):
+        observation = self._observe(
+            in_mapping=True, title="NEW title", doi="10.9999/new", citation_key="newKey"
+        )
+        self.assertEqual(observation.mapping_metadata["title"], "A title")
+        self.assertEqual(observation.zotero_metadata["title"], "NEW title")
+        self.assertIn(STATUS_METADATA_CHANGED, classify_item(observation))
+
+    def test_an_indexed_inventory_only_attachment_is_compared(self):
+        """No mapping row at all: the old rule required one and skipped the comparison."""
+        observation = self._observe(in_mapping=False, title="NEW title")
+        self.assertFalse(observation.in_mapping)
+        self.assertIn(STATUS_METADATA_CHANGED, classify_item(observation))
+
+    def test_matching_live_metadata_stays_current(self):
+        observation = self._observe(in_mapping=True)
+        self.assertEqual(sorted(classify_item(observation)), [STATUS_CURRENT])
+
+    def test_snapshot_metadata_is_used_when_the_inventory_is_unavailable(self):
+        """Without Zotero there is nothing newer to consult, so the snapshot is all there is."""
+        observation = _observation(
+            in_zotero=False,
+            inventory_available=False,
+            zotero_metadata={},
+            mapping_metadata={"title": "Edited", "doi": "10.1000/x", "citation_key": "k"},
+        )
+        self.assertIn(STATUS_METADATA_CHANGED, classify_item(observation))
+
+    def test_empty_current_metadata_never_reports_a_change(self):
+        """"We know nothing" must not masquerade as "everything differs"."""
+        observation = _observation(
+            in_zotero=True, inventory_available=True, zotero_metadata={}, mapping_metadata={}
+        )
+        self.assertNotIn(STATUS_METADATA_CHANGED, classify_item(observation))
 
 
 class SnapshotHashFallbackTests(unittest.TestCase):

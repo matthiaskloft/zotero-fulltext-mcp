@@ -1144,6 +1144,11 @@ class AuditLibraryCliTests(unittest.TestCase):
                     "doi": "10.1000/x",
                     "citation_key": "key1",
                     "source_path": str(pdf),
+                    # The mapper hashes every source PDF it sees, so a snapshot row without
+                    # `sha256` is not a state the pipeline produces. Without it the audit has
+                    # nothing to compare against the index and correctly reports
+                    # `source_unchecked` rather than certifying the item as `current`.
+                    "sha256": "stale-source-hash",
                     "classification": "mapped_verified",
                     "identity_status": "verified",
                 }

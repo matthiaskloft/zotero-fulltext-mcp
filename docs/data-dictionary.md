@@ -294,7 +294,19 @@ the library.
 - `source_changed`: the source PDF differs from the one this text was extracted from. Compared
   against the mapping snapshot's hash by default and against a freshly computed hash under
   `--full`; either way it fires only when the indexed record actually carries a source hash.
-- `metadata_changed`: title, DOI or citation key differ between Zotero and the index. Creators
+- `source_unchecked`: the index records a source hash and this audit had nothing to compare it
+  against, so the item was never examined. Fires when the attachment was relinked -- the
+  snapshot's hash then describes the previous file -- or when it never reached the mapper and so
+  has no snapshot hash at all. It exists because the alternative is silence, and silence here is
+  read as `current`: a clean bill of health for a file nobody looked at. Suppressed when
+  `missing_source` already says the same thing more precisely, and resolved by `--full`, which
+  hashes the file the audit can actually see. Distinct from `source_provenance_unknown`, which
+  counts the opposite gap -- records with no *indexed* hash, converted before the field existed.
+- `metadata_changed`: title, DOI or citation key differ between Zotero and the index. Compared
+  against Zotero's live record whenever the inventory could be read, falling back to the
+  snapshot only when it could not: the snapshot's copy is only as current as the last `dry-run`,
+  so an edit made in Zotero afterwards is invisible to it, and an attachment that never reached
+  the mapper carries no snapshot metadata at all. Creators
   and year are deliberately excluded -- they change during ordinary bibliographic tidying and
   would fire across a large share of the library without indicating real drift.
 - `missing_source`: the source PDF is gone from disk.

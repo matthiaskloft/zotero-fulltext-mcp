@@ -31,7 +31,12 @@ dated section once it has been stress-tested against a large library.
   path missed the source change when the old file was still present and reported a spurious
   `missing_source` when it was not. The snapshot hash is no longer used as a fallback across a
   relink either, since it describes the previous file and would report the item clean at
-  exactly the moment it changed most.
+  exactly the moment it changed most. Clearing it is not sufficient on its own, so such items
+  are now reported as `source_unchecked`.
+- `metadata_changed` compares against Zotero's live record whenever the inventory could be read,
+  rather than against the mapping snapshot's memory of it. A title, DOI or citation key edited
+  in Zotero after the last `dry-run` was previously invisible, and an indexed attachment that
+  never reached the mapper was skipped by the comparison entirely.
 
 ### Added
 
@@ -57,6 +62,12 @@ dated section once it has been stress-tested against a large library.
   the snapshot rather than blind. Also adds `library_status()` as a data function for
   later CLI/MCP use, reporting health categories and last successful publication rather than
   calling index row counts "coverage".
+- `source_unchecked`: an audit status for the gap between "the source changed" and "nobody
+  looked". The index records a source hash, but the default audit has nothing to compare it
+  against -- the attachment was relinked, so the snapshot's hash describes the previous file, or
+  it never reached the mapper and has no snapshot hash at all. Without a status such an item
+  falls through to `current`, certifying a file the audit never examined. `--full` resolves it
+  by hashing what is actually on disk.
 - `unverified_indexed`: an audit status beyond the nine originally planned, naming an attachment
   whose identity was never verified but which is nonetheless in the published index and being
   returned by search. Distinct from `orphaned_index` because the repair differs: verify the

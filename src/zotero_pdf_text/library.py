@@ -63,6 +63,12 @@ STATUS_CURRENT = "current"
 STATUS_UNINDEXED = "unindexed"
 STATUS_STALE_MARKDOWN = "stale_markdown"
 STATUS_SOURCE_CHANGED = "source_changed"
+# Not "the source changed" but "nobody could tell". The index records a source hash, yet this
+# audit has nothing to compare it against -- the attachment was relinked, so the snapshot's hash
+# describes the previous file, or it never reached the mapper and no snapshot hash exists. It is
+# a separate status rather than silence because silence here reads as `current`, which is the one
+# answer known to be wrong. `--full` resolves it by hashing the file the audit can actually see.
+STATUS_SOURCE_UNCHECKED = "source_unchecked"
 STATUS_METADATA_CHANGED = "metadata_changed"
 STATUS_MISSING_SOURCE = "missing_source"
 STATUS_MISSING_MARKDOWN = "missing_markdown"
@@ -80,6 +86,7 @@ ALL_STATUSES: tuple[str, ...] = (
     STATUS_UNINDEXED,
     STATUS_STALE_MARKDOWN,
     STATUS_SOURCE_CHANGED,
+    STATUS_SOURCE_UNCHECKED,
     STATUS_METADATA_CHANGED,
     STATUS_MISSING_SOURCE,
     STATUS_MISSING_MARKDOWN,
@@ -201,6 +208,11 @@ class ItemObservation:
     # mislabel a previously-indexed attachment with a vanished PDF as `orphaned_index`, asserting
     # Zotero no longer represents something it still does.
     in_zotero: bool = False
+
+    # Title, DOI and citation key as Zotero holds them *now*. The snapshot's copy is only as
+    # current as the last dry-run, so an edit made in Zotero afterwards is invisible to it --
+    # and an attachment that never reached the mapper has no snapshot metadata at all.
+    zotero_metadata: dict[str, str] = field(default_factory=dict)
 
     # Whether `in_zotero` is an answer or a shrug. False means the inventory could not be read,
     # so `in_zotero=False` carries no information and membership must fall back to the snapshot.
@@ -382,9 +394,32 @@ def classify_item(observation: ItemObservation) -> frozenset[str]:
     # provenance for free and `source_changed` is detectable without --full. The fallback is
     # weaker only in age -- it answers "has the PDF changed since the snapshot" rather than
     # "since this instant" -- which is a real caveat but a far smaller one than not looking.
-    if _differs(obs.source_sha256_current or obs.source_sha256_mapping, obs.indexed_source_sha256):
+    source_comparand = obs.source_sha256_current or obs.source_sha256_mapping
+    if _differs(source_comparand, obs.indexed_source_sha256):
         statuses.add(STATUS_SOURCE_CHANGED)
-    if obs.in_mapping and obs.in_index and obs.mapping_metadata != obs.indexed_metadata:
+    elif (
+        represented
+        and obs.in_index
+        and obs.indexed_source_sha256
+        and not source_comparand
+        and obs.source_exists is not False
+    ):
+        # The index knows what it extracted, and this audit cannot check it. Without a status
+        # the item falls through to `current`, asserting a clean bill of health that was never
+        # examined -- the failure mode that made a known relink read as `current`. Suppressed
+        # when the PDF is already reported missing, which says the same thing more precisely.
+        statuses.add(STATUS_SOURCE_UNCHECKED)
+    # Zotero's own record wins when it could be read: the snapshot's copy is only as current as
+    # the last dry-run, so an edit made afterwards is invisible to it, and an attachment that
+    # never reached the mapper carries no snapshot metadata at all. Requires non-empty current
+    # metadata so that "we know nothing" never masquerades as "everything differs".
+    current_metadata = obs.zotero_metadata if obs.in_zotero else obs.mapping_metadata
+    if (
+        represented
+        and obs.in_index
+        and current_metadata
+        and current_metadata != obs.indexed_metadata
+    ):
         statuses.add(STATUS_METADATA_CHANGED)
 
     # 3. Eligibility-dependent judgements.
@@ -580,6 +615,7 @@ def build_observations(
             ItemObservation(
                 attachment_key=key,
                 in_zotero=attachment is not None,
+                zotero_metadata=_attachment_metadata(attachment),
                 inventory_available=inventory_available,
                 in_mapping=mapping is not None,
                 classification=_text(mapping, "classification") or _text(indexed, "classification"),
@@ -764,6 +800,18 @@ def load_index_records(index_root: Path) -> tuple[str | None, dict[str, list[dic
 # "changed" and bury the drift actually worth acting on. What remains are the keys that change
 # identity or citation, where a hit almost certainly means something real.
 METADATA_KEYS: tuple[str, ...] = ("title", "doi", "citation_key")
+
+
+def _attachment_metadata(record: AttachmentRecord | None) -> dict[str, str]:
+    """Project a live Zotero attachment onto the same keys the index stores.
+
+    Safe to compare against `indexed_metadata` because the mapper derives its own row from this
+    very dataclass, so both sides of the comparison come from one definition of each field --
+    a `citation_key` computed differently on each side would fire across the whole library.
+    """
+    if record is None:
+        return {}
+    return {key: str(getattr(record, key, "") or "") for key in METADATA_KEYS}
 
 
 def _metadata(row: dict[str, object] | None) -> dict[str, str]:
