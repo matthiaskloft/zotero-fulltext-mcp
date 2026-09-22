@@ -11,6 +11,230 @@ unannounced rather than absent: present, inert unless explicitly configured and 
 validated for general use. Its config shape and output conventions may still change. It moves into a
 dated section once it has been stress-tested against a large library.
 
+### Added
+
+- `ocr-images --key <ATTACHMENT_KEY>`: recover the equations, tables and figure content that
+  conversion left stranded in extracted PNGs. `pymupdf4llm` pulls vector-drawn display equations
+  out of a PDF into their own crop files and leaves an opaque `![](…png)` placeholder behind, so
+  that notation never reaches the text index. This command walks the converted Markdown,
+  classifies each referenced crop, asks a locally served OCR model the matching question
+  (formula / table / figure recognition), and splices the answer back at the placeholder's
+  position — equations and tables replace their placeholder, figures keep the image link and gain
+  a searchable description. Because the crops are already isolated regions, no PDF re-rendering
+  or layout analysis is involved and **no new dependency is added**: the model is reached over
+  HTTP through Ollama using only the standard library, on GPU or CPU. `--dry-run` prints the full
+  classification table without contacting the model. Runs are resumable through a content-keyed
+  cache beside the crops, guarded against accidental re-runs, and commit under the same pipeline
+  write lock as every other index writer, and refusing to commit if the original changed while
+  OCR was running. Configured through an optional `image_ocr` block; `check-setup` reports the
+  runtime's availability.
+- Image OCR is non-destructive: the original converted Markdown is never modified. The enriched
+  result is written to a sibling file (`<stem>_ocr_eq.md` by default; `image_ocr.enriched_suffix`
+  is configurable, `""` overwrites in place) and the index is repointed at it, so the original
+  remains on disk as a permanent anchor and search still returns the recovered content. Each run
+  regenerates the sibling from the pristine original, so `--force` always starts from clean
+  placeholders.
+- Crop classification (`classify_crop`) decides per crop whether it is a formula, table, figure,
+  or decoration to skip, which selects the OCR task prompt. Alongside crop geometry and
+  neighbouring caption / picture-marker text, it uses a compression signal — compressed PNG bytes
+  per pixel — to tell a solid decorative bar from a wide display equation, which are otherwise
+  indistinguishable by shape or surrounding text and need no image library to separate. A "Table N"
+  or "Figure N" mention is treated as a caption only for a blockier crop, so a thin single-line
+  equation strip beside a running-prose cross-reference (e.g. "Table 4 shows the coefficients")
+  stays a formula rather than being mislabelled — a false positive observed on real documents.
+- Synthetic OCR validation corpus (`tests/fixtures/ocr_corpus/`, built by
+  `tools/build_ocr_corpus.py`). The suite previously had no real PDF at all — every test wrote
+  `b"%PDF"` and mocked the extractor — so nothing exercised real PDF → real crops. The corpus is a
+  LaTeX document covering equation varieties (numbered, unnumbered, multi-line aligned, matrix,
+  cases, quantifier- and Greek-heavy), a table, a captioned vector figure, and adversarial
+  negatives: a decorative separator band whose proportions match a display equation, a publisher
+  spine bar, and a solid logo block. Elements are tied to their observed crops through marker
+  tokens in the text layer rather than by ordering or filename, and the generated PDF is committed
+  so CI needs no LaTeX toolchain. Ground truth is recorded from an observed conversion run rather
+  than assumed, since whether a construct becomes a crop is a property of the extractor.
+- `ocr-images` re-roots converted-output paths recorded by a previous machine, matching the
+  deepest suffix that exists under `output_root`, and resolves crop PNGs by filename rather than
+  by the absolute image link embedded in the Markdown. A library that moved between machines
+  keeps working instead of reporting that it has no images.
+- Real-article classification benchmark tier (`benchmarks/preprints/`) plus a reusable scoring
+  harness (`benchmarks/scoring.py`) and CI test (`tests/test_benchmark_preprints.py`). It scores
+  `classify_crop` on 103 crops from open first-author preprints (used with the author's
+  permission; see `benchmarks/preprints/ATTRIBUTION.md`), complementing the synthetic corpus with
+  real-world content. The benchmark freezes the classifier's *inputs* — each crop's geometry and
+  the two neighbouring Markdown lines it reads — not a stale prediction, so CI re-runs the current
+  algorithm offline with no PDF, model or network. Source PDFs are fetched on first use into a
+  git-ignored cache and never redistributed; only the small crops, labels and short caption
+  snippets are tracked. Assertions are invariants rather than a per-crop table (accuracy floor,
+  every equation reaches the formula prompt, mistakes are only figures conservatively over-routed
+  to formula), so the tier can grow with harder examples without churn.
+- Recognition-quality scoring (`benchmarks/recognition.py`) that measures the layer *after*
+  classification: given a crop's OCR output, how much of the expected notation actually survived.
+  It scores **token recall** against the corpus's `expected_tokens` rather than an exact LaTeX
+  match — many spellings render the same mathematics — with a normalization that erases meaningless
+  differences (backslashes, whitespace) while keeping case significant (`\Gamma` ≠ `\gamma`). The
+  metric is pure and unit-tested offline (`tests/test_recognition_scoring.py`); the live corpus
+  recognition tier now reports aggregate micro/macro recall with per-element and corpus-wide floors
+  instead of a pass-if-any-token-appears check. A pressure-test harness
+  (`tools/score_recognition.py`) runs any Ollama-served model over the corpus and reports recall,
+  with `--model` to compare models on identical crops.
+- End-to-end search-recovery test (`tests/test_recognition_scoring.py`): drives canned OCR text
+  through the real `render_replacement` → `splice` → `build_fts_index` → `search_fts` path and
+  proves a term that lived *only* inside an equation image is unfindable before enrichment and
+  findable after. This promotes the plan's manual "search now hits" verification into an automated,
+  offline (no model, no network) invariant — the payoff of the whole feature, guarded in CI.
+- Engine comparison harness (`benchmarks/engines.py`, `tools/compare_engines.py`) that scores whole
+  *engines* against each other rather than pieces of one: the crop path (`crop-mvp`), the
+  whole-document path (`marker`), and MinerU as a declared-but-unwired candidate. All three are
+  judged on the one axis they share — the final Markdown a reader searches — so a crop engine that
+  splices and a whole-document engine that re-renders become commensurable. Per-element scoring
+  inside a foreign engine's output works by anchoring on the corpus's `CORPUSMARK` tokens, which
+  survive any engine that reads the page, so a token only counts where its element actually is: an
+  engine that swapped two elements' content scores zero where a document-wide search would have
+  scored it 100%. An element whose anchor is missing, or repeated (a duplicated text layer, a
+  contents block), is reported *and* scored zero — dropping the prose around an element is itself an
+  extraction defect. The harness reports its own **comparability** rather than overstating its
+  numbers: because a missing anchor widens its neighbour's window, a lost anchor inflates that
+  neighbour's recall — and where the lost element carried no expected tokens, both aggregate figures
+  invert in favour of the *worse* engine. That limitation is measured, pinned by a test, printed in
+  the report and exposed as `comparable` in the JSON, since it cannot be scored away without
+  ground-truth offsets. Comparison logic and hardware-verdict parsing are pure and unit-tested
+  offline (`tests/test_engine_comparison.py`); the runner detects the GPU through `nvidia-smi` (no
+  new dependency, no `torch` import), takes `--config` so the crop path is benchmarked against the
+  model actually configured, and exits non-zero when nothing was attempted rather than emitting an
+  empty comparison. An engine that is *absent* is reported and omitted — there is nothing to say
+  about it — while one that *ran* and then failed or timed out stays in the comparison scoring zero,
+  with the reason beside it, so a broken engine places last in the ranking instead of vanishing from
+  it and leaving the survivor looking unopposed. The
+  GPU-aware selection policy (`recommend_engine`) is a documented stub with its trade-off written
+  out; three tests are staged against its contract and skip until it exists.
+
+### Changed
+
+- `ocr-images` preserves an attachment's recorded `source_sha256` through its index upsert.
+  Enrichment rewrites derived Markdown from images already extracted, so the hash recorded
+  against the attachment still describes the right PDF and must survive the upsert rather than
+  being recomputed or cleared.
+
+### Fixed
+
+- Figures whose caption label sits two lines above them are no longer routed to the formula
+  prompt, where the splice replaced their image link with LaTeX invented from a plot. In the
+  common journal layout the label (`Figure 3`) is separated from the crop by an italicised title
+  line, so the label the classifier looks for is never on a line it can see; only the title above
+  and the closing `Note.` line below are reachable. Recognising that pair as a caption block
+  raises real-article routing accuracy from 85.4% to 100% (103 labelled crops), recovering 15
+  figures — slider screenshots, balance-beam diagrams and density curves — that geometry alone
+  cannot distinguish from wide display equations. Both halves are required: measured across the
+  whole converted library (75,205 crops), a rule keyed on the note line alone would have claimed
+  two real display equations, because a note line terminates a caption in one document style but
+  opens a pedagogical aside in another. `tests/test_image_ocr.py` carries both shapes as
+  regression cases, since the benchmark tier now scores 100% either way and can no longer tell the
+  two rules apart. The caption label itself is read from one line further back than the classifier
+  previously looked (`CropRef.text_lead`), because the same layout carries tables — so the block
+  establishes only that a crop is *captioned*, and the label decides whether it reaches the figure
+  or the table prompt. Without that, a wide table would have been forced through the figure prompt,
+  keeping its image and gaining prose instead of its cells. The label must *be* the lead line rather
+  than open it, since the existing caption patterns are anchored only at the start and so also match
+  a running-prose cross-reference ("Table 4 shows the coefficients") — the very shape the aspect
+  guard exists to reject, and which this rule deliberately runs outside of. A caption title is
+  likewise required to be one emphasised span filling its line, which is not the same as carrying no
+  interior emphasis: real titles contain inline markup such as a superscript, so what disqualifies a
+  line is prose *resuming* between spans.
+- Records whose math was recovered by a math-capable pass no longer carry a spurious
+  `math_extraction_may_be_lossy` warning in MCP responses. The check was an equality test against
+  a single extractor name (`marker`); it is now a per-component membership test, so a composite
+  provenance label such as `pymupdf4llm.to_markdown+glm-ocr` is recognised while an unknown
+  extractor still warns.
+
+
+## [0.5.0] - 2026-09-22
+
+Read-only library auditing, recorded source provenance, and a hardened path for reading a live
+Zotero database.
+
+`audit-library` compares four independent views of the same library -- Zotero's attachment
+inventory, the `dry-run` mapping snapshot, the files on disk, and the published index
+generation's JSONL -- and reports where they disagree. It moves, renames and rewrites nothing.
+It is also the evidence the deferred canonical-layout migration was always meant to rest on,
+rather than an intuition about whether the timestamped-run layout hurts yet.
+
+**This release changes the index schema, and every existing index needs one `rebuild-index`.**
+What that buys and what it does not is in Changed below: provenance is established per
+attachment as it is genuinely reconverted, so until that coverage is high a low `source_changed`
+count means *not measured* rather than *not drifted*, which is what `source_provenance_unknown`
+reports.
+
+Reading a live `zotero.sqlite` without writing to it turned out to be the substance of the
+release. Six read-only connections built their `file:` URI by interpolating the path, which a
+`#` in a directory name silently truncated into a read-write open somewhere else; the audit's
+own snapshot went through several corrections before it could be trusted, ending in a refusal to
+hand SQLite a rollback journal that names a file for it to delete. Those are Fixed entries
+below, and `docs/data-dictionary.md` records the limits that remain.
+
+### Added
+
+- `audit-library --mapping-report <snapshot>`: a read-only drift report. It compares four
+  independent views of the same library -- Zotero's attachment inventory, the `dry-run` mapping
+  snapshot, the files on disk, and the published index generation's JSONL -- and reports where
+  they disagree. Zotero's inventory, not the snapshot, is the authority on membership: the
+  mapper walks files on disk, so an attachment whose PDF is already gone never reaches the
+  snapshot at all. When the inventory cannot be read the audit withholds every membership
+  conclusion and reports `inventory_available: false` with the reason, rather than silently
+  answering a different question from the snapshot. It moves, renames and rewrites nothing, and it reads the live
+  `zotero.sqlite` by copying it to a temporary directory rather than opening the live file, so
+  that SQLite cannot checkpoint, recover or create a sidecar inside the user's Zotero folder.
+  The `-wal` is copied alongside it, so attachments Zotero committed since its last checkpoint
+  stay visible. Statuses are a **set**, not a bucket: an attachment can hold
+  several at once, so the reported counts overlap and do not sum to the attachment total,
+  and the output says so. Two counts sit outside the status vocabulary to keep it honest --
+  `ineligible_items` explains why correctly-quarantined attachments report nothing at all, and
+  `source_provenance_unknown` states how many records cannot be checked for source drift yet.
+  `--full` re-hashes every source PDF from disk; without it `source_changed` is still evaluated,
+  against the hashes the mapper recorded during `dry-run`, so the default mode is current as of
+  the snapshot rather than blind. Also adds `library_status()` as a data function for
+  later CLI/MCP use, reporting health categories and last successful publication rather than
+  calling index row counts "coverage".
+- `source_unchecked`: an audit status for the gap between "the source changed" and "nobody
+  looked". The index records a source hash, but the default audit has nothing to compare it
+  against -- the attachment was relinked, so the snapshot's hash describes the previous file, or
+  it never reached the mapper and has no snapshot hash at all. Without a status such an item
+  falls through to `current`, certifying a file the audit never examined. `--full` resolves it
+  by hashing what is actually on disk.
+- `membership_unchecked`: an audit status for an attachment whose membership cannot be decided
+  because Zotero's inventory could not be read. Index-only rows were previously reported as
+  `orphaned_index`, which recommends dropping a row that may still be perfectly valid —
+  an attachment missing from the mapping snapshot may simply have lost its PDF.
+- `unverified_indexed`: an audit status beyond the nine originally planned, naming an attachment
+  whose identity was never verified but which is nonetheless in the published index and being
+  returned by search. Distinct from `orphaned_index` because the repair differs: verify the
+  identity, rather than drop a row Zotero no longer represents.
+
+### Changed
+
+- **Breaking (index schema).** Index records now carry `source_sha256` -- the SHA-256 of the
+  source PDF the text was extracted from, hashed at conversion time -- and `indexed_at`. Without
+  recorded source provenance, "the source differs from what was indexed" was not computable at
+  all, and `audit-library` could not report `source_changed` honestly. Readers reject an index
+  built before this change with a named error pointing at `rebuild-index`, rather than failing on
+  a missing column deep inside a query. Two consequences worth stating plainly: every existing
+  index needs one `rebuild-index`, and because a rebuild re-reads conversion manifests that carry
+  no source hash, existing records keep an empty `source_sha256` until they are reconverted. Until
+  then a low `source_changed` count means *not measured*, not *not drifted* -- which is what
+  `source_provenance_unknown` exists to report.
+- `reconvert-math` records the hash of the PDF it actually extracted, verified unchanged across
+  the extraction. A full reconversion reads whatever is at the source path now and must name
+  that file rather than inheriting the previous record's hash. Publishing requires the
+  provenance fields to survive `get_item_context`, so they are now part of its metadata
+  projection -- without that, a reconversion republished an empty hash even when the index held
+  a valid one.
+- `load_attachment_records` closes its SQLite connection on every path, not only on success. A
+  failing query previously leaked the handle until garbage collection, which on Windows holds a
+  lock on a live Zotero database.
+- `source_sha256` is deliberately empty for `skipped_existing` conversions. That row reused
+  Markdown converted from whatever the PDF was at the time, so hashing the file now would record
+  confident provenance for text that may predate it. Empty means *not known*, and is never read
+  as *unchanged*.
+
 ### Fixed
 
 - Conversion now hashes the source PDF before *and* after extraction and refuses to publish the
@@ -112,203 +336,12 @@ dated section once it has been stress-tested against a large library.
   rather than against the mapping snapshot's memory of it. A title, DOI or citation key edited
   in Zotero after the last `dry-run` was previously invisible, and an indexed attachment that
   never reached the mapper was skipped by the comparison entirely.
-
-### Added
-
-- `audit-library --mapping-report <snapshot>`: a read-only drift report. It compares four
-  independent views of the same library -- Zotero's attachment inventory, the `dry-run` mapping
-  snapshot, the files on disk, and the published index generation's JSONL -- and reports where
-  they disagree. Zotero's inventory, not the snapshot, is the authority on membership: the
-  mapper walks files on disk, so an attachment whose PDF is already gone never reaches the
-  snapshot at all. When the inventory cannot be read the audit withholds every membership
-  conclusion and reports `inventory_available: false` with the reason, rather than silently
-  answering a different question from the snapshot. It moves, renames and rewrites nothing, and it reads the live
-  `zotero.sqlite` by copying it to a temporary directory rather than opening the live file, so
-  that SQLite cannot checkpoint, recover or create a sidecar inside the user's Zotero folder.
-  The `-wal` is copied alongside it, so attachments Zotero committed since its last checkpoint
-  stay visible. Statuses are a **set**, not a bucket: an attachment can hold
-  several at once, so the reported counts overlap and do not sum to the attachment total,
-  and the output says so. Two counts sit outside the status vocabulary to keep it honest --
-  `ineligible_items` explains why correctly-quarantined attachments report nothing at all, and
-  `source_provenance_unknown` states how many records cannot be checked for source drift yet.
-  `--full` re-hashes every source PDF from disk; without it `source_changed` is still evaluated,
-  against the hashes the mapper recorded during `dry-run`, so the default mode is current as of
-  the snapshot rather than blind. Also adds `library_status()` as a data function for
-  later CLI/MCP use, reporting health categories and last successful publication rather than
-  calling index row counts "coverage".
-- `source_unchecked`: an audit status for the gap between "the source changed" and "nobody
-  looked". The index records a source hash, but the default audit has nothing to compare it
-  against -- the attachment was relinked, so the snapshot's hash describes the previous file, or
-  it never reached the mapper and has no snapshot hash at all. Without a status such an item
-  falls through to `current`, certifying a file the audit never examined. `--full` resolves it
-  by hashing what is actually on disk.
-- `membership_unchecked`: an audit status for an attachment whose membership cannot be decided
-  because Zotero's inventory could not be read. Index-only rows were previously reported as
-  `orphaned_index`, which recommends dropping a row that may still be perfectly valid —
-  an attachment missing from the mapping snapshot may simply have lost its PDF.
-- `unverified_indexed`: an audit status beyond the nine originally planned, naming an attachment
-  whose identity was never verified but which is nonetheless in the published index and being
-  returned by search. Distinct from `orphaned_index` because the repair differs: verify the
-  identity, rather than drop a row Zotero no longer represents.
-- `ocr-images --key <ATTACHMENT_KEY>`: recover the equations, tables and figure content that
-  conversion left stranded in extracted PNGs. `pymupdf4llm` pulls vector-drawn display equations
-  out of a PDF into their own crop files and leaves an opaque `![](…png)` placeholder behind, so
-  that notation never reaches the text index. This command walks the converted Markdown,
-  classifies each referenced crop, asks a locally served OCR model the matching question
-  (formula / table / figure recognition), and splices the answer back at the placeholder's
-  position — equations and tables replace their placeholder, figures keep the image link and gain
-  a searchable description. Because the crops are already isolated regions, no PDF re-rendering
-  or layout analysis is involved and **no new dependency is added**: the model is reached over
-  HTTP through Ollama using only the standard library, on GPU or CPU. `--dry-run` prints the full
-  classification table without contacting the model. Runs are resumable through a content-keyed
-  cache beside the crops, guarded against accidental re-runs, and commit under the same pipeline
-  write lock as every other index writer, and refusing to commit if the original changed while
-  OCR was running. Configured through an optional `image_ocr` block; `check-setup` reports the
-  runtime's availability.
-- Image OCR is non-destructive: the original converted Markdown is never modified. The enriched
-  result is written to a sibling file (`<stem>_ocr_eq.md` by default; `image_ocr.enriched_suffix`
-  is configurable, `""` overwrites in place) and the index is repointed at it, so the original
-  remains on disk as a permanent anchor and search still returns the recovered content. Each run
-  regenerates the sibling from the pristine original, so `--force` always starts from clean
-  placeholders.
-- Crop classification (`classify_crop`) decides per crop whether it is a formula, table, figure,
-  or decoration to skip, which selects the OCR task prompt. Alongside crop geometry and
-  neighbouring caption / picture-marker text, it uses a compression signal — compressed PNG bytes
-  per pixel — to tell a solid decorative bar from a wide display equation, which are otherwise
-  indistinguishable by shape or surrounding text and need no image library to separate. A "Table N"
-  or "Figure N" mention is treated as a caption only for a blockier crop, so a thin single-line
-  equation strip beside a running-prose cross-reference (e.g. "Table 4 shows the coefficients")
-  stays a formula rather than being mislabelled — a false positive observed on real documents.
-- Synthetic OCR validation corpus (`tests/fixtures/ocr_corpus/`, built by
-  `tools/build_ocr_corpus.py`). The suite previously had no real PDF at all — every test wrote
-  `b"%PDF"` and mocked the extractor — so nothing exercised real PDF → real crops. The corpus is a
-  LaTeX document covering equation varieties (numbered, unnumbered, multi-line aligned, matrix,
-  cases, quantifier- and Greek-heavy), a table, a captioned vector figure, and adversarial
-  negatives: a decorative separator band whose proportions match a display equation, a publisher
-  spine bar, and a solid logo block. Elements are tied to their observed crops through marker
-  tokens in the text layer rather than by ordering or filename, and the generated PDF is committed
-  so CI needs no LaTeX toolchain. Ground truth is recorded from an observed conversion run rather
-  than assumed, since whether a construct becomes a crop is a property of the extractor.
-- `ocr-images` re-roots converted-output paths recorded by a previous machine, matching the
-  deepest suffix that exists under `output_root`, and resolves crop PNGs by filename rather than
-  by the absolute image link embedded in the Markdown. A library that moved between machines
-  keeps working instead of reporting that it has no images.
-- Real-article classification benchmark tier (`benchmarks/preprints/`) plus a reusable scoring
-  harness (`benchmarks/scoring.py`) and CI test (`tests/test_benchmark_preprints.py`). It scores
-  `classify_crop` on 103 crops from open first-author preprints (used with the author's
-  permission; see `benchmarks/preprints/ATTRIBUTION.md`), complementing the synthetic corpus with
-  real-world content. The benchmark freezes the classifier's *inputs* — each crop's geometry and
-  the two neighbouring Markdown lines it reads — not a stale prediction, so CI re-runs the current
-  algorithm offline with no PDF, model or network. Source PDFs are fetched on first use into a
-  git-ignored cache and never redistributed; only the small crops, labels and short caption
-  snippets are tracked. Assertions are invariants rather than a per-crop table (accuracy floor,
-  every equation reaches the formula prompt, mistakes are only figures conservatively over-routed
-  to formula), so the tier can grow with harder examples without churn.
-- Recognition-quality scoring (`benchmarks/recognition.py`) that measures the layer *after*
-  classification: given a crop's OCR output, how much of the expected notation actually survived.
-  It scores **token recall** against the corpus's `expected_tokens` rather than an exact LaTeX
-  match — many spellings render the same mathematics — with a normalization that erases meaningless
-  differences (backslashes, whitespace) while keeping case significant (`\Gamma` ≠ `\gamma`). The
-  metric is pure and unit-tested offline (`tests/test_recognition_scoring.py`); the live corpus
-  recognition tier now reports aggregate micro/macro recall with per-element and corpus-wide floors
-  instead of a pass-if-any-token-appears check. A pressure-test harness
-  (`tools/score_recognition.py`) runs any Ollama-served model over the corpus and reports recall,
-  with `--model` to compare models on identical crops.
-- End-to-end search-recovery test (`tests/test_recognition_scoring.py`): drives canned OCR text
-  through the real `render_replacement` → `splice` → `build_fts_index` → `search_fts` path and
-  proves a term that lived *only* inside an equation image is unfindable before enrichment and
-  findable after. This promotes the plan's manual "search now hits" verification into an automated,
-  offline (no model, no network) invariant — the payoff of the whole feature, guarded in CI.
-- Engine comparison harness (`benchmarks/engines.py`, `tools/compare_engines.py`) that scores whole
-  *engines* against each other rather than pieces of one: the crop path (`crop-mvp`), the
-  whole-document path (`marker`), and MinerU as a declared-but-unwired candidate. All three are
-  judged on the one axis they share — the final Markdown a reader searches — so a crop engine that
-  splices and a whole-document engine that re-renders become commensurable. Per-element scoring
-  inside a foreign engine's output works by anchoring on the corpus's `CORPUSMARK` tokens, which
-  survive any engine that reads the page, so a token only counts where its element actually is: an
-  engine that swapped two elements' content scores zero where a document-wide search would have
-  scored it 100%. An element whose anchor is missing, or repeated (a duplicated text layer, a
-  contents block), is reported *and* scored zero — dropping the prose around an element is itself an
-  extraction defect. The harness reports its own **comparability** rather than overstating its
-  numbers: because a missing anchor widens its neighbour's window, a lost anchor inflates that
-  neighbour's recall — and where the lost element carried no expected tokens, both aggregate figures
-  invert in favour of the *worse* engine. That limitation is measured, pinned by a test, printed in
-  the report and exposed as `comparable` in the JSON, since it cannot be scored away without
-  ground-truth offsets. Comparison logic and hardware-verdict parsing are pure and unit-tested
-  offline (`tests/test_engine_comparison.py`); the runner detects the GPU through `nvidia-smi` (no
-  new dependency, no `torch` import), takes `--config` so the crop path is benchmarked against the
-  model actually configured, and exits non-zero when nothing was attempted rather than emitting an
-  empty comparison. An engine that is *absent* is reported and omitted — there is nothing to say
-  about it — while one that *ran* and then failed or timed out stays in the comparison scoring zero,
-  with the reason beside it, so a broken engine places last in the ranking instead of vanishing from
-  it and leaving the survivor looking unopposed. The
-  GPU-aware selection policy (`recommend_engine`) is a documented stub with its trade-off written
-  out; three tests are staged against its contract and skip until it exists.
-
-### Changed
-
-- **Breaking (index schema).** Index records now carry `source_sha256` -- the SHA-256 of the
-  source PDF the text was extracted from, hashed at conversion time -- and `indexed_at`. Without
-  recorded source provenance, "the source differs from what was indexed" was not computable at
-  all, and `audit-library` could not report `source_changed` honestly. Readers reject an index
-  built before this change with a named error pointing at `rebuild-index`, rather than failing on
-  a missing column deep inside a query. Two consequences worth stating plainly: every existing
-  index needs one `rebuild-index`, and because a rebuild re-reads conversion manifests that carry
-  no source hash, existing records keep an empty `source_sha256` until they are reconverted. Until
-  then a low `source_changed` count means *not measured*, not *not drifted* -- which is what
-  `source_provenance_unknown` exists to report.
-- `ocr-images` preserves an attachment's recorded `source_sha256` through its index upsert, and
-  `reconvert-math` records the hash of the PDF it actually extracted, verified unchanged across
-  the extraction. The distinction matters: enrichment rewrites derived Markdown from images
-  already extracted, so the recorded hash still describes the right PDF, while a full
-  reconversion reads whatever is at the source path now and must name that file. Publishing
-  either way requires the provenance fields to survive `get_item_context`, so they are now part
-  of its metadata projection -- without that, both paths republished an empty hash even when the
-  index held a valid one.
-- `load_attachment_records` closes its SQLite connection on every path, not only on success. A
-  failing query previously leaked the handle until garbage collection, which on Windows holds a
-  lock on a live Zotero database.
-- `source_sha256` is deliberately empty for `skipped_existing` conversions. That row reused
-  Markdown converted from whatever the PDF was at the time, so hashing the file now would record
-  confident provenance for text that may predate it. Empty means *not known*, and is never read
-  as *unchanged*.
-
-### Fixed
-
 - Metadata rows were bound to SQLite columns by hard-coded position (`values[11]`, `values[17]`),
   so inserting any column above one of those indices would have silently bound an integer into
   the wrong column with no error. Now coerced by column name. This was latent: with the previous
   18 columns those indices were correct, so no shipped index ever held wrong data. Found while
   adding the provenance columns, which is exactly the edit that would have triggered it.
-- Figures whose caption label sits two lines above them are no longer routed to the formula
-  prompt, where the splice replaced their image link with LaTeX invented from a plot. In the
-  common journal layout the label (`Figure 3`) is separated from the crop by an italicised title
-  line, so the label the classifier looks for is never on a line it can see; only the title above
-  and the closing `Note.` line below are reachable. Recognising that pair as a caption block
-  raises real-article routing accuracy from 85.4% to 100% (103 labelled crops), recovering 15
-  figures — slider screenshots, balance-beam diagrams and density curves — that geometry alone
-  cannot distinguish from wide display equations. Both halves are required: measured across the
-  whole converted library (75,205 crops), a rule keyed on the note line alone would have claimed
-  two real display equations, because a note line terminates a caption in one document style but
-  opens a pedagogical aside in another. `tests/test_image_ocr.py` carries both shapes as
-  regression cases, since the benchmark tier now scores 100% either way and can no longer tell the
-  two rules apart. The caption label itself is read from one line further back than the classifier
-  previously looked (`CropRef.text_lead`), because the same layout carries tables — so the block
-  establishes only that a crop is *captioned*, and the label decides whether it reaches the figure
-  or the table prompt. Without that, a wide table would have been forced through the figure prompt,
-  keeping its image and gaining prose instead of its cells. The label must *be* the lead line rather
-  than open it, since the existing caption patterns are anchored only at the start and so also match
-  a running-prose cross-reference ("Table 4 shows the coefficients") — the very shape the aspect
-  guard exists to reject, and which this rule deliberately runs outside of. A caption title is
-  likewise required to be one emphasised span filling its line, which is not the same as carrying no
-  interior emphasis: real titles contain inline markup such as a superscript, so what disqualifies a
-  line is prose *resuming* between spans.
 
-- Records whose math was recovered by a math-capable pass no longer carry a spurious
-  `math_extraction_may_be_lossy` warning in MCP responses. The check was an equality test against
-  a single extractor name (`marker`); it is now a per-component membership test, so a composite
-  provenance label such as `pymupdf4llm.to_markdown+glm-ocr` is recognised while an unknown
-  extractor still warns.
 
 ## [0.4.0] - 2026-09-10
 
@@ -550,6 +583,7 @@ author's own machine.
 
 Initial import of the Zotero full-text conversion pipeline, CLI, and MCP server. Not tagged.
 
-[Unreleased]: https://github.com/matthiaskloft/zotero-fulltext-mcp/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/matthiaskloft/zotero-fulltext-mcp/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.5.0
 [0.4.0]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.4.0
 [0.2.0]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.2.0
