@@ -241,8 +241,15 @@ def snapshot_database(source: Path, run_dir: Path) -> Path:
     return destination
 
 
+_SNAPSHOT_SUFFIXES = ("", "-wal", "-shm")
+
+
+class SnapshotUnstableError(RuntimeError):
+    """The database would not hold still long enough to be copied coherently."""
+
+
 @contextlib.contextmanager
-def snapshot_for_reading(db_path: Path) -> Iterator[Path]:
+def snapshot_for_reading(db_path: Path, *, attempts: int = 3) -> Iterator[Path]:
     """Yield a throwaway copy of a SQLite database, leaving the original's directory untouched.
 
     The only way to read a live Zotero database without writing anything near it. Neither URI
@@ -258,20 +265,63 @@ def snapshot_for_reading(db_path: Path) -> Iterator[Path]:
     harmless because the file is ours and about to be deleted. The `-wal` and `-shm` are copied
     alongside the main database so that everything Zotero has committed is still visible.
 
-    A concurrent write can tear the copy. SQLite's WAL frames are checksummed, so a torn tail is
-    truncated rather than misread, and a copy too damaged to query raises -- which the audit
-    already handles as "inventory unavailable". A wrong answer is not among the outcomes.
+    A file-level copy of a database being written is *not* a transactionally consistent
+    snapshot. The files are copied one after another, so a checkpoint landing between them can
+    leave a main database and a `-wal` that were never a matching pair, and SQLite's per-frame
+    checksums do not detect that -- they validate each frame, not that the frames apply to the
+    base they were copied beside. The result can be wrong rather than merely unreadable.
+
+    So the copy is bracketed: the size and modification time of all three files are recorded
+    before and after, and a copy taken across any observed change is discarded and retried. If
+    the database will not hold still, this raises and the audit reports the inventory as
+    unavailable -- a stated gap, never a quiet guess.
+
+    This detects rather than prevents, and the detection has a floor: a write that lands within
+    one filesystem timestamp tick without changing any file's size is invisible to it. The
+    alternative -- SQLite's backup API or `VACUUM INTO`, which hold a proper read transaction --
+    requires opening the live database, and that creates the `-shm` this whole approach exists
+    to avoid. Given a read-only audit, a narrow undetected window is the better trade than a
+    guaranteed write into someone's Zotero folder.
     """
     staging = Path(tempfile.mkdtemp(prefix="zotero-snapshot-"))
     try:
         destination = staging / "zotero.sqlite"
-        for suffix in ("", "-wal", "-shm"):
-            sidecar = Path(f"{db_path}{suffix}")
-            if sidecar.is_file():
-                shutil.copy2(sidecar, Path(f"{destination}{suffix}"))
-        yield destination
+        for attempt in range(1, attempts + 1):
+            before = _file_fingerprints(db_path)
+            for suffix in _SNAPSHOT_SUFFIXES:
+                sidecar = Path(f"{db_path}{suffix}")
+                if sidecar.is_file():
+                    shutil.copy2(sidecar, Path(f"{destination}{suffix}"))
+            if _file_fingerprints(db_path) == before:
+                yield destination
+                return
+            # Something wrote to the database while it was being copied, so the copy may pair a
+            # main file and a WAL that never belonged together. Discard it rather than query it.
+            for suffix in _SNAPSHOT_SUFFIXES:
+                Path(f"{destination}{suffix}").unlink(missing_ok=True)
+        raise SnapshotUnstableError(
+            f"{db_path} kept changing while it was being copied ({attempts} attempts). "
+            "Close Zotero, or re-run when it is idle."
+        )
     finally:
         shutil.rmtree(staging, ignore_errors=True)
+
+
+def _file_fingerprints(db_path: Path) -> dict[str, tuple[int, int] | None]:
+    """Size and modification time of the database and its sidecars, or None where absent.
+
+    `None` is a meaningful value, not a gap: a `-wal` that appears or disappears during the
+    copy is exactly the checkpoint that would make the copy incoherent.
+    """
+    marks: dict[str, tuple[int, int] | None] = {}
+    for suffix in _SNAPSHOT_SUFFIXES:
+        try:
+            stat = Path(f"{db_path}{suffix}").stat()
+        except OSError:
+            marks[suffix] = None
+        else:
+            marks[suffix] = (stat.st_size, stat.st_mtime_ns)
+    return marks
 
 
 def load_attachment_records(db_path: Path) -> list[AttachmentRecord]:

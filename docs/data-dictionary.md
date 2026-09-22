@@ -269,6 +269,14 @@ but cannot see the WAL at all, and fails outright when the rows live in an unche
 Copying costs one file copy per audit and is the only option that is both complete and
 genuinely non-writing.
 
+A file-level copy of a database being written is not a transactionally consistent snapshot, so
+the copy is bracketed: the size and modification time of all three files are recorded before and
+after, and a copy taken across any observed change is discarded and retried. A database that
+will not hold still is reported as an unavailable inventory rather than read. This detects
+rather than prevents, and a write landing within one timestamp tick without changing any file
+size is invisible to it; SQLite's backup API would be exact but requires opening the live
+database, which creates the `-shm` this approach exists to avoid.
+
 Membership comes from Zotero, not from the snapshot. The mapper walks source *files*, so an
 attachment whose PDF has been moved or deleted produces no mapping row at all; reading membership
 off the snapshot would make `missing_source` nearly unreachable and would report such an
@@ -318,6 +326,11 @@ the library.
 - `orphaned_index`: the index holds a row for an attachment Zotero no longer represents. Decided
   against Zotero's inventory, so an attachment Zotero still lists whose PDF has vanished is
   reported as `missing_source` instead.
+- `membership_unchecked`: the index holds a row and Zotero's inventory could not be read, so
+  the audit cannot say whether the library still contains it. Distinct from `orphaned_index`
+  because the advice is opposite: that one says the row can go, this one says do not act until
+  Zotero can be consulted. The mapping snapshot cannot settle it, since an attachment whose PDF
+  is missing never reaches the snapshot in the first place.
 - `unverified_indexed`: Zotero represents the attachment but its identity was never verified, yet
   it is in the published index and is being returned by search. Distinct from `orphaned_index`:
   the repair is to verify the identity, not to drop the row.

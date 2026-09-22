@@ -4,6 +4,7 @@ import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from zotero_pdf_text.artifacts import (
     publish_generation,
@@ -21,6 +22,7 @@ from zotero_pdf_text.library import (
     STATUS_METADATA_CHANGED,
     STATUS_MISSING_MARKDOWN,
     STATUS_MISSING_SOURCE,
+    STATUS_MEMBERSHIP_UNCHECKED,
     STATUS_ORPHANED_INDEX,
     STATUS_SOURCE_CHANGED,
     STATUS_SOURCE_UNCHECKED,
@@ -75,17 +77,12 @@ def _observation(key: str = "AAAA1111", **overrides: object) -> ItemObservation:
 
 
 class CanonicalPathTests(unittest.TestCase):
-    def test_markdown_path_is_keyed_on_attachment_key_with_cosmetic_slug(self):
+    def test_markdown_path_is_keyed_on_the_attachment_key_alone(self):
         with tempfile.TemporaryDirectory() as tmp:
             config = _config(Path(tmp))
-            path = canonical_markdown_path(config, "ABCD1234", "A Bayesian Review!")
+            path = canonical_markdown_path(config, "ABCD1234")
             self.assertEqual(path.parent, config.output_root / "library" / "markdown")
-            self.assertEqual(path.name, "ABCD1234--a-bayesian-review.md")
-
-    def test_markdown_path_without_title_is_just_the_key(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            config = _config(Path(tmp))
-            self.assertEqual(canonical_markdown_path(config, "ABCD1234").name, "ABCD1234.md")
+            self.assertEqual(path.name, "ABCD1234.md")
 
     def test_image_dir_ignores_title_so_a_retitle_cannot_orphan_images(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -94,17 +91,21 @@ class CanonicalPathTests(unittest.TestCase):
             self.assertEqual(first, config.output_root / "library" / "images" / "ABCD1234")
             # The image directory is derived from the key alone, never from the Markdown
             # filename, so renaming the item leaves the images exactly where they were.
-            retitled = canonical_markdown_path(config, "ABCD1234", "A Totally Different Title")
-            self.assertNotEqual(retitled.stem, "ABCD1234")
             self.assertEqual(canonical_image_dir(config, "ABCD1234"), first)
 
-    def test_title_never_changes_identity(self):
+    def test_a_retitle_resolves_to_exactly_the_same_file(self):
+        """Equality, not a shared prefix.
+
+        The previous version of this test asserted only `startswith(key)`, which the old
+        title-slug implementation satisfied while still resolving `Old Title` and `New Title`
+        to two different files -- so the test passed and the guarantee in the docstring was
+        false. Any caller that checks existence needs the whole path to be stable.
+        """
         with tempfile.TemporaryDirectory() as tmp:
             config = _config(Path(tmp))
-            for title in ("One title", "Another title", ""):
-                self.assertTrue(
-                    canonical_markdown_path(config, "ABCD1234", title).name.startswith("ABCD1234")
-                )
+            paths = {canonical_markdown_path(config, "ABCD1234") for _ in range(2)}
+            self.assertEqual(len(paths), 1)
+            self.assertEqual(paths.pop().name, "ABCD1234.md")
 
     def test_invalid_attachment_keys_are_rejected_before_any_path_join(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -184,9 +185,33 @@ class ClassifyItemTests(unittest.TestCase):
 
     def test_orphaned_index_row(self):
         self.assertStatuses(
-            _observation(in_mapping=False, mapping_metadata={}, indexed_metadata={}),
+            _observation(
+                in_mapping=False,
+                inventory_available=True,
+                mapping_metadata={},
+                indexed_metadata={},
+            ),
             {STATUS_ORPHANED_INDEX},
         )
+
+    def test_an_index_only_row_is_unchecked_not_orphaned_without_the_inventory(self):
+        """Only Zotero can retire a row.
+
+        With no inventory, an attachment missing from the mapping snapshot may simply have lost
+        its PDF -- the snapshot is built by walking files. Calling that `orphaned_index` would
+        recommend dropping a row Zotero still lists.
+        """
+        statuses = classify_item(
+            _observation(
+                in_mapping=False,
+                inventory_available=False,
+                mapping_metadata={},
+                indexed_metadata={},
+            )
+        )
+        self.assertIn(STATUS_MEMBERSHIP_UNCHECKED, statuses)
+        self.assertNotIn(STATUS_ORPHANED_INDEX, statuses)
+        self.assertNotIn(STATUS_CURRENT, statuses)
 
     def test_missing_source_and_missing_markdown(self):
         self.assertStatuses(
@@ -365,7 +390,12 @@ class ClassifyItemTests(unittest.TestCase):
         """They name different repairs: verify the identity vs. drop the row."""
         unverified = classify_item(_observation(identity_status="unverified"))
         orphaned = classify_item(
-            _observation(in_mapping=False, mapping_metadata={}, indexed_metadata={})
+            _observation(
+                in_mapping=False,
+                inventory_available=True,
+                mapping_metadata={},
+                indexed_metadata={},
+            )
         )
         self.assertIn(STATUS_UNVERIFIED_INDEXED, unverified)
         self.assertNotIn(STATUS_ORPHANED_INDEX, unverified)
@@ -457,7 +487,7 @@ class SnapshotLoadingTests(unittest.TestCase):
 
     def test_unpublished_index_is_not_an_error(self):
         with tempfile.TemporaryDirectory() as tmp:
-            generation_id, rows = load_index_records(Path(tmp) / "index")
+            generation_id, published_at, rows = load_index_records(Path(tmp) / "index")
             self.assertIsNone(generation_id)
             self.assertEqual(rows, {})
 
@@ -515,7 +545,7 @@ class SnapshotLoadingTests(unittest.TestCase):
             with patch.object(artifacts, "read_current_pointer", racing_read), patch(
                 "zotero_pdf_text.library.read_current_pointer", racing_read
             ):
-                generation_id, rows = load_index_records(index_root)
+                generation_id, _published_at, rows = load_index_records(index_root)
 
             self.assertEqual(generation_id, first)
             self.assertEqual(
@@ -654,7 +684,9 @@ class AuditEndToEndTests(unittest.TestCase):
                 {
                     "AAAA1111": {STATUS_CURRENT},
                     "BBBB2222": {STATUS_UNINDEXED, STATUS_MISSING_SOURCE},
-                    "CCCC3333": {STATUS_ORPHANED_INDEX, STATUS_MISSING_SOURCE,
+                    # No Zotero database under this config, so membership is undecidable
+                    # and the row is `membership_unchecked` rather than `orphaned_index`.
+                    "CCCC3333": {STATUS_MEMBERSHIP_UNCHECKED, STATUS_MISSING_SOURCE,
                                  STATUS_MISSING_MARKDOWN},
                 },
             )
@@ -669,8 +701,14 @@ class AuditEndToEndTests(unittest.TestCase):
             audit = audit_library(_config(root), snapshot, index_root=index_root)
             self.assertEqual(audit.generation_id, generation_id)
 
-    def test_union_of_keys_makes_orphans_visible(self):
-        """Iterating the mapping alone would make orphaned_index structurally undetectable."""
+    def test_union_of_keys_makes_index_only_rows_visible(self):
+        """Iterating the mapping alone would make such a row structurally undetectable.
+
+        There is no Zotero database under this config, so the audit cannot decide membership
+        and reports `membership_unchecked` rather than `orphaned_index`. The property under
+        test is that the row is *seen at all*; which of the two it earns is decided by the
+        inventory and covered in `ZoteroInventoryTests`.
+        """
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             index_root = root / "index"
@@ -678,7 +716,9 @@ class AuditEndToEndTests(unittest.TestCase):
             snapshot = self._snapshot(root / "runs" / "r1", [])
             audit = audit_library(_config(root), snapshot, index_root=index_root)
             self.assertEqual(audit.total_items, 1)
-            self.assertIn(STATUS_ORPHANED_INDEX, audit.items[0].statuses)
+            self.assertFalse(audit.inventory_available)
+            self.assertIn(STATUS_MEMBERSHIP_UNCHECKED, audit.items[0].statuses)
+            self.assertNotIn(STATUS_ORPHANED_INDEX, audit.items[0].statuses)
 
     def test_unbuilt_index_reports_everything_unindexed(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -1042,7 +1082,9 @@ class ZoteroInventoryTests(unittest.TestCase):
         self.assertNotIn(STATUS_ORPHANED_INDEX, statuses)
 
     def test_index_row_absent_from_zotero_is_still_orphaned(self):
-        observation = _observation(in_zotero=False, in_mapping=False, mapping_metadata={})
+        observation = _observation(
+            in_zotero=False, inventory_available=True, in_mapping=False, mapping_metadata={}
+        )
         self.assertIn(STATUS_ORPHANED_INDEX, classify_item(observation))
 
     def test_eligibility_falls_back_to_the_indexed_record(self):
@@ -1458,6 +1500,181 @@ class LiveMetadataTests(unittest.TestCase):
             in_zotero=True, inventory_available=True, zotero_metadata={}, mapping_metadata={}
         )
         self.assertNotIn(STATUS_METADATA_CHANGED, classify_item(observation))
+
+
+class SnapshotConsistencyTests(unittest.TestCase):
+    """A file-level copy of a database being written is not a consistent snapshot.
+
+    The three files are copied one after another, so a checkpoint landing between them leaves a
+    main database and a `-wal` that were never a matching pair. SQLite's per-frame checksums do
+    not catch it: they validate each frame, not that the frames apply to the base beside them.
+    The failure mode is a wrong answer, not an unreadable file, so it has to be detected rather
+    than relied upon to crash.
+    """
+
+    def _wal_database(self) -> tuple[Path, Path, object]:
+        """A live WAL database with a connection held open, as Zotero holds one.
+
+        Cleanup order matters on Windows: `addCleanup` is LIFO, so registering the directory
+        removal *first* makes it run last, after the connection is closed. The other way round
+        leaves the file locked and the teardown raises.
+        """
+        directory = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, directory, True)
+        db = directory / "zotero.sqlite"
+        keeper = sqlite3.connect(db)
+        self.addCleanup(keeper.close)
+        keeper.execute("PRAGMA journal_mode=WAL")
+        keeper.execute("PRAGMA wal_autocheckpoint=0")
+        keeper.execute("CREATE TABLE t (a INTEGER)")
+        keeper.execute("INSERT INTO t VALUES (1)")
+        keeper.commit()
+        return directory, db, keeper
+
+    def test_a_write_during_the_copy_is_detected_and_retried(self):
+        from zotero_pdf_text import zotero_db
+
+        _directory, db, keeper = self._wal_database()
+        real_copy = zotero_db.shutil.copy2
+        writes = {"count": 0}
+
+        def copy_then_write(src, dst, *args, **kwargs):
+            result = real_copy(src, dst, *args, **kwargs)
+            # A concurrent Zotero write, landing between two file copies. Only the first
+            # attempt is disturbed, so the retry must succeed.
+            if writes["count"] == 0 and str(src).endswith("zotero.sqlite"):
+                writes["count"] += 1
+                keeper.execute("INSERT INTO t VALUES (2)")
+                keeper.commit()
+            return result
+
+        with patch.object(zotero_db.shutil, "copy2", copy_then_write):
+            with zotero_db.snapshot_for_reading(db) as copy:
+                con = sqlite3.connect(copy)
+                try:
+                    rows = con.execute("SELECT count(*) FROM t").fetchone()[0]
+                finally:
+                    con.close()
+
+        self.assertEqual(writes["count"], 1, "the fixture did not disturb the first copy")
+        self.assertEqual(rows, 2, "the retry did not pick up the completed write")
+
+    def test_a_database_that_never_settles_is_reported_unavailable(self):
+        """Never a quiet guess: an undecidable inventory is a stated gap."""
+        from zotero_pdf_text import zotero_db
+
+        _directory, db, keeper = self._wal_database()
+        real_copy = zotero_db.shutil.copy2
+        counter = {"n": 0}
+
+        def always_write(src, dst, *args, **kwargs):
+            result = real_copy(src, dst, *args, **kwargs)
+            if str(src).endswith("zotero.sqlite"):
+                counter["n"] += 1
+                keeper.execute("INSERT INTO t VALUES (?)", (counter["n"] + 1,))
+                keeper.commit()
+            return result
+
+        with patch.object(zotero_db.shutil, "copy2", always_write):
+            with self.assertRaises(zotero_db.SnapshotUnstableError):
+                with zotero_db.snapshot_for_reading(db, attempts=2):
+                    pass
+
+    def test_an_unstable_database_still_lets_the_audit_finish(self):
+        """End-to-end degradation only: the audit completes and flags the gap.
+
+        This does not guard the stability check itself -- the fixture's schema is not Zotero's,
+        so the inventory would be unavailable either way. `test_a_database_that_never_settles`
+        is the test that fails when the check is removed.
+        """
+        from zotero_pdf_text import zotero_db
+
+        root, db, keeper = self._wal_database()
+        snapshot = root / "mapping_report.jsonl"
+        snapshot.write_text("", encoding="utf-8")
+        real_copy = zotero_db.shutil.copy2
+
+        def always_write(src, dst, *args, **kwargs):
+            result = real_copy(src, dst, *args, **kwargs)
+            if str(src).endswith("zotero.sqlite"):
+                keeper.execute("INSERT INTO t VALUES (99)")
+                keeper.commit()
+            return result
+
+        config = ProjectConfig(
+            zotero_root=root,
+            zotero_data_directory=root,
+            linked_attachments=root,
+            output_root=root / "out",
+        )
+        self.assertEqual(config.zotero_sqlite, db)
+        with patch.object(zotero_db.shutil, "copy2", always_write):
+            audit = audit_library(config, snapshot, index_root=root / "index")
+        self.assertFalse(audit.inventory_available)
+
+
+class IncompletePublicationTests(unittest.TestCase):
+    """Past the pointer, absence is corruption rather than an unbuilt library.
+
+    `resolve_generation_dir` does not require the directory to exist, so treating a missing
+    JSONL as "no rows" hands back the generation id with an empty index. Every eligible
+    attachment then reports `unindexed` and a broken publication reads as a routine backlog --
+    the interpretation most likely to send someone re-converting a library that is fine.
+    """
+
+    def _published(self, index_root: Path) -> str:
+        from zotero_pdf_text.artifacts import (
+            publish_generation,
+            stage_generation,
+            validate_generation,
+            write_jsonl_from_existing,
+        )
+
+        index_root.mkdir(parents=True, exist_ok=True)
+        source = index_root / "source.jsonl"
+        source.write_text(json.dumps(_index_record("AAAA1111")) + "\n", encoding="utf-8")
+        info = stage_generation(index_root, write_jsonl_from_existing(source), command="test")
+        validate_generation(index_root, info.generation_id)
+        publish_generation(index_root, info.generation_id)
+        return info.generation_id
+
+    def test_a_missing_jsonl_is_an_error_not_an_empty_index(self):
+        from zotero_pdf_text.artifacts import CurrentPointerError, resolve_generation_dir
+
+        with tempfile.TemporaryDirectory() as tmp:
+            index_root = Path(tmp) / "index"
+            generation_id = self._published(index_root)
+            (resolve_generation_dir(index_root, generation_id) / "index.jsonl").unlink()
+
+            with self.assertRaises(CurrentPointerError) as ctx:
+                load_index_records(index_root)
+            self.assertIn("rebuild-index", str(ctx.exception))
+
+    def test_a_missing_generation_directory_is_an_error(self):
+        from zotero_pdf_text.artifacts import CurrentPointerError, resolve_generation_dir
+
+        with tempfile.TemporaryDirectory() as tmp:
+            index_root = Path(tmp) / "index"
+            generation_id = self._published(index_root)
+            shutil.rmtree(resolve_generation_dir(index_root, generation_id))
+
+            with self.assertRaises(CurrentPointerError):
+                load_index_records(index_root)
+
+    def test_the_audit_surfaces_an_incomplete_publication(self):
+        """The CLI turns this into a non-zero exit, not a report full of false `unindexed`."""
+        from zotero_pdf_text.artifacts import ArtifactError, resolve_generation_dir
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            index_root = root / "index"
+            generation_id = self._published(index_root)
+            (resolve_generation_dir(index_root, generation_id) / "index.jsonl").unlink()
+            snapshot = root / "mapping_report.jsonl"
+            snapshot.write_text("", encoding="utf-8")
+
+            with self.assertRaises(ArtifactError):
+                audit_library(_config(root), snapshot, index_root=index_root)
 
 
 class SnapshotHashFallbackTests(unittest.TestCase):

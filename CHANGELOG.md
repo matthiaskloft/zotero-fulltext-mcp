@@ -32,9 +32,24 @@ dated section once it has been stress-tested against a large library.
   produce. `immutable=1` creates nothing but cannot see the WAL, and fails outright when the
   rows live in an uncheckpointed one. Copying is the only option that is both complete and
   genuinely non-writing.
-- `audit-library` reads `current.json` once and resolves the generation JSONL from the id it
-  already holds. Reading the pointer a second time let a concurrent publish pair one
-  generation's id with another's rows, and the report serialised that false provenance as fact.
+- `audit-library` reads `current.json` once and resolves the generation JSONL, the generation
+  id and `last_published_at` from that single read. Reading the pointer again let a concurrent
+  publish pair one generation's id with another's rows or timestamp, and the report serialised
+  that false provenance as fact.
+- `audit-library` fails with a named error when `current.json` names a generation whose
+  directory or JSONL is missing. It previously returned the generation id with zero rows, so a
+  broken publication was reported as every eligible attachment being `unindexed` — the
+  reading most likely to send someone re-converting a library that is fine.
+- The snapshot of `zotero.sqlite` is now checked for stability: the size and modification time
+  of the database and its sidecars are compared before and after the copy, and a copy taken
+  across a concurrent write is discarded and retried. A file-level copy of a database being
+  written is not a consistent snapshot, and SQLite's per-frame checksums do not detect a main
+  database and a `-wal` that were never a matching pair. A database that will not settle is
+  reported as an unavailable inventory rather than read.
+- `canonical_markdown_path()` is keyed on the attachment key alone. It appended a title slug,
+  which made the path a function of current metadata and contradicted its own documented
+  guarantee: a retitled item resolved to a different file, so `canonical_markdown_exists` looked
+  at the wrong path and the previous file was orphaned.
 - `audit-library` now audits an attachment at the path Zotero currently gives it, rather than
   the one the snapshot and index remember. After a relink those disagree, and auditing the old
   path missed the source change when the old file was still present and reported a spurious
@@ -76,6 +91,10 @@ dated section once it has been stress-tested against a large library.
   it never reached the mapper and has no snapshot hash at all. Without a status such an item
   falls through to `current`, certifying a file the audit never examined. `--full` resolves it
   by hashing what is actually on disk.
+- `membership_unchecked`: an audit status for an index row whose membership cannot be decided
+  because Zotero's inventory could not be read. Previously such rows were reported as
+  `orphaned_index`, which recommends dropping a row that may still be perfectly valid —
+  an attachment missing from the mapping snapshot may simply have lost its PDF.
 - `unverified_indexed`: an audit status beyond the nine originally planned, naming an attachment
   whose identity was never verified but which is nonetheless in the published index and being
   returned by search. Distinct from `orphaned_index` because the repair differs: verify the

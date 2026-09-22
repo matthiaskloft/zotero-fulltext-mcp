@@ -38,6 +38,7 @@ from pathlib import Path
 
 from .artifacts import (
     GENERATION_JSONL_FILENAME,
+    CurrentPointerError,
     ManagedIndexMissingError,
     read_current_pointer,
     resolve_generation_dir,
@@ -74,6 +75,11 @@ STATUS_METADATA_CHANGED = "metadata_changed"
 STATUS_MISSING_SOURCE = "missing_source"
 STATUS_MISSING_MARKDOWN = "missing_markdown"
 STATUS_ORPHANED_INDEX = "orphaned_index"
+# The index holds a row and this audit cannot say whether Zotero still represents it, because
+# the inventory could not be read. Separate from `orphaned_index` because the two carry opposite
+# advice: one says the row can go, this one says do not act until Zotero can be consulted. The
+# mapping snapshot cannot settle it -- an attachment whose PDF is missing never reaches it.
+STATUS_MEMBERSHIP_UNCHECKED = "membership_unchecked"
 STATUS_DUPLICATE_KEY = "duplicate_key"
 # Not one of the nine the plan lists. The plan wrote that vocabulary before the index recorded
 # enough provenance to detect this condition, and it names something serious enough not to leave
@@ -92,6 +98,7 @@ ALL_STATUSES: tuple[str, ...] = (
     STATUS_MISSING_SOURCE,
     STATUS_MISSING_MARKDOWN,
     STATUS_ORPHANED_INDEX,
+    STATUS_MEMBERSHIP_UNCHECKED,
     STATUS_UNVERIFIED_INDEXED,
     STATUS_DUPLICATE_KEY,
 )
@@ -124,17 +131,21 @@ def canonical_library_root(config: ProjectConfig) -> Path:
     return config.output_root / LIBRARY_DIRNAME
 
 
-def canonical_markdown_path(config: ProjectConfig, attachment_key: str, title: str = "") -> Path:
+def canonical_markdown_path(config: ProjectConfig, attachment_key: str) -> Path:
     """Where attachment `attachment_key`'s converted Markdown lives under the canonical layout.
 
-    Identity comes from the attachment key alone; the title slug is cosmetic and never
-    participates in matching. That asymmetry matters -- a retitled Zotero item must not change
-    where its converted text lives, or every locator and index row pointing at it silently breaks.
+    Keyed on the attachment key and nothing else, exactly like `canonical_image_dir`. A retitled
+    Zotero item must resolve to the same file, or every locator and index row pointing at it
+    silently breaks and the previous file is orphaned.
+
+    This used to append a cosmetic title slug, which made the path a function of current
+    metadata and contradicted the guarantee in this docstring: `Old Title` and `New Title`
+    resolved to different files, so `canonical_markdown_exists` would look at the wrong one.
+    Human-readable filenames are not worth a mutable identity; a browsable name belongs in a
+    sidecar mapping if it is ever wanted, not in the path a lookup depends on.
     """
     key = validate_attachment_key(attachment_key)
-    slug = slugify_title(title)
-    stem = f"{key}--{slug}" if slug else key
-    return canonical_library_root(config) / MARKDOWN_DIRNAME / f"{stem}.md"
+    return canonical_library_root(config) / MARKDOWN_DIRNAME / f"{key}.md"
 
 
 def canonical_image_dir(config: ProjectConfig, attachment_key: str) -> Path:
@@ -290,6 +301,10 @@ class LibraryAudit:
 
     snapshot_time: str
     generation_id: str | None
+    # Read from the same pointer as `generation_id`, never fetched again. `library_status` used
+    # to read `current.json` a second time for it, which could pair one generation's id with
+    # another's timestamp -- the same mixed-generation race as the rows themselves.
+    published_at: str | None
     mapping_report: str
     full_audit: bool
     total_items: int
@@ -321,6 +336,7 @@ class LibraryAudit:
         payload: dict[str, object] = {
             "snapshot_time": self.snapshot_time,
             "generation_id": self.generation_id,
+            "published_at": self.published_at,
             "mapping_report": self.mapping_report,
             "full_audit": self.full_audit,
             "total_items": self.total_items,
@@ -378,7 +394,12 @@ def classify_item(observation: ItemObservation) -> frozenset[str]:
     if obs.index_row_count > 1:
         statuses.add(STATUS_DUPLICATE_KEY)
     if obs.in_index and not represented:
-        statuses.add(STATUS_ORPHANED_INDEX)
+        # Only Zotero can retire a row. Without the inventory, `represented` fell back to the
+        # mapping snapshot, and an attachment missing from that snapshot may simply have lost
+        # its PDF -- calling it orphaned would recommend dropping a row Zotero still lists.
+        statuses.add(
+            STATUS_ORPHANED_INDEX if obs.inventory_available else STATUS_MEMBERSHIP_UNCHECKED
+        )
     # `is False`, not a falsy test. Both fields are None when never checked, and an unindexed
     # item has no indexed markdown_path to check at all. Treating None as False here would report
     # every unindexed item as missing its Markdown as well, doubling the count for no information.
@@ -478,15 +499,15 @@ def audit_library(
     now" rather than "as of the snapshot". It also covers index-only rows, which no snapshot
     describes. It is the expensive mode; the default compares recorded hashes only.
 
-    The pointer and the generation JSONL are read in two steps without a lock, which is correct
-    for a read-only command but means a publication landing between them yields a generation id
-    that does not describe the rows reported. Re-run if that matters.
+    The pointer is read once and everything else resolved from it, so the reported generation
+    id, publication time and rows always describe the same generation even if a publication
+    lands mid-audit. The report is then a moment old, which is what a snapshot is.
     """
     snapshot_time = datetime.now(timezone.utc).isoformat(timespec="seconds")
     root = index_root if index_root is not None else config.output_root / "index"
 
     mapping_rows = load_mapping_snapshot(mapping_report)
-    generation_id, index_rows = load_index_records(root)
+    generation_id, published_at, index_rows = load_index_records(root)
 
     # Zotero is the authority on which attachments exist. A snapshot cannot be, because the
     # mapper only sees attachments whose files it found. Read-only, and never fatal: an audit
@@ -535,6 +556,7 @@ def audit_library(
     return LibraryAudit(
         snapshot_time=snapshot_time,
         generation_id=generation_id,
+        published_at=published_at,
         mapping_report=str(mapping_report),
         full_audit=full_audit,
         total_items=len(items),
@@ -606,9 +628,7 @@ def build_observations(
         markdown_exists = markdown_file.is_file() if markdown_file else None
 
         try:
-            canonical_exists: bool | None = canonical_markdown_path(
-                config, key, _text(mapping, "title")
-            ).is_file()
+            canonical_exists: bool | None = canonical_markdown_path(config, key).is_file()
         except ValueError:
             canonical_exists = None
 
@@ -668,12 +688,10 @@ def library_status(
     source library still matches it, which is precisely what the audit measures.
     """
     audit = audit_library(config, mapping_report, full_audit=full_audit, index_root=index_root)
-    root = index_root if index_root is not None else config.output_root / "index"
-    pointer = read_current_pointer(root) or {}
     return {
         "snapshot_time": audit.snapshot_time,
         "generation_id": audit.generation_id,
-        "last_published_at": pointer.get("published_at"),
+        "last_published_at": audit.published_at,
         "mapping_report": audit.mapping_report,
         "full_audit": audit.full_audit,
         "total_items": audit.total_items,
@@ -762,8 +780,12 @@ def _inventory_source_path(record: AttachmentRecord, linked_root: Path) -> str:
     return str(paths[0]) if paths else ""
 
 
-def load_index_records(index_root: Path) -> tuple[str | None, dict[str, list[dict[str, object]]]]:
-    """Load the published generation's metadata rows, keyed by attachment key.
+def load_index_records(
+    index_root: Path,
+) -> tuple[str | None, str | None, dict[str, list[dict[str, object]]]]:
+    """Load the published generation's id, publication time and metadata rows.
+
+    All three come from a single read of `current.json`, so they always describe one generation.
 
     Returns a *list* per key rather than one row, because detecting `duplicate_key` requires
     seeing the duplicates. The FTS builder rejects duplicates at build time, so more than one row
@@ -771,32 +793,50 @@ def load_index_records(index_root: Path) -> tuple[str | None, dict[str, list[dic
     drift worth reporting rather than silently collapsing.
 
     A missing or unpublished index is not an error: an unbuilt library audits fine and reports
-    everything as `unindexed`.
+    everything as `unindexed`. A pointer that names a generation whose JSONL is absent *is* an
+    error -- see below.
     """
     pointer = read_current_pointer(index_root)
     if not pointer:
-        return None, {}
+        return None, None, {}
     generation_id = str(pointer.get("current_generation") or "") or None
+    raw_published = pointer.get("published_at")
+    published_at = str(raw_published) if raw_published is not None else None
+    if not generation_id:
+        return None, published_at, {}
 
-    rows: dict[str, list[dict[str, object]]] = {}
-    # Resolve the JSONL from the generation this function already read, rather than calling
+    # Resolve everything from the pointer this function already read, rather than calling
     # `current_generation_jsonl`, which would read `current.json` a second time. A publish
     # landing between the two reads would pair generation A's id with generation B's rows and
     # the audit would report that false provenance as fact. Generation directories are
     # immutable once published, so one pointer read plus a direct resolve cannot mix identities
     # and contents -- the report is then merely a moment old, which is what a snapshot is.
-    jsonl_path: Path | None = None
-    if generation_id:
-        try:
-            jsonl_path = resolve_generation_dir(index_root, generation_id) / GENERATION_JSONL_FILENAME
-        except ManagedIndexMissingError:
-            jsonl_path = None
-    if jsonl_path and jsonl_path.is_file():
-        for row in _read_jsonl(jsonl_path):
-            key = str(row.get("zotero_attachment_key") or "").strip()
-            if key:
-                rows.setdefault(key, []).append(row)
-    return generation_id, rows
+    #
+    # `published_at` comes from the same read for the same reason: `library_status` used to
+    # fetch it separately and could pair one generation's id with another's timestamp.
+    try:
+        generation_dir = resolve_generation_dir(index_root, generation_id)
+    except ManagedIndexMissingError:
+        generation_dir = None
+    jsonl_path = (generation_dir / GENERATION_JSONL_FILENAME) if generation_dir else None
+    # Past the pointer, absence is corruption rather than an unbuilt library.
+    # `resolve_generation_dir` does not require the directory to exist, so treating a missing
+    # JSONL as "no rows" would return the generation id with an empty index and report every
+    # eligible attachment as `unindexed` -- a broken publication rendered as a routine backlog,
+    # which is the reading most likely to send someone re-converting a library that is fine.
+    if jsonl_path is None or not jsonl_path.is_file():
+        raise CurrentPointerError(
+            "current.json names generation '%s' but its JSONL file is missing. The published "
+            "index is incomplete. Re-publish with 'zotero-pdf-text rebuild-index'."
+            % generation_id
+        )
+
+    rows: dict[str, list[dict[str, object]]] = {}
+    for row in _read_jsonl(jsonl_path):
+        key = str(row.get("zotero_attachment_key") or "").strip()
+        if key:
+            rows.setdefault(key, []).append(row)
+    return generation_id, published_at, rows
 
 
 # --------------------------------------------------------------------------------------
