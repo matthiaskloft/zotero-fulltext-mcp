@@ -299,6 +299,15 @@ The safe default server exposes:
   Populated only after running the CLI's `find-orphan-parents` command, which reports only
   high-confidence (`classify_identity`-verified) pairings. To act on a candidate, confirm it
   yourself and run the CLI's `link-pdf` then `orphan-candidate` commands.
+- `library_status()` -- how current the index is, as two answers that are never merged.
+  `index` counts rows in the published generation: what was indexed, never what share of
+  your library is indexed. `library` is the audit's comparison against Zotero and the files
+  on disk, and is `null` whenever no `dry-run` snapshot, no config or no readable Zotero
+  database could produce that comparison, with `library_unavailable_reason` naming the CLI
+  command that fixes it. Read-only. It takes no arguments: the snapshot is discovered on
+  this side of the boundary so no path crosses it, and `--full` re-hashing is deliberately
+  not reachable from MCP. The audit half is cached briefly; the response reports
+  `from_cache` and `cache_age_seconds`, and the index half is always measured fresh.
 
 Optional tools:
 
