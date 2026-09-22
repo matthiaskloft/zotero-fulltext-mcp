@@ -13,6 +13,12 @@ dated section once it has been stress-tested against a large library.
 
 ### Added
 
+- `library-status`: the summary form of `audit-library`, reporting the same read-only
+  comparison as counts without the per-item evidence. It names the published generation and its
+  publication time, states that the health counts overlap, and says in its own output that these
+  are source-library health counts rather than index statistics. The audit that produces them
+  has existed since v0.5.0 but was reachable from no command.
+
 - `ocr-images --key <ATTACHMENT_KEY>`: recover the equations, tables and figure content that
   conversion left stranded in extracted PNGs. `pymupdf4llm` pulls vector-drawn display equations
   out of a PDF into their own crop files and leaves an opaque `![](…png)` placeholder behind, so

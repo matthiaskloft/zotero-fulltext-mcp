@@ -193,6 +193,18 @@ unindexed, whose converted text or source PDF has changed underneath the index, 
 rows are duplicated or orphaned. Add `--full` to hash source PDFs as well. An attachment can hold
 several statuses at once, so the counts overlap; see "Library Audit" in `docs/data-dictionary.md`.
 
+For counts without the per-item listing, `library-status` runs the same comparison and reports
+only the summary:
+
+```powershell
+& $python -m zotero_pdf_text library-status --config .\config.json --mapping-report .\converted_text\runs\<run-id>\mapping_report.jsonl
+```
+
+It is deliberately separate from `index-stats`, which summarizes what the published index
+generation holds. Index row counts are not library coverage -- an attachment you have in Zotero
+but never converted appears in none of them -- so the command that reports library health is the
+one that compares against Zotero, not the one that counts index rows.
+
 Zotero decides which attachments the library contains, so if its database cannot be read the
 audit still runs but withholds every membership answer: each attachment is reported
 `membership_unchecked`, and `current`, `unindexed` and `orphaned_index` are left out rather than

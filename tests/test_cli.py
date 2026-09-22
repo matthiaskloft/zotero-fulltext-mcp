@@ -10,6 +10,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from zotero_pdf_text.cli import _shell_quote, build_parser, main
+from zotero_pdf_text.library import ALL_STATUSES
 from zotero_pdf_text.config import resolve_config_path
 from zotero_pdf_text.fts import ChunkNotFoundError, SearchResult
 from zotero_pdf_text.math_ocr import ReconvertResult
@@ -1448,6 +1449,191 @@ class IndexStatsCliTests(unittest.TestCase):
         _, stdout, stderr, _ = self._run(["coverage-report", "--json"])
         json.loads(stdout)
         self.assertIn("index-stats", stderr)
+
+
+class LibraryStatusCliTests(unittest.TestCase):
+    """`library-status` is the summary form of `audit-library`, exposed by rank 9.
+
+    Its job is to keep two questions apart that `coverage-report` conflated: what the published
+    index holds, and whether the source library still matches it. The output assertions below
+    are about that separation, not about formatting.
+    """
+
+    def _config(self, root: Path) -> Path:
+        config_path = root / "config.json"
+        config_path.write_text(
+            json.dumps(
+                {
+                    "zotero_root": str(root),
+                    "zotero_data_directory": str(root),
+                    "linked_attachments": str(root),
+                    "output_root": str(root / "output"),
+                }
+            ),
+            encoding="utf-8",
+        )
+        (root / "output").mkdir(exist_ok=True)
+        # validate_config() requires every referenced path to exist, including the derived
+        # zotero.sqlite. The audit itself is patched out; this only gets past validation.
+        (root / "zotero.sqlite").write_bytes(b"")
+        return config_path
+
+    def _status(self, **overrides):
+        status = {
+            "snapshot_time": "2026-09-23T10:00:00+00:00",
+            "generation_id": "20260101T000000Z-0123abcd",
+            "last_published_at": "2026-01-01T00:00:00+00:00",
+            "mapping_report": "run/mapping_report.jsonl",
+            "full_audit": False,
+            "total_items": 12,
+            # The real payload always carries every ALL_STATUSES key (see
+            # tests/test_library.py::LibraryStatusTests), so a three-key fixture exercises a
+            # shape `library_status` never produces.
+            "health": {name: 0 for name in ALL_STATUSES}
+            | {"current": 9, "unindexed": 2, "source_changed": 1},
+            "inventory_available": True,
+            "inventory_error": None,
+            "ineligible_items": 3,
+            "source_provenance_unknown": 4,
+            "counts_overlap": True,
+            "counts_overlap_note": "overlap",
+        }
+        status.update(overrides)
+        return status
+
+    def _run(self, extra_argv, status=None):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config_path = self._config(root)
+            out, err = io.StringIO(), io.StringIO()
+            # autospec binds the mock to the real `library_status` signature, so renaming or
+            # dropping a parameter in library.py fails here instead of passing while the real
+            # command raises TypeError.
+            with patch(
+                "zotero_pdf_text.cli.library_status",
+                autospec=True,
+                return_value=status or self._status(),
+            ) as spy:
+                with redirect_stdout(out), redirect_stderr(err):
+                    code = main(
+                        ["library-status", "--config", str(config_path),
+                         "--mapping-report", str(root / "mapping_report.jsonl")] + extra_argv
+                    )
+            return code, out.getvalue(), err.getvalue(), spy
+
+    def test_end_to_end_against_a_real_audit(self):
+        """No mock: a real config, snapshot, Zotero inventory and published generation.
+
+        The mocked tests above only prove the printer formats a fixture. This one proves the
+        command actually runs -- that `library_status` accepts the arguments cli.py passes and
+        returns a payload whose keys the printer indexes. Reuses AuditLibraryCliTests._setup,
+        since `library-status` is the summary form of the same comparison.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config_path, snapshot = AuditLibraryCliTests()._setup(root)
+            out, err = io.StringIO(), io.StringIO()
+            with redirect_stdout(out), redirect_stderr(err):
+                code = main(
+                    ["library-status", "--config", str(config_path),
+                     "--mapping-report", str(snapshot), "--json"]
+                )
+
+            self.assertEqual(code, 0, err.getvalue())
+            payload = json.loads(out.getvalue())
+            # Exactly the keys _print_library_status indexes directly; a rename in library.py
+            # would make the human-readable form raise KeyError on a real library.
+            for key in ("snapshot_time", "mapping_report", "total_items", "health"):
+                self.assertIn(key, payload)
+            self.assertEqual(set(payload["health"]), set(ALL_STATUSES))
+            self.assertGreaterEqual(payload["total_items"], 1)
+
+    def test_end_to_end_human_readable_output_does_not_raise(self):
+        """The printer path against a real payload, which the mocked tests cannot exercise."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config_path, snapshot = AuditLibraryCliTests()._setup(root)
+            out, err = io.StringIO(), io.StringIO()
+            with redirect_stdout(out), redirect_stderr(err):
+                code = main(
+                    ["library-status", "--config", str(config_path),
+                     "--mapping-report", str(snapshot)]
+                )
+
+            self.assertEqual(code, 0, err.getvalue())
+            printed = out.getvalue()
+            self.assertIn("Attachments compared:", printed)
+            self.assertIn("overlap and do not sum", printed)
+            self.assertIn("not index statistics", printed)
+
+    def test_parser_defaults(self):
+        args = build_parser().parse_args(["library-status", "--mapping-report", "run"])
+        self.assertEqual(args.command, "library-status")
+        self.assertIs(args.full, False)
+        self.assertIs(args.json, False)
+        self.assertEqual(args.config, resolve_config_path())
+
+    def test_mapping_report_is_required(self):
+        with self.assertRaises(SystemExit):
+            build_parser().parse_args(["library-status"])
+
+    def test_full_is_forwarded_to_the_audit(self):
+        _, _, _, spy = self._run(["--full"])
+        self.assertIs(spy.call_args.kwargs["full_audit"], True)
+
+    def test_json_output_is_the_status_payload_verbatim(self):
+        code, stdout, _, _ = self._run(["--json"])
+        self.assertEqual(code, 0)
+        self.assertEqual(json.loads(stdout), self._status())
+
+    def test_output_names_the_generation_and_publication_time(self):
+        _, stdout, _, _ = self._run([])
+        self.assertIn("20260101T000000Z-0123abcd", stdout)
+        self.assertIn("2026-01-01T00:00:00+00:00", stdout)
+
+    def test_output_says_these_are_not_index_statistics(self):
+        """The whole point of the step: index row counts are not library coverage."""
+        _, stdout, _, _ = self._run([])
+        self.assertIn("not index statistics", stdout)
+        self.assertIn("index-stats", stdout)
+
+    def test_output_says_the_counts_overlap(self):
+        _, stdout, _, _ = self._run([])
+        self.assertIn("overlap and do not sum", stdout)
+
+    def test_unknown_provenance_is_reported_as_a_limit_on_the_answer(self):
+        """A low source_changed count is weak evidence while provenance coverage is low."""
+        _, stdout, _, _ = self._run([])
+        self.assertIn("4 indexed record(s) carry no source hash", stdout)
+
+    def test_an_unreadable_inventory_withholds_membership_conclusions(self):
+        status = self._status(
+            inventory_available=False,
+            inventory_error="SnapshotUnstableError: database is locked",
+        )
+        _, stdout, _, _ = self._run([], status=status)
+        self.assertIn("withheld rather than", stdout)
+        self.assertIn("SnapshotUnstableError", stdout)
+
+    def test_an_audit_failure_exits_nonzero_with_the_message_on_stderr(self):
+        from zotero_pdf_text.library import LibraryAuditError
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config_path = self._config(root)
+            out, err = io.StringIO(), io.StringIO()
+            with patch(
+                "zotero_pdf_text.cli.library_status",
+                side_effect=LibraryAuditError("No mapping snapshot at run/mapping_report.jsonl"),
+            ):
+                with redirect_stdout(out), redirect_stderr(err):
+                    code = main(
+                        ["library-status", "--config", str(config_path),
+                         "--mapping-report", str(root / "mapping_report.jsonl")]
+                    )
+        self.assertEqual(code, 2)
+        self.assertIn("No mapping snapshot", err.getvalue())
+        self.assertEqual(out.getvalue(), "")
 
 
 if __name__ == "__main__":

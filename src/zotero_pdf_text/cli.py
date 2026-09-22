@@ -47,7 +47,13 @@ from .fts import (
 from .ingestion import dry_run_ingest, ingest_approved
 from .zotero_db import SnapshotUnsafeError, SnapshotUnstableError
 from .indexer import load_indexed_keys
-from .library import ALL_STATUSES, LibraryAudit, LibraryAuditError, audit_library
+from .library import (
+    ALL_STATUSES,
+    LibraryAudit,
+    LibraryAuditError,
+    audit_library,
+    library_status,
+)
 from .lock import PipelineLockedError, pipeline_write_lock
 from .mapper import run_dry_run
 from .mcp_contract import (
@@ -375,6 +381,36 @@ def build_parser() -> argparse.ArgumentParser:
     audit_library_parser.add_argument(
         "--output", type=Path, default=None, help="Write the full JSON report here instead of listing items on stdout."
     )
+    library_status_parser = subparsers.add_parser(
+        "library-status",
+        help="Summarize library health: what the index holds and whether the library still matches it.",
+        description=(
+            "The summary form of audit-library: the same read-only comparison, reported as "
+            "counts without the per-item evidence. It deliberately does not present index row "
+            "counts as library coverage -- an index row count describes the indexed snapshot "
+            "and says nothing about whether the source library still matches it. Use "
+            "`audit-library` when you need to know which attachments are involved, and "
+            "`index-stats` for statistics about the indexed snapshot itself."
+        ),
+    )
+    library_status_parser.add_argument(
+        "--config", type=Path, default=resolve_config_path(), help="Path to project config JSON. Default: resolved for this machine."
+    )
+    library_status_parser.add_argument(
+        "--mapping-report",
+        type=Path,
+        required=True,
+        help="Existing mapping_report.jsonl, or the run directory containing it. Produce one with 'dry-run'.",
+    )
+    library_status_parser.add_argument(
+        "--full",
+        action="store_true",
+        help=(
+            "Re-hash every source PDF from disk, making source_changed current rather than "
+            "as-of-the-snapshot. Same meaning as audit-library --full, and the same cost."
+        ),
+    )
+    library_status_parser.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
     audit_library_parser.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
     bibtex_check = subparsers.add_parser("bibtex-check", help="Check Better BibTeX JSON-RPC availability.")
     bibtex_check.add_argument("--endpoint", default=DEFAULT_BBT_ENDPOINT, help="Better BibTeX JSON-RPC endpoint.")
@@ -908,6 +944,19 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(report, ensure_ascii=False, indent=2))
         else:
             _print_index_statistics(report)
+        return 0
+    if args.command == "library-status":
+        config = load_config(args.config)
+        validate_config(config)
+        try:
+            status = library_status(config, args.mapping_report, full_audit=args.full)
+        except (LibraryAuditError, ArtifactError, IndexSchemaUnsupportedError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        if args.json:
+            print(json.dumps(status, ensure_ascii=False, indent=2))
+        else:
+            _print_library_status(status)
         return 0
     if args.command == "audit-library":
         config = load_config(args.config)
@@ -1514,6 +1563,56 @@ def _print_index_statistics(report: dict[str, object]) -> None:
             print(f"- {key}: {count}")
     print("")
     print(str(report["scope_note"]))
+
+
+def _print_library_status(status: dict[str, object]) -> None:
+    """Render library health, keeping the indexed snapshot and the source library apart.
+
+    The two are different questions and the old `coverage-report` conflated them. What the index
+    holds is a fact about a published generation; whether the library still matches it is a fact
+    about the source, and only an audit can produce the comparison.
+    """
+    # No one-line verdict is printed. Deciding which statuses mean "needs attention" is a real
+    # judgment call -- `missing_source` is breakage, `unindexed` is pending work,
+    # `source_provenance_unknown` means part of the answer is not computable yet -- and a wrong
+    # headline is worse than none, because a reader told "all current" stops before the detail.
+    # The inventory-unavailable warning below is the one case that does get stated up front.
+    health = dict(status.get("health") or {})
+    print(f"Snapshot: {status['snapshot_time']}")
+    print(f"Mapping report: {status['mapping_report']}")
+    print(f"Published generation: {status.get('generation_id') or '(none published)'}")
+    print(f"Last published: {status.get('last_published_at') or '(unknown)'}")
+    print(f"Mode: {'full (source PDFs hashed)' if status.get('full_audit') else 'metadata only'}")
+    print(f"Attachments compared: {status['total_items']}")
+    print("")
+    print("Health (an attachment can hold several statuses; these overlap and do not sum):")
+    for name in ALL_STATUSES:
+        print(f"- {name}: {health.get(name, 0)}")
+    print("")
+    if not status.get("inventory_available"):
+        print(
+            "Zotero's attachment inventory could not be read, so no membership question could "
+            "be answered: current, unindexed and orphaned_index are withheld rather than "
+            "guessed. File-level findings are unaffected."
+        )
+        if status.get("inventory_error"):
+            print(f"  Reason: {status['inventory_error']}")
+    if status.get("ineligible_items"):
+        print(
+            f"{status['ineligible_items']} attachment(s) are unverified or unmapped and are "
+            "correctly absent from the index; they carry no finding."
+        )
+    if status.get("source_provenance_unknown"):
+        print(
+            f"{status['source_provenance_unknown']} indexed record(s) carry no source hash, so "
+            "source_changed cannot be evaluated for them and a low count is weak evidence."
+        )
+    print("")
+    print(
+        "These are source-library health counts, not index statistics. For what the published "
+        "generation itself holds, run `index-stats`; for the attachments behind each count, run "
+        "`audit-library`."
+    )
 
 
 def _print_library_audit(
