@@ -291,13 +291,48 @@ can change the database's content while leaving its size identical, and timestam
 a filesystem property rather than a guarantee. A database that will not hold still is reported
 as an unavailable inventory rather than read, with the reason in `inventory_error`.
 
-The residual window is narrow and worth stating. The two digests are taken one after another, so
-a source that changed and changed back between them would pass. A rollback journal belonging to
-a transaction spanning several attached databases names a super-journal that is not copied, and
-SQLite will not treat such a journal as hot without it; Zotero does not commit across attached
-databases, so this is a stated limit rather than a handled case. SQLite's backup API or
-`VACUUM INTO` would close all of it, but both require opening the live database, which creates
-the `-shm` this approach exists to avoid.
+### Known limits of the snapshot
+
+Copying a live database is a deliberate trade, and its edges are stated here rather than left
+implied. None of them is crash-shaped: every defect found in this area so far produced a file
+that passed `PRAGMA integrity_check`, so the failure mode is a wrong answer rather than an
+error. That is also why the list is worth keeping current -- nothing else would announce it.
+
+- **Revert in flight.** The two digests are taken one after another, so a source that changed
+  and changed back between them would pass. SQLite's backup API or `VACUUM INTO` would hold a
+  real read transaction and close this, but both require opening the live database, which
+  creates the `-shm` the whole approach exists to avoid.
+- **Super-journal.** A rollback journal belonging to a transaction spanning several *attached*
+  databases names a super-journal that is not copied, and SQLite will not treat such a journal
+  as hot without it, so the copy would keep the uncommitted pages. This is assumed not to arise
+  because Zotero is not known to commit across attached databases -- an assumption this project
+  has not verified against Zotero's own source. A plugin keeping a second database beside
+  `zotero.sqlite`, as Better BibTeX does, is the case that would invalidate it.
+- **Untested configurations.** `PRAGMA locking_mode=EXCLUSIVE`, a rollback journal under
+  `journal_mode=TRUNCATE` or `PERSIST` part-way through a transaction, and a `zotero_sqlite`
+  that is a symlink or sits on a network mount are all plausible, and none of them is covered
+  by a test here.
+- **Cost.** Each audit copies the database and its sidecars, then reads both the copy and the
+  source again to hash them -- roughly four times the database size in I/O per run. On a large
+  library that is not free.
+- **Availability under load.** A database being written continuously, during a long sync for
+  instance, can fail all three attempts; the audit then reports the inventory unavailable. That
+  is a stated gap rather than a wrong answer, but it does leave the audit unusable mid-sync.
+
+What none of this risks is the library itself. The audit writes nothing, and its report drives
+no action automatically, so a bad read costs bad evidence -- a phantom attachment, a false
+`orphaned_index` -- and never data.
+
+### Why the copy is the only inventory path
+
+Two alternatives were weighed, and neither replaces the copy today. Zotero's local HTTP API
+would answer from live, transactionally coherent state with no file handling at all, but it is
+off by default and returns `403` until the user enables it in Zotero's advanced settings, so it
+could only ever be an opportunistic fast path layered over this one. Requiring Zotero to be
+closed would remove the problem outright, at the cost of an audit that cannot run while the
+user is working -- which is most of the time it is wanted. The copy is kept because it is the
+only option that is complete, genuinely non-writing and available unconditionally. The limits
+above are what that costs.
 
 Membership comes from Zotero, not from the snapshot. The mapper walks source *files*, so an
 attachment whose PDF has been moved or deleted produces no mapping row at all; reading membership

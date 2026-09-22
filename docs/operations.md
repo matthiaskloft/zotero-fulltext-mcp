@@ -409,7 +409,10 @@ items holding a given status, or `--output <path>` to write the full JSON report
 
 If Zotero's database cannot be read, the audit completes but answers no membership question:
 every attachment is reported `membership_unchecked` and `inventory_error` states why. Close
-Zotero and re-run if the reason is an unstable snapshot.
+Zotero and re-run if the reason is an unstable snapshot; a long sync can keep the database
+moving for longer than the audit is willing to retry. Reading Zotero costs a copy of
+`zotero.sqlite` and its sidecars plus a hash of both sides, so budget roughly four times the
+database size in I/O per audit on a large library.
 
 An attachment can hold several statuses at once, so the reported counts overlap and do not sum
 to the attachment total. See the Library Audit section of `docs/data-dictionary.md` for what each

@@ -47,6 +47,11 @@ dated section once it has been stress-tested against a large library.
   matching pair. Size and modification time were not sufficient to catch it: a checkpoint
   rewrites pages in place, so the database can change content while keeping its exact size.
   A database that will not settle is reported as an unavailable inventory rather than read.
+- The snapshot's known limits are documented rather than implied: the revert-in-flight window,
+  the unverified assumption behind the super-journal case, the configurations no test covers,
+  the I/O cost per audit, and the unavailability of the audit while the database is under
+  sustained write load. `docs/data-dictionary.md` also records why the file copy is kept as the
+  only inventory path over Zotero's local HTTP API, which is disabled by default.
 - The snapshot copies the `-journal` as well as the `-wal`. In rollback-journal mode SQLite
   spills dirty pages into the main database before the commit, so a copy taken without the
   journal exposed an uncommitted transaction as ordinary data — silently, since such a copy

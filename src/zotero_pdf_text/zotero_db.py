@@ -299,12 +299,16 @@ def snapshot_for_reading(db_path: Path, *, attempts: int = 3) -> Iterator[Path]:
     against the source as it stood after the copy, which is the state the copy is required to
     match. A rollback journal belonging to a transaction spanning several attached databases
     names a super-journal that is not copied, and SQLite will not treat it as hot without one,
-    so such a copy would keep the uncommitted pages; Zotero does not commit across attached
-    databases, which is why this is a stated limit rather than a handled case. SQLite's backup
-    API or `VACUUM INTO` would hold a proper read transaction and remove all of it, but both
-    require opening the live database, which creates the `-shm` this whole approach exists to
-    avoid. Given a read-only audit of someone's library, a revert-in-flight window is the better
-    trade than a guaranteed write into their Zotero folder.
+    so such a copy would keep the uncommitted pages. Zotero is not known to commit across
+    attached databases, but this project has not verified that against Zotero's source, so it
+    is recorded as a stated limit rather than treated as a handled case. SQLite's backup API or
+    `VACUUM INTO` would hold a proper read transaction and remove all of it, but both require
+    opening the live database, which creates the `-shm` this whole approach exists to avoid.
+    Given a read-only audit of someone's library, a revert-in-flight window is the better trade
+    than a guaranteed write into their Zotero folder.
+
+    The Library Audit section of `docs/data-dictionary.md` carries the full list, including the
+    configurations no test here covers and why this path is kept over the alternatives.
 
     If the database will not hold still, this raises rather than returning a copy it could not
     vouch for, and the audit reports the inventory as unavailable -- a stated gap, never a quiet
