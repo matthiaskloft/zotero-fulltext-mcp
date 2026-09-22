@@ -1156,6 +1156,7 @@ class IndexStatisticsTests(unittest.TestCase):
             stats = index_statistics(self._build(Path(tmp)))
             self.assertEqual(stats["scope"], "indexed_snapshot")
             self.assertIn("not what share of the Zotero library", str(stats["scope_note"]))
+            self.assertIn("audit-library", str(stats["scope_note"]))
 
     def test_the_deprecated_alias_still_returns_the_same_numbers(self):
         with tempfile.TemporaryDirectory() as tmp:

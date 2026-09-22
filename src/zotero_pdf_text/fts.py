@@ -723,7 +723,7 @@ INDEX_STATISTICS_SCOPE = "indexed_snapshot"
 INDEX_STATISTICS_SCOPE_NOTE = (
     "Statistics about the rows in one published index generation. They describe what was "
     "indexed, not what share of the Zotero library is indexed: an attachment Zotero holds but "
-    "that was never converted is absent from every number here. Use `library-status` for "
+    "that was never converted is absent from every number here. Use `audit-library` for "
     "source-library health."
 )
 
