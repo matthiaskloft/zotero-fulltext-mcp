@@ -1883,6 +1883,28 @@ class SnapshotConsistencyTests(unittest.TestCase):
             Path(f"{db}-journal").is_file(), "the fixture produced no rollback journal"
         )
 
+        # Prove the hazard is actually staged before asserting it is handled. Whether the page
+        # cache spills is a platform and build detail, and without this the test would pass
+        # vacuously anywhere it does not -- green for the reason the code is wrong elsewhere.
+        # An `UPDATE` rather than an `INSERT` is what makes the spill reachable at all: appended
+        # pages sit past the boundary the current header describes, so a reader of the main file
+        # alone cannot see them, while an update dirties pages that header already reaches.
+        bare = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, bare, True)
+        bare_db = bare / "zotero.sqlite"
+        shutil.copy2(db, bare_db)
+        con = sqlite3.connect(bare_db)
+        try:
+            exposed = con.execute("SELECT count(*) FROM t WHERE b LIKE 'DIRTY%'").fetchone()[0]
+        finally:
+            con.close()
+        if not exposed:
+            writer.execute("ROLLBACK")
+            self.skipTest(
+                "this build did not spill uncommitted pages into the main database, so the "
+                "rollback-journal hazard could not be staged here"
+            )
+
         with zotero_db.snapshot_for_reading(db) as copy:
             con = sqlite3.connect(copy)
             try:
@@ -1898,7 +1920,12 @@ class SnapshotConsistencyTests(unittest.TestCase):
                 con.close()
 
         writer.execute("ROLLBACK")
-        self.assertEqual(dirty, 0, "the snapshot exposed an uncommitted transaction")
+        self.assertEqual(
+            dirty,
+            0,
+            f"the snapshot exposed an uncommitted transaction ({dirty} rows); a bare copy of "
+            f"the main file alone exposed {exposed}",
+        )
         self.assertEqual(
             writer.execute("SELECT count(*) FROM t WHERE b LIKE 'DIRTY%'").fetchone()[0], 0
         )
