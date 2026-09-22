@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import contextlib
 import json
 import sqlite3
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from .identity import extract_year, normalize_doi, normalize_text
+from .zotero_db import read_only_uri, snapshot_for_reading
 
 
 @dataclass(frozen=True)
@@ -68,7 +70,13 @@ def load_candidates(path: Path) -> list[ImportCandidate]:
 
 def dry_run_ingest(candidates_path: Path, zotero_sqlite: Path, output: Path | None = None) -> list[IngestDecision]:
     candidates = load_candidates(candidates_path)
-    existing = load_existing_items(zotero_sqlite)
+    # `zotero_sqlite` is the user's live database, so it is copied rather than opened. Escaping
+    # the URI stops the *truncated-path* write, but not this one: `mode=ro` forbids writes to
+    # the database and still creates the `-shm` and `-wal` a reader of a WAL database needs,
+    # inside the database's own directory. A dry run that leaves new files in someone's Zotero
+    # folder is not a dry run, and Zotero runs in WAL mode.
+    with snapshot_for_reading(zotero_sqlite) as snapshot:
+        existing = load_existing_items(snapshot)
     decisions = dedupe_candidates(candidates, existing)
     if output is not None:
         output.parent.mkdir(parents=True, exist_ok=True)
@@ -122,23 +130,36 @@ def dedupe_candidates(
 
 
 def load_existing_items(db_path: Path) -> list[ExistingItem]:
+    """Load the non-attachment items Zotero knows about.
+
+    Give this a *copy* when the source is a live database. It connects with `mode=ro`, which
+    forbids writes to the database but still lets SQLite create the `-shm` and `-wal` sidecars
+    any reader of a WAL database needs, in the database's own directory. Both callers do:
+    `dry_run_ingest` takes its own snapshot, and `zotero-write` already had one.
+    """
     if not db_path.exists():
         raise FileNotFoundError(db_path)
-    con = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
-    con.row_factory = sqlite3.Row
-    cur = con.cursor()
-    rows = cur.execute(
-        """
-        SELECT i.itemID, i.key
-        FROM items i
-        JOIN itemTypesCombined it ON it.itemTypeID = i.itemTypeID
-        WHERE i.itemID NOT IN (SELECT itemID FROM deletedItems)
-          AND it.typeName != 'attachment'
-        """
-    ).fetchall()
-    item_ids = [int(row["itemID"]) for row in rows]
-    fields = _load_fields(cur, item_ids)
-    con.close()
+    # `read_only_uri` rather than an interpolated path: a `#` or `?` in the configured Zotero
+    # directory would otherwise truncate the URI, and SQLite would create a stray file there
+    # under its default read-write mode while this read reported `no such table: items`.
+    # Closed on every path too -- a query that raises here would otherwise hold a handle on the
+    # user's live Zotero database until garbage collection, which on Windows is a lock.
+    with contextlib.closing(
+        sqlite3.connect(read_only_uri(db_path, immutable=False), uri=True)
+    ) as con:
+        con.row_factory = sqlite3.Row
+        cur = con.cursor()
+        rows = cur.execute(
+            """
+            SELECT i.itemID, i.key
+            FROM items i
+            JOIN itemTypesCombined it ON it.itemTypeID = i.itemTypeID
+            WHERE i.itemID NOT IN (SELECT itemID FROM deletedItems)
+              AND it.typeName != 'attachment'
+            """
+        ).fetchall()
+        item_ids = [int(row["itemID"]) for row in rows]
+        fields = _load_fields(cur, item_ids)
 
     result: list[ExistingItem] = []
     for row in rows:

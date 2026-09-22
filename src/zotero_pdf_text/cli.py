@@ -44,6 +44,7 @@ from .fts import (
     search_fts,
 )
 from .ingestion import dry_run_ingest, ingest_approved
+from .zotero_db import SnapshotUnsafeError, SnapshotUnstableError
 from .indexer import load_indexed_keys
 from .library import ALL_STATUSES, LibraryAudit, LibraryAuditError, audit_library
 from .lock import PipelineLockedError, pipeline_write_lock
@@ -949,7 +950,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "ingest-candidates":
         config = load_config(args.config)
         validate_config(config)
-        decisions = dry_run_ingest(args.input, config.zotero_sqlite, args.output)
+        try:
+            decisions = dry_run_ingest(args.input, config.zotero_sqlite, args.output)
+        except (SnapshotUnsafeError, SnapshotUnstableError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
         print(json.dumps([decision.to_dict() for decision in decisions], ensure_ascii=False, indent=2))
         return 0
     if args.command == "ingest-approved":

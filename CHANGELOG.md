@@ -24,8 +24,22 @@ dated section once it has been stress-tested against a large library.
   ended the URI and turned `?mode=ro` into a fragment, so SQLite opened the *truncated* path
   under its default read-write/create mode: a stray file appeared in the user's Zotero folder
   and the read-only guarantee was silently dropped, surfacing only as a `no such table` error.
-  This affected the three pre-existing `mode=ro&immutable=1` readers as well, not just the
-  audit's new one.
+  A `?` in the path misparsed the same way. This affected the three pre-existing
+  `mode=ro&immutable=1` readers — `find_item_by_doi`, `check_pdf_attachment` and
+  `load_items_without_pdf_attachment` — as well as the audit's new one. Three further readers
+  built the same URI by hand and now go through the helper too: `ingestion.load_existing_items`,
+  which `ingest-candidates` points at the live Zotero database, and `fts.connect_readonly` and
+  `artifacts.validate_generation`, which open the project's own index beneath the configured
+  `output_root` and were exposed to a `#` there by the same mechanism. `load_existing_items`
+  also closes its handle on every path now rather than leaking it to garbage collection on a
+  query error — on Windows that handle is a lock on the user's live database.
+- `ingest-candidates` now reads a temporary copy of `zotero.sqlite` rather than opening the
+  live file. Escaping the URI stopped the truncated-path write but not this one: `mode=ro`
+  forbids writes to the database and still creates the `-shm` and `-wal` that any reader of a
+  WAL database needs, in the database's own directory. Zotero runs in WAL mode, so a dry run
+  was leaving two new files in the user's Zotero folder. `load_existing_items` keeps its
+  `mode=ro` connection and now documents that it must be given a copy; `zotero-write` already
+  supplied one.
 - `audit-library` reads a temporary copy of `zotero.sqlite` instead of opening the live file.
   `mode=ro` forbids writes but still creates the `-shm` sidecar any reader of a WAL database
   needs — a new file inside the user's Zotero folder, which the command promises not to

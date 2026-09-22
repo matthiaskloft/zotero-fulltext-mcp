@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Iterable, Literal
 
 from ._atomic import replace_with_retry
+from .zotero_db import read_only_uri
 
 
 DEFAULT_CHUNK_CHARS = 6000
@@ -918,7 +919,7 @@ def _match_query(terms: list[str], search_mode: str) -> str:
 def connect_readonly(db_path: Path) -> sqlite3.Connection:
     if not db_path.exists():
         raise FileNotFoundError(db_path)
-    con = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+    con = sqlite3.connect(read_only_uri(db_path, immutable=False), uri=True)
     try:
         _assert_supported_schema(con, db_path)
     except BaseException:
