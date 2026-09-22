@@ -7,7 +7,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from .identity import extract_year, normalize_doi, normalize_text
-from .zotero_db import read_only_uri
+from .zotero_db import read_only_uri, snapshot_for_reading
 
 
 @dataclass(frozen=True)
@@ -70,7 +70,13 @@ def load_candidates(path: Path) -> list[ImportCandidate]:
 
 def dry_run_ingest(candidates_path: Path, zotero_sqlite: Path, output: Path | None = None) -> list[IngestDecision]:
     candidates = load_candidates(candidates_path)
-    existing = load_existing_items(zotero_sqlite)
+    # `zotero_sqlite` is the user's live database, so it is copied rather than opened. Escaping
+    # the URI stops the *truncated-path* write, but not this one: `mode=ro` forbids writes to
+    # the database and still creates the `-shm` and `-wal` a reader of a WAL database needs,
+    # inside the database's own directory. A dry run that leaves new files in someone's Zotero
+    # folder is not a dry run, and Zotero runs in WAL mode.
+    with snapshot_for_reading(zotero_sqlite) as snapshot:
+        existing = load_existing_items(snapshot)
     decisions = dedupe_candidates(candidates, existing)
     if output is not None:
         output.parent.mkdir(parents=True, exist_ok=True)
@@ -124,6 +130,13 @@ def dedupe_candidates(
 
 
 def load_existing_items(db_path: Path) -> list[ExistingItem]:
+    """Load the non-attachment items Zotero knows about.
+
+    Give this a *copy* when the source is a live database. It connects with `mode=ro`, which
+    forbids writes to the database but still lets SQLite create the `-shm` and `-wal` sidecars
+    any reader of a WAL database needs, in the database's own directory. Both callers do:
+    `dry_run_ingest` takes its own snapshot, and `zotero-write` already had one.
+    """
     if not db_path.exists():
         raise FileNotFoundError(db_path)
     # `read_only_uri` rather than an interpolated path: a `#` or `?` in the configured Zotero

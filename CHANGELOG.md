@@ -33,6 +33,13 @@ dated section once it has been stress-tested against a large library.
   `output_root` and were exposed to a `#` there by the same mechanism. `load_existing_items`
   also closes its handle on every path now rather than leaking it to garbage collection on a
   query error — on Windows that handle is a lock on the user's live database.
+- `ingest-candidates` now reads a temporary copy of `zotero.sqlite` rather than opening the
+  live file. Escaping the URI stopped the truncated-path write but not this one: `mode=ro`
+  forbids writes to the database and still creates the `-shm` and `-wal` that any reader of a
+  WAL database needs, in the database's own directory. Zotero runs in WAL mode, so a dry run
+  was leaving two new files in the user's Zotero folder. `load_existing_items` keeps its
+  `mode=ro` connection and now documents that it must be given a copy; `zotero-write` already
+  supplied one.
 - `audit-library` reads a temporary copy of `zotero.sqlite` instead of opening the live file.
   `mode=ro` forbids writes but still creates the `-shm` sidecar any reader of a WAL database
   needs — a new file inside the user's Zotero folder, which the command promises not to
