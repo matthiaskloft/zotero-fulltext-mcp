@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import hashlib
 import re
 import shutil
+import contextlib
 import sqlite3
+import tempfile
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -28,6 +32,29 @@ class AttachmentRecord:
     creator_surnames: list[str]
 
 
+def read_only_uri(db_path: Path, *, immutable: bool) -> str:
+    """Build a SQLite `file:` URI that actually applies its query parameters.
+
+    Interpolating a path into `f"file:{path}?mode=ro"` is wrong in a way that fails silently and
+    dangerously. `as_posix()` normalises separators but escapes nothing, so a `#` anywhere in the
+    path -- a perfectly legal directory name -- ends the URI and turns `?mode=ro` into part of a
+    fragment. SQLite then opens the *truncated* path with its default read-write/create mode:
+    it creates a stray file inside the user's Zotero folder, fails with `no such table`, and the
+    caller sees an ordinary query error rather than a breached read-only guarantee. A `?` in the
+    path misparses the same way.
+
+    `as_uri()` percent-encodes, so the parameters survive. It requires an absolute path, hence
+    the `resolve()`.
+
+    Note what `mode=ro` alone does *not* buy: SQLite still creates the `-shm` (and an empty
+    `-wal`) sidecar it needs to read a WAL database, inside the database's own directory. Only
+    `immutable=1` avoids that, at the cost of not seeing the WAL at all. Callers that must
+    neither write nor miss recent commits want `snapshot_for_reading` instead.
+    """
+    uri = Path(db_path).resolve().as_uri()
+    return f"{uri}?mode=ro&immutable=1" if immutable else f"{uri}?mode=ro"
+
+
 def find_item_by_doi(doi: str, zotero_sqlite: Path) -> str | None:
     """Return the Zotero parent key for an item with the given DOI, or None if not found.
 
@@ -39,7 +66,7 @@ def find_item_by_doi(doi: str, zotero_sqlite: Path) -> str | None:
     needle = normalize_doi(doi)
     if not needle:
         return None
-    uri = f"file:{zotero_sqlite.as_posix()}?mode=ro&immutable=1"
+    uri = read_only_uri(zotero_sqlite, immutable=True)
     con = sqlite3.connect(uri, uri=True)
     con.row_factory = sqlite3.Row
     cur = con.cursor()
@@ -63,7 +90,7 @@ def find_item_by_doi(doi: str, zotero_sqlite: Path) -> str | None:
 
 def check_pdf_attachment(parent_key: str, zotero_sqlite: Path) -> dict[str, object]:
     """Return PDF attachment info for a Zotero item key, reading directly from SQLite."""
-    uri = f"file:{Path(zotero_sqlite).as_posix()}?mode=ro&immutable=1"
+    uri = read_only_uri(zotero_sqlite, immutable=True)
     con = sqlite3.connect(uri, uri=True)
     con.row_factory = sqlite3.Row
     cur = con.cursor()
@@ -133,7 +160,7 @@ def load_items_without_pdf_attachment(
     `check_pdf_attachment`/`find_item_by_doi`) so Zotero's WAL write locks are bypassed; items
     committed after the last WAL checkpoint may not appear.
     """
-    uri = f"file:{Path(zotero_sqlite).as_posix()}?mode=ro&immutable=1"
+    uri = read_only_uri(zotero_sqlite, immutable=True)
     con = sqlite3.connect(uri, uri=True)
     con.row_factory = sqlite3.Row
     cur = con.cursor()
@@ -215,8 +242,206 @@ def snapshot_database(source: Path, run_dir: Path) -> Path:
     return destination
 
 
+# The `-wal` and the `-journal` are both here because a database is in one journalling mode or
+# the other and the snapshot cannot assume which. They matter for opposite reasons: the `-wal`
+# holds committed data the main file does not have yet, while the `-journal` holds the *undo*
+# bytes for uncommitted data the main file already does have. In rollback mode SQLite spills
+# dirty pages into the main database before the commit, so a copy taken without the journal
+# exposes a transaction that may never land -- and passes `PRAGMA integrity_check`, because the
+# file is structurally fine and only the data is wrong. Carried along, the journal is hot in the
+# copy and SQLite rolls it back on open, which is exactly the committed state the audit wants.
+#
+# The `-shm` is deliberately absent. It is the WAL index: transient cache and lock state that
+# SQLite reconstructs from the `-wal` whenever the first connection opens a database, so copying
+# it preserves no content. It does, however, churn on plain *reader* activity, which would make
+# a stability check on it fail for reasons that have nothing to do with the data.
+_SNAPSHOT_SUFFIXES = ("", "-wal", "-journal")
+
+
+# A rollback journal is not inert data. Its trailer can name a *super-journal*: the file SQLite
+# uses to commit a transaction spanning several attached databases. When SQLite opens a database
+# whose journal is hot it follows that name, and `pager_delmaster` deletes the file it points to
+# once no database still references it. The name is an absolute path written by whoever wrote the
+# journal, so it can point anywhere this process can reach, and copying the journal into a
+# private staging directory does not confine the effect there -- the path travels inside the
+# file. Reproduced against SQLite 3.45.1 through `snapshot_for_reading`: the copy read back
+# correctly and a file outside the staging directory was deleted.
+# https://sqlite.org/bugs/forumpost/0903b836fdae69784a53ebb31a697a6cf025b2c4f0232054fd992c74ee4aaefc
+#
+# So such a journal is refused rather than handed to SQLite. The layout is the one SQLite's own
+# `readMasterJournal` reads, at the very end of the file:
+#
+#     [name][4-byte name length][4-byte checksum][8-byte journal magic]
+_JOURNAL_MAGIC = b"\xd9\xd5\x05\xf9\x20\xa1\x63\xd7"
+
+
+def _names_super_journal(journal: Path) -> bool:
+    """Whether this rollback journal carries a super-journal pathname.
+
+    The checksum is deliberately not validated and the name is never resolved. This is a
+    refusal, not a parse: refusing a journal SQLite would have ignored costs one unavailable
+    inventory, while accepting one it would have followed costs a deleted file. An unreadable
+    journal is refused for the same reason -- not being able to look is not the same as
+    having looked and found nothing.
+    """
+    try:
+        size = journal.stat().st_size
+    except FileNotFoundError:
+        # No journal at all, which is the ordinary case for a WAL database.
+        return False
+    except OSError:
+        return True
+    if size < 16:
+        return False
+    try:
+        with open(journal, "rb") as handle:
+            handle.seek(size - 16)
+            trailer = handle.read(16)
+    except OSError:
+        return True
+    if len(trailer) != 16 or trailer[8:] != _JOURNAL_MAGIC:
+        return False
+    return int.from_bytes(trailer[:4], "big") != 0
+
+
+class SnapshotUnsafeError(RuntimeError):
+    """The database's journal would make SQLite touch files outside the snapshot."""
+
+
+class SnapshotUnstableError(RuntimeError):
+    """The database would not hold still long enough to be copied coherently."""
+
+
+@contextlib.contextmanager
+def snapshot_for_reading(db_path: Path, *, attempts: int = 3) -> Iterator[Path]:
+    """Yield a throwaway copy of a SQLite database, leaving the original's directory untouched.
+
+    The only way to read a live Zotero database without writing anything near it. Neither URI
+    mode is sufficient on its own:
+
+    * `mode=ro` forbids writes to the database but still creates the `-shm` (and an empty
+      `-wal`) that any reader of a WAL database needs -- new files inside the user's Zotero
+      folder, which `audit-library` promises not to produce.
+    * `mode=ro&immutable=1` creates nothing, but ignores the WAL entirely. That is not merely
+      staler: when the data lives in an uncheckpointed WAL, the query fails outright.
+
+    Copying sidesteps both. The copy is opened read-write, where recovery, rollback and
+    checkpointing are harmless because the file is ours and about to be deleted -- and are in
+    fact the point, since they are what turns the copied files into committed state. The `-wal`
+    and `-journal` are copied alongside the main database: see `_SNAPSHOT_SUFFIXES` for why both
+    are needed and why the `-shm` is not.
+
+    A file-level copy of a database being written is *not* a transactionally consistent
+    snapshot. The files are copied one after another, so a checkpoint landing between them can
+    leave a main database and a `-wal` that were never a matching pair, and SQLite's per-frame
+    checksums do not detect that -- they validate each frame, not that the frames apply to the
+    base they were copied beside. The result can be wrong rather than merely unreadable.
+
+    So the copy is verified rather than assumed: after copying, the copy's bytes are hashed and
+    compared against the source's, and any mismatch discards the copy and retries. Size and
+    modification time are not enough. A checkpoint rewrites existing pages in place, so the main
+    database can change content while keeping its exact size, and timestamp granularity is a
+    filesystem property rather than a guarantee. Equal digests for both files establish what is
+    actually needed: that the copy holds the same bytes the source held.
+
+    The residual window is narrow and worth naming. The two hashes are taken one after another,
+    so a source that changed and changed back between them would pass; and the comparison is
+    against the source as it stood after the copy, which is the state the copy is required to
+    match. SQLite's backup API or `VACUUM INTO` would hold a proper read transaction and remove
+    it, but both require opening the live database, which creates the `-shm` this whole
+    approach exists to avoid. Given a read-only audit of someone's library, a revert-in-flight
+    window is the better trade than a guaranteed write into their Zotero folder.
+
+    A journal naming a super-journal is refused outright rather than read: see
+    `_names_super_journal` for why giving one to SQLite is not a stale-data problem but a
+    file-deletion one. A transaction spanning attached databases is therefore reported as an
+    unavailable inventory rather than read as though it had committed.
+
+    The Library Audit section of `docs/data-dictionary.md` carries the full list, including the
+    configurations no test here covers and why this path is kept over the alternatives.
+
+    If the database will not hold still, this raises rather than returning a copy it could not
+    vouch for, and the audit reports the inventory as unavailable -- a stated gap, never a quiet
+    guess.
+    """
+    staging = Path(tempfile.mkdtemp(prefix="zotero-snapshot-"))
+    try:
+        destination = staging / "zotero.sqlite"
+        for _attempt in range(attempts):
+            for suffix in _SNAPSHOT_SUFFIXES:
+                sidecar = Path(f"{db_path}{suffix}")
+                if sidecar.is_file():
+                    shutil.copy2(sidecar, Path(f"{destination}{suffix}"))
+            # Before anything opens the copy. The journal in staging is the one SQLite would
+            # act on, so it is the one that has to be cleared -- checking the source instead
+            # would leave a window between the look and the copy.
+            if _names_super_journal(Path(f"{destination}-journal")):
+                raise SnapshotUnsafeError(
+                    f"{db_path} has a rollback journal that names a super-journal. Opening a "
+                    "copy of it would make SQLite follow that name and delete the file it "
+                    "points to, which need not be inside the snapshot, so no copy was taken. "
+                    "Close Zotero and re-run; if it persists, that journal is not one an "
+                    "ordinary Zotero session wrote."
+                )
+            if _digests(destination) == _digests(db_path):
+                yield destination
+                return
+            # The copy does not hold the bytes the source holds, so it may pair a main database
+            # and a WAL that never belonged together. Discard it rather than query it.
+            for suffix in _SNAPSHOT_SUFFIXES:
+                Path(f"{destination}{suffix}").unlink(missing_ok=True)
+        raise SnapshotUnstableError(
+            f"{db_path} kept changing while it was being copied ({attempts} attempts), so no "
+            "copy could be verified against it. Close Zotero, or re-run when it is idle."
+        )
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
+
+
+def _digests(db_path: Path) -> dict[str, str | None]:
+    """SHA-256 of the database and its journalling sidecars, or None where a file is absent.
+
+    `None` is a meaningful value rather than a gap: a `-wal` present on one side and absent on
+    the other is exactly the checkpoint that would make a copy incoherent, so it has to compare
+    unequal rather than be skipped.
+
+    The `-journal` is hashed for consistency rather than because it catches anything on its own.
+    A rollback journal only matters in conjunction with dirty pages already spilled into the
+    main database, and any such spill, commit or rollback moves the main file's digest too --
+    which is the comparison that actually detects the tear. Removing the journal from this
+    comparison alone does not fail any test here, and no fixture was invented to pretend
+    otherwise.
+    """
+    marks: dict[str, str | None] = {}
+    for suffix in _SNAPSHOT_SUFFIXES:
+        digest = hashlib.sha256()
+        try:
+            with open(f"{db_path}{suffix}", "rb") as handle:
+                for block in iter(lambda: handle.read(1024 * 1024), b""):
+                    digest.update(block)
+        except OSError:
+            marks[suffix] = None
+        else:
+            marks[suffix] = digest.hexdigest()
+    return marks
+
+
 def load_attachment_records(db_path: Path) -> list[AttachmentRecord]:
-    con = sqlite3.connect(db_path)
+    """Load every PDF attachment Zotero knows about.
+
+    Opens read-write, so callers must pass a copy rather than a user's live database --
+    `mapper` passes its own snapshot, and the audit uses `snapshot_for_reading`. A read-write
+    connection is not made harmless by issuing only SELECTs: SQLite checkpoints and recovers on
+    open and on close, rewriting the main database and discarding the WAL.
+    """
+    # Closed on every path, not just the happy one. A query that raises here -- an empty file, a
+    # schema this build does not know -- previously leaked the handle until garbage collection,
+    # which on Windows keeps a lock on someone's live Zotero database.
+    with contextlib.closing(sqlite3.connect(db_path)) as con:
+        return _load_attachment_records(con)
+
+
+def _load_attachment_records(con: sqlite3.Connection) -> list[AttachmentRecord]:
     con.row_factory = sqlite3.Row
     cur = con.cursor()
     rows = cur.execute(
@@ -247,7 +472,6 @@ def load_attachment_records(db_path: Path) -> list[AttachmentRecord]:
     parent_ids = sorted({row["parent_item_id"] for row in rows if row["parent_item_id"] is not None})
     fields = _load_fields(cur, parent_ids)
     creators = _load_creators(cur, parent_ids)
-    con.close()
 
     records: list[AttachmentRecord] = []
     for row in rows:

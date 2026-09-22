@@ -7,7 +7,7 @@ import subprocess
 import sys
 import tempfile
 from dataclasses import asdict, dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from ._atomic import replace_with_retry
@@ -113,8 +113,28 @@ def reconvert_with_marker(
                 images_root.rmdir()
 
     try:
+        # Hash the PDF this extraction actually reads, rather than inheriting the hash recorded
+        # for the previous conversion. `_run_marker_extractor` reads whatever is at source_path
+        # now, which may not be the file the old text came from -- publishing the old hash
+        # against new text would leave source_changed asserted after a successful reconversion,
+        # and would make it impossible for a reconversion to establish provenance for a record
+        # that never had any.
+        source_sha256_before = _sha256(source_path)
         _run_marker_extractor(source_path, raw_output_path, staged_images_dir, timeout_seconds)
         new_text = raw_output_path.read_text(encoding="utf-8")
+        source_sha256 = _sha256(source_path)
+        if source_sha256 != source_sha256_before:
+            cleanup_staging()
+            return _error_result(
+                attachment_key,
+                "The source PDF changed while marker-pdf was extracting it, so the resulting "
+                "text cannot be attributed to a known source. Nothing was published; re-run "
+                "reconvert-math.",
+                previous_extraction_tool=previous_extraction_tool,
+                previous_char_count=previous_char_count,
+                markdown_path=str(markdown_path),
+                source_path=str(source_path),
+            )
     except subprocess.TimeoutExpired:
         cleanup_staging()
         return _error_result(
@@ -222,6 +242,12 @@ def reconvert_with_marker(
                     identity_status=record["identity_status"],
                     identity_rule=record["identity_rule"],
                     has_math=has_math,
+                    # The hash of the PDF this reconversion actually read, verified unchanged
+                    # across the extraction -- not the previously recorded one. A full
+                    # reconversion produces text from the current file, so that is the file the
+                    # provenance must name.
+                    source_sha256=source_sha256,
+                    indexed_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
                     text=new_text_for_index,
                 )
                 stage_and_publish(

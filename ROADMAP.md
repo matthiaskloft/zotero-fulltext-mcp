@@ -41,8 +41,8 @@ Risk levels used below:
 | 5 | Package 4B step 1 (remainder): locator staleness | hardening plan | none | DONE | Package 4A already ships a locator keyed on `content_sha256` — stronger than the plan's `generation_id`, since a content hash survives regeneration. What is missing is verification: `get_fulltext_chunk` never checks the caller's hash against what is stored, so a locator taken before a reconvert silently returns text from a different document version. Adding the `stale_locator` response closes a correctness gap in a citation path that already ships, touches read code only, and depends on nothing unbuilt. |
 | 6 | Package 5 step 4: adversarial and containment tests | hardening plan | none | DONE | Tampered `current.json` generation identifiers, path escapes on MCP reads and maintenance writes, lock-ownership races, untrusted instruction text in titles and snippets. `resolve_generation_dir` already validates and contains; this proves it against hostile input. Covers shipped code, so nothing gates it. |
 | 7 | Package 5 step 2: schema-compatibility tests | hardening plan | none | DONE | An index written by an older version must migrate through a documented command or fail with a precise recovery instruction, never a raw SQLite error. Covers Package 2, which shipped at rank 4. |
-| 8 | Package 3 steps 4 + 7: `audit-library` and `library_status` | hardening plan | none | READY | The read-only half of Package 3. Compares represented attachments, source availability, canonical files, JSONL and FTS metadata, reporting `current`, `unindexed`, `stale_markdown`, `source_changed`, `metadata_changed`, `missing_source`, `missing_markdown`, `orphaned_index` and `duplicate_key` with per-item evidence. It moves no files. It is also the honest precondition for rank 10: the plan says to start migration only once the timestamped-run layout is an actual pain point, and this is the command that answers whether it is, instead of guessing. Requires a new `library.py` (none exists today) and the `is_canonical_eligible` predicate from step 3, used here in report-only form. |
-| 9 | Package 4B step 2: SQL aggregates and truthful status | hardening plan | none | READY after 8 | Move aggregate reporting to SQL and expose rank 8's `library_status`. `coverage_report` currently does `SELECT *` over the whole metadata table and counts in Python, and reports index row counts under the name "coverage" — the exact overstatement this step exists to fix. Needs rank 8 first, because status can only distinguish indexed-snapshot statistics from source-library health once an audit can produce that comparison. |
+| 8 | Package 3 steps 4 + 7: `audit-library` and `library_status` (JSONL only; FTS comparison not included) | hardening plan | none | DONE | The read-only half of Package 3. Compares represented attachments, source availability, canonical files, JSONL and FTS metadata, reporting `current`, `unindexed`, `stale_markdown`, `source_changed`, `metadata_changed`, `missing_source`, `missing_markdown`, `orphaned_index` and `duplicate_key` with per-item evidence. It moves no files. It is also the honest precondition for rank 10: the plan says to start migration only once the timestamped-run layout is an actual pain point, and this is the command that answers whether it is, instead of guessing. Requires a new `library.py` (none exists today) and the `is_canonical_eligible` predicate from step 3, used here in report-only form. |
+| 9 | Package 4B step 2: SQL aggregates and truthful status | hardening plan | none | READY | Move aggregate reporting to SQL and expose rank 8's `library_status`. `coverage_report` currently does `SELECT *` over the whole metadata table and counts in Python, and reports index row counts under the name "coverage" — the exact overstatement this step exists to fix. Needs rank 8 first, because status can only distinguish indexed-snapshot statistics from source-library health once an audit can produce that comparison. |
 | 10 | Package 3 steps 1, 2, 3, 5, 6: canonical layout, migration, reconciliation | hardening plan | **high** | OPTIONAL / GATED | The destructive half: `library/markdown` and `library/images` as canonical locations, publication through the artifact layer, `migrate-library-layout` dry-run and apply, and reconciliation-plan upserts replacing key-only incrementality. This is the package the plan calls its highest-risk item, and the gate is unchanged — start only if rank 8's audit shows the timestamped-run layout is an actual practical pain point. Take a manual filesystem backup of `output_root` before `--apply`, independent of the dry-run report. |
 | 11 | Package 5 steps 3, 5, 6: fixture tests, upgrade guide, performance baselines | hardening plan | none | FOLLOWS 8/10 | Step 6 (index build time and size, audit time, p95 search latency) can be recorded once rank 8 exists. Steps 3 and 5 document and exercise migration end to end, so they follow rank 10 and only exist if it ships. |
 
@@ -66,10 +66,32 @@ Risk levels used below:
 
 ## Next action
 
-Ranks 1-7 are done. **Rank 8** (`audit-library` and `library_status`) is next, and is the first
-remaining item that adds a command rather than tests. It is also the one that decides rank 10: the
-plan gates migration on the timestamped-run layout being an actual pain point, and this is the
-command that answers whether it is.
+Ranks 1-8 are done. **Rank 9** (SQL aggregates and exposing `library_status`) is next. The
+`library_status` data function already exists from rank 8, per Package 3 step 7's wording ("a
+truthful `library_status` data function for later CLI/MCP use"); rank 9 is what exposes it and
+moves `coverage_report` off its `SELECT *`-and-count-in-Python implementation.
+
+### Note on rank 8's scope
+
+Rank 8 pulled part of **Package 3 step 3** forward: index records now carry `source_sha256` and
+`indexed_at`. This was not optional scope creep. Without recorded source provenance,
+`source_changed` was not computable at all, and an audit that silently cannot detect a whole
+category of drift is not the evidence rank 10's gate is supposed to rest on. The rest of step 3
+(canonical publication, migration, reconciliation upserts) is untouched and still gated.
+
+Two limits on the evidence rank 8 currently produces, both worth knowing before reading its
+output as a verdict on rank 10:
+
+- `source_changed` fires only for records that carry a source hash. Records converted before
+  this change carry none and are counted under `source_provenance_unknown` rather than reported
+  as unchanged. Provenance is established per attachment when it is genuinely reconverted, and
+  `rebuild-index --manifest` can clear it again for attachments the manifest lists as
+  `skipped_existing`. Until that coverage is high, a low `source_changed` count is weak evidence
+  and should not by itself settle rank 10.
+- `audit-library` consumes an existing `dry-run` snapshot. The `--refresh-mapping` convenience
+  mode from step 4 was deliberately left out, because it writes a run artifact and would have
+  cost rank 8 the read-only property that is the entire reason it was split out of Package 3
+  ahead of the gated half.
 
 Image OCR (`ocr-images`) sits outside this roadmap — it is feature-complete in `[Unreleased]` but its
 release is deferred by decision, not blocked by anything here.

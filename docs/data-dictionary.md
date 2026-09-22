@@ -29,6 +29,11 @@ Each converted Markdown file starts with front matter:
 - `identity_status`
 - `identity_rule`
 - `has_math`: `true`/`false`, auto-detected from math fonts and Unicode math-symbol density.
+- `source_sha256`: SHA-256 of the source PDF this text was extracted from, hashed at conversion
+  time. Empty means *not known*, which is not the same as unchanged: a `skipped_existing` row
+  reused Markdown converted from whatever the PDF was at the time, so hashing the file now would
+  record confident provenance for text that may predate it. `audit-library` treats an empty value
+  as unverifiable and never as evidence that the source is current.
 - `error`
 
 ### Extraction Timeout and Fallback
@@ -220,6 +225,9 @@ contains one record per available converted full text:
 - page count
 - mapping classification and identity status
 - `has_math`: boolean, carried from the manifest
+- `source_sha256`: carried through from the conversion manifest, never recomputed at index time.
+  Re-hashing the PDF here would record today's file against text extracted from an older one.
+- `indexed_at`: UTC timestamp of when this record was built
 - full Markdown-derived `text`
 
 Reconvert a single paper with `reconvert-math --key <attachment_key>` when `has_math` is true and
@@ -245,6 +253,170 @@ navigation, but does not claim that the query occurs in that chunk's body text.
 
 Search normalizes query text into at most 20 word terms. `all_terms` is the default mode,
 `any_terms` matches any normalized term, and `phrase` requires the normalized terms in order.
+
+## Library Audit
+
+`audit-library` compares four independent views of the same library -- Zotero's own attachment
+inventory, the mapper snapshot, the filesystem, and the published index generation's JSONL --
+and reports where they disagree. It is read-only: it moves, renames and rewrites nothing, and it
+never opens the live `zotero.sqlite` at all: it copies the database and its journalling
+sidecars to a temporary directory and reads the copy. No connection mode achieves the same
+thing. A read-write connection runs recovery or a checkpoint on open and on close, rewriting the
+main database and deleting an outstanding WAL even when every statement issued is a `SELECT`.
+`mode=ro` forbids those writes but still creates the `-shm` that any reader of a WAL database
+needs, which is a new file in the user's Zotero folder. `mode=ro&immutable=1` creates nothing
+but cannot see the WAL at all, and fails outright when the rows live in an uncheckpointed one.
+Copying costs one file copy per audit and is the only option that is both complete and
+genuinely non-writing.
+
+Both the `-wal` and the `-journal` are copied, because a database is in one journalling mode or
+the other and the audit cannot assume which. They matter for opposite reasons. The `-wal` holds
+committed data the main file does not have yet. The `-journal` holds the bytes that *undo*
+uncommitted data the main file already does have: in rollback mode SQLite spills dirty pages
+into the main database before the commit, so a copy taken without the journal exposes a
+transaction that may never land, and does so silently — such a copy is structurally intact
+and `PRAGMA integrity_check` returns `ok`. Carried along, the journal is hot in the copy and
+SQLite rolls it back on open, which is the committed state the audit wants.
+
+The `-shm` is deliberately not copied. It is the WAL index: transient cache and lock state that
+SQLite reconstructs from the `-wal` when a database is first opened, so leaving it behind loses
+nothing, including rows that live only in an uncheckpointed WAL. It also changes on plain reader
+activity, which would feed unrelated churn into the check below.
+
+A file-level copy of a database being written is not a transactionally consistent snapshot, so
+the copy is verified rather than assumed: after copying, the SHA-256 of the copied database and
+WAL are compared against the source's, and any mismatch discards the copy and retries. Size and
+modification time are not sufficient, because a checkpoint rewrites existing pages in place and
+can change the database's content while leaving its size identical, and timestamp granularity is
+a filesystem property rather than a guarantee. A database that will not hold still is reported
+as an unavailable inventory rather than read, with the reason in `inventory_error`.
+
+### Known limits of the snapshot
+
+Copying a live database is a deliberate trade, and its edges are stated here rather than left
+implied. None of them is crash-shaped: every defect found in this area so far produced a file
+that passed `PRAGMA integrity_check`, so the failure mode is a wrong answer rather than an
+error. That is also why the list is worth keeping current -- nothing else would announce it.
+
+- **Revert in flight.** The two digests are taken one after another, so a source that changed
+  and changed back between them would pass. SQLite's backup API or `VACUUM INTO` would hold a
+  real read transaction and close this, but both require opening the live database, which
+  creates the `-shm` the whole approach exists to avoid.
+- **Super-journal (refused, not read).** A rollback journal can name a *super-journal*: the
+  file SQLite uses to commit a transaction spanning several attached databases. That name is an
+  absolute path stored inside the journal, and opening a database whose journal is hot makes
+  SQLite follow it and delete the file it names once no database still references it. Copying
+  the journal into a temporary directory does not confine that to the temporary directory,
+  because the path travels inside the file. The snapshot therefore inspects the copied
+  journal's trailer and refuses to open a copy whose journal names one, reporting the inventory
+  unavailable instead. The cost is that a genuine multi-database transaction becomes a gap
+  rather than a reading; the alternative was a deletion anywhere the process can reach.
+- **Untested configurations.** `PRAGMA locking_mode=EXCLUSIVE`, a rollback journal under
+  `journal_mode=TRUNCATE` or `PERSIST` part-way through a transaction, and a `zotero_sqlite`
+  that is a symlink or sits on a network mount are all plausible, and none of them is covered
+  by a test here.
+- **Cost.** Each audit copies the database and its sidecars, then reads both the copy and the
+  source again to hash them -- roughly four times the database size in I/O per run. On a large
+  library that is not free.
+- **Availability under load.** A database being written continuously, during a long sync for
+  instance, can fail all three attempts; the audit then reports the inventory unavailable. That
+  is a stated gap rather than a wrong answer, but it does leave the audit unusable mid-sync.
+
+Within those limits the audit does not touch the library: it writes nothing, and its report
+drives no action automatically, so a bad read costs bad evidence -- a phantom attachment, a
+false `orphaned_index` -- rather than data. That claim is worth only as much as the refusals
+above. An earlier revision of this section made it unconditionally, while the snapshot was
+still handing super-journal-bearing journals to SQLite; that combination could delete a file
+outside the snapshot directory entirely. The guarantee holds because that path is closed, not
+because copying a database is inherently harmless.
+
+### Why the copy is the only inventory path
+
+Two alternatives were weighed, and neither replaces the copy today. Zotero's local HTTP API
+would answer from live, transactionally coherent state with no file handling at all, but it is
+off by default and returns `403` until the user enables it in Zotero's advanced settings, so it
+could only ever be an opportunistic fast path layered over this one. Requiring Zotero to be
+closed would remove the problem outright, at the cost of an audit that cannot run while the
+user is working -- which is most of the time it is wanted. The copy is kept because it is the
+only option that is complete, genuinely non-writing and available unconditionally. The limits
+above are what that costs.
+
+Membership comes from Zotero, not from the snapshot. The mapper walks source *files*, so an
+attachment whose PDF has been moved or deleted produces no mapping row at all; reading membership
+off the snapshot would make `missing_source` nearly unreachable and would report such an
+attachment as `orphaned_index`, claiming Zotero dropped it when the file is what went missing.
+A successfully read inventory is the authority *outright*, not merely an additional source: a
+mapping row proves membership as of the last `dry-run`, so unioning the two would let a stale row
+vouch for an attachment the user has since deleted from Zotero and report it `current` when the
+honest answer is `orphaned_index`. If Zotero's database cannot be read the audit still runs, but it answers no membership question
+at all: every attachment is reported `membership_unchecked`, and `current`, `unindexed` and
+`orphaned_index` are withheld rather than guessed. The mapping snapshot is not a fallback
+authority here, because it proves membership as of the last `dry-run` and the question is
+membership *now*. File-level findings are unaffected and still reported, since a changed PDF or
+a stale Markdown file is a fact about disk regardless of who owns the attachment. The report
+carries `inventory_available: false` and `inventory_error`, the failing call's own message:
+a database that will not settle is resolved by closing Zotero and re-running, a permission or
+schema failure is not, and the flag alone cannot tell those apart.
+
+The canonical layout is recorded per item as evidence (`canonical_markdown_exists`) but is not
+classified, because nothing writes to `library/` yet and a status derived from it would fire on
+every attachment while meaning nothing. The audit reads the generation JSONL only and never
+opens the SQLite index, so a JSONL/FTS divergence within one generation is out of its scope.
+
+**Statuses are a set, not a bucket.** An attachment can hold several at once (a PDF that moved
+*and* whose metadata changed *and* whose Markdown predates the current source holds three), so
+the reported counts overlap and do not sum to the attachment total. Only `total_items` partitions
+the library.
+
+- `current`: indexed, eligible, source and Markdown present, no other status. The only status
+  that excludes all the others.
+- `unindexed`: mapped and library-eligible, but absent from the published index.
+- `stale_markdown`: the Markdown on disk differs from what the index holds, so search returns
+  text that no longer matches the file.
+- `source_changed`: the source PDF differs from the one this text was extracted from. Compared
+  against the mapping snapshot's hash by default and against a freshly computed hash under
+  `--full`; either way it fires only when the indexed record actually carries a source hash.
+- `source_unchecked`: the index records a source hash and this audit had nothing to compare it
+  against, so the item was never examined. Fires when the attachment was relinked -- the
+  snapshot's hash then describes the previous file -- or when it never reached the mapper and so
+  has no snapshot hash at all. It exists because the alternative is silence, and silence here is
+  read as `current`: a clean bill of health for a file nobody looked at. Suppressed when
+  `missing_source` already says the same thing more precisely, and resolved by `--full`, which
+  hashes the file the audit can actually see. Distinct from `source_provenance_unknown`, which
+  counts the opposite gap -- records with no *indexed* hash, converted before the field existed.
+- `metadata_changed`: title, DOI or citation key differ between Zotero and the index. Compared
+  against Zotero's live record whenever the inventory could be read, falling back to the
+  snapshot only when it could not: the snapshot's copy is only as current as the last `dry-run`,
+  so an edit made in Zotero afterwards is invisible to it, and an attachment that never reached
+  the mapper carries no snapshot metadata at all. Creators
+  and year are deliberately excluded -- they change during ordinary bibliographic tidying and
+  would fire across a large share of the library without indicating real drift.
+- `missing_source`: the source PDF is gone from disk.
+- `missing_markdown`: the converted Markdown is gone from disk.
+- `orphaned_index`: the index holds a row for an attachment Zotero no longer represents. Decided
+  against Zotero's inventory, so an attachment Zotero still lists whose PDF has vanished is
+  reported as `missing_source` instead.
+- `membership_unchecked`: Zotero's inventory could not be read, so the audit cannot say whether
+  the library still contains this attachment. It applies to *every* attachment in such a run,
+  not only to index-only rows, and that is the point: when the count equals `total_items` it
+  says plainly that this run could not check membership for anything. Distinct from
+  `orphaned_index` because the advice is opposite: that one says the row can go, this one says
+  do not act until Zotero can be consulted. The mapping snapshot cannot settle it either way
+  — it proves the attachment existed at the last `dry-run`, not that it exists now, and an
+  attachment whose PDF went missing never reaches the snapshot in the first place.
+- `unverified_indexed`: Zotero represents the attachment but its identity was never verified, yet
+  it is in the published index and is being returned by search. Distinct from `orphaned_index`:
+  the repair is to verify the identity, not to drop the row.
+- `duplicate_key`: more than one index row shares an attachment key.
+
+Two counts sit outside the status vocabulary and explain it:
+
+- `ineligible_items`: attachments that are unverified or unmapped and therefore correctly absent
+  from the library. They report no status at all, and this count is what distinguishes that
+  intended silence from a broken rule.
+- `source_provenance_unknown`: indexed records carrying no `source_sha256`, for which
+  `source_changed` cannot be evaluated at all. Until those records are reconverted, a low
+  `source_changed` count means *not measured*, not *not drifted*.
 
 ## Confidence Fields
 

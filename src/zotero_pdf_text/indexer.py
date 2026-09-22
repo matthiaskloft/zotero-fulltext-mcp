@@ -4,6 +4,7 @@ import csv
 import hashlib
 import json
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 
 from .identity import strip_front_matter
@@ -30,6 +31,13 @@ class TextIndexRecord:
     identity_rule: str
     has_math: bool
     text: str
+    # Provenance of the source PDF this text was extracted from, and when this record was built.
+    # Both default to "" so records constructed by older callers stay valid; an empty
+    # `source_sha256` means "not known" and an audit reports it as unverifiable rather than
+    # unchanged. See `converter.ConversionResult.source_sha256` for why it can legitimately be
+    # absent even on a successful pipeline run.
+    source_sha256: str = ""
+    indexed_at: str = ""
 
 
 def load_indexed_keys(jsonl_path: Path) -> set[str]:
@@ -84,6 +92,12 @@ def _record_from_manifest_row(row: dict[str, str]) -> TextIndexRecord:
         identity_rule=row.get("identity_rule", ""),
         has_math=row.get("has_math", "false").strip().lower() == "true",
         text=text,
+        # Carried through from the conversion manifest, never recomputed here. Re-hashing the PDF
+        # at index time would record today's file against text extracted from an older one --
+        # confident-looking provenance that is wrong in exactly the case `source_changed` exists
+        # to catch. A manifest predating this field yields "", i.e. not known.
+        source_sha256=row.get("source_sha256", ""),
+        indexed_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
     )
 
 

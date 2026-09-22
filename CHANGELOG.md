@@ -11,8 +11,131 @@ unannounced rather than absent: present, inert unless explicitly configured and 
 validated for general use. Its config shape and output conventions may still change. It moves into a
 dated section once it has been stress-tested against a large library.
 
+### Fixed
+
+- Conversion now hashes the source PDF before *and* after extraction and refuses to publish the
+  Markdown if the bytes changed in between. Hashing only afterwards would attach the new file's
+  hash to the old file's text — worse than recording no hash, because `audit-library` would
+  then read `source_changed` as clean and the drift would never surface. `reconvert-math`
+  carries the same guard; `ocr-images` keeps the original hash, which is correct there because
+  it operates on already-extracted images rather than on the PDF.
+- Every read-only connection to `zotero.sqlite` now builds its `file:` URI with `as_uri()`
+  instead of interpolating the path. A `#` anywhere in the path — a legal directory name —
+  ended the URI and turned `?mode=ro` into a fragment, so SQLite opened the *truncated* path
+  under its default read-write/create mode: a stray file appeared in the user's Zotero folder
+  and the read-only guarantee was silently dropped, surfacing only as a `no such table` error.
+  This affected the three pre-existing `mode=ro&immutable=1` readers as well, not just the
+  audit's new one.
+- `audit-library` reads a temporary copy of `zotero.sqlite` instead of opening the live file.
+  `mode=ro` forbids writes but still creates the `-shm` sidecar any reader of a WAL database
+  needs — a new file inside the user's Zotero folder, which the command promises not to
+  produce. `immutable=1` creates nothing but cannot see the WAL, and fails outright when the
+  rows live in an uncheckpointed one. Copying is the only option that is both complete and
+  genuinely non-writing.
+- `audit-library` reads `current.json` once and resolves the generation JSONL, the generation
+  id and `last_published_at` from that single read. Reading the pointer again let a concurrent
+  publish pair one generation's id with another's rows or timestamp, and the report serialised
+  that false provenance as fact.
+- `audit-library` fails with a named error when `current.json` names a generation whose
+  directory or JSONL is missing. It previously returned the generation id with zero rows, so a
+  broken publication was reported as every eligible attachment being `unindexed` — the
+  reading most likely to send someone re-converting a library that is fine.
+- The snapshot of `zotero.sqlite` is verified by content: the SHA-256 of the copied database
+  and WAL are compared against the source after copying, and any mismatch discards the copy and
+  retries. A file-level copy of a database being written is not a consistent snapshot, and
+  SQLite's per-frame checksums do not detect a main database and a `-wal` that were never a
+  matching pair. Size and modification time were not sufficient to catch it: a checkpoint
+  rewrites pages in place, so the database can change content while keeping its exact size.
+  A database that will not settle is reported as an unavailable inventory rather than read.
+- The snapshot's known limits are documented rather than implied: the revert-in-flight window,
+  the unverified assumption behind the super-journal case, the configurations no test covers,
+  the I/O cost per audit, and the unavailability of the audit while the database is under
+  sustained write load. `docs/data-dictionary.md` also records why the file copy is kept as the
+  only inventory path over Zotero's local HTTP API, which is disabled by default.
+- The snapshot refuses a rollback journal that names a super-journal instead of letting SQLite
+  open it. A journal's trailer can carry a super-journal pathname -- an absolute path -- and
+  SQLite follows it when the journal is hot, deleting the file it names once no database still
+  references it. Copying the journal into a temporary directory did not confine that to the
+  temporary directory, because the path travels inside the file: a copy read through
+  `snapshot_for_reading` deleted a file outside the snapshot directory, while returning correct
+  rows and reporting no error. Such a snapshot is now refused and the inventory reported
+  unavailable, which also means a transaction spanning attached databases is a stated gap
+  rather than a reading.
+- The snapshot copies the `-journal` as well as the `-wal`. In rollback-journal mode SQLite
+  spills dirty pages into the main database before the commit, so a copy taken without the
+  journal exposed an uncommitted transaction as ordinary data — silently, since such a copy
+  is structurally intact and `PRAGMA integrity_check` returns `ok`. Carried along, the journal
+  is hot in the copy and SQLite rolls it back on open. A transaction spanning several attached
+  databases names a super-journal that is not copied and remains a stated limit; Zotero does
+  not commit across attached databases.
+- The `-shm` is no longer copied into the snapshot. SQLite documents it as transient cache and
+  lock state reconstructed from the `-wal`, so copying it preserved nothing while feeding
+  reader-driven churn into the stability check.
+- `audit-library` withholds every membership conclusion when Zotero's inventory cannot be read,
+  instead of falling back to the mapping snapshot. The snapshot proves membership as of the
+  last `dry-run`, so an attachment deleted from Zotero afterwards was reported `current` if it
+  was indexed and `unindexed` if it was not — the first vouching for a document search can
+  still return, the second queueing conversion work for something that no longer exists.
+  `membership_unchecked` now covers every attachment in such a run, and file-level findings
+  are still reported.
+- `audit-library` reports `inventory_error` alongside `inventory_available`, in the JSON, the
+  `library_status()` payload and the human output. The flag alone could not distinguish a
+  database that is merely busy — where closing Zotero and re-running works — from a
+  permission or schema failure, and the only actionable recovery instruction the audit has was
+  being discarded by the catch that keeps a partial audit running.
+- `canonical_markdown_path()` is keyed on the attachment key alone. It appended a title slug,
+  which made the path a function of current metadata and contradicted its own documented
+  guarantee: a retitled item resolved to a different file, so `canonical_markdown_exists` looked
+  at the wrong path and the previous file was orphaned.
+- `audit-library` now audits an attachment at the path Zotero currently gives it, rather than
+  the one the snapshot and index remember. After a relink those disagree, and auditing the old
+  path missed the source change when the old file was still present and reported a spurious
+  `missing_source` when it was not. The snapshot hash is no longer used as a fallback across a
+  relink either, since it describes the previous file and would report the item clean at
+  exactly the moment it changed most. Clearing it is not sufficient on its own, so such items
+  are now reported as `source_unchecked`.
+- `metadata_changed` compares against Zotero's live record whenever the inventory could be read,
+  rather than against the mapping snapshot's memory of it. A title, DOI or citation key edited
+  in Zotero after the last `dry-run` was previously invisible, and an indexed attachment that
+  never reached the mapper was skipped by the comparison entirely.
+
 ### Added
 
+- `audit-library --mapping-report <snapshot>`: a read-only drift report. It compares four
+  independent views of the same library -- Zotero's attachment inventory, the `dry-run` mapping
+  snapshot, the files on disk, and the published index generation's JSONL -- and reports where
+  they disagree. Zotero's inventory, not the snapshot, is the authority on membership: the
+  mapper walks files on disk, so an attachment whose PDF is already gone never reaches the
+  snapshot at all. When the inventory cannot be read the audit withholds every membership
+  conclusion and reports `inventory_available: false` with the reason, rather than silently
+  answering a different question from the snapshot. It moves, renames and rewrites nothing, and it reads the live
+  `zotero.sqlite` by copying it to a temporary directory rather than opening the live file, so
+  that SQLite cannot checkpoint, recover or create a sidecar inside the user's Zotero folder.
+  The `-wal` is copied alongside it, so attachments Zotero committed since its last checkpoint
+  stay visible. Statuses are a **set**, not a bucket: an attachment can hold
+  several at once, so the reported counts overlap and do not sum to the attachment total,
+  and the output says so. Two counts sit outside the status vocabulary to keep it honest --
+  `ineligible_items` explains why correctly-quarantined attachments report nothing at all, and
+  `source_provenance_unknown` states how many records cannot be checked for source drift yet.
+  `--full` re-hashes every source PDF from disk; without it `source_changed` is still evaluated,
+  against the hashes the mapper recorded during `dry-run`, so the default mode is current as of
+  the snapshot rather than blind. Also adds `library_status()` as a data function for
+  later CLI/MCP use, reporting health categories and last successful publication rather than
+  calling index row counts "coverage".
+- `source_unchecked`: an audit status for the gap between "the source changed" and "nobody
+  looked". The index records a source hash, but the default audit has nothing to compare it
+  against -- the attachment was relinked, so the snapshot's hash describes the previous file, or
+  it never reached the mapper and has no snapshot hash at all. Without a status such an item
+  falls through to `current`, certifying a file the audit never examined. `--full` resolves it
+  by hashing what is actually on disk.
+- `membership_unchecked`: an audit status for an attachment whose membership cannot be decided
+  because Zotero's inventory could not be read. Index-only rows were previously reported as
+  `orphaned_index`, which recommends dropping a row that may still be perfectly valid —
+  an attachment missing from the mapping snapshot may simply have lost its PDF.
+- `unverified_indexed`: an audit status beyond the nine originally planned, naming an attachment
+  whose identity was never verified but which is nonetheless in the published index and being
+  returned by search. Distinct from `orphaned_index` because the repair differs: verify the
+  identity, rather than drop a row Zotero no longer represents.
 - `ocr-images --key <ATTACHMENT_KEY>`: recover the equations, tables and figure content that
   conversion left stranded in extracted PNGs. `pymupdf4llm` pulls vector-drawn display equations
   out of a PDF into their own crop files and leaves an opaque `![](…png)` placeholder behind, so
@@ -108,8 +231,41 @@ dated section once it has been stress-tested against a large library.
   GPU-aware selection policy (`recommend_engine`) is a documented stub with its trade-off written
   out; three tests are staged against its contract and skip until it exists.
 
+### Changed
+
+- **Breaking (index schema).** Index records now carry `source_sha256` -- the SHA-256 of the
+  source PDF the text was extracted from, hashed at conversion time -- and `indexed_at`. Without
+  recorded source provenance, "the source differs from what was indexed" was not computable at
+  all, and `audit-library` could not report `source_changed` honestly. Readers reject an index
+  built before this change with a named error pointing at `rebuild-index`, rather than failing on
+  a missing column deep inside a query. Two consequences worth stating plainly: every existing
+  index needs one `rebuild-index`, and because a rebuild re-reads conversion manifests that carry
+  no source hash, existing records keep an empty `source_sha256` until they are reconverted. Until
+  then a low `source_changed` count means *not measured*, not *not drifted* -- which is what
+  `source_provenance_unknown` exists to report.
+- `ocr-images` preserves an attachment's recorded `source_sha256` through its index upsert, and
+  `reconvert-math` records the hash of the PDF it actually extracted, verified unchanged across
+  the extraction. The distinction matters: enrichment rewrites derived Markdown from images
+  already extracted, so the recorded hash still describes the right PDF, while a full
+  reconversion reads whatever is at the source path now and must name that file. Publishing
+  either way requires the provenance fields to survive `get_item_context`, so they are now part
+  of its metadata projection -- without that, both paths republished an empty hash even when the
+  index held a valid one.
+- `load_attachment_records` closes its SQLite connection on every path, not only on success. A
+  failing query previously leaked the handle until garbage collection, which on Windows holds a
+  lock on a live Zotero database.
+- `source_sha256` is deliberately empty for `skipped_existing` conversions. That row reused
+  Markdown converted from whatever the PDF was at the time, so hashing the file now would record
+  confident provenance for text that may predate it. Empty means *not known*, and is never read
+  as *unchanged*.
+
 ### Fixed
 
+- Metadata rows were bound to SQLite columns by hard-coded position (`values[11]`, `values[17]`),
+  so inserting any column above one of those indices would have silently bound an integer into
+  the wrong column with no error. Now coerced by column name. This was latent: with the previous
+  18 columns those indices were correct, so no shipped index ever held wrong data. Found while
+  adding the provenance columns, which is exactly the edit that would have triggered it.
 - Figures whose caption label sits two lines above them are no longer routed to the formula
   prompt, where the splice replaced their image link with LaTeX invented from a plot. In the
   common journal layout the label (`Figure 3`) is separated from the crop by an italicised title
