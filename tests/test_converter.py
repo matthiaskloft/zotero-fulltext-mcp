@@ -685,6 +685,60 @@ def _write_raw_markdown(args, **kwargs):
     Path(args[4]).write_text("# Extracted\n\nBody text", encoding="utf-8")
 
 
+class SourceStabilityTests(unittest.TestCase):
+    """Provenance must describe the bytes that were actually extracted.
+
+    Hashing only after extraction pairs PDF A's text with PDF B's hash whenever the file is
+    replaced while the extractor runs. That is worse than recording no hash at all: an audit
+    reads `source_changed` as clean and the drift becomes permanently invisible.
+    """
+
+    def _convert(self, side_effect):
+        root = Path(tempfile.mkdtemp())
+        self.addCleanup(__import__("shutil").rmtree, root, True)
+        report = root / "mapping_report.csv"
+        pdf = root / "paper.pdf"
+        pdf.write_bytes(b"%PDF original")
+        _write_mapping_report(report, pdf)
+        config = ProjectConfig(root, root, root, root / "output")
+        with patch("zotero_pdf_text.converter.subprocess.run", side_effect=side_effect(pdf)):
+            run_dir = convert_sample(config, report, limit=1)
+        # manifest.jsonl, not manifest.csv: the CSV writer derives its columns from the
+        # dataclass too, but the JSONL is what `rebuild-index` reads, so it is the artifact
+        # whose provenance actually has to be right.
+        lines = (run_dir / "manifest.jsonl").read_text(encoding="utf-8").splitlines()
+        rows = [json.loads(line) for line in lines if line.strip()]
+        self.assertEqual(len(rows), 1)
+        return run_dir, rows[0], pdf
+
+    def test_a_stable_source_is_hashed_and_recorded(self):
+        def side_effect(pdf):
+            return _write_raw_markdown
+
+        _run_dir, row, pdf = self._convert(side_effect)
+        self.assertEqual(row["status"], "converted")
+        import hashlib
+
+        self.assertEqual(row["source_sha256"], hashlib.sha256(pdf.read_bytes()).hexdigest())
+
+    def test_a_source_replaced_mid_extraction_publishes_no_markdown(self):
+        def side_effect(pdf):
+            def run(args, **kwargs):
+                # The extractor reads PDF A and writes its text; the file becomes PDF B before
+                # it returns. Hashing only afterwards would attach B's hash to A's text.
+                _write_raw_markdown(args, **kwargs)
+                pdf.write_bytes(b"%PDF replaced")
+
+            return run
+
+        run_dir, row, _pdf = self._convert(side_effect)
+        self.assertEqual(row["status"], "error")
+        self.assertIn("changed while", row["error"])
+        self.assertEqual(row["source_sha256"], "")
+        self.assertEqual(row["output_path"], "")
+        self.assertEqual(list((run_dir / "markdown").glob("*.md")), [])
+
+
 def _write_raw_markdown_with_math(args, **kwargs):
     raw_output_path = Path(args[4])
     raw_output_path.write_text("# Extracted\n\nBody text", encoding="utf-8")

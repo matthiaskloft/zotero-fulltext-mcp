@@ -43,6 +43,34 @@ This snapshots the current (or legacy) JSONL sidecar into a validated generation
 repoints `current.json` at it. A corrupt/hand-edited `current.json` is never silently ignored in
 favor of stale data — readers fail loudly until a valid generation is re-published.
 
+## Index Schema Unsupported After Upgrading (`source_sha256`, `indexed_at`)
+
+Adding source provenance to index records changed the index schema. An index built before that
+change is missing the `source_sha256` and `indexed_at` columns, and every reader fails loudly
+rather than querying a schema it does not understand:
+
+```
+... is not a supported full-text index (missing: indexed_at, source_sha256).
+```
+
+Republish a generation from the current sidecar:
+
+```powershell
+& $python -m zotero_pdf_text rebuild-index --config .\config.json
+```
+
+A rebuild restores search immediately. The command above copies the current generation's JSONL
+verbatim, so pre-upgrade records keep an empty `source_sha256` simply because they never had one.
+`audit-library` counts those under `source_provenance_unknown` and cannot evaluate
+`source_changed` for them; a low `source_changed` count then means *not measured*, not *not
+drifted*.
+
+Prefer that plain form over `rebuild-index --manifest <manifest.csv>` when provenance matters.
+The manifest path rebuilds every record from the manifest, and a manifest row for an attachment
+that was skipped rather than reconverted (`skipped_existing`) carries no source hash -- so a
+manifest rebuild can *replace* recorded hashes with empty ones. Provenance is re-established for
+an attachment when it is genuinely reconverted.
+
 ## MCP Retrieval Reports `stale_locator`
 
 A locator carries the hash of the converted text its offsets were measured against.

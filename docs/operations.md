@@ -391,6 +391,33 @@ Coverage:
   --db $data\index\zotero_text_index.sqlite
 ```
 
+Audit the library for drift (read-only; moves and rewrites nothing, and reads a temporary copy
+of `zotero.sqlite` rather than the live file):
+
+```powershell
+& $python -m zotero_pdf_text audit-library `
+  --config .\config.json `
+  --mapping-report $data\runs\<run-id>\mapping_report.jsonl
+```
+
+The audit consumes an existing `dry-run` snapshot, so produce one first if none is current. Add
+`--full` to also hash every source PDF from disk. Without it `source_changed` is still
+evaluated, against the hashes the mapper recorded during `dry-run`, so the default mode is
+current as of that snapshot rather than blind; anything the snapshot cannot answer for is
+counted as `source_unchecked` rather than assumed current. Add `--status <name>` to list only
+items holding a given status, or `--output <path>` to write the full JSON report.
+
+If Zotero's database cannot be read, the audit completes but answers no membership question:
+every attachment is reported `membership_unchecked` and `inventory_error` states why. Close
+Zotero and re-run if the reason is an unstable snapshot; a long sync can keep the database
+moving for longer than the audit is willing to retry. Reading Zotero costs a copy of
+`zotero.sqlite` and its sidecars plus a hash of both sides, so budget roughly four times the
+database size in I/O per audit on a large library.
+
+An attachment can hold several statuses at once, so the reported counts overlap and do not sum
+to the attachment total. See the Library Audit section of `docs/data-dictionary.md` for what each
+status means.
+
 ## Better BibTeX For LaTeX
 
 LLMs should use the `citation_key` from full-text search results in LaTeX, then

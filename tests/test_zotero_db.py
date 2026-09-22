@@ -178,7 +178,7 @@ class ReadOnlyUriTests(unittest.TestCase):
         self.assertTrue(uri.endswith("?mode=ro&immutable=1"))
 
     def test_a_reader_opens_the_real_database_not_a_truncated_path(self):
-        """End-to-end guard for the three `immutable=1` readers that build URIs."""
+        """End-to-end guard for the three `immutable=1` readers that still build URIs."""
         with tempfile.TemporaryDirectory() as tmp:
             holder = Path(tmp) / "library#1"
             holder.mkdir()

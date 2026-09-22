@@ -179,6 +179,27 @@ Smoke-test the index directly:
 Search uses `all_terms` by default. Pass `--search-mode any_terms` for a broader fallback, or
 `--search-mode phrase` to require the normalized query words in order.
 
+Check whether the index still matches the library:
+
+```powershell
+& $python -m zotero_pdf_text audit-library --config .\config.json --mapping-report .\converted_text\runs\<run-id>\mapping_report.jsonl
+```
+
+`audit-library` is read-only — it moves, renames and rewrites nothing, and it never opens your
+live `zotero.sqlite`: it reads a temporary copy, so not even SQLite's own recovery, checkpointing
+or sidecar creation can touch your Zotero folder. It compares a `dry-run`
+snapshot against the files on disk and the published index, and reports attachments that are
+unindexed, whose converted text or source PDF has changed underneath the index, or whose index
+rows are duplicated or orphaned. Add `--full` to hash source PDFs as well. An attachment can hold
+several statuses at once, so the counts overlap; see "Library Audit" in `docs/data-dictionary.md`.
+
+Zotero decides which attachments the library contains, so if its database cannot be read the
+audit still runs but withholds every membership answer: each attachment is reported
+`membership_unchecked`, and `current`, `unindexed` and `orphaned_index` are left out rather than
+guessed from the older `dry-run` snapshot. Findings about files on disk are unaffected. The
+report says why the inventory was unavailable, because a database that is merely busy is fixed
+by closing Zotero and re-running and a permission failure is not.
+
 ## Register the MCP server
 
 ```powershell

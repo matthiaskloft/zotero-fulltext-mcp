@@ -5,7 +5,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
@@ -1063,6 +1063,317 @@ class SearchCliTests(unittest.TestCase):
 
         self.assertEqual(exit_code, 2)
         self.assertEqual(output.getvalue(), "")
+
+
+def _write_zotero_inventory(
+    db: Path, attachment_key: str, source_path: Path, *, title: str, doi: str, citation_key: str
+) -> None:
+    """A minimal Zotero-schema database listing one PDF attachment.
+
+    An empty file stood here, which made every `audit-library` CLI test run against an audit
+    that could not read membership. The counts those tests asserted on -- `current`,
+    `unindexed` -- are the ones such an audit must withhold, so they were checking the
+    formatting of an answer the audit had no business giving.
+
+    The metadata matches the indexed record on purpose: the audit compares Zotero's live record
+    against the index, so a fixture that disagreed with itself would report `metadata_changed`
+    on a library that has not drifted.
+    """
+    import sqlite3
+
+    con = sqlite3.connect(db)
+    try:
+        con.executescript(
+            """
+            CREATE TABLE items (itemID INTEGER PRIMARY KEY, key TEXT, itemTypeID INTEGER);
+            CREATE TABLE itemAttachments (
+                itemID INTEGER PRIMARY KEY,
+                parentItemID INTEGER,
+                linkMode INTEGER,
+                contentType TEXT,
+                path TEXT
+            );
+            CREATE TABLE deletedItems (itemID INTEGER PRIMARY KEY);
+            CREATE TABLE itemTypesCombined (itemTypeID INTEGER PRIMARY KEY, typeName TEXT);
+            CREATE TABLE fieldsCombined (fieldID INTEGER PRIMARY KEY, fieldName TEXT);
+            CREATE TABLE itemData (itemID INTEGER, fieldID INTEGER, valueID INTEGER);
+            CREATE TABLE itemDataValues (valueID INTEGER PRIMARY KEY, value TEXT);
+            CREATE TABLE itemCreators (itemID INTEGER, creatorID INTEGER, orderIndex INTEGER);
+            CREATE TABLE creators (
+                creatorID INTEGER PRIMARY KEY, firstName TEXT, lastName TEXT
+            );
+            INSERT INTO itemTypesCombined VALUES (1, 'journalArticle');
+            INSERT INTO fieldsCombined VALUES (1, 'title');
+            INSERT INTO fieldsCombined VALUES (2, 'DOI');
+            INSERT INTO fieldsCombined VALUES (3, 'citationKey');
+            INSERT INTO items VALUES (1, 'P1', 1);
+            """
+        )
+        for value_id, (field_id, value) in enumerate(
+            ((1, title), (2, doi), (3, citation_key)), start=1
+        ):
+            con.execute("INSERT INTO itemDataValues VALUES (?, ?)", (value_id, value))
+            con.execute("INSERT INTO itemData VALUES (1, ?, ?)", (field_id, value_id))
+        con.execute("INSERT INTO items VALUES (2, ?, 2)", (attachment_key,))
+        con.execute(
+            "INSERT INTO itemAttachments VALUES (2, 1, 2, 'application/pdf', ?)",
+            (str(source_path),),
+        )
+        con.commit()
+    finally:
+        con.close()
+
+
+class AuditLibraryCliTests(unittest.TestCase):
+    def _setup(self, root: Path, *, indexed: bool = True) -> tuple[Path, Path]:
+        """A config, a source PDF, converted Markdown, a snapshot and a published generation."""
+        from zotero_pdf_text.artifacts import (
+            publish_generation,
+            stage_generation,
+            validate_generation,
+            write_jsonl_from_existing,
+        )
+
+        output_root = root / "converted_text"
+        index_root = output_root / "index"
+        index_root.mkdir(parents=True)
+        config_path = root / "config.json"
+        config_path.write_text(
+            json.dumps(
+                {
+                    "zotero_root": str(root),
+                    "zotero_data_directory": str(root),
+                    "linked_attachments": str(root),
+                    "output_root": str(output_root),
+                }
+            ),
+            encoding="utf-8",
+        )
+        pdf = root / "AAAA1111.pdf"
+        pdf.write_bytes(b"pdf bytes")
+        markdown = root / "AAAA1111.md"
+        markdown.write_text("hello world", encoding="utf-8")
+        _write_zotero_inventory(
+            root / "zotero.sqlite",
+            "AAAA1111",
+            pdf,
+            title="A title",
+            doi="10.1000/x",
+            citation_key="key1",
+        )
+        import hashlib
+
+        md_hash = hashlib.sha256(b"hello world").hexdigest()
+
+        if indexed:
+            source = index_root / "source.jsonl"
+            source.write_text(
+                json.dumps(
+                    {
+                        "zotero_parent_key": "P1",
+                        "zotero_attachment_key": "AAAA1111",
+                        "title": "A title",
+                        "creators": "Jane Smith",
+                        "year": "2024",
+                        "doi": "10.1000/x",
+                        "citation_key": "key1",
+                        "source_path": str(pdf),
+                        "markdown_path": str(markdown),
+                        "markdown_sha256": md_hash,
+                        "extraction_tool": "pymupdf4llm.to_markdown",
+                        "char_count": 11,
+                        "word_count": 2,
+                        "page_count": "1",
+                        "classification": "mapped_verified",
+                        "identity_status": "verified",
+                        "identity_rule": "doi_exact",
+                        "has_math": False,
+                        "source_sha256": "stale-source-hash",
+                        "indexed_at": "2026-01-01T00:00:00+00:00",
+                        "text": "hello world",
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            info = stage_generation(index_root, write_jsonl_from_existing(source), command="test")
+            validate_generation(index_root, info.generation_id)
+            publish_generation(index_root, info.generation_id)
+
+        snapshot = root / "mapping_report.jsonl"
+        snapshot.write_text(
+            json.dumps(
+                {
+                    "zotero_attachment_key": "AAAA1111",
+                    "title": "A title",
+                    "doi": "10.1000/x",
+                    "citation_key": "key1",
+                    "source_path": str(pdf),
+                    # The mapper hashes every source PDF it sees, so a snapshot row without
+                    # `sha256` is not a state the pipeline produces. Without it the audit has
+                    # nothing to compare against the index and correctly reports
+                    # `source_unchecked` rather than certifying the item as `current`.
+                    "sha256": "stale-source-hash",
+                    "classification": "mapped_verified",
+                    "identity_status": "verified",
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        return config_path, snapshot
+
+    def test_parser_requires_a_mapping_report(self):
+        with self.assertRaises(SystemExit):
+            build_parser().parse_args(["audit-library"])
+
+    def test_reports_a_healthy_library_as_current(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config_path, snapshot = self._setup(root)
+            output = io.StringIO()
+            with redirect_stdout(output):
+                exit_code = main(
+                    ["audit-library", "--config", str(config_path), "--mapping-report", str(snapshot)]
+                )
+            self.assertEqual(exit_code, 0)
+            text = output.getvalue()
+            self.assertIn("Attachments: 1", text)
+            self.assertIn("- current: 1", text)
+
+    def test_output_states_that_counts_overlap(self):
+        """Every other count this CLI prints partitions its population; these do not."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config_path, snapshot = self._setup(root)
+            output = io.StringIO()
+            with redirect_stdout(output):
+                main(["audit-library", "--config", str(config_path), "--mapping-report", str(snapshot)])
+            self.assertIn("overlap", output.getvalue())
+
+    def test_cheap_mode_says_source_changed_was_not_evaluated(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config_path, snapshot = self._setup(root)
+            output = io.StringIO()
+            with redirect_stdout(output):
+                main(["audit-library", "--config", str(config_path), "--mapping-report", str(snapshot)])
+            self.assertIn("--full", output.getvalue())
+
+    def test_full_mode_detects_source_drift(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config_path, snapshot = self._setup(root)
+            output = io.StringIO()
+            with redirect_stdout(output):
+                exit_code = main(
+                    [
+                        "audit-library",
+                        "--config",
+                        str(config_path),
+                        "--mapping-report",
+                        str(snapshot),
+                        "--full",
+                    ]
+                )
+            self.assertEqual(exit_code, 0)
+            self.assertIn("- source_changed: 1", output.getvalue())
+
+    def test_json_mode_emits_the_full_report(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config_path, snapshot = self._setup(root)
+            output = io.StringIO()
+            with redirect_stdout(output):
+                main(
+                    [
+                        "audit-library",
+                        "--config",
+                        str(config_path),
+                        "--mapping-report",
+                        str(snapshot),
+                        "--json",
+                    ]
+                )
+            payload = json.loads(output.getvalue())
+            self.assertTrue(payload["counts_overlap"])
+            self.assertEqual(payload["total_items"], 1)
+            self.assertEqual(payload["items"][0]["attachment_key"], "AAAA1111")
+
+    def test_output_flag_writes_the_report_to_disk(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config_path, snapshot = self._setup(root)
+            report = root / "reports" / "audit.json"
+            output = io.StringIO()
+            with redirect_stdout(output):
+                exit_code = main(
+                    [
+                        "audit-library",
+                        "--config",
+                        str(config_path),
+                        "--mapping-report",
+                        str(snapshot),
+                        "--output",
+                        str(report),
+                    ]
+                )
+            self.assertEqual(exit_code, 0)
+            self.assertTrue(report.is_file())
+            self.assertEqual(json.loads(report.read_text(encoding="utf-8"))["total_items"], 1)
+
+    def test_missing_snapshot_exits_two_and_names_the_recovery_command(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config_path, _ = self._setup(root)
+            errors = io.StringIO()
+            with redirect_stderr(errors):
+                exit_code = main(
+                    [
+                        "audit-library",
+                        "--config",
+                        str(config_path),
+                        "--mapping-report",
+                        str(root / "nope.jsonl"),
+                    ]
+                )
+            self.assertEqual(exit_code, 2)
+            self.assertIn("dry-run", errors.getvalue())
+
+    def test_unpublished_index_is_reported_not_an_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config_path, snapshot = self._setup(root, indexed=False)
+            output = io.StringIO()
+            with redirect_stdout(output):
+                exit_code = main(
+                    ["audit-library", "--config", str(config_path), "--mapping-report", str(snapshot)]
+                )
+            self.assertEqual(exit_code, 0)
+            text = output.getvalue()
+            self.assertIn("(none published)", text)
+            self.assertIn("- unindexed: 1", text)
+
+    def test_status_filter_narrows_the_item_list_but_not_the_counts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config_path, snapshot = self._setup(root, indexed=False)
+            output = io.StringIO()
+            with redirect_stdout(output):
+                main(
+                    [
+                        "audit-library",
+                        "--config",
+                        str(config_path),
+                        "--mapping-report",
+                        str(snapshot),
+                        "--status",
+                        "duplicate_key",
+                    ]
+                )
+            text = output.getvalue()
+            self.assertIn("- unindexed: 1", text)
+            self.assertNotIn("AAAA1111", text)
 
 
 if __name__ == "__main__":
