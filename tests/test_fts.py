@@ -1065,10 +1065,23 @@ class IndexStatisticsTests(unittest.TestCase):
     """Rank 9 moved these aggregates from a `SELECT *`-and-count-in-Python loop into SQL.
 
     The numbers are the contract; where they are computed is not. The parity test below is the
-    one that matters: it recounts the same rows in Python and requires SQL to agree, so a
-    GROUP BY that quietly drops NULLs or an aggregate that overflows a JOIN fails here rather
-    than in someone's report.
+    one that matters: it recounts the same rows in Python and requires SQL to agree. It runs
+    against `_build_diverse`, not the shared two-record fixture, because a fixture whose rows
+    share one value per grouped column cannot tell a working GROUP BY from a broken one -- every
+    assertion would compare a single-key dict to itself.
     """
+
+    # The shared `_write_jsonl` fixture holds two records whose classification, identity_status
+    # and extraction_tool are all identical, so every grouped assertion against it compares a
+    # one-key dict to a one-key dict and a broken GROUP BY would still pass. These records give
+    # each grouped column more than one distinct value, which is the minimum needed for the
+    # parity test below to constrain anything at all.
+    _DIVERSE_RECORDS = (
+        ("ATTACH1", "mapped_verified", "verified", "pymupdf4llm.to_markdown", True, 80, 10),
+        ("ATTACH2", "mapped_verified", "verified", "pymupdf4llm.to_markdown", False, 50, 8),
+        ("ATTACH3", "mapped_unverified", "unverified", "marker", True, 120, 17),
+        ("ATTACH4", "unmapped", "unverified", "pymupdf4llm.to_markdown+glm-ocr", False, 30, 4),
+    )
 
     def _build(self, root: Path) -> Path:
         jsonl = root / "index.jsonl"
@@ -1077,10 +1090,50 @@ class IndexStatisticsTests(unittest.TestCase):
         build_fts_index(jsonl, sqlite_db, chunk_chars=40, overlap_chars=5)
         return sqlite_db
 
+    def _build_diverse(self, root: Path) -> Path:
+        jsonl = root / "diverse.jsonl"
+        sqlite_db = root / "diverse.sqlite"
+        records = [
+            {
+                "zotero_parent_key": "PARENT" + key[-1],
+                "zotero_attachment_key": key,
+                "title": "Record " + key,
+                "creators": "Author One",
+                "year": "2026",
+                "doi": "",
+                "citation_key": "record" + key,
+                "source_path": key + ".pdf",
+                "markdown_path": key + ".md",
+                "markdown_sha256": "hash" + key,
+                "extraction_tool": tool,
+                "char_count": chars,
+                "word_count": words,
+                "page_count": "1",
+                "classification": classification,
+                "identity_status": identity,
+                "identity_rule": "doi_exact",
+                "has_math": math,
+                "text": "Body text for " + key,
+            }
+            for key, classification, identity, tool, math, chars, words in self._DIVERSE_RECORDS
+        ]
+        jsonl.write_text(
+            "".join(json.dumps(record) + "\n" for record in records), encoding="utf-8"
+        )
+        build_fts_index(jsonl, sqlite_db, chunk_chars=40, overlap_chars=5)
+        return sqlite_db
+
     def test_sql_aggregates_match_a_python_recount(self):
         with tempfile.TemporaryDirectory() as tmp:
-            sqlite_db = self._build(Path(tmp))
+            sqlite_db = self._build_diverse(Path(tmp))
             stats = index_statistics(sqlite_db)
+
+            # Guard the guard: if the fixture ever loses its variety this test silently stops
+            # constraining the GROUP BY, which is exactly how the first version of it passed
+            # while asserting nothing.
+            self.assertGreater(len(stats["by_classification"]), 1)
+            self.assertGreater(len(stats["by_extraction_tool"]), 1)
+            self.assertGreater(len(stats["by_identity_status"]), 1)
 
             con = connect_readonly(sqlite_db)
             con.row_factory = sqlite3.Row

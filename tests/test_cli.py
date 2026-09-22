@@ -1376,8 +1376,6 @@ class AuditLibraryCliTests(unittest.TestCase):
             self.assertNotIn("AAAA1111", text)
 
 
-if __name__ == "__main__":
-    unittest.main()
 
 
 class IndexStatsCliTests(unittest.TestCase):
@@ -1450,3 +1448,7 @@ class IndexStatsCliTests(unittest.TestCase):
         _, stdout, stderr, _ = self._run(["coverage-report", "--json"])
         json.loads(stdout)
         self.assertIn("index-stats", stderr)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -22,6 +22,7 @@ from zotero_pdf_text.artifacts import (
     recover_pending_publication,
     resolve_generation_dir,
     resolve_reader_db_path,
+    resolve_reader_generation,
     stage_generation,
     validate_generation,
     write_jsonl_appending_manifest,
@@ -180,6 +181,68 @@ class StagePublishResolveTests(unittest.TestCase):
             self.assertEqual(
                 current_generation_jsonl(index_root), info.directory / GENERATION_JSONL_FILENAME
             )
+
+    def test_resolve_reader_generation_reports_the_pointer_it_read(self):
+        """The generation identity is read from current.json, never inferred or defaulted.
+
+        Nothing else covers `generation_id`/`published_at`: the CLI test that consumes them
+        patches this function out and asserts against a hand-built value, so a typo such as
+        `pointer.get("publishedAt")` would ship green and merely print "(unknown)" forever.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            index_root = Path(tmp) / "index"
+            index_root.mkdir()
+            info = _stage_from_records(index_root, [_record("A1", "Cultural consensus theory.")])
+            pointer = publish_generation(index_root, info.generation_id)
+
+            resolved = resolve_reader_generation(index_root / "zotero_text_index.sqlite")
+
+            self.assertEqual(resolved.db_path, info.directory / GENERATION_DB_FILENAME)
+            self.assertEqual(resolved.generation_id, info.generation_id)
+            self.assertEqual(resolved.published_at, pointer["published_at"])
+            # The wrapper must keep returning exactly the path half, since every existing
+            # reader still calls it.
+            self.assertEqual(
+                resolve_reader_db_path(index_root / "zotero_text_index.sqlite"), resolved.db_path
+            )
+
+    def test_resolve_reader_generation_reports_none_for_a_pointer_without_a_timestamp(self):
+        """`published_at` is optional in the pointer; absence must read as unknown, not crash."""
+        with tempfile.TemporaryDirectory() as tmp:
+            index_root = Path(tmp) / "index"
+            index_root.mkdir()
+            info = _stage_from_records(index_root, [_record("A1", "Cultural consensus theory.")])
+            publish_generation(index_root, info.generation_id)
+            pointer_path = IndexPaths(index_root).pointer_path
+            pointer = json.loads(pointer_path.read_text(encoding="utf-8"))
+            pointer.pop("published_at")
+            pointer_path.write_text(json.dumps(pointer), encoding="utf-8")
+
+            resolved = resolve_reader_generation(index_root / "zotero_text_index.sqlite")
+
+            self.assertEqual(resolved.generation_id, info.generation_id)
+            self.assertIsNone(resolved.published_at)
+
+    def test_resolve_reader_generation_raises_the_same_errors_as_the_path_wrapper(self):
+        """The refactor must not have changed which failure fires first, or with what type."""
+        with tempfile.TemporaryDirectory() as tmp:
+            index_root = Path(tmp)
+            db = index_root / "zotero_text_index.sqlite"
+
+            with self.assertRaises(ManagedIndexMissingError):
+                resolve_reader_generation(db)
+
+            (index_root / "current.json").write_text("{not json", encoding="utf-8")
+            with self.assertRaises(CurrentPointerError):
+                resolve_reader_generation(db)
+
+            (index_root / "current.json").write_text(
+                json.dumps({"schema_version": 1, "current_generation": new_generation_id()}),
+                encoding="utf-8",
+            )
+            with self.assertRaises(CurrentPointerError) as ctx:
+                resolve_reader_generation(db)
+            self.assertIn("rebuild-index", str(ctx.exception))
 
     def test_reader_requires_pointer_no_legacy_fallback(self):
         with tempfile.TemporaryDirectory() as tmp:

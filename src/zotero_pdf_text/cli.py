@@ -93,8 +93,10 @@ def _default_fts_db() -> Path:
 DEFAULT_FTS_DB = _default_fts_db()
 
 # `coverage-report` reported index row counts under a word that means "share of the library".
-# The command is kept as an alias so existing scripts and MCP client registrations keep working,
-# but it is no longer the name the help text teaches.
+# The command is kept as an alias so existing scripts and MCP client registrations keep working.
+# argparse still lists the alias in --help (both in the choices metavar and beside the command),
+# so the old spelling remains discoverable; what changes is which name the description teaches
+# and that using it prints a deprecation warning.
 DEPRECATED_INDEX_STATS_COMMAND = "coverage-report"
 
 
