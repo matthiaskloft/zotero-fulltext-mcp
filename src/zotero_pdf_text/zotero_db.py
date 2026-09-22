@@ -28,6 +28,29 @@ class AttachmentRecord:
     creator_surnames: list[str]
 
 
+def read_only_uri(db_path: Path, *, immutable: bool) -> str:
+    """Build a SQLite `file:` URI that actually applies its query parameters.
+
+    Interpolating a path into `f"file:{path}?mode=ro"` is wrong in a way that fails silently and
+    dangerously. `as_posix()` normalises separators but escapes nothing, so a `#` anywhere in the
+    path -- a perfectly legal directory name -- ends the URI and turns `?mode=ro` into part of a
+    fragment. SQLite then opens the *truncated* path with its default read-write/create mode:
+    it creates a stray file inside the user's Zotero folder, fails with `no such table`, and the
+    caller sees an ordinary query error rather than a breached read-only guarantee. A `?` in the
+    path misparses the same way.
+
+    `as_uri()` percent-encodes, so the parameters survive. It requires an absolute path, hence
+    the `resolve()`.
+
+    Note what `mode=ro` alone does *not* buy: SQLite still creates the `-shm` (and an empty
+    `-wal`) sidecar it needs to read a WAL database, inside the database's own directory. Only
+    `immutable=1` avoids that, at the cost of not seeing the WAL at all -- the trade every
+    reader here already makes, and the reason each one passes `immutable=True`.
+    """
+    uri = Path(db_path).resolve().as_uri()
+    return f"{uri}?mode=ro&immutable=1" if immutable else f"{uri}?mode=ro"
+
+
 def find_item_by_doi(doi: str, zotero_sqlite: Path) -> str | None:
     """Return the Zotero parent key for an item with the given DOI, or None if not found.
 
@@ -39,7 +62,7 @@ def find_item_by_doi(doi: str, zotero_sqlite: Path) -> str | None:
     needle = normalize_doi(doi)
     if not needle:
         return None
-    uri = f"file:{zotero_sqlite.as_posix()}?mode=ro&immutable=1"
+    uri = read_only_uri(zotero_sqlite, immutable=True)
     con = sqlite3.connect(uri, uri=True)
     con.row_factory = sqlite3.Row
     cur = con.cursor()
@@ -63,7 +86,7 @@ def find_item_by_doi(doi: str, zotero_sqlite: Path) -> str | None:
 
 def check_pdf_attachment(parent_key: str, zotero_sqlite: Path) -> dict[str, object]:
     """Return PDF attachment info for a Zotero item key, reading directly from SQLite."""
-    uri = f"file:{Path(zotero_sqlite).as_posix()}?mode=ro&immutable=1"
+    uri = read_only_uri(zotero_sqlite, immutable=True)
     con = sqlite3.connect(uri, uri=True)
     con.row_factory = sqlite3.Row
     cur = con.cursor()
@@ -133,7 +156,7 @@ def load_items_without_pdf_attachment(
     `check_pdf_attachment`/`find_item_by_doi`) so Zotero's WAL write locks are bypassed; items
     committed after the last WAL checkpoint may not appear.
     """
-    uri = f"file:{Path(zotero_sqlite).as_posix()}?mode=ro&immutable=1"
+    uri = read_only_uri(zotero_sqlite, immutable=True)
     con = sqlite3.connect(uri, uri=True)
     con.row_factory = sqlite3.Row
     cur = con.cursor()

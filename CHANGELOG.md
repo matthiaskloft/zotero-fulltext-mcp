@@ -110,6 +110,14 @@ dated section once it has been stress-tested against a large library.
 
 ### Fixed
 
+- Every read-only connection to `zotero.sqlite` now builds its `file:` URI with `as_uri()`
+  instead of interpolating the path. A `#` anywhere in the path -- a legal directory name --
+  ended the URI and turned `?mode=ro` into a fragment, so SQLite opened the *truncated* path
+  under its default read-write/create mode: a stray file appeared in the user's Zotero folder
+  and the read-only guarantee was silently dropped, surfacing only as a `no such table` error.
+  A `?` in the path misparsed the same way. This affected all three readers that open the
+  database directly -- `find_item_by_doi`, `check_pdf_attachment` and
+  `load_items_without_pdf_attachment`.
 - Figures whose caption label sits two lines above them are no longer routed to the formula
   prompt, where the splice replaced their image link with LaTeX invented from a plot. In the
   common journal layout the label (`Figure 3`) is separated from the crop by an italicised title

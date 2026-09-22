@@ -8,6 +8,7 @@ from zotero_pdf_text.zotero_db import (
     check_pdf_attachment,
     load_attachment_records,
     load_items_without_pdf_attachment,
+    read_only_uri,
 )
 
 
@@ -153,6 +154,46 @@ class LoadAttachmentRecordsTests(unittest.TestCase):
             self.assertNotIn("ATTACH03", keys)
             self.assertEqual(len(records), 1)
             self.assertEqual(records[0].title, "Active Paper")
+
+
+class ReadOnlyUriTests(unittest.TestCase):
+    """A path interpolated straight into a `file:` URI silently loses its parameters.
+
+    `as_posix()` normalises separators and escapes nothing, so a `#` in the path -- a legal
+    directory name -- ends the URI and swallows `?mode=ro` into a fragment. SQLite then opens
+    the *truncated* path under its default read-write/create mode. The damage is not a crash:
+    a stray file appears in the user's Zotero folder, the query fails with `no such table`, and
+    the caller sees a routine error while the read-only guarantee has quietly been dropped.
+    """
+
+    def test_a_fragment_character_does_not_swallow_the_mode(self):
+        uri = read_only_uri(Path("/tmp/library#1/zotero.sqlite"), immutable=False)
+        self.assertIn("%23", uri)
+        self.assertNotIn("#", uri)
+        self.assertTrue(uri.endswith("?mode=ro"))
+
+    def test_immutable_variant_keeps_both_parameters(self):
+        uri = read_only_uri(Path("/tmp/library#1/zotero.sqlite"), immutable=True)
+        self.assertNotIn("#", uri)
+        self.assertTrue(uri.endswith("?mode=ro&immutable=1"))
+
+    def test_a_reader_opens_the_real_database_not_a_truncated_path(self):
+        """End-to-end guard for the three `immutable=1` readers that build URIs."""
+        with tempfile.TemporaryDirectory() as tmp:
+            holder = Path(tmp) / "library#1"
+            holder.mkdir()
+            db = LoadAttachmentRecordsTests()._make_db(holder)
+            before = {p.name for p in Path(tmp).rglob("*")}
+
+            con = sqlite3.connect(read_only_uri(db, immutable=True), uri=True)
+            try:
+                count = con.execute("SELECT count(*) FROM itemAttachments").fetchone()[0]
+            finally:
+                con.close()
+
+            self.assertEqual(count, 3)
+            created = {p.name for p in Path(tmp).rglob("*")} - before
+            self.assertEqual(created, set(), f"reading created files: {created}")
 
 
 class LoadItemsWithoutPdfAttachmentTests(unittest.TestCase):
