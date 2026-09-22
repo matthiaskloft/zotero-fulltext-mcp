@@ -1833,6 +1833,7 @@ class SnapshotConsistencyTests(unittest.TestCase):
         from zotero_pdf_text import zotero_db
 
         self.assertNotIn("-shm", zotero_db._SNAPSHOT_SUFFIXES)
+        self.assertIn("-journal", zotero_db._SNAPSHOT_SUFFIXES)
 
         _directory, db, keeper = self._wal_database()
         keeper.execute("INSERT INTO t VALUES (7)")
@@ -1850,6 +1851,88 @@ class SnapshotConsistencyTests(unittest.TestCase):
             finally:
                 con.close()
         self.assertEqual(rows, [1, 7], "a WAL-only row was lost without the -shm")
+
+    def test_an_uncommitted_rollback_transaction_is_not_exposed(self):
+        """Rollback mode writes dirty pages into the main database *before* the commit.
+
+        The `-journal` holds the bytes that undo them, so a copy taken without it shows a
+        transaction that may never land -- and shows it as ordinary data: the file is
+        structurally intact and `PRAGMA integrity_check` returns `ok`. Carried along, the
+        journal is hot in the copy and SQLite rolls it back on open.
+
+        The audit would otherwise report attachments the user never committed, or miss ones
+        whose deletion was rolled back, with nothing anywhere saying the answer was provisional.
+        """
+        from zotero_pdf_text import zotero_db
+
+        directory = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, directory, True)
+        db = directory / "zotero.sqlite"
+        writer = sqlite3.connect(db, isolation_level=None)
+        self.addCleanup(writer.close)
+        writer.execute("PRAGMA journal_mode=DELETE")
+        writer.execute("CREATE TABLE t (a INTEGER PRIMARY KEY, b TEXT)")
+        for index in range(500):
+            writer.execute("INSERT INTO t VALUES (?, ?)", (index, "committed" + "x" * 200))
+        # A page cache too small to hold the transaction, which is what forces the spill.
+        writer.execute("PRAGMA cache_size=10")
+
+        writer.execute("BEGIN")
+        writer.execute("UPDATE t SET b = 'DIRTY' || substr(b, 10)")
+        self.assertTrue(
+            Path(f"{db}-journal").is_file(), "the fixture produced no rollback journal"
+        )
+
+        with zotero_db.snapshot_for_reading(db) as copy:
+            con = sqlite3.connect(copy)
+            try:
+                self.assertEqual(
+                    con.execute("PRAGMA integrity_check").fetchone()[0],
+                    "ok",
+                    "a corrupt copy would be a different bug; this one is silently wrong data",
+                )
+                dirty = con.execute(
+                    "SELECT count(*) FROM t WHERE b LIKE 'DIRTY%'"
+                ).fetchone()[0]
+            finally:
+                con.close()
+
+        writer.execute("ROLLBACK")
+        self.assertEqual(dirty, 0, "the snapshot exposed an uncommitted transaction")
+        self.assertEqual(
+            writer.execute("SELECT count(*) FROM t WHERE b LIKE 'DIRTY%'").fetchone()[0], 0
+        )
+
+    def test_a_leftover_journal_costs_a_wal_database_nothing(self):
+        """Carrying the `-journal` must not cost the WAL path anything.
+
+        A database that has been through a `journal_mode` change can leave a `-journal` beside
+        a `-wal`. SQLite ignores it in WAL mode, but a snapshot that silently dropped
+        WAL-resident rows here would be the previous bug wearing a new hat.
+        """
+        from zotero_pdf_text import zotero_db
+
+        directory = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, directory, True)
+        db = directory / "zotero.sqlite"
+        writer = sqlite3.connect(db, isolation_level=None)
+        self.addCleanup(writer.close)
+        writer.execute("PRAGMA journal_mode=DELETE")
+        writer.execute("CREATE TABLE t (a INTEGER PRIMARY KEY)")
+        writer.execute("INSERT INTO t VALUES (1)")
+        writer.execute("PRAGMA journal_mode=PERSIST")
+        writer.execute("INSERT INTO t VALUES (2)")
+        writer.execute("PRAGMA journal_mode=WAL")
+        writer.execute("PRAGMA wal_autocheckpoint=0")
+        writer.execute("INSERT INTO t VALUES (3)")
+
+        with zotero_db.snapshot_for_reading(db) as copy:
+            con = sqlite3.connect(copy)
+            try:
+                rows = sorted(row[0] for row in con.execute("SELECT a FROM t"))
+            finally:
+                con.close()
+        self.assertEqual(rows, [1, 2, 3])
 
     def test_an_unstable_database_still_lets_the_audit_finish(self):
         """End-to-end degradation only: the audit completes and flags the gap.

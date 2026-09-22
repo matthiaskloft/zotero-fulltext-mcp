@@ -242,11 +242,20 @@ def snapshot_database(source: Path, run_dir: Path) -> Path:
     return destination
 
 
+# The `-wal` and the `-journal` are both here because a database is in one journalling mode or
+# the other and the snapshot cannot assume which. They matter for opposite reasons: the `-wal`
+# holds committed data the main file does not have yet, while the `-journal` holds the *undo*
+# bytes for uncommitted data the main file already does have. In rollback mode SQLite spills
+# dirty pages into the main database before the commit, so a copy taken without the journal
+# exposes a transaction that may never land -- and passes `PRAGMA integrity_check`, because the
+# file is structurally fine and only the data is wrong. Carried along, the journal is hot in the
+# copy and SQLite rolls it back on open, which is exactly the committed state the audit wants.
+#
 # The `-shm` is deliberately absent. It is the WAL index: transient cache and lock state that
 # SQLite reconstructs from the `-wal` whenever the first connection opens a database, so copying
 # it preserves no content. It does, however, churn on plain *reader* activity, which would make
 # a stability check on it fail for reasons that have nothing to do with the data.
-_SNAPSHOT_SUFFIXES = ("", "-wal")
+_SNAPSHOT_SUFFIXES = ("", "-wal", "-journal")
 
 
 class SnapshotUnstableError(RuntimeError):
@@ -266,9 +275,11 @@ def snapshot_for_reading(db_path: Path, *, attempts: int = 3) -> Iterator[Path]:
     * `mode=ro&immutable=1` creates nothing, but ignores the WAL entirely. That is not merely
       staler: when the data lives in an uncheckpointed WAL, the query fails outright.
 
-    Copying sidesteps both. The copy is opened read-write, where recovery and checkpointing are
-    harmless because the file is ours and about to be deleted. The `-wal` and `-shm` are copied
-    alongside the main database so that everything Zotero has committed is still visible.
+    Copying sidesteps both. The copy is opened read-write, where recovery, rollback and
+    checkpointing are harmless because the file is ours and about to be deleted -- and are in
+    fact the point, since they are what turns the copied files into committed state. The `-wal`
+    and `-journal` are copied alongside the main database: see `_SNAPSHOT_SUFFIXES` for why both
+    are needed and why the `-shm` is not.
 
     A file-level copy of a database being written is *not* a transactionally consistent
     snapshot. The files are copied one after another, so a checkpoint landing between them can
@@ -286,10 +297,14 @@ def snapshot_for_reading(db_path: Path, *, attempts: int = 3) -> Iterator[Path]:
     The residual window is narrow and worth naming. The two hashes are taken one after another,
     so a source that changed and changed back between them would pass; and the comparison is
     against the source as it stood after the copy, which is the state the copy is required to
-    match. SQLite's backup API or `VACUUM INTO` would hold a proper read transaction and remove
-    even that, but both require opening the live database, which creates the `-shm` this whole
-    approach exists to avoid. Given a read-only audit of someone's library, a revert-in-flight
-    window is the better trade than a guaranteed write into their Zotero folder.
+    match. A rollback journal belonging to a transaction spanning several attached databases
+    names a super-journal that is not copied, and SQLite will not treat it as hot without one,
+    so such a copy would keep the uncommitted pages; Zotero does not commit across attached
+    databases, which is why this is a stated limit rather than a handled case. SQLite's backup
+    API or `VACUUM INTO` would hold a proper read transaction and remove all of it, but both
+    require opening the live database, which creates the `-shm` this whole approach exists to
+    avoid. Given a read-only audit of someone's library, a revert-in-flight window is the better
+    trade than a guaranteed write into their Zotero folder.
 
     If the database will not hold still, this raises rather than returning a copy it could not
     vouch for, and the audit reports the inventory as unavailable -- a stated gap, never a quiet
@@ -319,11 +334,18 @@ def snapshot_for_reading(db_path: Path, *, attempts: int = 3) -> Iterator[Path]:
 
 
 def _digests(db_path: Path) -> dict[str, str | None]:
-    """SHA-256 of the database and its WAL, or None where the file is absent.
+    """SHA-256 of the database and its journalling sidecars, or None where a file is absent.
 
     `None` is a meaningful value rather than a gap: a `-wal` present on one side and absent on
     the other is exactly the checkpoint that would make a copy incoherent, so it has to compare
     unequal rather than be skipped.
+
+    The `-journal` is hashed for consistency rather than because it catches anything on its own.
+    A rollback journal only matters in conjunction with dirty pages already spilled into the
+    main database, and any such spill, commit or rollback moves the main file's digest too --
+    which is the comparison that actually detects the tear. Removing the journal from this
+    comparison alone does not fail any test here, and no fixture was invented to pretend
+    otherwise.
     """
     marks: dict[str, str | None] = {}
     for suffix in _SNAPSHOT_SUFFIXES:

@@ -259,8 +259,8 @@ Search normalizes query text into at most 20 word terms. `all_terms` is the defa
 `audit-library` compares four independent views of the same library -- Zotero's own attachment
 inventory, the mapper snapshot, the filesystem, and the published index generation's JSONL --
 and reports where they disagree. It is read-only: it moves, renames and rewrites nothing, and it
-never opens the live `zotero.sqlite` at all: it copies the database and its `-wal` to a
-temporary directory and reads the copy. No connection mode achieves the same
+never opens the live `zotero.sqlite` at all: it copies the database and its journalling
+sidecars to a temporary directory and reads the copy. No connection mode achieves the same
 thing. A read-write connection runs recovery or a checkpoint on open and on close, rewriting the
 main database and deleting an outstanding WAL even when every statement issued is a `SELECT`.
 `mode=ro` forbids those writes but still creates the `-shm` that any reader of a WAL database
@@ -268,6 +268,15 @@ needs, which is a new file in the user's Zotero folder. `mode=ro&immutable=1` cr
 but cannot see the WAL at all, and fails outright when the rows live in an uncheckpointed one.
 Copying costs one file copy per audit and is the only option that is both complete and
 genuinely non-writing.
+
+Both the `-wal` and the `-journal` are copied, because a database is in one journalling mode or
+the other and the audit cannot assume which. They matter for opposite reasons. The `-wal` holds
+committed data the main file does not have yet. The `-journal` holds the bytes that *undo*
+uncommitted data the main file already does have: in rollback mode SQLite spills dirty pages
+into the main database before the commit, so a copy taken without the journal exposes a
+transaction that may never land, and does so silently — such a copy is structurally intact
+and `PRAGMA integrity_check` returns `ok`. Carried along, the journal is hot in the copy and
+SQLite rolls it back on open, which is the committed state the audit wants.
 
 The `-shm` is deliberately not copied. It is the WAL index: transient cache and lock state that
 SQLite reconstructs from the `-wal` when a database is first opened, so leaving it behind loses
@@ -282,10 +291,13 @@ can change the database's content while leaving its size identical, and timestam
 a filesystem property rather than a guarantee. A database that will not hold still is reported
 as an unavailable inventory rather than read, with the reason in `inventory_error`.
 
-The residual window is narrow and worth stating: the two digests are taken one after another, so
-a source that changed and changed back between them would pass. SQLite's backup API or
-`VACUUM INTO` would close it, but both require opening the live database, which creates the
-`-shm` this approach exists to avoid.
+The residual window is narrow and worth stating. The two digests are taken one after another, so
+a source that changed and changed back between them would pass. A rollback journal belonging to
+a transaction spanning several attached databases names a super-journal that is not copied, and
+SQLite will not treat such a journal as hot without it; Zotero does not commit across attached
+databases, so this is a stated limit rather than a handled case. SQLite's backup API or
+`VACUUM INTO` would close all of it, but both require opening the live database, which creates
+the `-shm` this approach exists to avoid.
 
 Membership comes from Zotero, not from the snapshot. The mapper walks source *files*, so an
 attachment whose PDF has been moved or deleted produces no mapping row at all; reading membership

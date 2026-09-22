@@ -47,6 +47,13 @@ dated section once it has been stress-tested against a large library.
   matching pair. Size and modification time were not sufficient to catch it: a checkpoint
   rewrites pages in place, so the database can change content while keeping its exact size.
   A database that will not settle is reported as an unavailable inventory rather than read.
+- The snapshot copies the `-journal` as well as the `-wal`. In rollback-journal mode SQLite
+  spills dirty pages into the main database before the commit, so a copy taken without the
+  journal exposed an uncommitted transaction as ordinary data — silently, since such a copy
+  is structurally intact and `PRAGMA integrity_check` returns `ok`. Carried along, the journal
+  is hot in the copy and SQLite rolls it back on open. A transaction spanning several attached
+  databases names a super-journal that is not copied and remains a stated limit; Zotero does
+  not commit across attached databases.
 - The `-shm` is no longer copied into the snapshot. SQLite documents it as transient cache and
   lock state reconstructed from the `-wal`, so copying it preserved nothing while feeding
   reader-driven churn into the stability check.
