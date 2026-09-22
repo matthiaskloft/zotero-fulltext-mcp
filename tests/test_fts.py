@@ -18,6 +18,7 @@ from zotero_pdf_text.fts import (
     build_fts_index,
     connect_readonly,
     coverage_report,
+    index_statistics,
     get_fulltext,
     get_item_context,
     search_fts,
@@ -96,10 +97,10 @@ class FtsTests(unittest.TestCase):
             self.assertEqual(old_record_context["records"][0]["citation_key"], "")
             self.assertIs(old_record_context["records"][0]["has_math"], False)
 
-            coverage = coverage_report(sqlite_db)
-            self.assertEqual(coverage["records"], 2)
-            self.assertEqual(coverage["by_extraction_tool"]["pymupdf4llm.to_markdown"], 2)
-            self.assertEqual(coverage["by_has_math"], {True: 1, False: 1})
+            stats = index_statistics(sqlite_db)
+            self.assertEqual(stats["records"], 2)
+            self.assertEqual(stats["by_extraction_tool"]["pymupdf4llm.to_markdown"], 2)
+            self.assertEqual(stats["by_has_math"], {True: 1, False: 1})
 
     def test_interrupted_rebuild_preserves_previous_database(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -1058,6 +1059,108 @@ class LocatorFreshnessTests(unittest.TestCase):
                 expected_content_sha256=hit.markdown_sha256,
             )
             self.assertEqual(passage.markdown_sha256, hit.markdown_sha256)
+
+
+class IndexStatisticsTests(unittest.TestCase):
+    """Rank 9 moved these aggregates from a `SELECT *`-and-count-in-Python loop into SQL.
+
+    The numbers are the contract; where they are computed is not. The parity test below is the
+    one that matters: it recounts the same rows in Python and requires SQL to agree, so a
+    GROUP BY that quietly drops NULLs or an aggregate that overflows a JOIN fails here rather
+    than in someone's report.
+    """
+
+    def _build(self, root: Path) -> Path:
+        jsonl = root / "index.jsonl"
+        sqlite_db = root / "index.sqlite"
+        _write_jsonl(jsonl)
+        build_fts_index(jsonl, sqlite_db, chunk_chars=40, overlap_chars=5)
+        return sqlite_db
+
+    def test_sql_aggregates_match_a_python_recount(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sqlite_db = self._build(Path(tmp))
+            stats = index_statistics(sqlite_db)
+
+            con = connect_readonly(sqlite_db)
+            con.row_factory = sqlite3.Row
+            try:
+                rows = con.execute("SELECT * FROM metadata").fetchall()
+                chunks = con.execute("SELECT COUNT(*) AS n FROM chunks").fetchone()["n"]
+            finally:
+                con.close()
+
+            self.assertEqual(stats["records"], len(rows))
+            self.assertEqual(stats["chunks"], int(chunks))
+            self.assertEqual(stats["total_chars"], sum(int(r["char_count"] or 0) for r in rows))
+            self.assertEqual(stats["total_words"], sum(int(r["word_count"] or 0) for r in rows))
+            for payload_key, column in (
+                ("by_classification", "classification"),
+                ("by_identity_status", "identity_status"),
+                ("by_extraction_tool", "extraction_tool"),
+            ):
+                expected: dict[str, int] = {}
+                for row in rows:
+                    expected[row[column] or ""] = expected.get(row[column] or "", 0) + 1
+                self.assertEqual(stats[payload_key], expected)
+            expected_math: dict[bool, int] = {}
+            for row in rows:
+                expected_math[bool(row["has_math"])] = expected_math.get(bool(row["has_math"]), 0) + 1
+            self.assertEqual(stats["by_has_math"], expected_math)
+
+    def test_has_math_keys_stay_booleans(self):
+        """`has_math` is stored as 0/1; the payload has always keyed it true/false.
+
+        A GROUP BY that reported the stored integers would change every consumer's key type
+        without changing a single count, which is the kind of break a totals check misses.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            stats = index_statistics(self._build(Path(tmp)))
+            self.assertEqual({type(key) for key in stats["by_has_math"]}, {bool})
+            self.assertEqual(stats["by_has_math"], {True: 1, False: 1})
+
+    def test_an_empty_index_reports_zeros_rather_than_none(self):
+        """SUM() over no rows is NULL in SQLite. Without COALESCE this returned null totals."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            jsonl = root / "index.jsonl"
+            sqlite_db = root / "index.sqlite"
+            jsonl.write_text("", encoding="utf-8")
+            build_fts_index(jsonl, sqlite_db, chunk_chars=40, overlap_chars=5)
+            stats = index_statistics(sqlite_db)
+            self.assertEqual(stats["records"], 0)
+            self.assertEqual(stats["chunks"], 0)
+            self.assertEqual(stats["total_chars"], 0)
+            self.assertEqual(stats["total_words"], 0)
+            self.assertEqual(stats["by_classification"], {})
+
+    def test_the_generation_is_reported_only_when_the_caller_knows_it(self):
+        """Never inferred from the database path -- see the docstring on `index_statistics`."""
+        with tempfile.TemporaryDirectory() as tmp:
+            sqlite_db = self._build(Path(tmp))
+            unlabelled = index_statistics(sqlite_db)
+            self.assertIsNone(unlabelled["generation_id"])
+            self.assertIsNone(unlabelled["published_at"])
+
+            labelled = index_statistics(
+                sqlite_db,
+                generation_id="20260101T000000Z-0123abcd",
+                published_at="2026-01-01T00:00:00+00:00",
+            )
+            self.assertEqual(labelled["generation_id"], "20260101T000000Z-0123abcd")
+            self.assertEqual(labelled["published_at"], "2026-01-01T00:00:00+00:00")
+
+    def test_the_payload_says_what_it_is_a_statistic_about(self):
+        """The name "coverage" invited a reading these numbers cannot support."""
+        with tempfile.TemporaryDirectory() as tmp:
+            stats = index_statistics(self._build(Path(tmp)))
+            self.assertEqual(stats["scope"], "indexed_snapshot")
+            self.assertIn("not what share of the Zotero library", str(stats["scope_note"]))
+
+    def test_the_deprecated_alias_still_returns_the_same_numbers(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sqlite_db = self._build(Path(tmp))
+            self.assertEqual(coverage_report(sqlite_db), index_statistics(sqlite_db))
 
 
 def _write_jsonl(path: Path) -> None:

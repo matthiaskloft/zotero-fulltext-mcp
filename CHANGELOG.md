@@ -110,6 +110,19 @@ dated section once it has been stress-tested against a large library.
 
 ### Changed
 
+- `coverage-report` is now `index-stats`, and its aggregates are computed in SQL. The old
+  command reported index row counts under a word that means "share of the library", which is a
+  question index rows cannot answer: an attachment Zotero holds but that was never converted is
+  absent from every number in the report. The payload now states its own scope
+  (`indexed_snapshot`) and names the generation and publication time it read, so two reports
+  taken across a re-publish are distinguishable. `coverage-report` remains as a deprecated alias
+  that warns on stderr, leaving `--json` output on stdout parseable.
+- Index aggregates no longer pull every metadata row into memory. The previous implementation
+  ran `SELECT *` over the whole metadata table and counted in Python to produce eight numbers,
+  so its cost scaled with the library and with the width of the text-bearing columns it never
+  read. The counts, their key types and their names are unchanged, and a parity test recounts
+  the same rows in Python to keep them that way.
+
 - `ocr-images` preserves an attachment's recorded `source_sha256` through its index upsert.
   Enrichment rewrites derived Markdown from images already extracted, so the hash recorded
   against the attachment still describes the right PDF and must survive the upsert rather than
