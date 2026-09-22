@@ -302,12 +302,15 @@ error. That is also why the list is worth keeping current -- nothing else would 
   and changed back between them would pass. SQLite's backup API or `VACUUM INTO` would hold a
   real read transaction and close this, but both require opening the live database, which
   creates the `-shm` the whole approach exists to avoid.
-- **Super-journal.** A rollback journal belonging to a transaction spanning several *attached*
-  databases names a super-journal that is not copied, and SQLite will not treat such a journal
-  as hot without it, so the copy would keep the uncommitted pages. This is assumed not to arise
-  because Zotero is not known to commit across attached databases -- an assumption this project
-  has not verified against Zotero's own source. A plugin keeping a second database beside
-  `zotero.sqlite`, as Better BibTeX does, is the case that would invalidate it.
+- **Super-journal (refused, not read).** A rollback journal can name a *super-journal*: the
+  file SQLite uses to commit a transaction spanning several attached databases. That name is an
+  absolute path stored inside the journal, and opening a database whose journal is hot makes
+  SQLite follow it and delete the file it names once no database still references it. Copying
+  the journal into a temporary directory does not confine that to the temporary directory,
+  because the path travels inside the file. The snapshot therefore inspects the copied
+  journal's trailer and refuses to open a copy whose journal names one, reporting the inventory
+  unavailable instead. The cost is that a genuine multi-database transaction becomes a gap
+  rather than a reading; the alternative was a deletion anywhere the process can reach.
 - **Untested configurations.** `PRAGMA locking_mode=EXCLUSIVE`, a rollback journal under
   `journal_mode=TRUNCATE` or `PERSIST` part-way through a transaction, and a `zotero_sqlite`
   that is a symlink or sits on a network mount are all plausible, and none of them is covered
@@ -319,9 +322,13 @@ error. That is also why the list is worth keeping current -- nothing else would 
   instance, can fail all three attempts; the audit then reports the inventory unavailable. That
   is a stated gap rather than a wrong answer, but it does leave the audit unusable mid-sync.
 
-What none of this risks is the library itself. The audit writes nothing, and its report drives
-no action automatically, so a bad read costs bad evidence -- a phantom attachment, a false
-`orphaned_index` -- and never data.
+Within those limits the audit does not touch the library: it writes nothing, and its report
+drives no action automatically, so a bad read costs bad evidence -- a phantom attachment, a
+false `orphaned_index` -- rather than data. That claim is worth only as much as the refusals
+above. An earlier revision of this section made it unconditionally, while the snapshot was
+still handing super-journal-bearing journals to SQLite; that combination could delete a file
+outside the snapshot directory entirely. The guarantee holds because that path is closed, not
+because copying a database is inherently harmless.
 
 ### Why the copy is the only inventory path
 

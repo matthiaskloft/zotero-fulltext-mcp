@@ -258,6 +258,56 @@ def snapshot_database(source: Path, run_dir: Path) -> Path:
 _SNAPSHOT_SUFFIXES = ("", "-wal", "-journal")
 
 
+# A rollback journal is not inert data. Its trailer can name a *super-journal*: the file SQLite
+# uses to commit a transaction spanning several attached databases. When SQLite opens a database
+# whose journal is hot it follows that name, and `pager_delmaster` deletes the file it points to
+# once no database still references it. The name is an absolute path written by whoever wrote the
+# journal, so it can point anywhere this process can reach, and copying the journal into a
+# private staging directory does not confine the effect there -- the path travels inside the
+# file. Reproduced against SQLite 3.45.1 through `snapshot_for_reading`: the copy read back
+# correctly and a file outside the staging directory was deleted.
+# https://sqlite.org/bugs/forumpost/0903b836fdae69784a53ebb31a697a6cf025b2c4f0232054fd992c74ee4aaefc
+#
+# So such a journal is refused rather than handed to SQLite. The layout is the one SQLite's own
+# `readMasterJournal` reads, at the very end of the file:
+#
+#     [name][4-byte name length][4-byte checksum][8-byte journal magic]
+_JOURNAL_MAGIC = b"\xd9\xd5\x05\xf9\x20\xa1\x63\xd7"
+
+
+def _names_super_journal(journal: Path) -> bool:
+    """Whether this rollback journal carries a super-journal pathname.
+
+    The checksum is deliberately not validated and the name is never resolved. This is a
+    refusal, not a parse: refusing a journal SQLite would have ignored costs one unavailable
+    inventory, while accepting one it would have followed costs a deleted file. An unreadable
+    journal is refused for the same reason -- not being able to look is not the same as
+    having looked and found nothing.
+    """
+    try:
+        size = journal.stat().st_size
+    except FileNotFoundError:
+        # No journal at all, which is the ordinary case for a WAL database.
+        return False
+    except OSError:
+        return True
+    if size < 16:
+        return False
+    try:
+        with open(journal, "rb") as handle:
+            handle.seek(size - 16)
+            trailer = handle.read(16)
+    except OSError:
+        return True
+    if len(trailer) != 16 or trailer[8:] != _JOURNAL_MAGIC:
+        return False
+    return int.from_bytes(trailer[:4], "big") != 0
+
+
+class SnapshotUnsafeError(RuntimeError):
+    """The database's journal would make SQLite touch files outside the snapshot."""
+
+
 class SnapshotUnstableError(RuntimeError):
     """The database would not hold still long enough to be copied coherently."""
 
@@ -297,15 +347,15 @@ def snapshot_for_reading(db_path: Path, *, attempts: int = 3) -> Iterator[Path]:
     The residual window is narrow and worth naming. The two hashes are taken one after another,
     so a source that changed and changed back between them would pass; and the comparison is
     against the source as it stood after the copy, which is the state the copy is required to
-    match. A rollback journal belonging to a transaction spanning several attached databases
-    names a super-journal that is not copied, and SQLite will not treat it as hot without one,
-    so such a copy would keep the uncommitted pages. Zotero is not known to commit across
-    attached databases, but this project has not verified that against Zotero's source, so it
-    is recorded as a stated limit rather than treated as a handled case. SQLite's backup API or
-    `VACUUM INTO` would hold a proper read transaction and remove all of it, but both require
-    opening the live database, which creates the `-shm` this whole approach exists to avoid.
-    Given a read-only audit of someone's library, a revert-in-flight window is the better trade
-    than a guaranteed write into their Zotero folder.
+    match. SQLite's backup API or `VACUUM INTO` would hold a proper read transaction and remove
+    it, but both require opening the live database, which creates the `-shm` this whole
+    approach exists to avoid. Given a read-only audit of someone's library, a revert-in-flight
+    window is the better trade than a guaranteed write into their Zotero folder.
+
+    A journal naming a super-journal is refused outright rather than read: see
+    `_names_super_journal` for why giving one to SQLite is not a stale-data problem but a
+    file-deletion one. A transaction spanning attached databases is therefore reported as an
+    unavailable inventory rather than read as though it had committed.
 
     The Library Audit section of `docs/data-dictionary.md` carries the full list, including the
     configurations no test here covers and why this path is kept over the alternatives.
@@ -322,6 +372,17 @@ def snapshot_for_reading(db_path: Path, *, attempts: int = 3) -> Iterator[Path]:
                 sidecar = Path(f"{db_path}{suffix}")
                 if sidecar.is_file():
                     shutil.copy2(sidecar, Path(f"{destination}{suffix}"))
+            # Before anything opens the copy. The journal in staging is the one SQLite would
+            # act on, so it is the one that has to be cleared -- checking the source instead
+            # would leave a window between the look and the copy.
+            if _names_super_journal(Path(f"{destination}-journal")):
+                raise SnapshotUnsafeError(
+                    f"{db_path} has a rollback journal that names a super-journal. Opening a "
+                    "copy of it would make SQLite follow that name and delete the file it "
+                    "points to, which need not be inside the snapshot, so no copy was taken. "
+                    "Close Zotero and re-run; if it persists, that journal is not one an "
+                    "ordinary Zotero session wrote."
+                )
             if _digests(destination) == _digests(db_path):
                 yield destination
                 return

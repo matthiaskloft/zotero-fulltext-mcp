@@ -1,6 +1,7 @@
 import json
 import shutil
 import sqlite3
+import struct
 import tempfile
 import unittest
 from pathlib import Path
@@ -1960,6 +1961,176 @@ class SnapshotConsistencyTests(unittest.TestCase):
             finally:
                 con.close()
         self.assertEqual(rows, [1, 2, 3])
+
+    # SQLite's rollback-journal magic, and the trailer layout `readMasterJournal` expects:
+    # [name][4-byte name length][4-byte checksum][8-byte magic] at the end of the file.
+    _JOURNAL_MAGIC = bytes([0xD9, 0xD5, 0x05, 0xF9, 0x20, 0xA1, 0x63, 0xD7])
+
+    def _database_with_crafted_journal(self, directory: Path, names: Path) -> Path:
+        """A valid database beside a journal whose trailer names `names`.
+
+        Written by hand because SQLite only produces one during the commit of a transaction
+        spanning attached databases, which lasts microseconds and cannot be caught reliably.
+        The bytes are the same either way, and the bytes are what SQLite acts on.
+        """
+        db = directory / "zotero.sqlite"
+        con = sqlite3.connect(db)
+        try:
+            con.execute("PRAGMA journal_mode=DELETE")
+            con.execute("CREATE TABLE t (a INTEGER PRIMARY KEY)")
+            con.executemany("INSERT INTO t VALUES (?)", [(i,) for i in range(50)])
+            con.commit()
+            page_size = con.execute("PRAGMA page_size").fetchone()[0]
+            page_count = con.execute("PRAGMA page_count").fetchone()[0]
+        finally:
+            con.close()
+
+        header = (
+            self._JOURNAL_MAGIC
+            + struct.pack(">I", 0)           # nRec: no page records to replay
+            + struct.pack(">I", 0)           # cksumInit
+            + struct.pack(">I", page_count)  # database size, in pages
+            + struct.pack(">I", 512)         # sector size
+            + struct.pack(">I", page_size)
+        ).ljust(512, b"\x00")
+        name = str(names).encode("utf-8")
+        trailer = (
+            name
+            + struct.pack(">I", len(name))
+            + struct.pack(">I", sum(name) & 0xFFFFFFFF)
+            + self._JOURNAL_MAGIC
+        )
+        Path(f"{db}-journal").write_bytes(header + trailer)
+        return db
+
+    def test_a_journal_naming_a_super_journal_cannot_delete_a_file_outside_the_snapshot(self):
+        """A rollback journal is not inert data; it can name a file for SQLite to delete.
+
+        The trailer can carry a super-journal pathname -- an absolute path -- and SQLite
+        follows it when the journal is hot, deleting what it names once no database still
+        references it. Copying the journal into staging does not confine that to staging,
+        because the path travels inside the file. The copy reads back correctly and reports no
+        error while the deletion happens, so nothing about the query itself would reveal it.
+        """
+        from zotero_pdf_text import zotero_db
+
+        directory = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, directory, True)
+        outside = directory / "outside"
+        outside.mkdir()
+
+        # Two sentinels. The first proves this SQLite build actually performs the deletion;
+        # the second is the one the guard has to save. Without the first, the test would pass
+        # vacuously wherever SQLite declines to follow the name -- green for the reason the
+        # code is wrong elsewhere.
+        proof = outside / "PROOF"
+        proof.write_bytes(b"\x00")
+        staged = directory / "staged"
+        staged.mkdir()
+        db = self._database_with_crafted_journal(staged, proof)
+        bare = directory / "bare"
+        bare.mkdir()
+        shutil.copy2(db, bare / "zotero.sqlite")
+        shutil.copy2(f"{db}-journal", bare / "zotero.sqlite-journal")
+        con = sqlite3.connect(bare / "zotero.sqlite")
+        try:
+            con.execute("SELECT count(*) FROM t").fetchone()
+        except sqlite3.Error:
+            pass
+        finally:
+            con.close()
+        if proof.exists():
+            self.skipTest(
+                "this SQLite build did not follow the super-journal name, so the deletion "
+                "could not be staged here"
+            )
+
+        guarded = outside / "GUARDED"
+        guarded.write_bytes(b"\x00")
+        live = directory / "live"
+        live.mkdir()
+        target = self._database_with_crafted_journal(live, guarded)
+
+        with self.assertRaises(zotero_db.SnapshotUnsafeError):
+            with zotero_db.snapshot_for_reading(target) as copy:
+                sqlite3.connect(copy).close()
+
+        self.assertTrue(
+            guarded.exists(),
+            "the snapshot let SQLite delete a file outside the staging directory",
+        )
+
+    def test_an_ordinary_rollback_journal_is_still_accepted(self):
+        """The refusal must not swallow the journals the snapshot was taught to carry.
+
+        A single-database transaction writes no super-journal trailer, so the guard has
+        nothing to match on. Were it to match anyway, every rollback-mode database would
+        report an unavailable inventory and the previous fix would be silently undone.
+        """
+        from zotero_pdf_text import zotero_db
+
+        directory = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, directory, True)
+        db = directory / "zotero.sqlite"
+        writer = sqlite3.connect(db, isolation_level=None)
+        self.addCleanup(writer.close)
+        writer.execute("PRAGMA journal_mode=DELETE")
+        writer.execute("CREATE TABLE t (a INTEGER PRIMARY KEY, b TEXT)")
+        for index in range(200):
+            writer.execute("INSERT INTO t VALUES (?, ?)", (index, "committed"))
+        writer.execute("PRAGMA cache_size=10")
+        writer.execute("BEGIN")
+        writer.execute("UPDATE t SET b = 'DIRTY'")
+        self.assertTrue(Path(f"{db}-journal").is_file(), "the fixture produced no journal")
+        self.assertFalse(zotero_db._names_super_journal(Path(f"{db}-journal")))
+
+        with zotero_db.snapshot_for_reading(db) as copy:
+            con = sqlite3.connect(copy)
+            try:
+                dirty = con.execute("SELECT count(*) FROM t WHERE b = 'DIRTY'").fetchone()[0]
+            finally:
+                con.close()
+        writer.execute("ROLLBACK")
+        self.assertEqual(dirty, 0)
+
+    def test_a_journal_that_cannot_be_read_is_refused_rather_than_assumed_safe(self):
+        """Not being able to look is not the same as having looked and found nothing.
+
+        An absent journal is the ordinary case for a WAL database and must stay cheap; a
+        journal that exists but will not open is the one that has to fail closed.
+        """
+        from zotero_pdf_text import zotero_db
+
+        directory = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, directory, True)
+        journal = directory / "zotero.sqlite-journal"
+
+        self.assertFalse(zotero_db._names_super_journal(journal), "absent is not suspicious")
+        journal.write_bytes(b"x" * 64)
+        self.assertFalse(zotero_db._names_super_journal(journal), "no trailer, no refusal")
+        with patch("builtins.open", side_effect=OSError("unreadable")):
+            self.assertTrue(zotero_db._names_super_journal(journal))
+
+    def test_a_trailer_that_names_nothing_is_not_a_super_journal_reference(self):
+        """Precision, not just sensitivity: a zero-length name means no super-journal.
+
+        SQLite's own `readMasterJournal` reads a zero length as "none" and goes on to open the
+        database. Refusing on the magic alone would make this snapshot stricter than SQLite and
+        report an unavailable inventory for a database SQLite would have read without ever
+        reaching outside the snapshot.
+        """
+        from zotero_pdf_text import zotero_db
+
+        directory = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, directory, True)
+        journal = directory / "zotero.sqlite-journal"
+        journal.write_bytes(
+            b"page data" * 8
+            + struct.pack(">I", 0)
+            + struct.pack(">I", 0)
+            + self._JOURNAL_MAGIC
+        )
+        self.assertFalse(zotero_db._names_super_journal(journal))
 
     def test_an_unstable_database_still_lets_the_audit_finish(self):
         """End-to-end degradation only: the audit completes and flags the gap.

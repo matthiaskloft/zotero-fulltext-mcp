@@ -52,6 +52,15 @@ dated section once it has been stress-tested against a large library.
   the I/O cost per audit, and the unavailability of the audit while the database is under
   sustained write load. `docs/data-dictionary.md` also records why the file copy is kept as the
   only inventory path over Zotero's local HTTP API, which is disabled by default.
+- The snapshot refuses a rollback journal that names a super-journal instead of letting SQLite
+  open it. A journal's trailer can carry a super-journal pathname -- an absolute path -- and
+  SQLite follows it when the journal is hot, deleting the file it names once no database still
+  references it. Copying the journal into a temporary directory did not confine that to the
+  temporary directory, because the path travels inside the file: a copy read through
+  `snapshot_for_reading` deleted a file outside the snapshot directory, while returning correct
+  rows and reporting no error. Such a snapshot is now refused and the inventory reported
+  unavailable, which also means a transaction spanning attached databases is a stated gap
+  rather than a reading.
 - The snapshot copies the `-journal` as well as the `-wal`. In rollback-journal mode SQLite
   spills dirty pages into the main database before the commit, so a copy taken without the
   journal exposed an uncommitted transaction as ordinary data — silently, since such a copy
