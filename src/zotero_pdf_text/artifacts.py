@@ -35,6 +35,7 @@ from pathlib import Path
 from typing import Callable
 
 from ._atomic import replace_with_retry
+from .zotero_db import read_only_uri
 from .fts import DEFAULT_CHUNK_CHARS, DEFAULT_OVERLAP_CHARS, FtsBuildSummary, build_fts_index
 from .indexer import TextIndexRecord, _converted_rows, _record_from_manifest_row
 
@@ -313,7 +314,7 @@ def validate_generation(index_root: Path, generation_id: str) -> dict[str, objec
                 "the generation is corrupt or was modified after staging."
             )
     db_path = generation_dir / GENERATION_DB_FILENAME
-    con = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+    con = sqlite3.connect(read_only_uri(db_path, immutable=False), uri=True)
     try:
         records = con.execute("SELECT COUNT(*) FROM metadata").fetchone()[0]
         chunks = con.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]

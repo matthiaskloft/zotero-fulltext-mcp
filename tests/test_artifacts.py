@@ -70,6 +70,25 @@ def _stage_from_records(index_root: Path, records: list[dict[str, object]], comm
     return stage_generation(index_root, write_jsonl_from_existing(source), command=command)
 
 
+class GenerationPathTests(unittest.TestCase):
+    """`validate_generation` opens the staged database, so it carries the same defect.
+
+    `index_root` comes from the configured `output_root`. A `#` there truncated the URI, and
+    validation reported the generation unreadable -- a corruption message for a path problem.
+    """
+
+    def test_a_fragment_in_the_index_root_still_validates_a_good_generation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            index_root = root / "output#1"
+            index_root.mkdir()
+            staged = _stage_from_records(index_root, [_record("ATTACH1", "some text here")])
+
+            manifest = validate_generation(index_root, staged.generation_id)
+
+            self.assertEqual(manifest.get("records"), 1)
+
+
 def _write_conversion_manifest(root: Path, rows: list[dict[str, str]]) -> Path:
     manifest = root / "manifest.csv"
     fieldnames = [

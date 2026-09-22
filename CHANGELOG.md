@@ -25,8 +25,14 @@ dated section once it has been stress-tested against a large library.
   under its default read-write/create mode: a stray file appeared in the user's Zotero folder
   and the read-only guarantee was silently dropped, surfacing only as a `no such table` error.
   A `?` in the path misparsed the same way. This affected the three pre-existing
-  `mode=ro&immutable=1` readers as well — `find_item_by_doi`, `check_pdf_attachment` and
-  `load_items_without_pdf_attachment` — not just the audit's new one.
+  `mode=ro&immutable=1` readers — `find_item_by_doi`, `check_pdf_attachment` and
+  `load_items_without_pdf_attachment` — as well as the audit's new one. Three further readers
+  built the same URI by hand and now go through the helper too: `ingestion.load_existing_items`,
+  which `ingest-candidates` points at the live Zotero database, and `fts.connect_readonly` and
+  `artifacts.validate_generation`, which open the project's own index beneath the configured
+  `output_root` and were exposed to a `#` there by the same mechanism. `load_existing_items`
+  also closes its handle on every path now rather than leaking it to garbage collection on a
+  query error — on Windows that handle is a lock on the user's live database.
 - `audit-library` reads a temporary copy of `zotero.sqlite` instead of opening the live file.
   `mode=ro` forbids writes but still creates the `-shm` sidecar any reader of a WAL database
   needs — a new file inside the user's Zotero folder, which the command promises not to

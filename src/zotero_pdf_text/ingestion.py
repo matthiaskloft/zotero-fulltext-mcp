@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import contextlib
 import json
 import sqlite3
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from .identity import extract_year, normalize_doi, normalize_text
+from .zotero_db import read_only_uri
 
 
 @dataclass(frozen=True)
@@ -124,21 +126,27 @@ def dedupe_candidates(
 def load_existing_items(db_path: Path) -> list[ExistingItem]:
     if not db_path.exists():
         raise FileNotFoundError(db_path)
-    con = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
-    con.row_factory = sqlite3.Row
-    cur = con.cursor()
-    rows = cur.execute(
-        """
-        SELECT i.itemID, i.key
-        FROM items i
-        JOIN itemTypesCombined it ON it.itemTypeID = i.itemTypeID
-        WHERE i.itemID NOT IN (SELECT itemID FROM deletedItems)
-          AND it.typeName != 'attachment'
-        """
-    ).fetchall()
-    item_ids = [int(row["itemID"]) for row in rows]
-    fields = _load_fields(cur, item_ids)
-    con.close()
+    # `read_only_uri` rather than an interpolated path: a `#` or `?` in the configured Zotero
+    # directory would otherwise truncate the URI, and SQLite would create a stray file there
+    # under its default read-write mode while this read reported `no such table: items`.
+    # Closed on every path too -- a query that raises here would otherwise hold a handle on the
+    # user's live Zotero database until garbage collection, which on Windows is a lock.
+    with contextlib.closing(
+        sqlite3.connect(read_only_uri(db_path, immutable=False), uri=True)
+    ) as con:
+        con.row_factory = sqlite3.Row
+        cur = con.cursor()
+        rows = cur.execute(
+            """
+            SELECT i.itemID, i.key
+            FROM items i
+            JOIN itemTypesCombined it ON it.itemTypeID = i.itemTypeID
+            WHERE i.itemID NOT IN (SELECT itemID FROM deletedItems)
+              AND it.typeName != 'attachment'
+            """
+        ).fetchall()
+        item_ids = [int(row["itemID"]) for row in rows]
+        fields = _load_fields(cur, item_ids)
 
     result: list[ExistingItem] = []
     for row in rows:

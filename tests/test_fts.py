@@ -16,11 +16,41 @@ from zotero_pdf_text.fts import (
     DEFAULT_CONTEXT_RECORD_LIMIT,
     _chunk_text,
     build_fts_index,
+    connect_readonly,
     coverage_report,
     get_fulltext,
     get_item_context,
     search_fts,
 )
+
+
+class ConnectReadonlyPathTests(unittest.TestCase):
+    """The index lives under `output_root`, which the user configures and can contain a `#`.
+
+    Same defect as the Zotero readers, a different database: the truncated path is opened
+    read-write/create, so the search path reports a missing schema and leaves a stray file.
+    """
+
+    def test_a_fragment_in_the_index_path_opens_the_real_database(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            holder = root / "output#1"
+            holder.mkdir()
+            jsonl = holder / "index.jsonl"
+            sqlite_db = holder / "index.sqlite"
+            _write_jsonl(jsonl)
+            build_fts_index(jsonl, sqlite_db, chunk_chars=40, overlap_chars=5)
+            before = {path.name for path in root.rglob("*")}
+
+            con = connect_readonly(sqlite_db)
+            try:
+                chunks = con.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
+            finally:
+                con.close()
+
+            self.assertGreater(chunks, 0)
+            created = {path.name for path in root.rglob("*")} - before
+            self.assertEqual(created, set(), f"a read created files: {created}")
 
 
 class FtsTests(unittest.TestCase):
