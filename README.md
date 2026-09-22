@@ -185,9 +185,9 @@ Check whether the index still matches the library:
 & $python -m zotero_pdf_text audit-library --config .\config.json --mapping-report .\converted_text\runs\<run-id>\mapping_report.jsonl
 ```
 
-`audit-library` is read-only — it moves, renames and rewrites nothing, and it opens your live
-`zotero.sqlite` with `mode=ro` so that not even SQLite's own recovery or checkpointing can alter
-it. It compares a `dry-run`
+`audit-library` is read-only — it moves, renames and rewrites nothing, and it never opens your
+live `zotero.sqlite`: it reads a temporary copy, so not even SQLite's own recovery, checkpointing
+or sidecar creation can touch your Zotero folder. It compares a `dry-run`
 snapshot against the files on disk and the published index, and reports attachments that are
 unindexed, whose converted text or source PDF has changed underneath the index, or whose index
 rows are duplicated or orphaned. Add `--full` to hash source PDFs as well. An attachment can hold

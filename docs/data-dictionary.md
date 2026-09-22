@@ -259,11 +259,15 @@ Search normalizes query text into at most 20 word terms. `all_terms` is the defa
 `audit-library` compares four independent views of the same library -- Zotero's own attachment
 inventory, the mapper snapshot, the filesystem, and the published index generation's JSONL --
 and reports where they disagree. It is read-only: it moves, renames and rewrites nothing, and it
-opens the live `zotero.sqlite` with `mode=ro`. That last part is not a formality — a read-write
-connection lets SQLite run recovery or a checkpoint on open and on close, rewriting the main
-database and deleting an outstanding WAL even when every statement issued is a `SELECT`. The mode
-is `mode=ro` rather than the `mode=ro&immutable=1` used by this codebase's other readers, because
-`immutable=1` would also hide everything Zotero has committed since its last checkpoint.
+never opens the live `zotero.sqlite` at all: it copies the database and its `-wal`/`-shm`
+sidecars to a temporary directory and reads the copy. No connection mode achieves the same
+thing. A read-write connection runs recovery or a checkpoint on open and on close, rewriting the
+main database and deleting an outstanding WAL even when every statement issued is a `SELECT`.
+`mode=ro` forbids those writes but still creates the `-shm` that any reader of a WAL database
+needs, which is a new file in the user's Zotero folder. `mode=ro&immutable=1` creates nothing
+but cannot see the WAL at all, and fails outright when the rows live in an uncheckpointed one.
+Copying costs one file copy per audit and is the only option that is both complete and
+genuinely non-writing.
 
 Membership comes from Zotero, not from the snapshot. The mapper walks source *files*, so an
 attachment whose PDF has been moved or deleted produces no mapping row at all; reading membership

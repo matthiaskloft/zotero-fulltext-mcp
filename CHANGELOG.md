@@ -26,6 +26,15 @@ dated section once it has been stress-tested against a large library.
   and the read-only guarantee was silently dropped, surfacing only as a `no such table` error.
   This affected the three pre-existing `mode=ro&immutable=1` readers as well, not just the
   audit's new one.
+- `audit-library` reads a temporary copy of `zotero.sqlite` instead of opening the live file.
+  `mode=ro` forbids writes but still creates the `-shm` sidecar any reader of a WAL database
+  needs — a new file inside the user's Zotero folder, which the command promises not to
+  produce. `immutable=1` creates nothing but cannot see the WAL, and fails outright when the
+  rows live in an uncheckpointed one. Copying is the only option that is both complete and
+  genuinely non-writing.
+- `audit-library` reads `current.json` once and resolves the generation JSONL from the id it
+  already holds. Reading the pointer a second time let a concurrent publish pair one
+  generation's id with another's rows, and the report serialised that false provenance as fact.
 - `audit-library` now audits an attachment at the path Zotero currently gives it, rather than
   the one the snapshot and index remember. After a relink those disagree, and auditing the old
   path missed the source change when the old file was still present and reported a spurious
@@ -48,11 +57,10 @@ dated section once it has been stress-tested against a large library.
   snapshot at all. When the inventory cannot be read the audit falls back to snapshot
   membership and reports `inventory_available: false`, rather than silently answering a
   different question. It moves, renames and rewrites nothing, and it reads the live
-  `zotero.sqlite` through a `mode=ro` connection so that SQLite cannot checkpoint or recover
-  into it either — a read-write handle rewrites the main database and discards an outstanding
-  WAL on close even when every statement issued is a `SELECT`. `mode=ro` rather than the
-  `immutable=1` used elsewhere in the codebase, so that attachments Zotero committed since its
-  last checkpoint stay visible. Statuses are a **set**, not a bucket: an attachment can hold
+  `zotero.sqlite` by copying it to a temporary directory rather than opening the live file, so
+  that SQLite cannot checkpoint, recover or create a sidecar inside the user's Zotero folder.
+  The `-wal` is copied alongside it, so attachments Zotero committed since its last checkpoint
+  stay visible. Statuses are a **set**, not a bucket: an attachment can hold
   several at once, so the reported counts overlap and do not sum to the attachment total,
   and the output says so. Two counts sit outside the status vocabulary to keep it honest --
   `ineligible_items` explains why correctly-quarantined attachments report nothing at all, and

@@ -177,20 +177,23 @@ class ReadOnlyUriTests(unittest.TestCase):
         self.assertNotIn("#", uri)
         self.assertTrue(uri.endswith("?mode=ro&immutable=1"))
 
-    def test_records_load_from_a_path_containing_a_fragment_character(self):
+    def test_a_reader_opens_the_real_database_not_a_truncated_path(self):
+        """End-to-end guard for the three `immutable=1` readers that still build URIs."""
         with tempfile.TemporaryDirectory() as tmp:
             holder = Path(tmp) / "library#1"
             holder.mkdir()
             db = LoadAttachmentRecordsTests()._make_db(holder)
             before = {p.name for p in Path(tmp).rglob("*")}
 
-            records = load_attachment_records(db, read_only=True)
+            con = sqlite3.connect(read_only_uri(db, immutable=True), uri=True)
+            try:
+                count = con.execute("SELECT count(*) FROM itemAttachments").fetchone()[0]
+            finally:
+                con.close()
 
-            self.assertEqual([r.attachment_key for r in records], ["ATTACH01"])
+            self.assertEqual(count, 3)
             created = {p.name for p in Path(tmp).rglob("*")} - before
-            # SQLite creates -wal/-shm for any reader of a WAL database; a *truncated* path is
-            # the failure this guards against.
-            self.assertNotIn("library", created, f"opened a truncated path: {created}")
+            self.assertEqual(created, set(), f"reading created files: {created}")
 
 
 class LoadItemsWithoutPdfAttachmentTests(unittest.TestCase):

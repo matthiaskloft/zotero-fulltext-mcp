@@ -37,13 +37,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .artifacts import (
+    GENERATION_JSONL_FILENAME,
     ManagedIndexMissingError,
-    current_generation_jsonl,
     read_current_pointer,
+    resolve_generation_dir,
 )
 from .config import ProjectConfig
 from .identity import resolve_attachment_paths
-from .zotero_db import AttachmentRecord, load_attachment_records
+from .zotero_db import AttachmentRecord, load_attachment_records, snapshot_for_reading
 
 # --------------------------------------------------------------------------------------
 # Status vocabulary
@@ -732,11 +733,13 @@ def load_attachment_inventory(zotero_sqlite: Path) -> dict[str, AttachmentRecord
     # missing database is "inventory unavailable", not something to hand to sqlite.
     if not Path(zotero_sqlite).is_file():
         raise LibraryAuditError(f"No Zotero database at {zotero_sqlite}")
-    # read_only is not optional here. This is the *live* database, and a read-write connection
-    # lets SQLite checkpoint or recover on open and on close -- rewriting the main file and
-    # discarding the WAL -- even when every statement issued is a SELECT. The audit promises to
-    # touch nothing; that promise has to live in the connection, not in the queries.
-    records = load_attachment_records(zotero_sqlite, read_only=True)
+    # Read a copy, never the original. `mode=ro` is not enough: it forbids writes to the
+    # database but still creates the `-shm` any reader of a WAL database needs, which is a new
+    # file inside the user's Zotero folder. `immutable=1` creates nothing but cannot see the
+    # WAL, and fails outright when the rows live in an uncheckpointed one. Copying is the only
+    # option that is both complete and genuinely non-writing.
+    with snapshot_for_reading(Path(zotero_sqlite)) as snapshot:
+        records = load_attachment_records(snapshot)
     inventory: dict[str, AttachmentRecord] = {}
     for record in records:
         key = (record.attachment_key or "").strip()
@@ -776,10 +779,18 @@ def load_index_records(index_root: Path) -> tuple[str | None, dict[str, list[dic
     generation_id = str(pointer.get("current_generation") or "") or None
 
     rows: dict[str, list[dict[str, object]]] = {}
-    try:
-        jsonl_path = current_generation_jsonl(index_root)
-    except ManagedIndexMissingError:
-        jsonl_path = None
+    # Resolve the JSONL from the generation this function already read, rather than calling
+    # `current_generation_jsonl`, which would read `current.json` a second time. A publish
+    # landing between the two reads would pair generation A's id with generation B's rows and
+    # the audit would report that false provenance as fact. Generation directories are
+    # immutable once published, so one pointer read plus a direct resolve cannot mix identities
+    # and contents -- the report is then merely a moment old, which is what a snapshot is.
+    jsonl_path: Path | None = None
+    if generation_id:
+        try:
+            jsonl_path = resolve_generation_dir(index_root, generation_id) / GENERATION_JSONL_FILENAME
+        except ManagedIndexMissingError:
+            jsonl_path = None
     if jsonl_path and jsonl_path.is_file():
         for row in _read_jsonl(jsonl_path):
             key = str(row.get("zotero_attachment_key") or "").strip()

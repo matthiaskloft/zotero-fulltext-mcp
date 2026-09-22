@@ -1,5 +1,6 @@
 import json
 import shutil
+import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
@@ -459,6 +460,69 @@ class SnapshotLoadingTests(unittest.TestCase):
             generation_id, rows = load_index_records(Path(tmp) / "index")
             self.assertIsNone(generation_id)
             self.assertEqual(rows, {})
+
+    def test_a_publish_between_reads_cannot_mix_generation_and_rows(self):
+        """The reported generation id and the reported rows must come from one pointer read.
+
+        Reading `current.json` twice -- once for the id, once to locate the JSONL -- lets a
+        publish landing in between pair generation A's id with generation B's contents, and the
+        audit then serialises that false provenance as fact. Generation directories are
+        immutable once published, so resolving the JSONL from the id already in hand makes the
+        pair self-consistent: the report is a moment old, which is what a snapshot is.
+        """
+        from zotero_pdf_text import artifacts
+        from zotero_pdf_text.artifacts import (
+            publish_generation,
+            stage_generation,
+            validate_generation,
+            write_jsonl_from_existing,
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            index_root = Path(tmp) / "index"
+            index_root.mkdir(parents=True)
+
+            def publish(key: str) -> str:
+                source = index_root / f"{key}.jsonl"
+                source.write_text(
+                    json.dumps(_index_record(key)) + "\n", encoding="utf-8"
+                )
+                info = stage_generation(
+                    index_root, write_jsonl_from_existing(source), command="test"
+                )
+                validate_generation(index_root, info.generation_id)
+                publish_generation(index_root, info.generation_id)
+                return info.generation_id
+
+            first = publish("AAAA1111")
+            second = publish("BBBB2222")
+            # Point back at the first generation, then swap to the second the moment the
+            # pointer is read -- the exact interleaving a concurrent publish produces.
+            artifacts.publish_generation(index_root, first)
+
+            real_read = artifacts.read_current_pointer
+            calls = []
+
+            def racing_read(root):
+                pointer = real_read(root)
+                calls.append(pointer)
+                if len(calls) == 1:
+                    artifacts.publish_generation(index_root, second)
+                return pointer
+
+            from unittest.mock import patch
+
+            with patch.object(artifacts, "read_current_pointer", racing_read), patch(
+                "zotero_pdf_text.library.read_current_pointer", racing_read
+            ):
+                generation_id, rows = load_index_records(index_root)
+
+            self.assertEqual(generation_id, first)
+            self.assertEqual(
+                sorted(rows),
+                ["AAAA1111"],
+                "rows came from a different generation than the reported id",
+            )
 
 
 def _attachment_record(attachment_key: str, **overrides: object):
@@ -1041,16 +1105,25 @@ class ZoteroInventoryTests(unittest.TestCase):
 
 
 class InventoryReadOnlyTests(unittest.TestCase):
-    """Reading the live inventory must not rewrite the database or discard its WAL.
+    """Reading the live inventory must leave its directory byte-for-byte identical.
 
-    `mode=ro` is not a formality here. A read-write connection lets SQLite checkpoint or recover
-    on open and on close, so a connection that only ever issues SELECTs can still change the
-    main database file and delete the -wal sidecar -- in a user's live Zotero library.
+    Not "must not corrupt it" and not "must not rewrite the main file" -- *nothing changes and
+    nothing appears*. That is what `audit-library` promises in four documents, and neither URI
+    mode delivers it: a read-write connection recovers and checkpoints, `mode=ro` still creates
+    the `-shm` every reader of a WAL database needs, and `immutable=1` creates nothing but
+    cannot see the WAL at all. The audit therefore reads a copy.
 
-    What read-only does *not* promise is that no file appears: SQLite creates an empty -wal and
-    a -shm for any reader of a WAL database, exactly as Zotero itself does. The claim under test
-    is that the database and its WAL contents are never modified, not that nothing is created.
+    The assertions compare the whole directory tree, names and bytes, because the earlier
+    version of this test compared only the database and its WAL and so had nothing to say about
+    a sidecar appearing beside them.
     """
+
+    def _tree(self, directory: Path) -> dict[str, bytes]:
+        return {
+            str(p.relative_to(directory)): p.read_bytes()
+            for p in sorted(directory.rglob("*"))
+            if p.is_file()
+        }
 
     def _database_with_orphaned_wal(self, destination: Path) -> Path:
         """A database whose -wal is on disk with no connection owning it.
@@ -1088,22 +1161,66 @@ class InventoryReadOnlyTests(unittest.TestCase):
         from zotero_pdf_text.library import load_attachment_inventory
 
         with tempfile.TemporaryDirectory() as tmp:
-            db = self._database_with_orphaned_wal(Path(tmp) / "zotero.sqlite")
+            directory = Path(tmp)
+            db = self._database_with_orphaned_wal(directory / "zotero.sqlite")
             wal = db.with_name(db.name + "-wal")
             self.assertTrue(wal.exists(), "fixture failed to leave an orphaned WAL")
-            before = db.read_bytes()
-            wal_before = wal.read_bytes()
+            before = self._tree(directory)
 
             # The schema is not Zotero's, so the query fails. That is deliberate: recovery
-            # happens on open and on close, so the failure path must be as read-only as the
+            # happens on open and on close, so the failure path must be as untouched as the
             # success path. A read-write connection rewrites the database here even though
             # nothing but a failing SELECT was ever issued.
             with self.assertRaises(Exception):
                 load_attachment_inventory(db)
 
-            self.assertEqual(db.read_bytes(), before, "main database was rewritten")
-            self.assertTrue(wal.exists(), "the WAL was discarded")
-            self.assertEqual(wal.read_bytes(), wal_before, "the WAL was rewritten")
+            self.assertEqual(self._tree(directory), before)
+
+    def test_reading_a_wal_database_creates_no_sidecar(self):
+        """`mode=ro` passes every "was it modified" check and still fails this one.
+
+        A WAL database with no `-shm` is the ordinary state of a Zotero library that is not
+        currently running. Any reader needs an `-shm` to see the WAL, and a read-only connection
+        creates it -- a new file in the user's Zotero folder, which the audit promises not to
+        produce. Only reading a copy avoids it.
+        """
+        from zotero_pdf_text.library import load_attachment_inventory
+
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            db = self._database_with_orphaned_wal(directory / "zotero.sqlite")
+            shm = db.with_name(db.name + "-shm")
+            shm.unlink(missing_ok=True)
+            before = self._tree(directory)
+            self.assertNotIn("zotero.sqlite-shm", before)
+
+            with self.assertRaises(Exception):
+                load_attachment_inventory(db)
+
+            after = self._tree(directory)
+            self.assertEqual(
+                set(after) - set(before), set(), "reading the inventory created a sidecar"
+            )
+            self.assertEqual(after, before)
+
+    def test_rows_committed_to_the_wal_are_still_visible(self):
+        """The reason the audit copies rather than using `immutable=1`, which cannot see them."""
+        from zotero_pdf_text.zotero_db import snapshot_for_reading
+
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            db = self._database_with_orphaned_wal(directory / "zotero.sqlite")
+            before = self._tree(directory)
+
+            with snapshot_for_reading(db) as copy:
+                con = sqlite3.connect(copy)
+                try:
+                    rows = con.execute("SELECT count(*) FROM t").fetchone()[0]
+                finally:
+                    con.close()
+
+            self.assertEqual(rows, 1, "the uncheckpointed WAL row was not visible")
+            self.assertEqual(self._tree(directory), before)
 
     def test_a_missing_database_is_never_created(self):
         from zotero_pdf_text.library import load_attachment_inventory

@@ -4,6 +4,8 @@ import re
 import shutil
 import contextlib
 import sqlite3
+import tempfile
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -42,6 +44,11 @@ def read_only_uri(db_path: Path, *, immutable: bool) -> str:
 
     `as_uri()` percent-encodes, so the parameters survive. It requires an absolute path, hence
     the `resolve()`.
+
+    Note what `mode=ro` alone does *not* buy: SQLite still creates the `-shm` (and an empty
+    `-wal`) sidecar it needs to read a WAL database, inside the database's own directory. Only
+    `immutable=1` avoids that, at the cost of not seeing the WAL at all. Callers that must
+    neither write nor miss recent commits want `snapshot_for_reading` instead.
     """
     uri = Path(db_path).resolve().as_uri()
     return f"{uri}?mode=ro&immutable=1" if immutable else f"{uri}?mode=ro"
@@ -234,30 +241,51 @@ def snapshot_database(source: Path, run_dir: Path) -> Path:
     return destination
 
 
-def load_attachment_records(db_path: Path, *, read_only: bool = False) -> list[AttachmentRecord]:
+@contextlib.contextmanager
+def snapshot_for_reading(db_path: Path) -> Iterator[Path]:
+    """Yield a throwaway copy of a SQLite database, leaving the original's directory untouched.
+
+    The only way to read a live Zotero database without writing anything near it. Neither URI
+    mode is sufficient on its own:
+
+    * `mode=ro` forbids writes to the database but still creates the `-shm` (and an empty
+      `-wal`) that any reader of a WAL database needs -- new files inside the user's Zotero
+      folder, which `audit-library` promises not to produce.
+    * `mode=ro&immutable=1` creates nothing, but ignores the WAL entirely. That is not merely
+      staler: when the data lives in an uncheckpointed WAL, the query fails outright.
+
+    Copying sidesteps both. The copy is opened read-write, where recovery and checkpointing are
+    harmless because the file is ours and about to be deleted. The `-wal` and `-shm` are copied
+    alongside the main database so that everything Zotero has committed is still visible.
+
+    A concurrent write can tear the copy. SQLite's WAL frames are checksummed, so a torn tail is
+    truncated rather than misread, and a copy too damaged to query raises -- which the audit
+    already handles as "inventory unavailable". A wrong answer is not among the outcomes.
+    """
+    staging = Path(tempfile.mkdtemp(prefix="zotero-snapshot-"))
+    try:
+        destination = staging / "zotero.sqlite"
+        for suffix in ("", "-wal", "-shm"):
+            sidecar = Path(f"{db_path}{suffix}")
+            if sidecar.is_file():
+                shutil.copy2(sidecar, Path(f"{destination}{suffix}"))
+        yield destination
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
+
+
+def load_attachment_records(db_path: Path) -> list[AttachmentRecord]:
     """Load every PDF attachment Zotero knows about.
 
-    `read_only` is required whenever `db_path` is a *live* Zotero database rather than a
-    snapshot copy. A read-write connection is not made harmless by issuing only SELECTs:
-    SQLite may checkpoint or recover on open and on close, rewriting the main database and
-    removing the WAL. For an audit that promises to touch nothing, that is a real violation.
-
-    The mode is `mode=ro` alone, deliberately without the `immutable=1` that the other readers
-    in this module use. `immutable=1` tells SQLite to ignore the WAL entirely, which trades away
-    visibility of everything Zotero has committed since the last checkpoint; `mode=ro` keeps
-    that visibility and still forbids writes.
-
-    It stays opt-in because `mapper` passes a snapshot copied without its `-wal` sidecar, and
-    such a copy can need the recovery that a read-only connection refuses to perform.
+    Opens read-write, so callers must pass a copy rather than a user's live database --
+    `mapper` passes its own snapshot, and the audit uses `snapshot_for_reading`. A read-write
+    connection is not made harmless by issuing only SELECTs: SQLite checkpoints and recovers on
+    open and on close, rewriting the main database and discarding the WAL.
     """
-    if read_only:
-        connection = sqlite3.connect(read_only_uri(db_path, immutable=False), uri=True)
-    else:
-        connection = sqlite3.connect(db_path)
     # Closed on every path, not just the happy one. A query that raises here -- an empty file, a
     # schema this build does not know -- previously leaked the handle until garbage collection,
     # which on Windows keeps a lock on someone's live Zotero database.
-    with contextlib.closing(connection) as con:
+    with contextlib.closing(sqlite3.connect(db_path)) as con:
         return _load_attachment_records(con)
 
 
