@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import re
 import shutil
 import contextlib
@@ -241,7 +242,11 @@ def snapshot_database(source: Path, run_dir: Path) -> Path:
     return destination
 
 
-_SNAPSHOT_SUFFIXES = ("", "-wal", "-shm")
+# The `-shm` is deliberately absent. It is the WAL index: transient cache and lock state that
+# SQLite reconstructs from the `-wal` whenever the first connection opens a database, so copying
+# it preserves no content. It does, however, churn on plain *reader* activity, which would make
+# a stability check on it fail for reasons that have nothing to do with the data.
+_SNAPSHOT_SUFFIXES = ("", "-wal")
 
 
 class SnapshotUnstableError(RuntimeError):
@@ -271,56 +276,66 @@ def snapshot_for_reading(db_path: Path, *, attempts: int = 3) -> Iterator[Path]:
     checksums do not detect that -- they validate each frame, not that the frames apply to the
     base they were copied beside. The result can be wrong rather than merely unreadable.
 
-    So the copy is bracketed: the size and modification time of all three files are recorded
-    before and after, and a copy taken across any observed change is discarded and retried. If
-    the database will not hold still, this raises and the audit reports the inventory as
-    unavailable -- a stated gap, never a quiet guess.
+    So the copy is verified rather than assumed: after copying, the copy's bytes are hashed and
+    compared against the source's, and any mismatch discards the copy and retries. Size and
+    modification time are not enough. A checkpoint rewrites existing pages in place, so the main
+    database can change content while keeping its exact size, and timestamp granularity is a
+    filesystem property rather than a guarantee. Equal digests for both files establish what is
+    actually needed: that the copy holds the same bytes the source held.
 
-    This detects rather than prevents, and the detection has a floor: a write that lands within
-    one filesystem timestamp tick without changing any file's size is invisible to it. The
-    alternative -- SQLite's backup API or `VACUUM INTO`, which hold a proper read transaction --
-    requires opening the live database, and that creates the `-shm` this whole approach exists
-    to avoid. Given a read-only audit, a narrow undetected window is the better trade than a
-    guaranteed write into someone's Zotero folder.
+    The residual window is narrow and worth naming. The two hashes are taken one after another,
+    so a source that changed and changed back between them would pass; and the comparison is
+    against the source as it stood after the copy, which is the state the copy is required to
+    match. SQLite's backup API or `VACUUM INTO` would hold a proper read transaction and remove
+    even that, but both require opening the live database, which creates the `-shm` this whole
+    approach exists to avoid. Given a read-only audit of someone's library, a revert-in-flight
+    window is the better trade than a guaranteed write into their Zotero folder.
+
+    If the database will not hold still, this raises rather than returning a copy it could not
+    vouch for, and the audit reports the inventory as unavailable -- a stated gap, never a quiet
+    guess.
     """
     staging = Path(tempfile.mkdtemp(prefix="zotero-snapshot-"))
     try:
         destination = staging / "zotero.sqlite"
-        for attempt in range(1, attempts + 1):
-            before = _file_fingerprints(db_path)
+        for _attempt in range(attempts):
             for suffix in _SNAPSHOT_SUFFIXES:
                 sidecar = Path(f"{db_path}{suffix}")
                 if sidecar.is_file():
                     shutil.copy2(sidecar, Path(f"{destination}{suffix}"))
-            if _file_fingerprints(db_path) == before:
+            if _digests(destination) == _digests(db_path):
                 yield destination
                 return
-            # Something wrote to the database while it was being copied, so the copy may pair a
-            # main file and a WAL that never belonged together. Discard it rather than query it.
+            # The copy does not hold the bytes the source holds, so it may pair a main database
+            # and a WAL that never belonged together. Discard it rather than query it.
             for suffix in _SNAPSHOT_SUFFIXES:
                 Path(f"{destination}{suffix}").unlink(missing_ok=True)
         raise SnapshotUnstableError(
-            f"{db_path} kept changing while it was being copied ({attempts} attempts). "
-            "Close Zotero, or re-run when it is idle."
+            f"{db_path} kept changing while it was being copied ({attempts} attempts), so no "
+            "copy could be verified against it. Close Zotero, or re-run when it is idle."
         )
     finally:
         shutil.rmtree(staging, ignore_errors=True)
 
 
-def _file_fingerprints(db_path: Path) -> dict[str, tuple[int, int] | None]:
-    """Size and modification time of the database and its sidecars, or None where absent.
+def _digests(db_path: Path) -> dict[str, str | None]:
+    """SHA-256 of the database and its WAL, or None where the file is absent.
 
-    `None` is a meaningful value, not a gap: a `-wal` that appears or disappears during the
-    copy is exactly the checkpoint that would make the copy incoherent.
+    `None` is a meaningful value rather than a gap: a `-wal` present on one side and absent on
+    the other is exactly the checkpoint that would make a copy incoherent, so it has to compare
+    unequal rather than be skipped.
     """
-    marks: dict[str, tuple[int, int] | None] = {}
+    marks: dict[str, str | None] = {}
     for suffix in _SNAPSHOT_SUFFIXES:
+        digest = hashlib.sha256()
         try:
-            stat = Path(f"{db_path}{suffix}").stat()
+            with open(f"{db_path}{suffix}", "rb") as handle:
+                for block in iter(lambda: handle.read(1024 * 1024), b""):
+                    digest.update(block)
         except OSError:
             marks[suffix] = None
         else:
-            marks[suffix] = (stat.st_size, stat.st_mtime_ns)
+            marks[suffix] = digest.hexdigest()
     return marks
 
 

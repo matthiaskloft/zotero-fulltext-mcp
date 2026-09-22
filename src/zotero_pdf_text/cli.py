@@ -1482,10 +1482,16 @@ def _print_library_audit(
     print("")
     if not audit.inventory_available:
         print(
-            "Zotero's attachment inventory could not be read, so membership fell back to the "
-            "mapping snapshot. An attachment whose PDF is missing never reaches that snapshot, "
-            "so missing_source and orphaned_index are understated."
+            "Zotero's attachment inventory could not be read, so no membership question could "
+            "be answered: every attachment is reported membership_unchecked, and current, "
+            "unindexed and orphaned_index are withheld rather than guessed. File-level "
+            "findings below are unaffected."
         )
+        if audit.inventory_error:
+            # The distinction that decides what the user does next: a database that would not
+            # hold still is fixed by closing Zotero and re-running, a permission or schema
+            # failure is not.
+            print(f"  Reason: {audit.inventory_error}")
     if audit.ineligible_items:
         print(
             f"{audit.ineligible_items} attachment(s) are unverified or unmapped and are correctly "

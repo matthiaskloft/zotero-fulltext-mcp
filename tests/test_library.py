@@ -56,8 +56,16 @@ def _config(root: Path) -> ProjectConfig:
 
 
 def _observation(key: str = "AAAA1111", **overrides: object) -> ItemObservation:
-    """An indexed, eligible, healthy item. Tests override only the fields they are about."""
+    """An indexed, eligible, healthy item. Tests override only the fields they are about.
+
+    `in_zotero` and `inventory_available` are part of "healthy" rather than left at their
+    dataclass defaults. Omitting them described an item whose membership nothing had checked,
+    and every test that meant "a normal library" was quietly asserting against an audit run
+    with Zotero unreadable -- a state in which no membership conclusion is sound.
+    """
     base: dict[str, object] = {
+        "in_zotero": True,
+        "inventory_available": True,
         "in_mapping": True,
         "classification": "mapped_verified",
         "identity_status": "verified",
@@ -70,6 +78,7 @@ def _observation(key: str = "AAAA1111", **overrides: object) -> ItemObservation:
         "source_sha256_current": "src-hash",
         "indexed_source_sha256": "src-hash",
         "mapping_metadata": {"title": "A title", "doi": "10.1000/x", "citation_key": "k"},
+        "zotero_metadata": {"title": "A title", "doi": "10.1000/x", "citation_key": "k"},
         "indexed_metadata": {"title": "A title", "doi": "10.1000/x", "citation_key": "k"},
     }
     base.update(overrides)
@@ -186,9 +195,11 @@ class ClassifyItemTests(unittest.TestCase):
     def test_orphaned_index_row(self):
         self.assertStatuses(
             _observation(
+                in_zotero=False,
                 in_mapping=False,
                 inventory_available=True,
                 mapping_metadata={},
+                zotero_metadata={},
                 indexed_metadata={},
             ),
             {STATUS_ORPHANED_INDEX},
@@ -203,9 +214,11 @@ class ClassifyItemTests(unittest.TestCase):
         """
         statuses = classify_item(
             _observation(
+                in_zotero=False,
                 in_mapping=False,
                 inventory_available=False,
                 mapping_metadata={},
+                zotero_metadata={},
                 indexed_metadata={},
             )
         )
@@ -313,16 +326,41 @@ class ClassifyItemTests(unittest.TestCase):
         )
 
     def test_metadata_changed_fires_in_both_directions(self):
-        enriched = _observation(
-            mapping_metadata={"title": "T", "doi": "10.1000/x", "citation_key": "k"},
-            indexed_metadata={"title": "T", "doi": "", "citation_key": "k"},
+        """Adding a DOI and removing one are both drift, from either comparison source.
+
+        Run against Zotero's live record and against the snapshot's fallback, because the two
+        take different branches and only one of them is exercised on a healthy library.
+        """
+        with_doi = {"title": "T", "doi": "10.1000/x", "citation_key": "k"}
+        without_doi = {"title": "T", "doi": "", "citation_key": "k"}
+        sources: tuple[tuple[str, dict[str, object]], ...] = (
+            ("live zotero record", {"in_zotero": True, "inventory_available": True}),
+            (
+                "snapshot fallback",
+                {"in_zotero": False, "inventory_available": False, "zotero_metadata": {}},
+            ),
         )
-        removed = _observation(
-            mapping_metadata={"title": "T", "doi": "", "citation_key": "k"},
-            indexed_metadata={"title": "T", "doi": "10.1000/x", "citation_key": "k"},
-        )
-        self.assertStatuses(enriched, {STATUS_METADATA_CHANGED})
-        self.assertStatuses(removed, {STATUS_METADATA_CHANGED})
+        for label, membership in sources:
+            for direction, current, indexed in (
+                ("doi added", with_doi, without_doi),
+                ("doi removed", without_doi, with_doi),
+            ):
+                with self.subTest(source=label, change=direction):
+                    statuses = classify_item(
+                        _observation(
+                            mapping_metadata=current,
+                            **{
+                                **membership,
+                                **(
+                                    {"zotero_metadata": current}
+                                    if membership["in_zotero"]
+                                    else {}
+                                ),
+                            },
+                            indexed_metadata=indexed,
+                        )
+                    )
+                    self.assertIn(STATUS_METADATA_CHANGED, statuses)
 
     def test_metadata_comparison_ignores_creators_and_year(self):
         """Routine Zotero tidying must not light up the library as drifted."""
@@ -391,9 +429,11 @@ class ClassifyItemTests(unittest.TestCase):
         unverified = classify_item(_observation(identity_status="unverified"))
         orphaned = classify_item(
             _observation(
+                in_zotero=False,
                 in_mapping=False,
                 inventory_available=True,
                 mapping_metadata={},
+                zotero_metadata={},
                 indexed_metadata={},
             )
         )
@@ -608,6 +648,75 @@ def _index_record(attachment_key: str, **overrides: object) -> dict[str, object]
     return record
 
 
+def _write_zotero_inventory(config: ProjectConfig, attachments: dict[str, str]) -> Path:
+    """Write a minimal Zotero-schema database listing `attachments` (key -> source path).
+
+    End-to-end audit tests need this. Without a database at `config.zotero_sqlite` the audit
+    cannot read membership, so every item comes back `membership_unchecked` and an assertion
+    about `current` or `unindexed` is really an assertion about an audit that answered nothing.
+
+    Title, DOI and citation key are written to match `_index_record`'s defaults, because the
+    audit compares Zotero's live record against the indexed one. A fixture that disagreed with
+    itself would report `metadata_changed` on a library that has not drifted, and a test
+    written around that would be asserting the fixture rather than the rule.
+    """
+    db = config.zotero_sqlite
+    db.parent.mkdir(parents=True, exist_ok=True)
+    con = sqlite3.connect(db)
+    try:
+        con.executescript(
+            """
+            CREATE TABLE items (itemID INTEGER PRIMARY KEY, key TEXT, itemTypeID INTEGER);
+            CREATE TABLE itemAttachments (
+                itemID INTEGER PRIMARY KEY,
+                parentItemID INTEGER,
+                linkMode INTEGER,
+                contentType TEXT,
+                path TEXT
+            );
+            CREATE TABLE deletedItems (itemID INTEGER PRIMARY KEY);
+            CREATE TABLE itemTypesCombined (itemTypeID INTEGER PRIMARY KEY, typeName TEXT);
+            CREATE TABLE fieldsCombined (fieldID INTEGER PRIMARY KEY, fieldName TEXT);
+            CREATE TABLE itemData (itemID INTEGER, fieldID INTEGER, valueID INTEGER);
+            CREATE TABLE itemDataValues (valueID INTEGER PRIMARY KEY, value TEXT);
+            CREATE TABLE itemCreators (itemID INTEGER, creatorID INTEGER, orderIndex INTEGER);
+            CREATE TABLE creators (
+                creatorID INTEGER PRIMARY KEY, firstName TEXT, lastName TEXT
+            );
+            INSERT INTO itemTypesCombined VALUES (1, 'journalArticle');
+            INSERT INTO fieldsCombined VALUES (1, 'title');
+            INSERT INTO fieldsCombined VALUES (2, 'DOI');
+            INSERT INTO fieldsCombined VALUES (3, 'citationKey');
+            """
+        )
+        item_id = 0
+        value_id = 0
+        for key, source_path in attachments.items():
+            item_id += 1
+            parent_id = item_id
+            con.execute("INSERT INTO items VALUES (?, ?, 1)", (parent_id, f"P{key}"))
+            for field_id, value in (
+                (1, "A title"),
+                (2, "10.1000/x"),
+                (3, f"key-{key}"),
+            ):
+                value_id += 1
+                con.execute("INSERT INTO itemDataValues VALUES (?, ?)", (value_id, value))
+                con.execute(
+                    "INSERT INTO itemData VALUES (?, ?, ?)", (parent_id, field_id, value_id)
+                )
+            item_id += 1
+            con.execute("INSERT INTO items VALUES (?, ?, 2)", (item_id, key))
+            con.execute(
+                "INSERT INTO itemAttachments VALUES (?, ?, 2, 'application/pdf', ?)",
+                (item_id, parent_id, source_path),
+            )
+        con.commit()
+    finally:
+        con.close()
+    return db
+
+
 class AuditEndToEndTests(unittest.TestCase):
     def _publish(self, index_root: Path, records: list[dict[str, object]]) -> str:
         index_root.mkdir(parents=True, exist_ok=True)
@@ -674,8 +783,20 @@ class AuditEndToEndTests(unittest.TestCase):
                 ],
             )
 
+            # Zotero lists the two live attachments and not CCCC3333, which is what makes
+            # that row genuinely orphaned rather than merely unverifiable.
+            _write_zotero_inventory(
+                config,
+                {
+                    "AAAA1111": str(source_pdf),
+                    "BBBB2222": str(root / "BBBB2222.pdf"),
+                },
+            )
+
             audit = audit_library(config, snapshot, index_root=index_root)
 
+            self.assertTrue(audit.inventory_available)
+            self.assertIsNone(audit.inventory_error)
             self.assertEqual(audit.total_items, 3)
             self.assertEqual([item.attachment_key for item in audit.items],
                              ["AAAA1111", "BBBB2222", "CCCC3333"])
@@ -684,9 +805,7 @@ class AuditEndToEndTests(unittest.TestCase):
                 {
                     "AAAA1111": {STATUS_CURRENT},
                     "BBBB2222": {STATUS_UNINDEXED, STATUS_MISSING_SOURCE},
-                    # No Zotero database under this config, so membership is undecidable
-                    # and the row is `membership_unchecked` rather than `orphaned_index`.
-                    "CCCC3333": {STATUS_MEMBERSHIP_UNCHECKED, STATUS_MISSING_SOURCE,
+                    "CCCC3333": {STATUS_ORPHANED_INDEX, STATUS_MISSING_SOURCE,
                                  STATUS_MISSING_MARKDOWN},
                 },
             )
@@ -729,7 +848,9 @@ class AuditEndToEndTests(unittest.TestCase):
                 root / "runs" / "r1",
                 [{"zotero_attachment_key": "AAAA1111", "source_path": str(pdf), **ELIGIBLE}],
             )
-            audit = audit_library(_config(root), snapshot, index_root=root / "index")
+            config = _config(root)
+            _write_zotero_inventory(config, {"AAAA1111": str(pdf)})
+            audit = audit_library(config, snapshot, index_root=root / "index")
             self.assertIsNone(audit.generation_id)
             self.assertEqual(audit.status_counts[STATUS_UNINDEXED], 1)
 
@@ -1121,18 +1242,74 @@ class ZoteroInventoryTests(unittest.TestCase):
         self.assertIn(STATUS_ORPHANED_INDEX, statuses)
         self.assertNotIn(STATUS_CURRENT, statuses)
 
-    def test_mapping_membership_still_counts_when_the_inventory_is_unavailable(self):
-        """Without a readable inventory `in_zotero=False` is a shrug, not a denial."""
-        observation = _observation(
-            in_zotero=False,
-            inventory_available=False,
-            in_mapping=True,
-            mapping_metadata={},
-            indexed_metadata={},
+    def test_an_unreadable_inventory_withholds_every_membership_conclusion(self):
+        """A mapping row proves historical membership, which is not the question being asked.
+
+        The snapshot says the attachment existed at the last dry-run. Whether the user has
+        deleted it since is exactly what an unreadable inventory leaves unknown, so neither
+        `current` (it may be gone) nor `orphaned_index` (it may be fine) may be asserted.
+        """
+        for label, extra in (
+            ("indexed", {"in_index": True}),
+            ("not indexed", {"in_index": False}),
+        ):
+            with self.subTest(case=label):
+                observation = _observation(
+                    in_zotero=False,
+                    inventory_available=False,
+                    in_mapping=True,
+                    mapping_metadata={},
+                    indexed_metadata={},
+                    **extra,
+                )
+                statuses = classify_item(observation)
+                self.assertIn(STATUS_MEMBERSHIP_UNCHECKED, statuses)
+                self.assertNotIn(STATUS_ORPHANED_INDEX, statuses)
+                self.assertNotIn(STATUS_CURRENT, statuses)
+                self.assertNotIn(STATUS_UNINDEXED, statuses)
+
+    def test_file_level_findings_survive_an_unreadable_inventory(self):
+        """Withholding membership must not silence facts about files on disk.
+
+        A changed PDF is a changed PDF whether or not Zotero still lists the attachment. If
+        these went quiet too, an audit run while Zotero was busy would look clean, and
+        `membership_unchecked` on every row would read as the only thing wrong.
+
+        `source_unchecked` is in here deliberately. An earlier version of this test asserted
+        only on its two neighbours, and a mutation silencing `source_unchecked` under unknown
+        membership survived -- the same near-miss scoping that has cost this branch several
+        rounds.
+        """
+        unreadable = {"in_zotero": False, "inventory_available": False, "in_mapping": True}
+        drifted = classify_item(
+            _observation(
+                **unreadable,
+                source_sha256_current="moved-on",
+                indexed_source_sha256="as-converted",
+                markdown_sha256_current="edited",
+                indexed_markdown_sha256="as-published",
+            )
         )
-        statuses = classify_item(observation)
-        self.assertNotIn(STATUS_ORPHANED_INDEX, statuses)
-        self.assertIn(STATUS_CURRENT, statuses)
+        self.assertIn(STATUS_SOURCE_CHANGED, drifted)
+        self.assertIn(STATUS_STALE_MARKDOWN, drifted)
+        self.assertIn(STATUS_MEMBERSHIP_UNCHECKED, drifted)
+
+        # Nothing hashed this PDF, so the index's provenance is unverified rather than fine.
+        unchecked = classify_item(
+            _observation(
+                **unreadable,
+                indexed_source_sha256="as-converted",
+                source_sha256_current=None,
+                source_sha256_mapping="",
+            )
+        )
+        self.assertIn(STATUS_SOURCE_UNCHECKED, unchecked)
+        self.assertIn(STATUS_MEMBERSHIP_UNCHECKED, unchecked)
+
+        missing = classify_item(
+            _observation(**unreadable, source_exists=False, source_sha256_current=None)
+        )
+        self.assertIn(STATUS_MISSING_SOURCE, missing)
 
     def test_positive_zotero_membership_survives_a_missing_availability_flag(self):
         """`in_zotero=True` is evidence in its own right; only the fallback is conditional."""
@@ -1505,11 +1682,15 @@ class LiveMetadataTests(unittest.TestCase):
 class SnapshotConsistencyTests(unittest.TestCase):
     """A file-level copy of a database being written is not a consistent snapshot.
 
-    The three files are copied one after another, so a checkpoint landing between them leaves a
+    The files are copied one after another, so a *checkpoint* landing between them leaves a
     main database and a `-wal` that were never a matching pair. SQLite's per-frame checksums do
     not catch it: they validate each frame, not that the frames apply to the base beside them.
-    The failure mode is a wrong answer, not an unreadable file, so it has to be detected rather
-    than relied upon to crash.
+    The failure mode is a wrong answer rather than an unreadable file, so it has to be detected
+    rather than relied upon to crash.
+
+    A checkpoint, specifically -- not any write. An ordinary commit only appends to the `-wal`
+    and leaves the main database untouched, so a copy spanning one is still a matching pair.
+    Retrying on every write would be both slower and less honest about what is wrong.
     """
 
     def _wal_database(self) -> tuple[Path, Path, object]:
@@ -1531,54 +1712,144 @@ class SnapshotConsistencyTests(unittest.TestCase):
         keeper.commit()
         return directory, db, keeper
 
-    def test_a_write_during_the_copy_is_detected_and_retried(self):
+    def _interfere_after_main_copy(self, keeper, action, *, limit: int | None = None):
+        """Patch `copy2` so `action(keeper)` runs once the main database has been copied.
+
+        That is the dangerous instant: the copy holds the old main file and is about to take a
+        `-wal` that may no longer belong to it.
+        """
+        from zotero_pdf_text import zotero_db
+
+        real_copy = zotero_db.shutil.copy2
+        calls = {"n": 0}
+
+        def copy_then_interfere(src, dst, *args, **kwargs):
+            result = real_copy(src, dst, *args, **kwargs)
+            if str(src).endswith("zotero.sqlite") and (limit is None or calls["n"] < limit):
+                calls["n"] += 1
+                action(keeper)
+            return result
+
+        return patch.object(zotero_db.shutil, "copy2", copy_then_interfere), calls
+
+    @staticmethod
+    def _checkpoint(keeper):
+        keeper.execute("INSERT INTO t VALUES (2)")
+        keeper.commit()
+        keeper.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+
+    def test_a_checkpoint_during_the_copy_is_detected_and_retried(self):
+        """The copy no longer matches the source, so it is thrown away rather than queried."""
         from zotero_pdf_text import zotero_db
 
         _directory, db, keeper = self._wal_database()
-        real_copy = zotero_db.shutil.copy2
-        writes = {"count": 0}
+        patcher, calls = self._interfere_after_main_copy(keeper, self._checkpoint, limit=1)
 
-        def copy_then_write(src, dst, *args, **kwargs):
-            result = real_copy(src, dst, *args, **kwargs)
-            # A concurrent Zotero write, landing between two file copies. Only the first
-            # attempt is disturbed, so the retry must succeed.
-            if writes["count"] == 0 and str(src).endswith("zotero.sqlite"):
-                writes["count"] += 1
-                keeper.execute("INSERT INTO t VALUES (2)")
-                keeper.commit()
-            return result
-
-        with patch.object(zotero_db.shutil, "copy2", copy_then_write):
+        with patcher:
             with zotero_db.snapshot_for_reading(db) as copy:
                 con = sqlite3.connect(copy)
                 try:
-                    rows = con.execute("SELECT count(*) FROM t").fetchone()[0]
+                    rows = sorted(r[0] for r in con.execute("SELECT a FROM t"))
                 finally:
                     con.close()
 
-        self.assertEqual(writes["count"], 1, "the fixture did not disturb the first copy")
-        self.assertEqual(rows, 2, "the retry did not pick up the completed write")
+        self.assertEqual(calls["n"], 1, "the fixture did not checkpoint during the first copy")
+        self.assertEqual(rows, [1, 2], "the retry did not pick up the checkpointed state")
+
+    def test_a_plain_commit_between_copies_does_not_force_a_retry(self):
+        """An append-only WAL write leaves the pair coherent, so the first copy stands.
+
+        Guards the precision of the check, not just its sensitivity. A stability test that
+        fired on any write at all would make the audit retry three times and give up on a
+        perfectly ordinary library that happens to be in use.
+        """
+        from zotero_pdf_text import zotero_db
+
+        _directory, db, keeper = self._wal_database()
+
+        def commit_only(k):
+            k.execute("INSERT INTO t VALUES (2)")
+            k.commit()
+
+        patcher, calls = self._interfere_after_main_copy(keeper, commit_only)
+
+        with patcher:
+            with zotero_db.snapshot_for_reading(db) as copy:
+                con = sqlite3.connect(copy)
+                try:
+                    rows = sorted(r[0] for r in con.execute("SELECT a FROM t"))
+                finally:
+                    con.close()
+
+        self.assertEqual(calls["n"], 1, "exactly one copy round should have happened")
+        self.assertEqual(rows, [1, 2])
 
     def test_a_database_that_never_settles_is_reported_unavailable(self):
         """Never a quiet guess: an undecidable inventory is a stated gap."""
         from zotero_pdf_text import zotero_db
 
         _directory, db, keeper = self._wal_database()
-        real_copy = zotero_db.shutil.copy2
-        counter = {"n": 0}
+        patcher, _calls = self._interfere_after_main_copy(keeper, self._checkpoint)
 
-        def always_write(src, dst, *args, **kwargs):
-            result = real_copy(src, dst, *args, **kwargs)
-            if str(src).endswith("zotero.sqlite"):
-                counter["n"] += 1
-                keeper.execute("INSERT INTO t VALUES (?)", (counter["n"] + 1,))
-                keeper.commit()
-            return result
-
-        with patch.object(zotero_db.shutil, "copy2", always_write):
-            with self.assertRaises(zotero_db.SnapshotUnstableError):
+        with patcher:
+            with self.assertRaises(zotero_db.SnapshotUnstableError) as ctx:
                 with zotero_db.snapshot_for_reading(db, attempts=2):
                     pass
+        self.assertIn("Close Zotero", str(ctx.exception))
+
+    def test_size_and_timestamp_alone_would_miss_a_checkpoint(self):
+        """Why the check compares content: a checkpoint can leave the file size unchanged.
+
+        An in-place `UPDATE` rewrites existing pages, so the main database changes content
+        while keeping its exact byte count. Timestamp granularity is a filesystem property
+        rather than a guarantee, which leaves content as the only dependable comparison.
+        """
+        from zotero_pdf_text import zotero_db
+
+        _directory, db, keeper = self._wal_database()
+        keeper.execute("CREATE TABLE u (a INTEGER PRIMARY KEY, b TEXT)")
+        for index in range(200):
+            keeper.execute("INSERT INTO u VALUES (?, ?)", (index, "x" * 50))
+        keeper.commit()
+        keeper.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+
+        before_size = db.stat().st_size
+        before_digest = zotero_db._digests(db)
+        keeper.execute("UPDATE u SET b = 'y' WHERE a = 5")
+        keeper.commit()
+        keeper.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+
+        self.assertEqual(db.stat().st_size, before_size, "the fixture changed the file size")
+        self.assertNotEqual(zotero_db._digests(db), before_digest)
+
+    def test_the_shm_is_never_copied_and_costs_no_visibility(self):
+        """The `-shm` is a reconstructible index, not data, and it churns on plain reads.
+
+        SQLite rebuilds the WAL index from the `-wal` when a database is first opened, so
+        leaving it behind loses nothing -- including rows that live only in an uncheckpointed
+        WAL, which is the case `immutable=1` cannot handle at all. Copying it would only feed
+        reader-driven churn into the stability check.
+        """
+        from zotero_pdf_text import zotero_db
+
+        self.assertNotIn("-shm", zotero_db._SNAPSHOT_SUFFIXES)
+
+        _directory, db, keeper = self._wal_database()
+        keeper.execute("INSERT INTO t VALUES (7)")
+        keeper.commit()
+        self.assertTrue(Path(f"{db}-wal").stat().st_size > 0, "fixture has no uncheckpointed WAL")
+        self.assertTrue(Path(f"{db}-shm").is_file(), "fixture has no -shm to leave behind")
+
+        with zotero_db.snapshot_for_reading(db) as copy:
+            self.assertFalse(
+                Path(f"{copy}-shm").exists(), "the -shm was copied into the snapshot"
+            )
+            con = sqlite3.connect(copy)
+            try:
+                rows = sorted(r[0] for r in con.execute("SELECT a FROM t"))
+            finally:
+                con.close()
+        self.assertEqual(rows, [1, 7], "a WAL-only row was lost without the -shm")
 
     def test_an_unstable_database_still_lets_the_audit_finish(self):
         """End-to-end degradation only: the audit completes and flags the gap.
@@ -1587,19 +1858,10 @@ class SnapshotConsistencyTests(unittest.TestCase):
         so the inventory would be unavailable either way. `test_a_database_that_never_settles`
         is the test that fails when the check is removed.
         """
-        from zotero_pdf_text import zotero_db
-
         root, db, keeper = self._wal_database()
         snapshot = root / "mapping_report.jsonl"
         snapshot.write_text("", encoding="utf-8")
-        real_copy = zotero_db.shutil.copy2
-
-        def always_write(src, dst, *args, **kwargs):
-            result = real_copy(src, dst, *args, **kwargs)
-            if str(src).endswith("zotero.sqlite"):
-                keeper.execute("INSERT INTO t VALUES (99)")
-                keeper.commit()
-            return result
+        patcher, _calls = self._interfere_after_main_copy(keeper, self._checkpoint)
 
         config = ProjectConfig(
             zotero_root=root,
@@ -1608,9 +1870,49 @@ class SnapshotConsistencyTests(unittest.TestCase):
             output_root=root / "out",
         )
         self.assertEqual(config.zotero_sqlite, db)
-        with patch.object(zotero_db.shutil, "copy2", always_write):
+        with patcher:
             audit = audit_library(config, snapshot, index_root=root / "index")
         self.assertFalse(audit.inventory_available)
+
+    def test_the_audit_reports_why_the_inventory_was_unavailable(self):
+        """The recovery instruction must survive the catch that keeps the audit running.
+
+        `inventory_available: false` alone cannot tell a user whether retrying is worth
+        anything. An unstable database is fixed by closing Zotero; a permission or schema
+        failure never will be, and the two call for different next steps.
+        """
+        root, db, keeper = self._wal_database()
+        snapshot = root / "mapping_report.jsonl"
+        snapshot.write_text("", encoding="utf-8")
+        patcher, _calls = self._interfere_after_main_copy(keeper, self._checkpoint)
+
+        config = ProjectConfig(
+            zotero_root=root,
+            zotero_data_directory=root,
+            linked_attachments=root,
+            output_root=root / "out",
+        )
+        with patcher:
+            audit = audit_library(config, snapshot, index_root=root / "index")
+
+        self.assertIsNotNone(audit.inventory_error)
+        self.assertIn("SnapshotUnstableError", audit.inventory_error or "")
+        self.assertIn("Close Zotero", audit.inventory_error or "")
+        self.assertEqual(audit.to_dict()["inventory_error"], audit.inventory_error)
+
+    def test_a_readable_inventory_reports_no_error(self):
+        """The reason field must stay empty on the happy path, or it is just noise."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config = _config(root)
+            pdf = root / "AAAA1111.pdf"
+            pdf.write_bytes(b"pdf")
+            _write_zotero_inventory(config, {"AAAA1111": str(pdf)})
+            snapshot = root / "mapping_report.jsonl"
+            snapshot.write_text("", encoding="utf-8")
+            audit = audit_library(config, snapshot, index_root=root / "index")
+        self.assertTrue(audit.inventory_available)
+        self.assertIsNone(audit.inventory_error)
 
 
 class IncompletePublicationTests(unittest.TestCase):

@@ -322,12 +322,18 @@ class LibraryAudit:
     # actually informative yet.
     ineligible_items: int = 0
     source_provenance_unknown: int = 0
-    # Whether Zotero's attachment inventory could be read. When it could not, membership falls
-    # back to the mapping snapshot, and an attachment whose PDF is missing is invisible rather
-    # than reported -- so missing_source and orphaned_index are both understated. Reported
+    # Whether Zotero's attachment inventory could be read. When it could not, no membership
+    # question can be answered at all: every item is reported `membership_unchecked` and the
+    # membership conclusions (`current`, `unindexed`, `orphaned_index`) are withheld. Reported
     # rather than raised: a partial audit that says which question it could not answer beats
     # refusing to run because Zotero happened to be mid-sync.
     inventory_available: bool = False
+    # Why it could not be read, in the failing call's own words. The flag alone tells a user
+    # that something went wrong without telling them whether it is worth retrying: a database
+    # that would not hold still resolves by closing Zotero, a permission or schema failure
+    # never will. `SnapshotUnstableError` carries the only actionable recovery instruction the
+    # audit has, and dropping it made that instruction unreachable.
+    inventory_error: str | None = None
 
     def items_with(self, status: str) -> tuple[AuditItem, ...]:
         return tuple(item for item in self.items if item.has(status))
@@ -343,6 +349,7 @@ class LibraryAudit:
             "status_counts": dict(self.status_counts),
             "counts_overlap": True,
             "inventory_available": self.inventory_available,
+            "inventory_error": self.inventory_error,
             "ineligible_items": self.ineligible_items,
             "source_provenance_unknown": self.source_provenance_unknown,
         }
@@ -371,35 +378,44 @@ def classify_item(observation: ItemObservation) -> frozenset[str]:
     obs = observation
     statuses: set[str] = set()
     eligible = is_canonical_eligible(obs)
-    # Who decides whether the library still contains this attachment.
+    # Whether the library still contains this attachment -- three-valued, because "Zotero does
+    # not list this" and "nobody could ask Zotero" call for opposite actions and a boolean
+    # cannot hold them apart. This was a boolean, and collapsing the two let an unreadable
+    # inventory fall through to a mapping row that only ever proved *historical* membership.
     #
-    # When the live inventory was read, it is the authority outright: it is current, whereas a
-    # mapping row only proves membership as of the last dry-run. Unioning the two would let a
-    # stale row vouch for an attachment the user has since deleted from Zotero, reporting it
-    # `current` when the honest answer is `orphaned_index`.
+    # Only Zotero can answer it. A mapping row proves the attachment existed at the last
+    # dry-run, which says nothing about whether the user has deleted it since; treating the
+    # snapshot as a fallback authority is what reported a deleted-but-indexed attachment as
+    # `current`, and a deleted-but-unindexed one as a backlog item to go and convert.
     #
-    # When the inventory could not be read, `in_zotero` is False for everything and means
-    # nothing, so the snapshot is all there is. The fallback is weaker in the other direction --
-    # an attachment whose PDF vanished never reached the snapshot -- which is why the audit
-    # reports `inventory_available` rather than quietly picking one.
-    #
-    # Written so that positive evidence is never discarded: only the *fallback* is switched off
-    # by a successful read, never `in_zotero` itself. A plain conditional would answer "not
-    # represented" for the contradictory state `in_zotero=True, inventory_available=False`,
-    # which production cannot produce but a hand-built observation can.
-    represented = obs.in_zotero or (obs.in_mapping and not obs.inventory_available)
+    # Positive evidence is never discarded, which is why `in_zotero` is tested before the flag:
+    # a plain conditional would answer "absent" for the contradictory state
+    # `in_zotero=True, inventory_available=False`, which production cannot produce but a
+    # hand-built observation can.
+    if obs.in_zotero:
+        member: bool | None = True
+    elif obs.inventory_available:
+        member = False
+    else:
+        member = None
+    # Used by every rule that must not fire against an attachment Zotero has retired, while
+    # still firing when membership is merely unknown. Those findings -- a stale Markdown file, a
+    # changed PDF -- are facts about files on disk, true regardless of who owns them.
+    not_retired = member is not False
 
     # 1. Structural facts. Reported for quarantine rows too -- a duplicate key or a vanished PDF
     #    is a fact about the library, not a judgement about whether the item belongs in it.
     if obs.index_row_count > 1:
         statuses.add(STATUS_DUPLICATE_KEY)
-    if obs.in_index and not represented:
-        # Only Zotero can retire a row. Without the inventory, `represented` fell back to the
-        # mapping snapshot, and an attachment missing from that snapshot may simply have lost
-        # its PDF -- calling it orphaned would recommend dropping a row Zotero still lists.
-        statuses.add(
-            STATUS_ORPHANED_INDEX if obs.inventory_available else STATUS_MEMBERSHIP_UNCHECKED
-        )
+    if obs.in_index and member is False:
+        statuses.add(STATUS_ORPHANED_INDEX)
+    if member is None:
+        # Applies to every item in the audit, not just index-only rows, and that is the point:
+        # when the count equals `total_items` it says plainly that this run could not check
+        # membership for anything. Reported rather than inferred, because both directions of
+        # guess are wrong -- calling a row orphaned recommends dropping one Zotero may still
+        # list, and calling it current vouches for one the user may have deleted.
+        statuses.add(STATUS_MEMBERSHIP_UNCHECKED)
     # `is False`, not a falsy test. Both fields are None when never checked, and an unindexed
     # item has no indexed markdown_path to check at all. Treating None as False here would report
     # every unindexed item as missing its Markdown as well, doubling the count for no information.
@@ -420,7 +436,7 @@ def classify_item(observation: ItemObservation) -> frozenset[str]:
     if _differs(source_comparand, obs.indexed_source_sha256):
         statuses.add(STATUS_SOURCE_CHANGED)
     elif (
-        represented
+        not_retired
         and obs.in_index
         and obs.indexed_source_sha256
         and not source_comparand
@@ -437,7 +453,7 @@ def classify_item(observation: ItemObservation) -> frozenset[str]:
     # metadata so that "we know nothing" never masquerades as "everything differs".
     current_metadata = obs.zotero_metadata if obs.in_zotero else obs.mapping_metadata
     if (
-        represented
+        not_retired
         and obs.in_index
         and current_metadata
         and current_metadata != obs.indexed_metadata
@@ -448,18 +464,28 @@ def classify_item(observation: ItemObservation) -> frozenset[str]:
     #    `unverified_indexed` requires `in_mapping`, which is what separates it from
     #    `orphaned_index`: the two name different repairs -- verify the identity, versus drop a
     #    row for an attachment Zotero no longer represents.
-    if represented and obs.in_index and not eligible:
+    if not_retired and obs.in_index and not eligible:
         statuses.add(STATUS_UNVERIFIED_INDEXED)
     #    An ineligible item is never `unindexed`. It is correctly absent from the library, and
     #    reporting it as a gap would manufacture a backlog that should not be worked -- the exact
     #    false signal that would wrongly push the gated migration forward.
-    if represented and eligible and not obs.in_index:
+    #
+    #    `member is True`, not `not_retired`, for the same reason: `unindexed` is a membership
+    #    conclusion. It asserts the attachment belongs in the library and is missing from it,
+    #    and the first half is exactly what an unreadable inventory leaves unknown. Work queued
+    #    from an unchecked membership converts PDFs for attachments the user may have deleted.
+    #    `membership_unchecked` carries those items instead, so they are named rather than
+    #    silently dropped.
+    if member is True and eligible and not obs.in_index:
         statuses.add(STATUS_UNINDEXED)
 
     # 4. `current` last, defined as the absence of every other finding rather than by restating
     #    the conditions. A status added later then narrows `current` automatically, instead of
     #    leaving a second definition to remember to update.
-    if represented and eligible and obs.in_index and not statuses:
+    #    `member is True` is redundant today -- `membership_unchecked` already makes `statuses`
+    #    non-empty -- but `current` is the one answer that must never be reached by accident,
+    #    and stating the precondition keeps it out of reach if that status is ever narrowed.
+    if member is True and eligible and obs.in_index and not statuses:
         statuses.add(STATUS_CURRENT)
 
     return frozenset(statuses)
@@ -515,11 +541,16 @@ def audit_library(
     # which question it could not answer.
     inventory: dict[str, AttachmentRecord] = {}
     inventory_available = False
+    inventory_error: str | None = None
     try:
         inventory = load_attachment_inventory(config.zotero_sqlite)
         inventory_available = True
-    except Exception:
+    except Exception as exc:
+        # Broad on purpose -- every failure here degrades to the same partial audit -- but the
+        # reason is kept rather than swallowed. The exception type is included because the
+        # message alone does not always say whether retrying is worth anything.
         inventory = {}
+        inventory_error = f"{type(exc).__name__}: {exc}"
 
     observations = build_observations(
         config,
@@ -563,6 +594,7 @@ def audit_library(
         status_counts=counts,
         items=tuple(items),
         inventory_available=inventory_available,
+        inventory_error=inventory_error,
         ineligible_items=sum(1 for item in items if not item.canonical_eligible),
         source_provenance_unknown=sum(
             1
@@ -697,6 +729,7 @@ def library_status(
         "total_items": audit.total_items,
         "health": dict(audit.status_counts),
         "inventory_available": audit.inventory_available,
+        "inventory_error": audit.inventory_error,
         "ineligible_items": audit.ineligible_items,
         "source_provenance_unknown": audit.source_provenance_unknown,
         "counts_overlap": True,

@@ -401,9 +401,15 @@ of `zotero.sqlite` rather than the live file):
 ```
 
 The audit consumes an existing `dry-run` snapshot, so produce one first if none is current. Add
-`--full` to also hash every source PDF -- without it `source_changed` is never evaluated and
-reads as zero. Add `--status <name>` to list only items holding a given status, or `--output
-<path>` to write the full JSON report.
+`--full` to also hash every source PDF from disk. Without it `source_changed` is still
+evaluated, against the hashes the mapper recorded during `dry-run`, so the default mode is
+current as of that snapshot rather than blind; anything the snapshot cannot answer for is
+counted as `source_unchecked` rather than assumed current. Add `--status <name>` to list only
+items holding a given status, or `--output <path>` to write the full JSON report.
+
+If Zotero's database cannot be read, the audit completes but answers no membership question:
+every attachment is reported `membership_unchecked` and `inventory_error` states why. Close
+Zotero and re-run if the reason is an unstable snapshot.
 
 An attachment can hold several statuses at once, so the reported counts overlap and do not sum
 to the attachment total. See the Library Audit section of `docs/data-dictionary.md` for what each

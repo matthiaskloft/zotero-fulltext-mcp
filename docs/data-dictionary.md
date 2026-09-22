@@ -259,8 +259,8 @@ Search normalizes query text into at most 20 word terms. `all_terms` is the defa
 `audit-library` compares four independent views of the same library -- Zotero's own attachment
 inventory, the mapper snapshot, the filesystem, and the published index generation's JSONL --
 and reports where they disagree. It is read-only: it moves, renames and rewrites nothing, and it
-never opens the live `zotero.sqlite` at all: it copies the database and its `-wal`/`-shm`
-sidecars to a temporary directory and reads the copy. No connection mode achieves the same
+never opens the live `zotero.sqlite` at all: it copies the database and its `-wal` to a
+temporary directory and reads the copy. No connection mode achieves the same
 thing. A read-write connection runs recovery or a checkpoint on open and on close, rewriting the
 main database and deleting an outstanding WAL even when every statement issued is a `SELECT`.
 `mode=ro` forbids those writes but still creates the `-shm` that any reader of a WAL database
@@ -269,13 +269,23 @@ but cannot see the WAL at all, and fails outright when the rows live in an unche
 Copying costs one file copy per audit and is the only option that is both complete and
 genuinely non-writing.
 
+The `-shm` is deliberately not copied. It is the WAL index: transient cache and lock state that
+SQLite reconstructs from the `-wal` when a database is first opened, so leaving it behind loses
+nothing, including rows that live only in an uncheckpointed WAL. It also changes on plain reader
+activity, which would feed unrelated churn into the check below.
+
 A file-level copy of a database being written is not a transactionally consistent snapshot, so
-the copy is bracketed: the size and modification time of all three files are recorded before and
-after, and a copy taken across any observed change is discarded and retried. A database that
-will not hold still is reported as an unavailable inventory rather than read. This detects
-rather than prevents, and a write landing within one timestamp tick without changing any file
-size is invisible to it; SQLite's backup API would be exact but requires opening the live
-database, which creates the `-shm` this approach exists to avoid.
+the copy is verified rather than assumed: after copying, the SHA-256 of the copied database and
+WAL are compared against the source's, and any mismatch discards the copy and retries. Size and
+modification time are not sufficient, because a checkpoint rewrites existing pages in place and
+can change the database's content while leaving its size identical, and timestamp granularity is
+a filesystem property rather than a guarantee. A database that will not hold still is reported
+as an unavailable inventory rather than read, with the reason in `inventory_error`.
+
+The residual window is narrow and worth stating: the two digests are taken one after another, so
+a source that changed and changed back between them would pass. SQLite's backup API or
+`VACUUM INTO` would close it, but both require opening the live database, which creates the
+`-shm` this approach exists to avoid.
 
 Membership comes from Zotero, not from the snapshot. The mapper walks source *files*, so an
 attachment whose PDF has been moved or deleted produces no mapping row at all; reading membership
@@ -284,9 +294,15 @@ attachment as `orphaned_index`, claiming Zotero dropped it when the file is what
 A successfully read inventory is the authority *outright*, not merely an additional source: a
 mapping row proves membership as of the last `dry-run`, so unioning the two would let a stale row
 vouch for an attachment the user has since deleted from Zotero and report it `current` when the
-honest answer is `orphaned_index`. If Zotero's database cannot be read the audit still runs, falls
-back to snapshot membership, reports `inventory_available: false`, and says that `missing_source`
-and `orphaned_index` are understated.
+honest answer is `orphaned_index`. If Zotero's database cannot be read the audit still runs, but it answers no membership question
+at all: every attachment is reported `membership_unchecked`, and `current`, `unindexed` and
+`orphaned_index` are withheld rather than guessed. The mapping snapshot is not a fallback
+authority here, because it proves membership as of the last `dry-run` and the question is
+membership *now*. File-level findings are unaffected and still reported, since a changed PDF or
+a stale Markdown file is a fact about disk regardless of who owns the attachment. The report
+carries `inventory_available: false` and `inventory_error`, the failing call's own message:
+a database that will not settle is resolved by closing Zotero and re-running, a permission or
+schema failure is not, and the flag alone cannot tell those apart.
 
 The canonical layout is recorded per item as evidence (`canonical_markdown_exists`) but is not
 classified, because nothing writes to `library/` yet and a status derived from it would fire on
@@ -326,11 +342,14 @@ the library.
 - `orphaned_index`: the index holds a row for an attachment Zotero no longer represents. Decided
   against Zotero's inventory, so an attachment Zotero still lists whose PDF has vanished is
   reported as `missing_source` instead.
-- `membership_unchecked`: the index holds a row and Zotero's inventory could not be read, so
-  the audit cannot say whether the library still contains it. Distinct from `orphaned_index`
-  because the advice is opposite: that one says the row can go, this one says do not act until
-  Zotero can be consulted. The mapping snapshot cannot settle it, since an attachment whose PDF
-  is missing never reaches the snapshot in the first place.
+- `membership_unchecked`: Zotero's inventory could not be read, so the audit cannot say whether
+  the library still contains this attachment. It applies to *every* attachment in such a run,
+  not only to index-only rows, and that is the point: when the count equals `total_items` it
+  says plainly that this run could not check membership for anything. Distinct from
+  `orphaned_index` because the advice is opposite: that one says the row can go, this one says
+  do not act until Zotero can be consulted. The mapping snapshot cannot settle it either way
+  — it proves the attachment existed at the last `dry-run`, not that it exists now, and an
+  attachment whose PDF went missing never reaches the snapshot in the first place.
 - `unverified_indexed`: Zotero represents the attachment but its identity was never verified, yet
   it is in the published index and is being returned by search. Distinct from `orphaned_index`:
   the repair is to verify the identity, not to drop the row.

@@ -1065,6 +1065,65 @@ class SearchCliTests(unittest.TestCase):
         self.assertEqual(output.getvalue(), "")
 
 
+def _write_zotero_inventory(
+    db: Path, attachment_key: str, source_path: Path, *, title: str, doi: str, citation_key: str
+) -> None:
+    """A minimal Zotero-schema database listing one PDF attachment.
+
+    An empty file stood here, which made every `audit-library` CLI test run against an audit
+    that could not read membership. The counts those tests asserted on -- `current`,
+    `unindexed` -- are the ones such an audit must withhold, so they were checking the
+    formatting of an answer the audit had no business giving.
+
+    The metadata matches the indexed record on purpose: the audit compares Zotero's live record
+    against the index, so a fixture that disagreed with itself would report `metadata_changed`
+    on a library that has not drifted.
+    """
+    import sqlite3
+
+    con = sqlite3.connect(db)
+    try:
+        con.executescript(
+            """
+            CREATE TABLE items (itemID INTEGER PRIMARY KEY, key TEXT, itemTypeID INTEGER);
+            CREATE TABLE itemAttachments (
+                itemID INTEGER PRIMARY KEY,
+                parentItemID INTEGER,
+                linkMode INTEGER,
+                contentType TEXT,
+                path TEXT
+            );
+            CREATE TABLE deletedItems (itemID INTEGER PRIMARY KEY);
+            CREATE TABLE itemTypesCombined (itemTypeID INTEGER PRIMARY KEY, typeName TEXT);
+            CREATE TABLE fieldsCombined (fieldID INTEGER PRIMARY KEY, fieldName TEXT);
+            CREATE TABLE itemData (itemID INTEGER, fieldID INTEGER, valueID INTEGER);
+            CREATE TABLE itemDataValues (valueID INTEGER PRIMARY KEY, value TEXT);
+            CREATE TABLE itemCreators (itemID INTEGER, creatorID INTEGER, orderIndex INTEGER);
+            CREATE TABLE creators (
+                creatorID INTEGER PRIMARY KEY, firstName TEXT, lastName TEXT
+            );
+            INSERT INTO itemTypesCombined VALUES (1, 'journalArticle');
+            INSERT INTO fieldsCombined VALUES (1, 'title');
+            INSERT INTO fieldsCombined VALUES (2, 'DOI');
+            INSERT INTO fieldsCombined VALUES (3, 'citationKey');
+            INSERT INTO items VALUES (1, 'P1', 1);
+            """
+        )
+        for value_id, (field_id, value) in enumerate(
+            ((1, title), (2, doi), (3, citation_key)), start=1
+        ):
+            con.execute("INSERT INTO itemDataValues VALUES (?, ?)", (value_id, value))
+            con.execute("INSERT INTO itemData VALUES (1, ?, ?)", (field_id, value_id))
+        con.execute("INSERT INTO items VALUES (2, ?, 2)", (attachment_key,))
+        con.execute(
+            "INSERT INTO itemAttachments VALUES (2, 1, 2, 'application/pdf', ?)",
+            (str(source_path),),
+        )
+        con.commit()
+    finally:
+        con.close()
+
+
 class AuditLibraryCliTests(unittest.TestCase):
     def _setup(self, root: Path, *, indexed: bool = True) -> tuple[Path, Path]:
         """A config, a source PDF, converted Markdown, a snapshot and a published generation."""
@@ -1090,12 +1149,18 @@ class AuditLibraryCliTests(unittest.TestCase):
             ),
             encoding="utf-8",
         )
-        (root / "zotero.sqlite").write_bytes(b"")
-
         pdf = root / "AAAA1111.pdf"
         pdf.write_bytes(b"pdf bytes")
         markdown = root / "AAAA1111.md"
         markdown.write_text("hello world", encoding="utf-8")
+        _write_zotero_inventory(
+            root / "zotero.sqlite",
+            "AAAA1111",
+            pdf,
+            title="A title",
+            doi="10.1000/x",
+            citation_key="key1",
+        )
         import hashlib
 
         md_hash = hashlib.sha256(b"hello world").hexdigest()

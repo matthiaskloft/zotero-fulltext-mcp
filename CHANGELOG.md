@@ -40,12 +40,28 @@ dated section once it has been stress-tested against a large library.
   directory or JSONL is missing. It previously returned the generation id with zero rows, so a
   broken publication was reported as every eligible attachment being `unindexed` — the
   reading most likely to send someone re-converting a library that is fine.
-- The snapshot of `zotero.sqlite` is now checked for stability: the size and modification time
-  of the database and its sidecars are compared before and after the copy, and a copy taken
-  across a concurrent write is discarded and retried. A file-level copy of a database being
-  written is not a consistent snapshot, and SQLite's per-frame checksums do not detect a main
-  database and a `-wal` that were never a matching pair. A database that will not settle is
-  reported as an unavailable inventory rather than read.
+- The snapshot of `zotero.sqlite` is verified by content: the SHA-256 of the copied database
+  and WAL are compared against the source after copying, and any mismatch discards the copy and
+  retries. A file-level copy of a database being written is not a consistent snapshot, and
+  SQLite's per-frame checksums do not detect a main database and a `-wal` that were never a
+  matching pair. Size and modification time were not sufficient to catch it: a checkpoint
+  rewrites pages in place, so the database can change content while keeping its exact size.
+  A database that will not settle is reported as an unavailable inventory rather than read.
+- The `-shm` is no longer copied into the snapshot. SQLite documents it as transient cache and
+  lock state reconstructed from the `-wal`, so copying it preserved nothing while feeding
+  reader-driven churn into the stability check.
+- `audit-library` withholds every membership conclusion when Zotero's inventory cannot be read,
+  instead of falling back to the mapping snapshot. The snapshot proves membership as of the
+  last `dry-run`, so an attachment deleted from Zotero afterwards was reported `current` if it
+  was indexed and `unindexed` if it was not — the first vouching for a document search can
+  still return, the second queueing conversion work for something that no longer exists.
+  `membership_unchecked` now covers every attachment in such a run, and file-level findings
+  are still reported.
+- `audit-library` reports `inventory_error` alongside `inventory_available`, in the JSON, the
+  `library_status()` payload and the human output. The flag alone could not distinguish a
+  database that is merely busy — where closing Zotero and re-running works — from a
+  permission or schema failure, and the only actionable recovery instruction the audit has was
+  being discarded by the catch that keeps a partial audit running.
 - `canonical_markdown_path()` is keyed on the attachment key alone. It appended a title slug,
   which made the path a function of current metadata and contradicted its own documented
   guarantee: a retitled item resolved to a different file, so `canonical_markdown_exists` looked
@@ -69,9 +85,9 @@ dated section once it has been stress-tested against a large library.
   snapshot, the files on disk, and the published index generation's JSONL -- and reports where
   they disagree. Zotero's inventory, not the snapshot, is the authority on membership: the
   mapper walks files on disk, so an attachment whose PDF is already gone never reaches the
-  snapshot at all. When the inventory cannot be read the audit falls back to snapshot
-  membership and reports `inventory_available: false`, rather than silently answering a
-  different question. It moves, renames and rewrites nothing, and it reads the live
+  snapshot at all. When the inventory cannot be read the audit withholds every membership
+  conclusion and reports `inventory_available: false` with the reason, rather than silently
+  answering a different question from the snapshot. It moves, renames and rewrites nothing, and it reads the live
   `zotero.sqlite` by copying it to a temporary directory rather than opening the live file, so
   that SQLite cannot checkpoint, recover or create a sidecar inside the user's Zotero folder.
   The `-wal` is copied alongside it, so attachments Zotero committed since its last checkpoint
@@ -91,8 +107,8 @@ dated section once it has been stress-tested against a large library.
   it never reached the mapper and has no snapshot hash at all. Without a status such an item
   falls through to `current`, certifying a file the audit never examined. `--full` resolves it
   by hashing what is actually on disk.
-- `membership_unchecked`: an audit status for an index row whose membership cannot be decided
-  because Zotero's inventory could not be read. Previously such rows were reported as
+- `membership_unchecked`: an audit status for an attachment whose membership cannot be decided
+  because Zotero's inventory could not be read. Index-only rows were previously reported as
   `orphaned_index`, which recommends dropping a row that may still be perfectly valid —
   an attachment missing from the mapping snapshot may simply have lost its PDF.
 - `unverified_indexed`: an audit status beyond the nine originally planned, naming an attachment
