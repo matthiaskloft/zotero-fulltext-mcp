@@ -18,6 +18,7 @@ from zotero_pdf_text.fts import (
     build_fts_index,
     connect_readonly,
     coverage_report,
+    index_statistics,
     get_fulltext,
     get_item_context,
     search_fts,
@@ -96,10 +97,10 @@ class FtsTests(unittest.TestCase):
             self.assertEqual(old_record_context["records"][0]["citation_key"], "")
             self.assertIs(old_record_context["records"][0]["has_math"], False)
 
-            coverage = coverage_report(sqlite_db)
-            self.assertEqual(coverage["records"], 2)
-            self.assertEqual(coverage["by_extraction_tool"]["pymupdf4llm.to_markdown"], 2)
-            self.assertEqual(coverage["by_has_math"], {True: 1, False: 1})
+            stats = index_statistics(sqlite_db)
+            self.assertEqual(stats["records"], 2)
+            self.assertEqual(stats["by_extraction_tool"]["pymupdf4llm.to_markdown"], 2)
+            self.assertEqual(stats["by_has_math"], {True: 1, False: 1})
 
     def test_interrupted_rebuild_preserves_previous_database(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -1058,6 +1059,162 @@ class LocatorFreshnessTests(unittest.TestCase):
                 expected_content_sha256=hit.markdown_sha256,
             )
             self.assertEqual(passage.markdown_sha256, hit.markdown_sha256)
+
+
+class IndexStatisticsTests(unittest.TestCase):
+    """Rank 9 moved these aggregates from a `SELECT *`-and-count-in-Python loop into SQL.
+
+    The numbers are the contract; where they are computed is not. The parity test below is the
+    one that matters: it recounts the same rows in Python and requires SQL to agree. It runs
+    against `_build_diverse`, not the shared two-record fixture, because a fixture whose rows
+    share one value per grouped column cannot tell a working GROUP BY from a broken one -- every
+    assertion would compare a single-key dict to itself.
+    """
+
+    # The shared `_write_jsonl` fixture holds two records whose classification, identity_status
+    # and extraction_tool are all identical, so every grouped assertion against it compares a
+    # one-key dict to a one-key dict and a broken GROUP BY would still pass. These records give
+    # each grouped column more than one distinct value, which is the minimum needed for the
+    # parity test below to constrain anything at all.
+    _DIVERSE_RECORDS = (
+        ("ATTACH1", "mapped_verified", "verified", "pymupdf4llm.to_markdown", True, 80, 10),
+        ("ATTACH2", "mapped_verified", "verified", "pymupdf4llm.to_markdown", False, 50, 8),
+        ("ATTACH3", "mapped_unverified", "unverified", "marker", True, 120, 17),
+        ("ATTACH4", "unmapped", "unverified", "pymupdf4llm.to_markdown+glm-ocr", False, 30, 4),
+    )
+
+    def _build(self, root: Path) -> Path:
+        jsonl = root / "index.jsonl"
+        sqlite_db = root / "index.sqlite"
+        _write_jsonl(jsonl)
+        build_fts_index(jsonl, sqlite_db, chunk_chars=40, overlap_chars=5)
+        return sqlite_db
+
+    def _build_diverse(self, root: Path) -> Path:
+        jsonl = root / "diverse.jsonl"
+        sqlite_db = root / "diverse.sqlite"
+        records = [
+            {
+                "zotero_parent_key": "PARENT" + key[-1],
+                "zotero_attachment_key": key,
+                "title": "Record " + key,
+                "creators": "Author One",
+                "year": "2026",
+                "doi": "",
+                "citation_key": "record" + key,
+                "source_path": key + ".pdf",
+                "markdown_path": key + ".md",
+                "markdown_sha256": "hash" + key,
+                "extraction_tool": tool,
+                "char_count": chars,
+                "word_count": words,
+                "page_count": "1",
+                "classification": classification,
+                "identity_status": identity,
+                "identity_rule": "doi_exact",
+                "has_math": math,
+                "text": "Body text for " + key,
+            }
+            for key, classification, identity, tool, math, chars, words in self._DIVERSE_RECORDS
+        ]
+        jsonl.write_text(
+            "".join(json.dumps(record) + "\n" for record in records), encoding="utf-8"
+        )
+        build_fts_index(jsonl, sqlite_db, chunk_chars=40, overlap_chars=5)
+        return sqlite_db
+
+    def test_sql_aggregates_match_a_python_recount(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sqlite_db = self._build_diverse(Path(tmp))
+            stats = index_statistics(sqlite_db)
+
+            # Guard the guard: if the fixture ever loses its variety this test silently stops
+            # constraining the GROUP BY, which is exactly how the first version of it passed
+            # while asserting nothing.
+            self.assertGreater(len(stats["by_classification"]), 1)
+            self.assertGreater(len(stats["by_extraction_tool"]), 1)
+            self.assertGreater(len(stats["by_identity_status"]), 1)
+
+            con = connect_readonly(sqlite_db)
+            con.row_factory = sqlite3.Row
+            try:
+                rows = con.execute("SELECT * FROM metadata").fetchall()
+                chunks = con.execute("SELECT COUNT(*) AS n FROM chunks").fetchone()["n"]
+            finally:
+                con.close()
+
+            self.assertEqual(stats["records"], len(rows))
+            self.assertEqual(stats["chunks"], int(chunks))
+            self.assertEqual(stats["total_chars"], sum(int(r["char_count"] or 0) for r in rows))
+            self.assertEqual(stats["total_words"], sum(int(r["word_count"] or 0) for r in rows))
+            for payload_key, column in (
+                ("by_classification", "classification"),
+                ("by_identity_status", "identity_status"),
+                ("by_extraction_tool", "extraction_tool"),
+            ):
+                expected: dict[str, int] = {}
+                for row in rows:
+                    expected[row[column] or ""] = expected.get(row[column] or "", 0) + 1
+                self.assertEqual(stats[payload_key], expected)
+            expected_math: dict[bool, int] = {}
+            for row in rows:
+                expected_math[bool(row["has_math"])] = expected_math.get(bool(row["has_math"]), 0) + 1
+            self.assertEqual(stats["by_has_math"], expected_math)
+
+    def test_has_math_keys_stay_booleans(self):
+        """`has_math` is stored as 0/1; the payload has always keyed it true/false.
+
+        A GROUP BY that reported the stored integers would change every consumer's key type
+        without changing a single count, which is the kind of break a totals check misses.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            stats = index_statistics(self._build(Path(tmp)))
+            self.assertEqual({type(key) for key in stats["by_has_math"]}, {bool})
+            self.assertEqual(stats["by_has_math"], {True: 1, False: 1})
+
+    def test_an_empty_index_reports_zeros_rather_than_none(self):
+        """SUM() over no rows is NULL in SQLite. Without COALESCE this returned null totals."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            jsonl = root / "index.jsonl"
+            sqlite_db = root / "index.sqlite"
+            jsonl.write_text("", encoding="utf-8")
+            build_fts_index(jsonl, sqlite_db, chunk_chars=40, overlap_chars=5)
+            stats = index_statistics(sqlite_db)
+            self.assertEqual(stats["records"], 0)
+            self.assertEqual(stats["chunks"], 0)
+            self.assertEqual(stats["total_chars"], 0)
+            self.assertEqual(stats["total_words"], 0)
+            self.assertEqual(stats["by_classification"], {})
+
+    def test_the_generation_is_reported_only_when_the_caller_knows_it(self):
+        """Never inferred from the database path -- see the docstring on `index_statistics`."""
+        with tempfile.TemporaryDirectory() as tmp:
+            sqlite_db = self._build(Path(tmp))
+            unlabelled = index_statistics(sqlite_db)
+            self.assertIsNone(unlabelled["generation_id"])
+            self.assertIsNone(unlabelled["published_at"])
+
+            labelled = index_statistics(
+                sqlite_db,
+                generation_id="20260101T000000Z-0123abcd",
+                published_at="2026-01-01T00:00:00+00:00",
+            )
+            self.assertEqual(labelled["generation_id"], "20260101T000000Z-0123abcd")
+            self.assertEqual(labelled["published_at"], "2026-01-01T00:00:00+00:00")
+
+    def test_the_payload_says_what_it_is_a_statistic_about(self):
+        """The name "coverage" invited a reading these numbers cannot support."""
+        with tempfile.TemporaryDirectory() as tmp:
+            stats = index_statistics(self._build(Path(tmp)))
+            self.assertEqual(stats["scope"], "indexed_snapshot")
+            self.assertIn("not what share of the Zotero library", str(stats["scope_note"]))
+            self.assertIn("audit-library", str(stats["scope_note"]))
+
+    def test_the_deprecated_alias_still_returns_the_same_numbers(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sqlite_db = self._build(Path(tmp))
+            self.assertEqual(coverage_report(sqlite_db), index_statistics(sqlite_db))
 
 
 def _write_jsonl(path: Path) -> None:

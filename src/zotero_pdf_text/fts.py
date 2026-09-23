@@ -7,7 +7,6 @@ import math
 import os
 import re
 import sqlite3
-from collections import Counter
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Iterable, Literal
@@ -717,25 +716,108 @@ def get_item_context(
     return {"records": [_metadata_dict(row) for row in rows]}
 
 
-def coverage_report(db_path: Path) -> dict[str, object]:
+# What `index_statistics` describes, stated in its own payload. The name "coverage" invited the
+# reading these numbers cannot support -- a share of the Zotero library -- so the scope travels
+# with the numbers rather than living only in a docstring no MCP client or JSON consumer reads.
+INDEX_STATISTICS_SCOPE = "indexed_snapshot"
+INDEX_STATISTICS_SCOPE_NOTE = (
+    "Statistics about the rows in one published index generation. They describe what was "
+    "indexed, not what share of the Zotero library is indexed: an attachment Zotero holds but "
+    "that was never converted is absent from every number here. Use `audit-library` for "
+    "source-library health."
+)
+
+_GROUPED_STATISTIC_COLUMNS: tuple[tuple[str, str], ...] = (
+    ("by_classification", "classification"),
+    ("by_identity_status", "identity_status"),
+    ("by_extraction_tool", "extraction_tool"),
+)
+
+
+def index_statistics(
+    db_path: Path,
+    *,
+    generation_id: str | None = None,
+    published_at: str | None = None,
+) -> dict[str, object]:
+    """Summarize one published index generation, aggregating in SQL rather than in Python.
+
+    The previous implementation pulled every metadata row with `SELECT *` and counted them in
+    memory to produce eight numbers, so its cost scaled with library size and with the width of
+    the widest column -- the text-bearing ones it never looked at. SQLite computes the same
+    counts over the same rows without materializing them here.
+
+    `generation_id`/`published_at` are supplied by the caller rather than inferred from
+    `db_path`, because the caller resolving the database already read `current.json` (see
+    `artifacts.resolve_reader_generation`) and re-reading it here would risk labelling these
+    numbers with a different generation's identity. They are reported as `None` when the caller
+    does not know them, never guessed.
+    """
     con = connect_readonly(db_path)
     con.row_factory = sqlite3.Row
     try:
-        metadata_rows = con.execute("SELECT * FROM metadata").fetchall()
+        totals = con.execute(
+            """
+            SELECT COUNT(*) AS records,
+                   COALESCE(SUM(char_count), 0) AS total_chars,
+                   COALESCE(SUM(word_count), 0) AS total_words
+            FROM metadata
+            """
+        ).fetchone()
         chunks = con.execute("SELECT COUNT(*) AS n FROM chunks").fetchone()["n"]
+        grouped = {
+            payload_key: _grouped_counts(con, column)
+            for payload_key, column in _GROUPED_STATISTIC_COLUMNS
+        }
+        # Kept separate from the string-valued groupings above because its keys are booleans,
+        # not column text: `has_math` is stored as 0/1 and has always been reported under
+        # true/false rather than under "0"/"1".
+        has_math_rows = con.execute(
+            """
+            SELECT CASE WHEN has_math THEN 1 ELSE 0 END AS flag, COUNT(*) AS n
+            FROM metadata
+            GROUP BY flag
+            """
+        ).fetchall()
     finally:
         con.close()
 
     return {
-        "records": len(metadata_rows),
+        "scope": INDEX_STATISTICS_SCOPE,
+        "scope_note": INDEX_STATISTICS_SCOPE_NOTE,
+        "generation_id": generation_id,
+        "published_at": published_at,
+        "records": int(totals["records"]),
         "chunks": int(chunks),
-        "total_chars": sum(int(row["char_count"] or 0) for row in metadata_rows),
-        "total_words": sum(int(row["word_count"] or 0) for row in metadata_rows),
-        "by_classification": dict(Counter(row["classification"] or "" for row in metadata_rows)),
-        "by_identity_status": dict(Counter(row["identity_status"] or "" for row in metadata_rows)),
-        "by_extraction_tool": dict(Counter(row["extraction_tool"] or "" for row in metadata_rows)),
-        "by_has_math": dict(Counter(bool(row["has_math"]) for row in metadata_rows)),
+        "total_chars": int(totals["total_chars"]),
+        "total_words": int(totals["total_words"]),
+        **grouped,
+        "by_has_math": {bool(row["flag"]): int(row["n"]) for row in has_math_rows},
     }
+
+
+def _grouped_counts(con: sqlite3.Connection, column: str) -> dict[str, int]:
+    """Count metadata rows per distinct value of `column`, normalizing NULL to the empty string.
+
+    `column` is interpolated into SQL, so it is never caller-supplied: the only values that
+    reach here are the literals in `_GROUPED_STATISTIC_COLUMNS`.
+    """
+    rows = con.execute(
+        f"""
+        SELECT COALESCE({column}, '') AS value, COUNT(*) AS n
+        FROM metadata
+        GROUP BY value
+        """
+    ).fetchall()
+    return {str(row["value"]): int(row["n"]) for row in rows}
+
+
+def coverage_report(db_path: Path) -> dict[str, object]:
+    """Deprecated alias for `index_statistics`, kept so existing callers keep working.
+
+    It cannot report a generation, because it never received one.
+    """
+    return index_statistics(db_path)
 
 
 def _create_schema(con: sqlite3.Connection) -> None:

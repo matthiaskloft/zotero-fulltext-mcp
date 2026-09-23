@@ -1376,5 +1376,79 @@ class AuditLibraryCliTests(unittest.TestCase):
             self.assertNotIn("AAAA1111", text)
 
 
+
+
+class IndexStatsCliTests(unittest.TestCase):
+    """`coverage-report` became `index-stats` in rank 9, keeping the old spelling as an alias.
+
+    The command is the part a user's scripts and MCP client registrations name, so the alias is
+    tested as behavior rather than left as a parser detail.
+    """
+
+    def _resolved(self):
+        from zotero_pdf_text.artifacts import ResolvedGeneration
+
+        return ResolvedGeneration(
+            db_path=Path("index.sqlite"),
+            generation_id="20260101T000000Z-0123abcd",
+            published_at="2026-01-01T00:00:00+00:00",
+        )
+
+    def _stats(self):
+        return {
+            "scope": "indexed_snapshot",
+            "scope_note": "note",
+            "generation_id": "20260101T000000Z-0123abcd",
+            "published_at": "2026-01-01T00:00:00+00:00",
+            "records": 2,
+            "chunks": 5,
+            "total_chars": 130,
+            "total_words": 18,
+            "by_classification": {"mapped_verified": 2},
+            "by_identity_status": {"verified": 2},
+            "by_extraction_tool": {"pymupdf4llm.to_markdown": 2},
+            "by_has_math": {True: 1, False: 1},
+        }
+
+    def _run(self, argv):
+        out, err = io.StringIO(), io.StringIO()
+        with patch("zotero_pdf_text.cli.resolve_reader_generation", return_value=self._resolved()), \
+             patch("zotero_pdf_text.cli.index_statistics", return_value=self._stats()) as stats:
+            with redirect_stdout(out), redirect_stderr(err):
+                code = main(argv)
+        return code, out.getvalue(), err.getvalue(), stats
+
+    def test_index_stats_reports_the_generation_it_read(self):
+        code, stdout, stderr, _ = self._run(["index-stats"])
+        self.assertEqual(code, 0)
+        self.assertIn("Generation: 20260101T000000Z-0123abcd", stdout)
+        self.assertIn("Published: 2026-01-01T00:00:00+00:00", stdout)
+        self.assertEqual(stderr, "")
+
+    def test_the_generation_is_passed_through_rather_than_re_resolved(self):
+        """One `current.json` read labels the numbers, so a mid-run publish cannot mislabel them."""
+        _, _, _, stats = self._run(["index-stats", "--json"])
+        stats.assert_called_once()
+        self.assertEqual(
+            stats.call_args.kwargs,
+            {
+                "generation_id": "20260101T000000Z-0123abcd",
+                "published_at": "2026-01-01T00:00:00+00:00",
+            },
+        )
+
+    def test_the_deprecated_spelling_still_works(self):
+        code, stdout, stderr, _ = self._run(["coverage-report"])
+        self.assertEqual(code, 0)
+        self.assertIn("Records: 2", stdout)
+        self.assertIn("deprecated", stderr)
+
+    def test_the_deprecation_notice_stays_off_stdout(self):
+        """`--json` output is parsed by scripts; a warning on stdout would corrupt it."""
+        _, stdout, stderr, _ = self._run(["coverage-report", "--json"])
+        json.loads(stdout)
+        self.assertIn("index-stats", stderr)
+
+
 if __name__ == "__main__":
     unittest.main()

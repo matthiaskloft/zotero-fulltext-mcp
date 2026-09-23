@@ -29,6 +29,7 @@ from .artifacts import (
     ArtifactError,
     current_generation_jsonl,
     resolve_reader_db_path,
+    resolve_reader_generation,
     stage_and_publish,
     write_jsonl_appending_manifest,
     write_jsonl_from_conversion_manifest,
@@ -39,7 +40,7 @@ from .converter import convert_sample, convert_verified, default_worker_count
 from .fts import (
     ChunkNotFoundError,
     IndexSchemaUnsupportedError,
-    coverage_report,
+    index_statistics,
     get_fulltext,
     search_fts,
 )
@@ -90,6 +91,13 @@ def _default_fts_db() -> Path:
 
 
 DEFAULT_FTS_DB = _default_fts_db()
+
+# `coverage-report` reported index row counts under a word that means "share of the library".
+# The command is kept as an alias so existing scripts and MCP client registrations keep working.
+# argparse still lists the alias in --help (both in the choices metavar and beside the command),
+# so the old spelling remains discoverable; what changes is which name the description teaches
+# and that using it prints a deprecation warning.
+DEPRECATED_INDEX_STATS_COMMAND = "coverage-report"
 
 
 def _resolve_managed_root(args: argparse.Namespace) -> tuple[Path, Path]:
@@ -315,9 +323,20 @@ def build_parser() -> argparse.ArgumentParser:
     fulltext.add_argument("--chunk-index", type=int, default=None, help="Optional chunk index to fetch.")
     fulltext.add_argument("--max-chars", type=int, default=12000, help="Maximum text characters to print.")
     fulltext.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
-    coverage = subparsers.add_parser("coverage-report", help="Summarize SQLite FTS coverage.")
-    coverage.add_argument("--db", type=Path, default=DEFAULT_FTS_DB, help="SQLite FTS database path.")
-    coverage.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+    index_stats = subparsers.add_parser(
+        "index-stats",
+        aliases=[DEPRECATED_INDEX_STATS_COMMAND],
+        help="Summarize the rows in the published index generation.",
+        description=(
+            "Statistics about one published index generation: how many records and chunks it "
+            "holds and how they break down by classification, identity status and extraction "
+            "tool. These describe the indexed snapshot, not what share of the Zotero library "
+            "is indexed -- an attachment that was never converted appears in none of them. Use "
+            "`audit-library` for source-library health."
+        ),
+    )
+    index_stats.add_argument("--db", type=Path, default=DEFAULT_FTS_DB, help="SQLite FTS database path.")
+    index_stats.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
     audit_library_parser = subparsers.add_parser(
         "audit-library",
         help="Compare the Zotero mapping, converted files on disk, and the published index.",
@@ -872,16 +891,23 @@ def main(argv: list[str] | None = None) -> int:
         else:
             _print_fulltext_result(result.to_dict())
         return 0
-    if args.command == "coverage-report":
+    if args.command in {"index-stats", DEPRECATED_INDEX_STATS_COMMAND}:
+        if args.command == DEPRECATED_INDEX_STATS_COMMAND:
+            _warn_deprecated_command(DEPRECATED_INDEX_STATS_COMMAND, "index-stats")
         try:
-            report = coverage_report(resolve_reader_db_path(args.db))
+            resolved = resolve_reader_generation(args.db)
+            report = index_statistics(
+                resolved.db_path,
+                generation_id=resolved.generation_id,
+                published_at=resolved.published_at,
+            )
         except (ArtifactError, IndexSchemaUnsupportedError) as exc:
             print(str(exc), file=sys.stderr)
             return 2
         if args.json:
             print(json.dumps(report, ensure_ascii=False, indent=2))
         else:
-            _print_coverage_report(report)
+            _print_index_statistics(report)
         return 0
     if args.command == "audit-library":
         config = load_config(args.config)
@@ -1455,7 +1481,29 @@ def _print_fulltext_result(result: dict[str, object]) -> None:
     print(result["text"])
 
 
-def _print_coverage_report(report: dict[str, object]) -> None:
+def _warn_deprecated_command(used: str, replacement: str) -> None:
+    """Tell a caller that `used` is a deprecated spelling of `replacement`.
+
+    TODO(user): decide how insistent this should be. It currently warns on stderr and runs the
+    command normally, which keeps stdout clean for `--json` consumers and never breaks an
+    existing script. The alternatives are to also name a removal version, or to refuse the old
+    spelling outright once a release has warned about it.
+    """
+    print(
+        f"warning: '{used}' is deprecated and will be removed; use '{replacement}' instead.",
+        file=sys.stderr,
+    )
+
+
+def _print_index_statistics(report: dict[str, object]) -> None:
+    """Render index statistics, naming the generation and what the numbers are about.
+
+    The generation line is not decoration: without it two runs taken across a re-publish are
+    indistinguishable, and a number that moved looks like library drift rather than a different
+    snapshot being read.
+    """
+    print(f"Generation: {report.get('generation_id') or '(unknown)'}")
+    print(f"Published: {report.get('published_at') or '(unknown)'}")
     print(f"Records: {report['records']}")
     print(f"Chunks: {report['chunks']}")
     print(f"Total characters: {report['total_chars']}")
@@ -1464,6 +1512,8 @@ def _print_coverage_report(report: dict[str, object]) -> None:
         print(field + ":")
         for key, count in sorted(dict(report[field]).items()):
             print(f"- {key}: {count}")
+    print("")
+    print(str(report["scope_note"]))
 
 
 def _print_library_audit(

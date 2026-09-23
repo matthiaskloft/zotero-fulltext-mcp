@@ -114,7 +114,7 @@ never built as specified. Instead, a simpler just-in-time approach shipped 2026-
 - `math_detection.py` auto-detects likely math content per PDF during normal conversion
   (math-font substrings + Unicode math-symbol density) and stores it as a `has_math` boolean in
   the Markdown front matter, JSONL sidecar, and SQLite metadata (`by_has_math` in
-  `coverage-report`).
+  `index-stats`).
 - `reconvert-math --key <ATTACHMENT_KEY>` re-extracts **one paper at a time** with marker-pdf
   (LaTeX-aware equation/figure handling), overwriting that paper's Markdown in place. Deliberately
   just-in-time only, never bulk — marker-pdf runs at roughly 27s/page, so reconverting a whole

@@ -82,7 +82,7 @@ The derived index (JSONL sidecar plus SQLite FTS database) is published as immut
 `index.sqlite`, and an `artifact_manifest.json` with checksums, record/chunk counts, and the
 chunking parameters used. `$data\index\current.json` is the single, atomically replaced pointer
 that names the current generation; readers (the MCP server, `search-fts`, `get-fulltext`,
-`coverage-report`) follow it automatically. A failed or interrupted build can never take the
+`index-stats`) follow it automatically. A failed or interrupted build can never take the
 published index offline: the pointer only moves after the new generation validates, and the
 previous generation is retained for rollback. Older generations are swept automatically after a
 successful publish, so disk use stays bounded at roughly two full copies.
@@ -384,12 +384,16 @@ Fetch bounded text:
   --max-chars 12000
 ```
 
-Coverage:
+Index statistics (what the published generation holds -- **not** what share of the Zotero
+library is indexed; use `audit-library` for that):
 
 ```powershell
-& $python -m zotero_pdf_text coverage-report `
+& $python -m zotero_pdf_text index-stats `
   --db $data\index\zotero_text_index.sqlite
 ```
+
+The output names the generation it read, so two runs taken across a re-publish are
+distinguishable. `coverage-report` still works as a deprecated alias and warns on stderr.
 
 Audit the library for drift (read-only; moves and rewrites nothing, and reads a temporary copy
 of `zotero.sqlite` rather than the live file):

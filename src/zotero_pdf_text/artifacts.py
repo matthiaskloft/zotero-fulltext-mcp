@@ -169,14 +169,24 @@ def read_current_pointer(index_root: Path) -> dict[str, object] | None:
     return data
 
 
-def resolve_reader_db_path(db_path: Path) -> Path:
-    """Resolve the SQLite file a reader should open for a configured/registered DB path.
+@dataclass(frozen=True)
+class ResolvedGeneration:
+    """The database a reader should open, together with the identity of what it contains."""
 
-    The managed ``current.json`` next to ``db_path`` is the only way an index is located: the
-    ``--db`` argument is effectively an index-root anchor whose sibling pointer names the current
-    generation. There is no legacy standalone-database fallback — a missing pointer means no
-    index is published here, and the caller gets a clear error naming ``rebuild-index`` instead
-    of silently opening whatever file happens to sit at ``db_path``.
+    db_path: Path
+    generation_id: str
+    published_at: str | None
+
+
+def resolve_reader_generation(db_path: Path) -> ResolvedGeneration:
+    """Resolve the reader database *and* the identity of the generation holding it.
+
+    One ``current.json`` read answers both. A caller that resolved the path first and then read
+    the pointer again for its id would, if a publication landed between the two reads, label
+    generation A's numbers with generation B's identity -- the same mixed-generation race
+    ``load_index_records`` documents. Generation directories are immutable once published, so a
+    single read cannot mix an identity with someone else's contents; the answer is then merely
+    a moment old, which is what a snapshot is.
     """
     index_root = db_path.parent
     pointer = read_current_pointer(index_root)
@@ -185,14 +195,35 @@ def resolve_reader_db_path(db_path: Path) -> Path:
             f"No managed index generation is published under {index_root} (no current.json). "
             "Publish one with 'zotero-pdf-text rebuild-index'."
         )
-    generation_dir = resolve_generation_dir(index_root, str(pointer["current_generation"]))
+    generation_id = str(pointer["current_generation"])
+    generation_dir = resolve_generation_dir(index_root, generation_id)
     resolved = generation_dir / GENERATION_DB_FILENAME
     if not resolved.is_file():
         raise CurrentPointerError(
-            f"current.json names generation '{pointer['current_generation']}' but its database "
+            f"current.json names generation '{generation_id}' but its database "
             "file is missing. Re-publish with 'zotero-pdf-text rebuild-index'."
         )
-    return resolved
+    raw_published = pointer.get("published_at")
+    return ResolvedGeneration(
+        db_path=resolved,
+        generation_id=generation_id,
+        published_at=str(raw_published) if raw_published is not None else None,
+    )
+
+
+def resolve_reader_db_path(db_path: Path) -> Path:
+    """Resolve the SQLite file a reader should open for a configured/registered DB path.
+
+    The managed ``current.json`` next to ``db_path`` is the only way an index is located: the
+    ``--db`` argument is effectively an index-root anchor whose sibling pointer names the current
+    generation. There is no legacy standalone-database fallback — a missing pointer means no
+    index is published here, and the caller gets a clear error naming ``rebuild-index`` instead
+    of silently opening whatever file happens to sit at ``db_path``.
+
+    Callers that also need to report *which* generation they read should use
+    ``resolve_reader_generation`` instead of resolving the id from the returned path.
+    """
+    return resolve_reader_generation(db_path).db_path
 
 
 def current_generation_jsonl(index_root: Path) -> Path | None:
