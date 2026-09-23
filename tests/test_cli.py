@@ -1615,6 +1615,28 @@ class LibraryStatusCliTests(unittest.TestCase):
         self.assertIn("withheld rather than", stdout)
         self.assertIn("SnapshotUnstableError", stdout)
 
+    def test_the_total_is_labelled_when_zotero_could_not_be_read(self):
+        """`total_items` is not a library total then; printing it bare invites a false share.
+
+        Without the inventory the audit's key set is the union of the snapshot's and the index's
+        keys. Zotero contributed none, so the number is smaller than the library and is not a
+        denominator for anything -- yet it appears directly above the notice saying membership
+        could not be checked.
+        """
+        status = self._status(
+            inventory_available=False,
+            inventory_error="SnapshotUnstableError: database is locked",
+        )
+        _, stdout, _, _ = self._run([], status=status)
+
+        self.assertIn("not a library total", stdout)
+
+    def test_the_total_is_printed_plainly_when_zotero_was_read(self):
+        _, stdout, _, _ = self._run([])
+
+        self.assertIn("Attachments compared: 12", stdout)
+        self.assertNotIn("not a library total", stdout)
+
     def test_an_audit_failure_exits_nonzero_with_the_message_on_stderr(self):
         from zotero_pdf_text.library import LibraryAuditError
 

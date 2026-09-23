@@ -1583,7 +1583,17 @@ def _print_library_status(status: dict[str, object]) -> None:
     print(f"Published generation: {status.get('generation_id') or '(none published)'}")
     print(f"Last published: {status.get('last_published_at') or '(unknown)'}")
     print(f"Mode: {'full (source PDFs hashed)' if status.get('full_audit') else 'metadata only'}")
-    print(f"Attachments compared: {status['total_items']}")
+    if status.get("inventory_available"):
+        print(f"Attachments compared: {status['total_items']}")
+    else:
+        # Without Zotero's inventory this is the union of the snapshot's and the index's keys,
+        # not a library total -- and it reads as one precisely when the command has just said
+        # membership could not be checked. Naming what it counts stops it being divided into
+        # a "share of the library" that nothing here measured.
+        print(
+            f"Attachments compared: {status['total_items']} "
+            "(snapshot and index keys only; not a library total -- see below)"
+        )
     print("")
     print("Health (an attachment can hold several statuses; these overlap and do not sum):")
     for name in ALL_STATUSES:
