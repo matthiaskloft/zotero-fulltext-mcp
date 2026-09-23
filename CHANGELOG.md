@@ -15,9 +15,12 @@ dated section once it has been stress-tested against a large library.
 
 - `library_status` MCP tool: the same health answer on the read-only MCP surface, deliberately
   shaped so index row counts can never be read as library coverage. It reports the published
-  generation's statistics and the audit's comparison as two separate fields, with the comparison
-  `null` and a reason given whenever no snapshot, config or readable Zotero database could
-  produce it. It takes no arguments -- the mapping snapshot is discovered server-side so no local
+  generation's statistics and the audit's comparison as two separate fields. The comparison is
+  `null`, with a reason, only when none could be produced at all: no config, no snapshot, a
+  failed audit, or a publication landing mid-measurement. When the audit ran but Zotero could
+  not be read it is present and explicitly partial -- `inventory_available` false, membership
+  statuses withheld under `membership_unchecked`, `attachments_compared` null -- so a client
+  must check `inventory_available` rather than treat any non-null comparison as complete. It takes no arguments -- the mapping snapshot is discovered server-side so no local
   path crosses the boundary, and the expensive `--full` re-hash is not reachable from MCP.
   Only the audit half is cached, for two minutes; the index half is measured on every call,
   so a re-publish cannot be reported under the previous generation's id. The response states

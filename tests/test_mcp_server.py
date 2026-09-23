@@ -1522,6 +1522,37 @@ class LibraryStatusToolTests(unittest.TestCase):
             self.assertEqual(index["scope"], "indexed_snapshot")
             self.assertIn("not what share of the Zotero library", index["scope_note"])
 
+    def test_an_unreadable_inventory_is_a_partial_comparison_not_a_null_one(self):
+        """The two unavailability states are distinct, and the docs must not conflate them.
+
+        `library` null means no comparison was produced. A non-null `library` with
+        `inventory_available` false means one was produced and is partial. A client that treats
+        any non-null `library` as a complete Zotero comparison reads the withheld membership
+        counts as real zeros -- which is why `library_unavailable_reason` stays null here and
+        `inventory_available` is the flag to branch on.
+        """
+        from zotero_pdf_text.zotero_db import SnapshotUnstableError
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            server, config = self._server(root, with_config=True)
+            self._write_snapshot(config)
+
+            with patch(
+                "zotero_pdf_text.library.load_attachment_inventory",
+                side_effect=SnapshotUnstableError(f"{root} kept changing"),
+            ):
+                response = server.tools["library_status"]()
+
+            library = response["library"]
+            self.assertIsNotNone(library)
+            self.assertIsNone(response["library_unavailable_reason"])
+            self.assertFalse(library["inventory_available"])
+            # Membership withheld: reported as zero, with the attachments parked elsewhere.
+            for withheld in ("current", "unindexed", "orphaned_index"):
+                self.assertEqual(library["counts"][withheld], 0)
+            self.assertGreater(library["counts"]["membership_unchecked"], 0)
+
     def test_attachments_compared_is_withheld_when_zotero_cannot_be_read(self):
         """It is not a library total then, and a plausible number invites a false share."""
         from zotero_pdf_text.zotero_db import SnapshotUnstableError

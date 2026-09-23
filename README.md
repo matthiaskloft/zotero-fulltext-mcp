@@ -302,14 +302,29 @@ The safe default server exposes:
 - `library_status()` -- how current the index is, as two answers that are never merged.
   `index` counts rows in the published generation: what was indexed, never what share of
   your library is indexed. `library` is the audit's comparison against Zotero and the files
-  on disk, and is `null` whenever no `dry-run` snapshot, no config or no readable Zotero
-  database could produce that comparison, with `library_unavailable_reason` naming the CLI
-  command that fixes it. Read-only. It takes no arguments: the snapshot is discovered on
-  this side of the boundary so no path crosses it, and `--full` re-hashing is deliberately
-  not reachable from MCP. The audit half is cached briefly, keyed on the index generation it
-  and mapping snapshot it ran against, and never when it failed to read Zotero; the response reports `from_cache`,
-  `cache_age_seconds` and the generation the audit compared against, and the index half is
-  always measured fresh.
+  on disk. Read-only. It takes no arguments: the snapshot is discovered on this side of the
+  boundary so no path crosses it, and `--full` re-hashing is deliberately not reachable from
+  MCP.
+
+  `library` is `null` only when no comparison could be produced at all -- no config, no
+  `dry-run` snapshot, an audit that failed, or a publication landing mid-measurement --
+  and `library_unavailable_reason` then says which it was and which CLI command fixes it.
+
+  A non-null `library` is **not** necessarily a complete Zotero comparison. When the audit
+  ran but Zotero's database could not be read, `library` is present and partial:
+  `inventory_available` is `false`, `inventory_error` says why, `attachments_compared` is
+  `null` because the key set is then not a library total, and the membership statuses
+  (`current`, `unindexed`, `orphaned_index`) are withheld -- they read `0` while
+  `membership_unchecked` carries the attachments they could not be decided for. File-level
+  findings (`stale_markdown`, `missing_markdown`, `source_changed`, `duplicate_key`) are
+  unaffected and still meaningful. `library_unavailable_reason` is `null` in this case,
+  because a comparison *was* produced; check `inventory_available` before reading membership
+  counts.
+
+  The audit half is cached briefly, keyed on both the index generation and the mapping
+  snapshot it ran against, and never cached when it could not read Zotero. The response
+  reports `from_cache`, `cache_age_seconds` and `audited_generation_id`, and the index half
+  is always measured fresh.
 
 Optional tools:
 

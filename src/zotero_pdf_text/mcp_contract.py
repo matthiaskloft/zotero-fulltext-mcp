@@ -334,8 +334,14 @@ class IndexSnapshotStats(TypedDict):
 class LibraryHealth(TypedDict):
     """The audit's comparison of the source library against the published index.
 
-    Present only when an audit snapshot produced the comparison. `counts` overlap: one
-    attachment can hold several statuses, so they do not sum to `attachments_compared`.
+    Present whenever an audit ran, which does not mean every question was answerable.
+    `inventory_available` is the gate: when it is false Zotero's database could not be read,
+    so `current`, `unindexed` and `orphaned_index` are withheld -- they read 0, and the
+    attachments they could not be decided for are counted under `membership_unchecked` --
+    while file-level findings stay valid. Read those three counts only when it is true.
+
+    `counts` overlap: one attachment can hold several statuses, so they do not sum to
+    `attachments_compared`.
     """
 
     snapshot_time: str
@@ -362,9 +368,15 @@ class LibraryStatusResponse(TypedDict):
     """Two separate answers, deliberately never merged into one number.
 
     `index` describes the published snapshot. `library` describes whether the source library
-    still matches it, and is null whenever no audit snapshot could produce that comparison --
-    in which case `library_unavailable_reason` says why. Index row counts are never presented
-    as library totals, which is this step's acceptance criterion.
+    still matches it, and is null only when no comparison could be produced at all -- in
+    which case `library_unavailable_reason` says why.
+
+    A non-null `library` may still be partial: see `LibraryHealth.inventory_available`. The
+    two are distinct states, and a consumer that treats any non-null `library` as a complete
+    Zotero comparison will read withheld membership counts as real zeros.
+
+    Index row counts are never presented as library totals, which is this step's acceptance
+    criterion.
     """
 
     index: IndexSnapshotStats
@@ -706,14 +718,22 @@ def create_server(
         Two separate answers that must not be merged. `index` counts rows in the published
         index generation: it says what was indexed, never what share of the Zotero library is
         indexed, because an attachment that was never converted appears in none of its numbers.
-        `library` is the audit's comparison against Zotero and the files on disk, and is null
-        whenever no snapshot could produce that comparison -- `library_unavailable_reason` then
-        says why and which CLI command fixes it.
+        `library` is the audit's comparison against Zotero and the files on disk. It is null
+        only when no comparison could be produced at all -- no config, no snapshot, a failed
+        audit, or a publication landing mid-measurement -- and `library_unavailable_reason`
+        then says which, and which CLI command fixes it.
 
-        Its counts overlap: one attachment can hold several statuses, so they do not sum to
-        `attachments_compared`. A null `inventory_available` case means Zotero could not be read
-        and membership conclusions were withheld rather than guessed, and
-        `source_provenance_unknown` states how much of the drift answer is not computable yet.
+        A non-null `library` is not necessarily a complete comparison. Check
+        `inventory_available` first: when it is false, Zotero's database could not be read,
+        so the membership statuses (current, unindexed, orphaned_index) are withheld and
+        read 0 while membership_unchecked carries those attachments, and
+        `attachments_compared` is null because the key set is not a library total.
+        File-level findings are unaffected. `library_unavailable_reason` is null in that
+        case, because a comparison was produced.
+
+        Its counts overlap: one attachment can hold several statuses at once, so they do not
+        sum to `attachments_compared`. `source_provenance_unknown` states how much of the
+        drift answer is not computable yet.
 
         Read-only; moves, rewrites and re-converts nothing. The index half is measured on
         every call. The audit half is reused for a short period because it copies and hashes
