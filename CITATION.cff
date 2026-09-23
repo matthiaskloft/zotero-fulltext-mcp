@@ -1,0 +1,18 @@
+cff-version: 1.2.0
+message: "If this software supports your research, please cite it using the metadata below."
+title: "zotero-fulltext-mcp"
+type: software
+version: 0.5.0
+date-released: 2026-09-22
+authors:
+  - family-names: Kloft
+    given-names: Matthias
+repository-code: "https://github.com/matthiaskloft/zotero-fulltext-mcp"
+url: "https://github.com/matthiaskloft/zotero-fulltext-mcp"
+license: MIT
+keywords:
+  - Zotero
+  - Model Context Protocol
+  - full-text search
+  - research software
+  - local-first

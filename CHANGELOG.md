@@ -13,6 +13,8 @@ dated section once it has been stress-tested against a large library.
 
 ### Added
 
+- Public project metadata, citation, contributor and security guidance, an SVG preview, and
+  packaging checks that keep installation examples and legacy requirements in sync.
 - `library_status` MCP tool: the same health answer on the read-only MCP surface, deliberately
   shaped so index row counts can never be read as library coverage. It reports the published
   generation's statistics and the audit's comparison as two separate fields. The comparison is

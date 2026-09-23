@@ -1,6 +1,10 @@
 # zotero-fulltext-mcp
 
 [![CI](https://github.com/matthiaskloft/zotero-fulltext-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/matthiaskloft/zotero-fulltext-mcp/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/matthiaskloft/zotero-fulltext-mcp?display_name=tag)](https://github.com/matthiaskloft/zotero-fulltext-mcp/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+![zotero-fulltext-mcp: local full-text search for a Zotero library](docs/assets/zotero-fulltext-mcp-social-preview.svg)
 
 Convert a Zotero library's linked PDF attachments to Markdown, build a full-text search index,
 and expose it to LLM tools (Claude Code, Codex, etc.) through an MCP server — so an assistant
@@ -31,7 +35,13 @@ floating `HEAD` — a tag is a known-good, CI-verified snapshot; `HEAD` on `mast
 mid-change:
 
 ```powershell
-C:\Users\you\.venvs\zotero_fulltext_mcp\Scripts\python.exe -m pip install "git+https://github.com/matthiaskloft/zotero-fulltext-mcp@v0.5.0#egg=zotero-fulltext-mcp[mcp]"
+C:\Users\you\.venvs\zotero_fulltext_mcp\Scripts\python.exe -m pip install "zotero-fulltext-mcp[mcp] @ git+https://github.com/matthiaskloft/zotero-fulltext-mcp.git@v0.5.0"
+```
+
+macOS/Linux:
+
+```bash
+~/.venvs/zotero_fulltext_mcp/bin/python -m pip install 'zotero-fulltext-mcp[mcp] @ git+https://github.com/matthiaskloft/zotero-fulltext-mcp.git@v0.5.0'
 ```
 
 Substitute the latest tag from the

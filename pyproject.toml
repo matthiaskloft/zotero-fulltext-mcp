@@ -6,7 +6,22 @@ build-backend = "hatchling.build"
 name = "zotero-fulltext-mcp"
 version = "0.5.0"
 description = "Convert a Zotero library's linked PDF attachments to Markdown, build a full-text search index, and expose it via an MCP server."
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [
+  { name = "Matthias Kloft" },
+]
 requires-python = ">=3.11"
+keywords = ["zotero", "mcp", "full-text-search", "research", "local-first"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering :: Information Analysis",
+]
 dependencies = [
   "pymupdf>=1.24",
   "pymupdf4llm>=0.0.17",
@@ -34,6 +49,12 @@ marker = [
 test = [
   "pytest>=7.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/matthiaskloft/zotero-fulltext-mcp"
+Documentation = "https://github.com/matthiaskloft/zotero-fulltext-mcp#readme"
+Issues = "https://github.com/matthiaskloft/zotero-fulltext-mcp/issues"
+Changelog = "https://github.com/matthiaskloft/zotero-fulltext-mcp/blob/master/CHANGELOG.md"
 
 [tool.pytest.ini_options]
 pythonpath = ["src", "benchmarks"]
