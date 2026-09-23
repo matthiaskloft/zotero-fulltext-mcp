@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import tempfile
+import time
 import unittest
 from collections.abc import Callable
 from pathlib import Path
@@ -1228,9 +1229,9 @@ class LibraryStatusToolTests(unittest.TestCase):
         )
         return server, config
 
-    def _write_snapshot(self, config) -> Path:
-        run_dir = config.output_root / "runs" / "20260923T120000Z"
-        run_dir.mkdir(parents=True)
+    def _write_snapshot(self, config, run_id: str = "20260923T120000Z") -> Path:
+        run_dir = config.output_root / "runs" / run_id
+        run_dir.mkdir(parents=True, exist_ok=True)
         snapshot = run_dir / "mapping_report.jsonl"
         snapshot.write_text(
             json.dumps(
@@ -1433,6 +1434,69 @@ class LibraryStatusToolTests(unittest.TestCase):
 
             self.assertIs(recovered["from_cache"], False)
             self.assertTrue(recovered["library"]["inventory_available"])
+
+    def test_a_newer_snapshot_invalidates_the_cached_audit(self):
+        """`dry-run` must be visible immediately; the tool discovers the snapshot per call.
+
+        Keying the cache on the published generation alone left a freshly mapped library
+        reported from the older snapshot, under that snapshot's run id, for the rest of the TTL.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            server, config = self._server(Path(tmp), with_config=True)
+            self._write_snapshot(config, run_id="20260923T120000Z")
+            first = server.tools["library_status"]()
+            self.assertEqual(first["library"]["snapshot_run_id"], "20260923T120000Z")
+
+            # A later dry-run. Newer mtime, and a different run id, so both halves of the
+            # snapshot identity change.
+            newer = self._write_snapshot(config, run_id="20260924T090000Z")
+            import os
+
+            os.utime(newer, (time.time() + 10, time.time() + 10))
+            second = server.tools["library_status"]()
+
+            self.assertIs(second["from_cache"], False)
+            self.assertEqual(second["library"]["snapshot_run_id"], "20260924T090000Z")
+
+    def test_a_publication_between_the_two_reads_refuses_the_mixed_answer(self):
+        """The index is read first; a publish before the audit would mix two generations.
+
+        Reporting `audited_generation_id` makes the mismatch visible. Refusing to return the
+        pair is what stops it being returned at all -- and the refused result is not cached, so
+        the next call simply succeeds.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            server, config = self._server(Path(tmp), with_config=True)
+            self._write_snapshot(config)
+            index_root = config.output_root / "index"
+
+            from zotero_pdf_text.artifacts import stage_and_publish, write_jsonl_from_existing
+            from zotero_pdf_text import mcp_contract
+
+            real_audit = mcp_contract._library_status_data
+
+            def publish_then_audit(*args, **kwargs):
+                # Stand in for `rebuild-index` landing after the index half was measured.
+                stage_and_publish(
+                    index_root,
+                    write_jsonl_from_existing(index_root / "zotero_text_index.jsonl"),
+                    command="test-race",
+                )
+                return real_audit(*args, **kwargs)
+
+            with patch.object(mcp_contract, "_library_status_data", publish_then_audit):
+                raced = server.tools["library_status"]()
+
+            self.assertIsNone(raced["library"])
+            self.assertIn("different generations", raced["library_unavailable_reason"])
+            self.assertIs(raced["from_cache"], False)
+
+            # Not cached, so the immediate retry gives a consistent answer.
+            settled = server.tools["library_status"]()
+            self.assertIsNotNone(settled["library"])
+            self.assertEqual(
+                settled["library"]["audited_generation_id"], settled["index"]["generation_id"]
+            )
 
     def test_an_unpublished_index_names_the_command_that_builds_one(self):
         """Not `operation_unavailable` -- this is the tool asked whether an index exists."""

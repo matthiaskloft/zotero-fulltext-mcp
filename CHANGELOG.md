@@ -28,10 +28,12 @@ dated section once it has been stress-tested against a large library.
   `index_not_published` and names `rebuild-index` instead of falling through to the generic
   `operation_unavailable`. `attachments_compared` is withheld when Zotero could not be read,
   since it is not a library total in that case. The cached audit is keyed on the index
-  generation it ran against and the payload reports that generation, so a re-publish can
-  never pair one generation's row counts with another's health counts; an audit that could
-  not read Zotero is not cached at all, because its own message tells the user to close
-  Zotero and ask again.
+  generation *and* the mapping snapshot it ran against, and the payload reports the audited
+  generation, so neither a `rebuild-index` nor a `dry-run` can leave a stale comparison in
+  place. The audit is also pointed at the same index root the server reads, and a response
+  whose two halves would describe different generations is refused rather than returned. An
+  audit that could not read Zotero is not cached at all, because its own message tells the
+  user to close Zotero and ask again.
 
 - `library-status`: the summary form of `audit-library`, reporting the same read-only
   comparison as counts without the per-item evidence. It names the published generation and its

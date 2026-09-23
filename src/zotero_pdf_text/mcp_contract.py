@@ -943,15 +943,15 @@ def _public_inventory_error(raw: object) -> str | None:
     )
 
 
-def _library_health(config: ProjectConfig | None) -> tuple[LibraryHealth | None, str | None]:
-    """Audit the library, or say why it could not be audited. Never both, never neither.
+def _resolve_audit_inputs(config: ProjectConfig | None) -> tuple[Path | None, str | None]:
+    """Return the snapshot an audit would use, or a written reason why none is usable.
 
-    Every reason is written here rather than taken from an exception's text, because an audit
-    failure's message names local paths and this response must not carry them.
+    Split out of the audit itself so the caller can put the snapshot's identity in the cache
+    key. All three checks are cheap -- a config test and a one-level glob -- which is why they
+    are re-run on every call rather than cached.
 
-    `full_audit` is deliberately not reachable from MCP: it re-hashes every source PDF in the
-    library, which is not a cost an LLM should be able to incur on a user's machine without the
-    user typing the command.
+    Every reason is written here rather than taken from an exception's text, because a failure's
+    message names local paths and this response must not carry them.
     """
     if config is None:
         return None, (
@@ -973,8 +973,48 @@ def _library_health(config: ProjectConfig | None) -> tuple[LibraryHealth | None,
             "No mapping snapshot exists yet, so there is nothing to compare the index against. "
             "Produce one with the CLI's `dry-run` command, then ask again."
         )
+    return snapshot, None
+
+
+def _snapshot_identity(snapshot: Path) -> object:
+    """What makes one snapshot a different snapshot, for cache-key purposes.
+
+    Its path and modification time, not its contents: `dry-run` writes a new run directory, and
+    re-running it in place rewrites the file. Hashing the contents would be more precise and
+    would cost a read of the whole snapshot on every call, which is the opposite of what a cache
+    is for. A `None` here means "cannot tell", which is treated as a miss rather than a hit.
+    """
     try:
-        status = _library_status_data(config, snapshot)
+        return (str(snapshot), snapshot.stat().st_mtime_ns)
+    except OSError:
+        return None
+
+
+def _library_health(
+    config: ProjectConfig,
+    snapshot: Path,
+    *,
+    index_root: Path,
+    expected_generation_id: str | None,
+) -> tuple[LibraryHealth | None, str | None]:
+    """Audit the library, or say why it could not be audited. Never both, never neither.
+
+    `index_root` is passed explicitly so the audit reads the same published generation the
+    index half read. Left to its default the audit resolves `config.output_root / "index"`,
+    which is not necessarily the index root the server was pointed at with `--db`; the two
+    halves of one response would then describe different indexes with nothing saying so.
+
+    `expected_generation_id` closes the remaining window. The index is measured first, so a
+    publication landing between that read and the audit's own pointer read would pair one
+    generation's row counts with another generation's health counts. Reporting the audited
+    generation makes that visible; refusing to return the mismatched pair is what prevents it.
+
+    `full_audit` is deliberately not reachable from MCP: it re-hashes every source PDF in the
+    library, which is not a cost an LLM should be able to incur on a user's machine without the
+    user typing the command.
+    """
+    try:
+        status = _library_status_data(config, snapshot, index_root=index_root)
     except PublicMcpError:
         raise
     except Exception as exc:
@@ -988,12 +1028,19 @@ def _library_health(config: ProjectConfig | None) -> tuple[LibraryHealth | None,
             f"({type(exc).__name__}). Run the CLI's `library-status` command for the full "
             "diagnostic, which may name local paths this surface withholds."
         )
+
+    audited_generation = str(status["generation_id"]) if status["generation_id"] else None
+    if audited_generation != expected_generation_id:
+        return None, (
+            "A new index generation was published while this status was being measured, so the "
+            "index statistics and the library comparison would describe different generations. "
+            "Nothing is wrong; ask again for a consistent answer."
+        )
+
     return (
         LibraryHealth(
             snapshot_time=str(status["snapshot_time"]),
-            audited_generation_id=(
-                str(status["generation_id"]) if status["generation_id"] else None
-            ),
+            audited_generation_id=audited_generation,
             # The run id, not the path: it identifies the snapshot without exposing where the
             # user keeps their library.
             snapshot_run_id=snapshot.parent.name,
@@ -1015,17 +1062,16 @@ def _library_health(config: ProjectConfig | None) -> tuple[LibraryHealth | None,
 def _is_cacheable_health(result: tuple[LibraryHealth | None, str | None]) -> bool:
     """Whether a computed health result is worth keeping for the rest of the TTL.
 
-    Two kinds are refused, for the same reason: both hand the caller something to fix and then
+    Refused in two cases, for the same reason: both hand the caller something to fix and then
     invite them to ask again, and a cache would spend two minutes answering that re-ask with the
     very state the caller just resolved.
 
-    - No audit ran at all (`health is None`): the reason says to run `dry-run`, or to start the
-      server with a config. Recomputing costs a `validate_config` call and a one-level glob.
-    - An audit ran but Zotero could not be read: membership conclusions were withheld and the
-      reason says to close Zotero and ask again. This one is easy to miss, because the result is
-      a fully-formed `LibraryHealth` -- it simply has `inventory_available` false. Re-running it
-      is the expensive path, but serving a known-degraded answer to someone who has just been
-      told how to un-degrade it is worse than paying for the audit.
+    - `health is None`: no usable comparison was produced -- the audit failed, or a publication
+      landed mid-measurement and the two halves would describe different generations.
+    - An audit ran but Zotero could not be read. Easy to miss, because the result is a
+      fully-formed `LibraryHealth` that simply has `inventory_available` false. Re-running is
+      the expensive path, but serving a known-degraded answer to someone who has just been told
+      how to un-degrade it is worse than paying for the audit.
     """
     health, _reason = result
     if health is None:
@@ -1036,23 +1082,45 @@ def _is_cacheable_health(result: tuple[LibraryHealth | None, str | None]) -> boo
 def _library_status_response(
     db_path: Path, config: ProjectConfig | None, cache: LibraryStatusCache
 ) -> LibraryStatusResponse:
-    """Measure the index every call; reuse a recent audit.
+    """Measure the index every call; reuse a recent audit only when its inputs are unchanged.
 
     Only the audit is expensive -- it copies and hashes Zotero's database -- so only the audit
     is cached. The index half is three bounded aggregates over a local SQLite file, and caching
     it alongside the audit meant a caller could be told generation A's id and record count for
     up to two minutes after a `rebuild-index` published generation B, while `search_fulltext`
-    (which resolves the pointer per request) was already citing B. That is the same
-    mixed-generation mislabeling `resolve_reader_generation` exists to prevent, reintroduced one
-    layer up, and it lands on the one tool whose whole job is to say how current the index is.
+    (which resolves the pointer per request) was already citing B.
+
+    The cache key is both inputs the audit actually reads: the published generation and the
+    mapping snapshot. Keying on the generation alone left `dry-run` invisible -- a freshly
+    mapped library would be reported from the older snapshot, under that snapshot's run id, for
+    the rest of the TTL, which contradicts discovering the snapshot per call in the first place.
     """
+    snapshot, unavailable = _resolve_audit_inputs(config)
     index = _index_snapshot_stats(db_path)
+    if snapshot is None or config is None:
+        # Nothing was audited, so there is nothing to cache or to reuse. These paths cost a
+        # config check and a glob, and one of them tells the caller to run `dry-run` and ask
+        # again -- an instruction a cached answer would spend two minutes contradicting.
+        return LibraryStatusResponse(
+            index=index,
+            library=None,
+            library_unavailable_reason=unavailable,
+            measured_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            from_cache=False,
+            cache_age_seconds=0,
+        )
+
+    identity = _snapshot_identity(snapshot)
     (health, reason), age, from_cache = cache.get_or_compute(
-        lambda: _library_health(config),
-        # The audit reads the published generation, so its health counts belong to that
-        # generation. Keying on it means a `rebuild-index` re-runs the audit rather than leaving
-        # B's row counts sitting beside A's `current`/`unindexed` counts until the TTL expires.
-        key=index["generation_id"],
+        lambda: _library_health(
+            config,
+            snapshot,
+            index_root=db_path.parent,
+            expected_generation_id=index["generation_id"],
+        ),
+        # A `None` identity means the snapshot's mtime could not be read, so the key can never
+        # match and the audit is recomputed -- the safe direction.
+        key=None if identity is None else (index["generation_id"], identity),
         should_cache=_is_cacheable_health,
     )
     return LibraryStatusResponse(
