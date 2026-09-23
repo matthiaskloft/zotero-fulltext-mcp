@@ -8,6 +8,7 @@ import re
 import sqlite3
 import threading
 import time
+from datetime import datetime, timezone
 from collections.abc import Callable
 from dataclasses import asdict
 from pathlib import Path
@@ -25,15 +26,19 @@ except ImportError:
 
 from .artifacts import (
     ArtifactError,
+    CurrentPointerError,
     ManagedIndexMissingError,
     current_generation_jsonl,
     resolve_reader_db_path,
+    resolve_reader_generation,
 )
 from .bibtex import DEFAULT_BBT_ENDPOINT, DEFAULT_BBT_TRANSLATOR, export_bibtex_entries
 from .config import ProjectConfig, validate_config
+from .library import MAPPING_REPORT_JSONL, LibraryAuditError, library_status as _library_status_data
 from .fts import (
     ChunkNotFoundError,
     DEFAULT_CONTEXT_RECORD_LIMIT,
+    index_statistics,
     FullTextResult,
     IndexSchemaUnsupportedError,
     MAX_QUERY_CHARS,
@@ -78,7 +83,10 @@ MCP_INSTRUCTIONS = (
     "source_locator.chunk_index with get_fulltext_chunk before using it to support a claim, passing "
     "that locator's chunk_sha256 so a passage that has since been replaced answers stale_locator "
     "instead of quietly returning different text under the citation you formed, and "
-    "use get_item_context for bibliographic and extraction context. Cite human-readable bibliographic "
+    "use get_item_context for bibliographic and extraction context. Use library_status to say how "
+    "current this index is before treating an absent result as an absent paper; its index counts "
+    "describe what was indexed and never what share of the library is indexed, and its library "
+    "health is null whenever no audit snapshot produced that comparison. Cite human-readable bibliographic "
     "metadata and retain the attachment key and source locator for traceability; do not invent PDF "
     "page numbers. Do not invoke a tool that rewrites converted content unless the user explicitly "
     "approves that specific operation. Zotero writes belong in approval-gated CLI workflows."
@@ -89,7 +97,14 @@ DEFAULT_MCP_TOOL_NAMES = (
     "get_item_context",
     "list_timeout_candidates",
     "list_orphan_candidates",
+    "library_status",
 )
+LIBRARY_STATUS_MCP_TOOL_NAME = "library_status"
+# An audit copies and hashes Zotero's database -- roughly four times its size in I/O per call.
+# That is fine once and wasteful in a loop, and an LLM asking a follow-up question has no way to
+# know it is re-paying the cost. A short cache makes repeated asking cheap; the payload reports
+# the cache age so a reused answer is never passed off as freshly measured.
+LIBRARY_STATUS_CACHE_SECONDS = 120
 BIBTEX_MCP_TOOL_NAME = "export_bibtex_entries_by_key"
 RECONVERT_MCP_TOOL_NAME = "reconvert_with_math_ocr"
 RETRY_TIMEOUT_MCP_TOOL_NAMES = ("skip_timeout_extraction", "retry_timeout_extraction")
@@ -295,6 +310,86 @@ class ListOrphanCandidatesResponse(TypedDict):
     candidates: list[OrphanCandidateRecord]
 
 
+class IndexSnapshotStats(TypedDict):
+    """What one published index generation holds. Never a share of the Zotero library.
+
+    `scope`/`scope_note` are carried from `fts.index_statistics` rather than dropped, because
+    the consumer here is the one most likely to read a row count as a library share, and a
+    docstring is not part of the payload it reads.
+    """
+
+    scope: str
+    scope_note: str
+    generation_id: str | None
+    published_at: str | None
+    records: int
+    chunks: int
+    total_chars: int
+    total_words: int
+    by_classification: dict[str, int]
+    by_identity_status: dict[str, int]
+    by_extraction_tool: dict[str, int]
+
+
+class LibraryHealth(TypedDict):
+    """The audit's comparison of the source library against the published index.
+
+    Present whenever an audit ran, which does not mean every question was answerable.
+    `inventory_available` is the gate: when it is false Zotero's database could not be read,
+    so `current`, `unindexed` and `orphaned_index` are withheld -- they read 0, and the
+    attachments they could not be decided for are counted under `membership_unchecked` --
+    while file-level findings stay valid. Read those three counts only when it is true.
+
+    `counts` overlap: one attachment can hold several statuses, so they do not sum to
+    `attachments_compared`.
+    """
+
+    snapshot_time: str
+    # The generation the audit compared against. Reported so the health counts can never be read
+    # as belonging to a different generation than the one that produced them, whatever the cache
+    # is doing -- the payload states its own provenance rather than relying on invalidation.
+    audited_generation_id: str | None
+    snapshot_run_id: str
+    snapshot_age_seconds: int | None
+    # Null when Zotero could not be read. It is then not a library total -- only what the
+    # snapshot and index happened to contain -- and leaving a plausible number under this name
+    # invites exactly the `counts["current"] / attachments_compared` share the acceptance
+    # criterion forbids, from a denominator that is not a library.
+    attachments_compared: int | None
+    counts: dict[str, int]
+    counts_overlap: bool
+    inventory_available: bool
+    inventory_error: str | None
+    ineligible_items: int
+    source_provenance_unknown: int
+
+
+class LibraryStatusResponse(TypedDict):
+    """Two separate answers, deliberately never merged into one number.
+
+    `index` describes the published snapshot. `library` describes whether the source library
+    still matches it, and is null only when no comparison could be produced at all -- in
+    which case `library_unavailable_reason` says why.
+
+    A non-null `library` may still be partial: see `LibraryHealth.inventory_available`. The
+    two are distinct states, and a consumer that treats any non-null `library` as a complete
+    Zotero comparison will read withheld membership counts as real zeros.
+
+    Index row counts are never presented as library totals, which is this step's acceptance
+    criterion.
+    """
+
+    index: IndexSnapshotStats
+    library: LibraryHealth | None
+    library_unavailable_reason: str | None
+    measured_at: str
+    # The index half is always measured fresh; only the audit half can be cached. `from_cache`
+    # states that plainly, because `cache_age_seconds` truncates and reads 0 for anything under
+    # a second -- the same value a fresh measurement reports.
+    from_cache: bool
+    cache_age_seconds: int
+
+
 class RetryTimeoutResponse(TypedDict):
     ok: bool
     action: str
@@ -314,6 +409,67 @@ class PublicMcpError(Exception):
         super().__init__(f"{code}: {message}")
         self.code = code
         self.message = message
+
+
+class LibraryStatusCache:
+    """Serve a recently computed status instead of re-auditing on every follow-up question.
+
+    An audit copies and hashes Zotero's database. Paying that once per conversational turn is
+    waste an LLM cannot see, so a short TTL absorbs repeat asking. The age is returned with the
+    value rather than hidden: a cached answer stated as if freshly measured is the failure mode
+    a cache introduces, and this step exists to stop status being overstated.
+
+    Locked for the same reason `ReconvertRateLimiter` is: stdio dispatches one call at a time
+    today, and this stays correct if that ever stops being true.
+    """
+
+    def __init__(self, ttl_seconds: int = LIBRARY_STATUS_CACHE_SECONDS) -> None:
+        self.ttl_seconds = ttl_seconds
+        self._value: Any = None
+        self._stored_at: float | None = None
+        self._key: object = None
+        self._lock = threading.Lock()
+
+    def get_or_compute(
+        self,
+        compute: Callable[[], Any],
+        *,
+        key: object = None,
+        should_cache: Callable[[Any], bool] | None = None,
+    ) -> tuple[Any, int, bool]:
+        """Return `(value, cache_age_seconds, from_cache)`, computing only on a miss.
+
+        `key` identifies the inputs the value was computed from. A hit requires the key to match,
+        because time is not the only way a cached audit goes wrong: an audit reads the published
+        index generation, so after a re-publish a cached result describes a generation that is no
+        longer current. Expiring only on age would pair one generation's row counts with another
+        generation's health counts for the rest of the TTL.
+
+        `should_cache` decides whether a freshly computed value is worth keeping. Results that
+        were cheap to produce, or that tell the caller to fix something and ask again, are not
+        stored: caching them buys nothing and spends the TTL contradicting the instruction the
+        response just gave.
+        """
+        with self._lock:
+            now = time.monotonic()
+            if self._value is not None and self._stored_at is not None and self._key == key:
+                age = now - self._stored_at
+                if age < self.ttl_seconds:
+                    return self._value, int(age), True
+            # Computed under the lock on purpose: a concurrent transport must not start two
+            # audits of the same library at once, which is the cost this cache exists to avoid.
+            value = compute()
+            if should_cache is None or should_cache(value):
+                self._value = value
+                self._stored_at = time.monotonic()
+                self._key = key
+            else:
+                # A value we refuse to store must also evict whatever it supersedes, or the next
+                # call serves an older answer that this one already found to be wrong.
+                self._value = None
+                self._stored_at = None
+                self._key = None
+            return value, 0, False
 
 
 class ReconvertRateLimiter:
@@ -553,6 +709,42 @@ def create_server(
             lambda: _list_orphan_candidates(db_path, status=status, limit=limit)
         )
 
+    library_status_cache = LibraryStatusCache()
+
+    @mcp.tool(annotations=READ_ONLY_TOOL_ANNOTATIONS)
+    def library_status() -> LibraryStatusResponse:
+        """Report what the published index holds and whether the library still matches it.
+
+        Two separate answers that must not be merged. `index` counts rows in the published
+        index generation: it says what was indexed, never what share of the Zotero library is
+        indexed, because an attachment that was never converted appears in none of its numbers.
+        `library` is the audit's comparison against Zotero and the files on disk. It is null
+        only when no comparison could be produced at all -- no config, no snapshot, a failed
+        audit, or a publication landing mid-measurement -- and `library_unavailable_reason`
+        then says which, and which CLI command fixes it.
+
+        A non-null `library` is not necessarily a complete comparison. Check
+        `inventory_available` first: when it is false, Zotero's database could not be read,
+        so the membership statuses (current, unindexed, orphaned_index) are withheld and
+        read 0 while membership_unchecked carries those attachments, and
+        `attachments_compared` is null because the key set is not a library total.
+        File-level findings are unaffected. `library_unavailable_reason` is null in that
+        case, because a comparison was produced.
+
+        Its counts overlap: one attachment can hold several statuses at once, so they do not
+        sum to `attachments_compared`. `source_provenance_unknown` states how much of the
+        drift answer is not computable yet.
+
+        Read-only; moves, rewrites and re-converts nothing. The index half is measured on
+        every call. The audit half is reused for a short period because it copies and hashes
+        Zotero's database; `from_cache` and `cache_age_seconds` say when that happened, so a
+        reused answer is never mistaken for a fresh measurement.
+        """
+
+        return _public_call(
+            lambda: _library_status_response(db_path, config, library_status_cache)
+        )
+
     if enable_reconvert:
         limiter = ReconvertRateLimiter()
 
@@ -655,6 +847,310 @@ def create_server(
             )
 
     return mcp
+
+
+def latest_mapping_snapshot(config: ProjectConfig) -> Path | None:
+    """Return the newest `runs/<id>/mapping_report.jsonl` under `output_root`, or None.
+
+    The CLI takes the snapshot path as an argument. An MCP client must not: a path is local
+    diagnostic detail the retrieval surface is specified to keep on this side of the boundary,
+    and an LLM has no way to know which run directory is current anyway. Discovering it per call
+    rather than pinning it at startup means a snapshot produced after the server started is
+    visible without a restart -- which is the normal case, since `dry-run` is how a user prepares
+    for an audit.
+
+    Newest by modification time rather than by directory name: run ids sort chronologically
+    today, but a copied or restored run directory keeps its old name and would otherwise be
+    treated as current.
+    """
+    runs_root = config.output_root / "runs"
+    if not runs_root.is_dir():
+        return None
+    snapshots = [
+        candidate
+        for candidate in runs_root.glob("*/" + MAPPING_REPORT_JSONL)
+        if candidate.is_file()
+    ]
+    if not snapshots:
+        return None
+    # A run directory pruned between the glob and the stat would otherwise raise OSError, which
+    # `_public_call` reports as "the local full-text index is unavailable" -- a false statement
+    # about a component that is fine. Skip what vanished instead.
+    dated: list[tuple[float, Path]] = []
+    for candidate in snapshots:
+        try:
+            dated.append((candidate.stat().st_mtime, candidate))
+        except OSError:
+            continue
+    if not dated:
+        return None
+    return max(dated, key=lambda pair: pair[0])[1]
+
+
+def _snapshot_age_seconds(snapshot: Path) -> int | None:
+    """How long ago the snapshot was written, so a stale comparison is visible as stale."""
+    try:
+        return max(int(time.time() - snapshot.stat().st_mtime), 0)
+    except OSError:
+        return None
+
+
+def _index_snapshot_stats(db_path: Path) -> IndexSnapshotStats:
+    """Summarize the published generation, or say plainly that none is published.
+
+    `ManagedIndexMissingError` would otherwise reach `_public_call`'s `except RuntimeError` and
+    surface as `operation_unavailable: "The requested local operation is unavailable."` -- the
+    most generic error on the surface, returned by the one tool an LLM calls to find out whether
+    an index exists at all. The specific error it was swallowing already names the command that
+    fixes it, so that guidance is kept.
+    """
+    try:
+        resolved = resolve_reader_generation(db_path)
+    except (ManagedIndexMissingError, CurrentPointerError) as exc:
+        raise PublicMcpError(
+            "index_not_published",
+            "No complete index generation is published, so there is nothing to report about "
+            f"the indexed snapshot ({type(exc).__name__}). Build one with the CLI's "
+            "`rebuild-index` command.",
+        ) from None
+    stats = index_statistics(
+        resolved.db_path,
+        generation_id=resolved.generation_id,
+        published_at=resolved.published_at,
+    )
+    return IndexSnapshotStats(
+        scope=str(stats["scope"]),
+        scope_note=str(stats["scope_note"]),
+        generation_id=stats["generation_id"],
+        published_at=stats["published_at"],
+        records=stats["records"],
+        chunks=stats["chunks"],
+        total_chars=stats["total_chars"],
+        total_words=stats["total_words"],
+        by_classification=stats["by_classification"],
+        by_identity_status=stats["by_identity_status"],
+        by_extraction_tool=stats["by_extraction_tool"],
+    )
+
+
+def _public_inventory_error(raw: object) -> str | None:
+    """Reduce the audit's inventory error to its type plus a written, path-free sentence.
+
+    `library.audit_library` builds this string as `f"{type(exc).__name__}: {exc}"` from a broad
+    `except Exception`, and several of the exceptions it catches embed the Zotero database path
+    verbatim -- `SnapshotUnstableError` and `SnapshotUnsafeError` both interpolate `db_path`, and
+    a `PermissionError` from the copy carries the filename in its `strerror`. Forwarding that
+    text put a researcher's absolute path into an LLM's context on the most ordinary failure
+    there is: Zotero being open while the audit runs.
+
+    The type name is the part that carries the decision -- a database that would not hold still
+    is fixed by closing Zotero, a permission or schema failure is not -- so it is kept and the
+    message is replaced rather than sanitized. Sanitizing would mean guessing which substrings
+    are paths, which fails on the first unfamiliar exception.
+    """
+    if not raw:
+        return None
+    # The type name is everything before the first colon, which is how audit_library composes it.
+    exception_type = str(raw).split(":", 1)[0].strip() or "Exception"
+    if not exception_type.replace("_", "").isalnum():
+        # Defensive: never echo a token that is not a bare identifier.
+        exception_type = "Exception"
+    return (
+        f"Zotero's attachment inventory could not be read ({exception_type}), so membership "
+        "conclusions were withheld rather than guessed. If Zotero is open, close it and ask "
+        "again. The CLI's `library-status` command reports the full diagnostic, which names "
+        "local paths this surface withholds."
+    )
+
+
+def _resolve_audit_inputs(config: ProjectConfig | None) -> tuple[Path | None, str | None]:
+    """Return the snapshot an audit would use, or a written reason why none is usable.
+
+    Split out of the audit itself so the caller can put the snapshot's identity in the cache
+    key. All three checks are cheap -- a config test and a one-level glob -- which is why they
+    are re-run on every call rather than cached.
+
+    Every reason is written here rather than taken from an exception's text, because a failure's
+    message names local paths and this response must not carry them.
+    """
+    if config is None:
+        return None, (
+            "This server was started without a project config, so it can compare the index "
+            "against nothing. Library health is available from the CLI's `library-status` "
+            "command, or by starting the server with --config."
+        )
+    try:
+        validate_config(config)
+    except Exception:
+        return None, (
+            "The configured Zotero and output locations are not all present on this machine, "
+            "so the source library cannot be compared against the index. Check the paths with "
+            "the CLI's `check-setup` command."
+        )
+    snapshot = latest_mapping_snapshot(config)
+    if snapshot is None:
+        return None, (
+            "No mapping snapshot exists yet, so there is nothing to compare the index against. "
+            "Produce one with the CLI's `dry-run` command, then ask again."
+        )
+    return snapshot, None
+
+
+def _snapshot_identity(snapshot: Path) -> object:
+    """What makes one snapshot a different snapshot, for cache-key purposes.
+
+    Its path and modification time, not its contents: `dry-run` writes a new run directory, and
+    re-running it in place rewrites the file. Hashing the contents would be more precise and
+    would cost a read of the whole snapshot on every call, which is the opposite of what a cache
+    is for. A `None` here means "cannot tell", which is treated as a miss rather than a hit.
+    """
+    try:
+        return (str(snapshot), snapshot.stat().st_mtime_ns)
+    except OSError:
+        return None
+
+
+def _library_health(
+    config: ProjectConfig,
+    snapshot: Path,
+    *,
+    index_root: Path,
+    expected_generation_id: str | None,
+) -> tuple[LibraryHealth | None, str | None]:
+    """Audit the library, or say why it could not be audited. Never both, never neither.
+
+    `index_root` is passed explicitly so the audit reads the same published generation the
+    index half read. Left to its default the audit resolves `config.output_root / "index"`,
+    which is not necessarily the index root the server was pointed at with `--db`; the two
+    halves of one response would then describe different indexes with nothing saying so.
+
+    `expected_generation_id` closes the remaining window. The index is measured first, so a
+    publication landing between that read and the audit's own pointer read would pair one
+    generation's row counts with another generation's health counts. Reporting the audited
+    generation makes that visible; refusing to return the mismatched pair is what prevents it.
+
+    `full_audit` is deliberately not reachable from MCP: it re-hashes every source PDF in the
+    library, which is not a cost an LLM should be able to incur on a user's machine without the
+    user typing the command.
+    """
+    try:
+        status = _library_status_data(config, snapshot, index_root=index_root)
+    except PublicMcpError:
+        raise
+    except Exception as exc:
+        # Broad on purpose. The design intent is "index stats always answer, library degrades to
+        # a reason"; catching only two types lost that for everything else -- an OSError reading
+        # the mapping report reached `_public_call` and was reported as the *index* being
+        # unavailable, which is both wrong and unactionable.
+        # The type is informative; the message is not safe to forward.
+        return None, (
+            "The library audit could not be completed "
+            f"({type(exc).__name__}). Run the CLI's `library-status` command for the full "
+            "diagnostic, which may name local paths this surface withholds."
+        )
+
+    audited_generation = str(status["generation_id"]) if status["generation_id"] else None
+    if audited_generation != expected_generation_id:
+        return None, (
+            "A new index generation was published while this status was being measured, so the "
+            "index statistics and the library comparison would describe different generations. "
+            "Nothing is wrong; ask again for a consistent answer."
+        )
+
+    return (
+        LibraryHealth(
+            snapshot_time=str(status["snapshot_time"]),
+            audited_generation_id=audited_generation,
+            # The run id, not the path: it identifies the snapshot without exposing where the
+            # user keeps their library.
+            snapshot_run_id=snapshot.parent.name,
+            snapshot_age_seconds=_snapshot_age_seconds(snapshot),
+            attachments_compared=(
+                int(status["total_items"]) if status["inventory_available"] else None
+            ),
+            counts=dict(status["health"] or {}),
+            counts_overlap=True,
+            inventory_available=bool(status["inventory_available"]),
+            inventory_error=_public_inventory_error(status["inventory_error"]),
+            ineligible_items=int(status["ineligible_items"]),
+            source_provenance_unknown=int(status["source_provenance_unknown"]),
+        ),
+        None,
+    )
+
+
+def _is_cacheable_health(result: tuple[LibraryHealth | None, str | None]) -> bool:
+    """Whether a computed health result is worth keeping for the rest of the TTL.
+
+    Refused in two cases, for the same reason: both hand the caller something to fix and then
+    invite them to ask again, and a cache would spend two minutes answering that re-ask with the
+    very state the caller just resolved.
+
+    - `health is None`: no usable comparison was produced -- the audit failed, or a publication
+      landed mid-measurement and the two halves would describe different generations.
+    - An audit ran but Zotero could not be read. Easy to miss, because the result is a
+      fully-formed `LibraryHealth` that simply has `inventory_available` false. Re-running is
+      the expensive path, but serving a known-degraded answer to someone who has just been told
+      how to un-degrade it is worse than paying for the audit.
+    """
+    health, _reason = result
+    if health is None:
+        return False
+    return bool(health["inventory_available"])
+
+
+def _library_status_response(
+    db_path: Path, config: ProjectConfig | None, cache: LibraryStatusCache
+) -> LibraryStatusResponse:
+    """Measure the index every call; reuse a recent audit only when its inputs are unchanged.
+
+    Only the audit is expensive -- it copies and hashes Zotero's database -- so only the audit
+    is cached. The index half is three bounded aggregates over a local SQLite file, and caching
+    it alongside the audit meant a caller could be told generation A's id and record count for
+    up to two minutes after a `rebuild-index` published generation B, while `search_fulltext`
+    (which resolves the pointer per request) was already citing B.
+
+    The cache key is both inputs the audit actually reads: the published generation and the
+    mapping snapshot. Keying on the generation alone left `dry-run` invisible -- a freshly
+    mapped library would be reported from the older snapshot, under that snapshot's run id, for
+    the rest of the TTL, which contradicts discovering the snapshot per call in the first place.
+    """
+    snapshot, unavailable = _resolve_audit_inputs(config)
+    index = _index_snapshot_stats(db_path)
+    if snapshot is None or config is None:
+        # Nothing was audited, so there is nothing to cache or to reuse. These paths cost a
+        # config check and a glob, and one of them tells the caller to run `dry-run` and ask
+        # again -- an instruction a cached answer would spend two minutes contradicting.
+        return LibraryStatusResponse(
+            index=index,
+            library=None,
+            library_unavailable_reason=unavailable,
+            measured_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            from_cache=False,
+            cache_age_seconds=0,
+        )
+
+    identity = _snapshot_identity(snapshot)
+    (health, reason), age, from_cache = cache.get_or_compute(
+        lambda: _library_health(
+            config,
+            snapshot,
+            index_root=db_path.parent,
+            expected_generation_id=index["generation_id"],
+        ),
+        # A `None` identity means the snapshot's mtime could not be read, so the key can never
+        # match and the audit is recomputed -- the safe direction.
+        key=None if identity is None else (index["generation_id"], identity),
+        should_cache=_is_cacheable_health,
+    )
+    return LibraryStatusResponse(
+        index=index,
+        library=health,
+        library_unavailable_reason=reason,
+        measured_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        from_cache=from_cache,
+        cache_age_seconds=age,
+    )
 
 
 def configured_index_path(config: ProjectConfig) -> Path:

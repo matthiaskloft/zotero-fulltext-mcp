@@ -26,7 +26,7 @@ class McpProtocolTests(unittest.TestCase):
             tools = {tool.name: tool for tool in asyncio.run(server.list_tools())}
             self.assertEqual(
                 set(tools),
-                {"search_fulltext", "get_fulltext_chunk", "get_item_context", "list_timeout_candidates", "list_orphan_candidates"},
+                {"search_fulltext", "get_fulltext_chunk", "get_item_context", "list_timeout_candidates", "list_orphan_candidates", "library_status"},
             )
             for tool in tools.values():
                 self.assertIsNotNone(tool.outputSchema)
@@ -132,6 +132,7 @@ class McpProtocolTests(unittest.TestCase):
                     "get_item_context",
                     "list_timeout_candidates",
                     "list_orphan_candidates",
+                    "library_status",
                     "export_bibtex_entries_by_key",
                     "reconvert_with_math_ocr",
                 },

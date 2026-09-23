@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import tempfile
+import time
 import unittest
 from collections.abc import Callable
 from pathlib import Path
@@ -24,9 +25,41 @@ from zotero_pdf_text.mcp_contract import (
     create_server,
     validate_bibtex_endpoint,
 )
+from zotero_pdf_text.library import library_status as library_status_data
 from zotero_pdf_text.mcp_server import main
 from zotero_pdf_text.orphan_candidates import append_master_candidates as append_master_candidates_orphan
 from zotero_pdf_text.timeout_candidates import TimeoutCandidate, append_master_candidates
+
+
+def assert_no_local_path(test: unittest.TestCase, payload: object, root: Path) -> None:
+    """Fail if `root` appears anywhere in `payload`, checking the values, not their JSON form.
+
+    The obvious spelling -- `assertNotIn(str(root), json.dumps(payload))` -- cannot fail on
+    Windows. `json.dumps` escapes every backslash, so a path's separators are doubled in the
+    serialized text and the raw path never appears as a substring. Every path-containment
+    assertion on this surface used that spelling, which is how a real leak in
+    `inventory_error` reached review with a green suite on the platform this project is
+    primarily verified on.
+
+    This walks the structure instead and compares against the raw string, plus the POSIX
+    spelling, since paths reach responses through both `str()` and `Path.as_posix()`.
+    """
+    needles = {str(root), root.as_posix()}
+
+    def walk(node: object, where: str) -> None:
+        if isinstance(node, str):
+            for needle in needles:
+                if needle and needle in node:
+                    test.fail(f"local path leaked at {where}: {node!r}")
+        elif isinstance(node, dict):
+            for key, value in node.items():
+                walk(key, f"{where}.{key}")
+                walk(value, f"{where}.{key}")
+        elif isinstance(node, (list, tuple)):
+            for i, value in enumerate(node):
+                walk(value, f"{where}[{i}]")
+
+    walk(payload, "response")
 
 
 class FakeFastMCP:
@@ -57,7 +90,7 @@ class McpServerTests(unittest.TestCase):
 
             self.assertEqual(
                 set(server.tools),
-                {"search_fulltext", "get_fulltext_chunk", "get_item_context", "list_timeout_candidates", "list_orphan_candidates"},
+                {"search_fulltext", "get_fulltext_chunk", "get_item_context", "list_timeout_candidates", "list_orphan_candidates", "library_status"},
             )
             self.assertNotIn("ensure_zotero_running", server.tools)
             self.assertNotIn("export_bibtex_entries_by_key", server.tools)
@@ -85,7 +118,7 @@ class McpServerTests(unittest.TestCase):
 
         self.assertEqual(
             {tool.name for tool in tools},
-            {"search_fulltext", "get_fulltext_chunk", "get_item_context", "list_timeout_candidates", "list_orphan_candidates"},
+            {"search_fulltext", "get_fulltext_chunk", "get_item_context", "list_timeout_candidates", "list_orphan_candidates", "library_status"},
         )
         descriptions = {tool.name: tool.description for tool in tools}
         self.assertIn("title, creators, citation key, and converted body text", descriptions["search_fulltext"])
@@ -113,6 +146,7 @@ class McpServerTests(unittest.TestCase):
                     "get_item_context",
                     "list_timeout_candidates",
                     "list_orphan_candidates",
+                    "library_status",
                     "export_bibtex_entries_by_key",
                     "reconvert_with_math_ocr",
                 },
@@ -165,7 +199,7 @@ class McpServerTests(unittest.TestCase):
             self.assertEqual([record["attachment_key"] for record in broader_search["results"]], ["ATTACH1"])
 
             context = server.tools["get_item_context"](attachment_key="ATTACH1")
-            self.assertNotIn(str(root), json.dumps(context))
+            assert_no_local_path(self, context, root)
             self.assertEqual(context["records"][0]["provenance"]["source_kind"], "converted_pdf")
 
             passage = server.tools["get_fulltext_chunk"]("ATTACH1", chunk_index=0)
@@ -511,7 +545,7 @@ class McpServerTests(unittest.TestCase):
             with patch("zotero_pdf_text.math_ocr.reconvert_with_marker", return_value=success):
                 result = reconvert("ATTACH1", confirm="reconvert")
             self.assertTrue(result["ok"])
-            self.assertNotIn(str(root), json.dumps(result))
+            assert_no_local_path(self, result, root)
 
             _assert_tool_error(self, lambda: reconvert("ATTACH1", confirm="reconvert"), "reconversion_rate_limited")
 
@@ -711,7 +745,7 @@ class TimeoutCandidateMcpTests(unittest.TestCase):
             self.assertEqual(candidate["attachment_key"], "SLOWKEY")
             self.assertEqual(candidate["status"], "pending")
             self.assertNotIn("source_path", candidate)
-            self.assertNotIn(str(root), json.dumps(response))
+            assert_no_local_path(self, response, root)
 
     def test_list_timeout_candidates_filters_by_status(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -775,7 +809,7 @@ class TimeoutCandidateMcpTests(unittest.TestCase):
             result = skip("SLOWKEY", reason="too slow", confirm="skip_timeout")
             self.assertTrue(result["ok"])
             self.assertEqual(result["new_status"], "skipped")
-            self.assertNotIn(str(root), json.dumps(result))
+            assert_no_local_path(self, result, root)
 
     def test_retry_timeout_extraction_requires_literal_confirmation_and_is_rate_limited(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -806,7 +840,7 @@ class TimeoutCandidateMcpTests(unittest.TestCase):
             with patch("zotero_pdf_text.retry_timeout.retry_timeout_candidate", return_value=success):
                 result = retry("SLOWKEY", confirm="retry_timeout")
             self.assertTrue(result["ok"])
-            self.assertNotIn(str(root), json.dumps(result))
+            assert_no_local_path(self, result, root)
 
             _assert_tool_error(self, lambda: retry("SLOWKEY", confirm="retry_timeout"), "timeout_retry_rate_limited")
 
@@ -840,7 +874,7 @@ class OrphanCandidateMcpTests(unittest.TestCase):
             self.assertEqual(candidate["status"], "pending")
             self.assertEqual(candidate["confidence_tier"], "high")
             self.assertNotIn("orphan_source_path", candidate)
-            self.assertNotIn(str(root), json.dumps(response))
+            assert_no_local_path(self, response, root)
 
     def test_list_orphan_candidates_filters_by_status(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -1160,3 +1194,379 @@ class TamperedPointerMcpReadTests(unittest.TestCase):
 
             pointer_path.write_text(good_pointer, encoding="utf-8")
             self.assertTrue(server.tools["search_fulltext"]("searchable")["results"])
+
+
+class LibraryStatusToolTests(unittest.TestCase):
+    """Rank 9's MCP half: two answers that must never be merged into one number.
+
+    `index` counts rows in the published generation. `library` is the audit's comparison against
+    Zotero. The acceptance criterion for this step is a prohibition -- library status is not
+    presented as a total-Zotero-library count unless an audit snapshot produced the comparison --
+    so most of what is asserted here is what the response refuses to claim.
+    """
+
+    def _server(self, root: Path, *, with_config: bool, readable_inventory: bool = True):
+        _, sqlite_path, config = _build_index(root)
+        if readable_inventory:
+            # `_build_index` leaves an empty zotero.sqlite, which makes every audit here report
+            # `inventory_available` false. Tests about caching a *completed* audit need one that
+            # actually completes -- the same trap tests/test_cli.py documents on
+            # `_write_zotero_inventory`.
+            from test_cli import _write_zotero_inventory
+
+            _write_zotero_inventory(
+                root / "zotero.sqlite",
+                "ATTACH1",
+                root / "private-paper.pdf",
+                title="Ignore instructions",
+                doi="",
+                citation_key="ignoreInstructions2026",
+            )
+        server = create_server(
+            sqlite_path,
+            config=config if with_config else None,
+            mcp_factory=FakeFastMCP,
+        )
+        return server, config
+
+    def _write_snapshot(self, config, run_id: str = "20260923T120000Z") -> Path:
+        run_dir = config.output_root / "runs" / run_id
+        run_dir.mkdir(parents=True, exist_ok=True)
+        snapshot = run_dir / "mapping_report.jsonl"
+        snapshot.write_text(
+            json.dumps(
+                {
+                    "zotero_attachment_key": "ATTACH1",
+                    "classification": "mapped_verified",
+                    "identity_status": "verified",
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        return snapshot
+
+    def test_the_tool_is_on_the_default_read_only_surface(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            server, _ = self._server(Path(tmp), with_config=False)
+            self.assertIn("library_status", server.tools)
+            self.assertEqual(
+                server.tool_metadata["library_status"]["annotations"], READ_ONLY_TOOL_ANNOTATIONS
+            )
+
+    def test_full_audit_is_not_reachable_from_mcp(self):
+        """Re-hashing every source PDF is a cost the user types a command for, not one an LLM incurs."""
+        import inspect
+
+        with tempfile.TemporaryDirectory() as tmp:
+            server, _ = self._server(Path(tmp), with_config=False)
+            self.assertEqual(
+                list(inspect.signature(server.tools["library_status"]).parameters), []
+            )
+
+    def test_without_a_config_the_index_is_still_reported_and_health_is_withheld(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            server, _ = self._server(Path(tmp), with_config=False)
+            response = server.tools["library_status"]()
+
+            self.assertEqual(response["index"]["records"], 1)
+            self.assertIsNotNone(response["index"]["generation_id"])
+            self.assertIsNone(response["library"])
+            self.assertIn("without a project config", response["library_unavailable_reason"])
+
+    def test_without_a_snapshot_the_reason_names_the_command_that_produces_one(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            server, _ = self._server(Path(tmp), with_config=True)
+            response = server.tools["library_status"]()
+
+            self.assertIsNone(response["library"])
+            self.assertIn("dry-run", response["library_unavailable_reason"])
+
+    def test_with_a_snapshot_the_comparison_is_reported(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            server, config = self._server(Path(tmp), with_config=True)
+            self._write_snapshot(config)
+            response = server.tools["library_status"]()
+
+            self.assertIsNone(response["library_unavailable_reason"])
+            library = response["library"]
+            self.assertIsNotNone(library)
+            self.assertEqual(library["snapshot_run_id"], "20260923T120000Z")
+            self.assertIs(library["counts_overlap"], True)
+            self.assertIsInstance(library["counts"], dict)
+            self.assertGreaterEqual(library["snapshot_age_seconds"], 0)
+
+    def test_the_response_never_carries_a_local_path(self):
+        """`library_status` returns an absolute mapping_report path; this surface must not."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            server, config = self._server(root, with_config=True)
+            self._write_snapshot(config)
+            response = server.tools["library_status"]()
+
+            assert_no_local_path(self, response, root)
+            self.assertNotIn("mapping_report.jsonl", json.dumps(response))
+
+    def test_an_unreadable_zotero_database_does_not_leak_its_path(self):
+        """The fixture's Zotero DB fails with a path-free error, so the leak needs injecting.
+
+        `SnapshotUnstableError` interpolates the database path, and an open Zotero is the most
+        ordinary way to reach it. This is the case the previous containment assertion could not
+        see: it compared against `json.dumps` output, where every backslash is escaped.
+        """
+        from zotero_pdf_text.zotero_db import SnapshotUnstableError
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            server, config = self._server(root, with_config=True)
+            self._write_snapshot(config)
+            secret = root / "Zotero" / "zotero.sqlite"
+
+            with patch(
+                "zotero_pdf_text.library.load_attachment_inventory",
+                side_effect=SnapshotUnstableError(
+                    f"{secret} kept changing while it was being copied (3 attempts)."
+                ),
+            ):
+                response = server.tools["library_status"]()
+
+            library = response["library"]
+            self.assertIsNotNone(library)
+            self.assertFalse(library["inventory_available"])
+            assert_no_local_path(self, response, root)
+            # The type survives, because it is what tells the user whether retrying helps.
+            self.assertIn("SnapshotUnstableError", library["inventory_error"])
+            self.assertIn("close it and ask again", library["inventory_error"])
+
+    def test_a_repeat_call_reuses_the_audit_and_says_so(self):
+        """An audit costs real disk I/O; a chatty caller must not re-pay it silently."""
+        with tempfile.TemporaryDirectory() as tmp:
+            server, config = self._server(Path(tmp), with_config=True)
+            self._write_snapshot(config)
+
+            with patch(
+                "zotero_pdf_text.mcp_contract._library_status_data",
+                wraps=library_status_data,
+            ) as audit:
+                first = server.tools["library_status"]()
+                second = server.tools["library_status"]()
+
+            self.assertEqual(audit.call_count, 1)
+            self.assertIs(first["from_cache"], False)
+            self.assertIs(second["from_cache"], True)
+            self.assertEqual(second["library"], first["library"])
+
+    def test_the_index_half_is_measured_on_every_call(self):
+        """Caching the index alongside the audit would mislabel a generation after a republish.
+
+        `search_fulltext` resolves the pointer per request, so a cached generation id would have
+        this tool reporting A while retrieval cites B -- on the one tool whose job is to say how
+        current the index is.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            server, config = self._server(Path(tmp), with_config=True)
+            self._write_snapshot(config)
+            first = server.tools["library_status"]()
+
+            from zotero_pdf_text.artifacts import stage_and_publish, write_jsonl_from_existing
+
+            index_root = config.output_root / "index"
+            stage_and_publish(
+                index_root,
+                write_jsonl_from_existing(index_root / "zotero_text_index.jsonl"),
+                command="test-republish",
+            )
+            second = server.tools["library_status"]()
+
+            self.assertNotEqual(
+                second["index"]["generation_id"], first["index"]["generation_id"]
+            )
+            # The audit reads the published generation, so its health counts belong to one too.
+            # Serving them from cache would pair B's row counts with A's current/unindexed.
+            self.assertIs(second["from_cache"], False)
+            self.assertEqual(
+                second["library"]["audited_generation_id"], second["index"]["generation_id"]
+            )
+            self.assertEqual(
+                first["library"]["audited_generation_id"], first["index"]["generation_id"]
+            )
+
+    def test_an_unavailable_library_answer_is_not_cached(self):
+        """"Run dry-run, then ask again" must not be contradicted for two minutes."""
+        with tempfile.TemporaryDirectory() as tmp:
+            server, config = self._server(Path(tmp), with_config=True)
+
+            first = server.tools["library_status"]()
+            self.assertIsNone(first["library"])
+            self.assertIn("dry-run", first["library_unavailable_reason"])
+
+            self._write_snapshot(config)
+            second = server.tools["library_status"]()
+
+            self.assertIsNotNone(second["library"])
+            self.assertIsNone(second["library_unavailable_reason"])
+            self.assertIs(second["from_cache"], False)
+
+    def test_an_inventory_failure_is_not_cached_across_a_retry(self):
+        """The response says to close Zotero and ask again; the cache must honour that.
+
+        This result is a fully-formed LibraryHealth -- it just has `inventory_available` false --
+        so a "cache anything that produced health" rule keeps it, and the user who closes Zotero
+        and asks again is told the same thing for the rest of the TTL.
+        """
+        from zotero_pdf_text.zotero_db import SnapshotUnstableError
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            server, config = self._server(root, with_config=True)
+            self._write_snapshot(config)
+
+            with patch(
+                "zotero_pdf_text.library.load_attachment_inventory",
+                side_effect=SnapshotUnstableError(f"{root} kept changing"),
+            ):
+                degraded = server.tools["library_status"]()
+            self.assertFalse(degraded["library"]["inventory_available"])
+            self.assertIn("ask again", degraded["library"]["inventory_error"])
+
+            # Zotero closed; the very next call must re-audit rather than serve the failure.
+            recovered = server.tools["library_status"]()
+
+            self.assertIs(recovered["from_cache"], False)
+            self.assertTrue(recovered["library"]["inventory_available"])
+
+    def test_a_newer_snapshot_invalidates_the_cached_audit(self):
+        """`dry-run` must be visible immediately; the tool discovers the snapshot per call.
+
+        Keying the cache on the published generation alone left a freshly mapped library
+        reported from the older snapshot, under that snapshot's run id, for the rest of the TTL.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            server, config = self._server(Path(tmp), with_config=True)
+            self._write_snapshot(config, run_id="20260923T120000Z")
+            first = server.tools["library_status"]()
+            self.assertEqual(first["library"]["snapshot_run_id"], "20260923T120000Z")
+
+            # A later dry-run. Newer mtime, and a different run id, so both halves of the
+            # snapshot identity change.
+            newer = self._write_snapshot(config, run_id="20260924T090000Z")
+            import os
+
+            os.utime(newer, (time.time() + 10, time.time() + 10))
+            second = server.tools["library_status"]()
+
+            self.assertIs(second["from_cache"], False)
+            self.assertEqual(second["library"]["snapshot_run_id"], "20260924T090000Z")
+
+    def test_a_publication_between_the_two_reads_refuses_the_mixed_answer(self):
+        """The index is read first; a publish before the audit would mix two generations.
+
+        Reporting `audited_generation_id` makes the mismatch visible. Refusing to return the
+        pair is what stops it being returned at all -- and the refused result is not cached, so
+        the next call simply succeeds.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            server, config = self._server(Path(tmp), with_config=True)
+            self._write_snapshot(config)
+            index_root = config.output_root / "index"
+
+            from zotero_pdf_text.artifacts import stage_and_publish, write_jsonl_from_existing
+            from zotero_pdf_text import mcp_contract
+
+            real_audit = mcp_contract._library_status_data
+
+            def publish_then_audit(*args, **kwargs):
+                # Stand in for `rebuild-index` landing after the index half was measured.
+                stage_and_publish(
+                    index_root,
+                    write_jsonl_from_existing(index_root / "zotero_text_index.jsonl"),
+                    command="test-race",
+                )
+                return real_audit(*args, **kwargs)
+
+            with patch.object(mcp_contract, "_library_status_data", publish_then_audit):
+                raced = server.tools["library_status"]()
+
+            self.assertIsNone(raced["library"])
+            self.assertIn("different generations", raced["library_unavailable_reason"])
+            self.assertIs(raced["from_cache"], False)
+
+            # Not cached, so the immediate retry gives a consistent answer.
+            settled = server.tools["library_status"]()
+            self.assertIsNotNone(settled["library"])
+            self.assertEqual(
+                settled["library"]["audited_generation_id"], settled["index"]["generation_id"]
+            )
+
+    def test_an_unpublished_index_names_the_command_that_builds_one(self):
+        """Not `operation_unavailable` -- this is the tool asked whether an index exists."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _, sqlite_path, config = _build_index(root)
+            (config.output_root / "index" / "current.json").unlink()
+            server = create_server(sqlite_path, config=config, mcp_factory=FakeFastMCP)
+
+            with self.assertRaises(PublicMcpError) as ctx:
+                server.tools["library_status"]()
+
+            self.assertEqual(ctx.exception.code, "index_not_published")
+            self.assertIn("rebuild-index", ctx.exception.message)
+            assert_no_local_path(self, ctx.exception.message, root)
+
+    def test_the_scope_note_travels_with_the_index_numbers(self):
+        """The field exists so the consumer most likely to misread counts reads the caveat."""
+        with tempfile.TemporaryDirectory() as tmp:
+            server, _ = self._server(Path(tmp), with_config=False)
+            index = server.tools["library_status"]()["index"]
+
+            self.assertEqual(index["scope"], "indexed_snapshot")
+            self.assertIn("not what share of the Zotero library", index["scope_note"])
+
+    def test_an_unreadable_inventory_is_a_partial_comparison_not_a_null_one(self):
+        """The two unavailability states are distinct, and the docs must not conflate them.
+
+        `library` null means no comparison was produced. A non-null `library` with
+        `inventory_available` false means one was produced and is partial. A client that treats
+        any non-null `library` as a complete Zotero comparison reads the withheld membership
+        counts as real zeros -- which is why `library_unavailable_reason` stays null here and
+        `inventory_available` is the flag to branch on.
+        """
+        from zotero_pdf_text.zotero_db import SnapshotUnstableError
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            server, config = self._server(root, with_config=True)
+            self._write_snapshot(config)
+
+            with patch(
+                "zotero_pdf_text.library.load_attachment_inventory",
+                side_effect=SnapshotUnstableError(f"{root} kept changing"),
+            ):
+                response = server.tools["library_status"]()
+
+            library = response["library"]
+            self.assertIsNotNone(library)
+            self.assertIsNone(response["library_unavailable_reason"])
+            self.assertFalse(library["inventory_available"])
+            # Membership withheld: reported as zero, with the attachments parked elsewhere.
+            for withheld in ("current", "unindexed", "orphaned_index"):
+                self.assertEqual(library["counts"][withheld], 0)
+            self.assertGreater(library["counts"]["membership_unchecked"], 0)
+
+    def test_attachments_compared_is_withheld_when_zotero_cannot_be_read(self):
+        """It is not a library total then, and a plausible number invites a false share."""
+        from zotero_pdf_text.zotero_db import SnapshotUnstableError
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            server, config = self._server(root, with_config=True)
+            self._write_snapshot(config)
+
+            with patch(
+                "zotero_pdf_text.library.load_attachment_inventory",
+                side_effect=SnapshotUnstableError(f"{root} kept changing"),
+            ):
+                library = server.tools["library_status"]()["library"]
+
+            self.assertFalse(library["inventory_available"])
+            self.assertIsNone(library["attachments_compared"])

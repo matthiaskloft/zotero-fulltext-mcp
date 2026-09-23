@@ -13,6 +13,31 @@ dated section once it has been stress-tested against a large library.
 
 ### Added
 
+- `library_status` MCP tool: the same health answer on the read-only MCP surface, deliberately
+  shaped so index row counts can never be read as library coverage. It reports the published
+  generation's statistics and the audit's comparison as two separate fields. The comparison is
+  `null`, with a reason, only when none could be produced at all: no config, no snapshot, a
+  failed audit, or a publication landing mid-measurement. When the audit ran but Zotero could
+  not be read it is present and explicitly partial -- `inventory_available` false, membership
+  statuses withheld under `membership_unchecked`, `attachments_compared` null -- so a client
+  must check `inventory_available` rather than treat any non-null comparison as complete. It takes no arguments -- the mapping snapshot is discovered server-side so no local
+  path crosses the boundary, and the expensive `--full` re-hash is not reachable from MCP.
+  Only the audit half is cached, for two minutes; the index half is measured on every call,
+  so a re-publish cannot be reported under the previous generation's id. The response states
+  `from_cache` and `cache_age_seconds`, so a reused answer is never presented as freshly
+  measured. `inventory_error` reports the failing exception's type plus a written
+  explanation rather than its message, because several of those messages embed the Zotero
+  database path. When no index generation is published the tool answers
+  `index_not_published` and names `rebuild-index` instead of falling through to the generic
+  `operation_unavailable`. `attachments_compared` is withheld when Zotero could not be read,
+  since it is not a library total in that case. The cached audit is keyed on the index
+  generation *and* the mapping snapshot it ran against, and the payload reports the audited
+  generation, so neither a `rebuild-index` nor a `dry-run` can leave a stale comparison in
+  place. The audit is also pointed at the same index root the server reads, and a response
+  whose two halves would describe different generations is refused rather than returned. An
+  audit that could not read Zotero is not cached at all, because its own message tells the
+  user to close Zotero and ask again.
+
 - `library-status`: the summary form of `audit-library`, reporting the same read-only
   comparison as counts without the per-item evidence. It names the published generation and its
   publication time, states that the health counts overlap, and says in its own output that these
@@ -135,6 +160,12 @@ dated section once it has been stress-tested against a large library.
   being recomputed or cleared.
 
 ### Fixed
+
+- Path-containment assertions on the MCP surface could not fail on Windows. They compared a
+  local path against `json.dumps` output, where every backslash is escaped, so the raw path
+  was never a substring of the serialized response. They now walk the response structure
+  and compare against the values. This is what let an absolute-path leak reach review
+  with a green suite.
 
 - Figures whose caption label sits two lines above them are no longer routed to the formula
   prompt, where the splice replaced their image link with LaTeX invented from a plot. In the

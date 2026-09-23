@@ -648,6 +648,7 @@ class InstallMcpCliTests(unittest.TestCase):
                     "get_item_context",
                     "list_timeout_candidates",
                     "list_orphan_candidates",
+                    "library_status",
                     "reconvert_with_math_ocr",
                 ],
             )
