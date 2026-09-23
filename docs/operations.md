@@ -393,7 +393,10 @@ library is indexed; use `audit-library` for that):
 ```
 
 The output names the generation it read, so two runs taken across a re-publish are
-distinguishable. `coverage-report` still works as a deprecated alias and warns on stderr.
+distinguishable. `coverage-report` still works as a deprecated alias: it warns on stderr --
+so `--json` output on stdout stays parseable -- and names v0.7.0 as the release that removes
+it. Update any script or MCP client registration that still uses the old spelling before
+upgrading past v0.6.x.
 
 Audit the library for drift (read-only; moves and rewrites nothing, and reads a temporary copy
 of `zotero.sqlite` rather than the live file):

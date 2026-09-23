@@ -530,6 +530,73 @@ contains a stable public code followed by a safe explanation (for example,
 tools are absent from `list_tools`; their calls use MCP's ordinary unknown-tool behavior rather
 than a project-defined error code.
 
+### library_status
+
+`library_status` returns two answers that are deliberately never merged, because they answer
+different questions and combining them produces a number neither one supports.
+
+`index` describes the published index generation and nothing else. It carries `scope:
+"indexed_snapshot"` and a `scope_note` saying so in the payload rather than only in
+documentation, plus `generation_id`, `published_at`, `records`, `chunks`, `total_chars`,
+`total_words` and the `by_classification` / `by_identity_status` / `by_extraction_tool`
+breakdowns. These are row counts: an attachment Zotero holds but that was never converted
+appears in none of them, so no ratio built from them is a share of the library. This half is
+measured on every call.
+
+`library` is the audit's comparison against Zotero and the files on disk. **It has three
+states, and a consumer that collapses them will misreport.**
+
+| State | Meaning |
+|-------|---------|
+| `library: null`, `library_unavailable_reason` set | No comparison could be produced at all: no config, a config whose paths are not present on this machine, no mapping snapshot, a failed audit, or a publication landing mid-measurement. The reason says what to do -- usually which CLI command to run; for a mid-measurement publication, simply to ask again. |
+| `library` set, `inventory_available: true` | A complete comparison. |
+| `library` set, `inventory_available: false`, `library_unavailable_reason: null` | A comparison was produced and is **partial**. |
+
+The partial state is the one worth reading carefully. Zotero is the only authority on which
+attachments the library contains, so when its database cannot be read the membership statuses
+(`current`, `unindexed`, `orphaned_index`) are withheld: they read `0`, and the attachments they
+could not be decided for are counted under `membership_unchecked`. `attachments_compared` is
+`null`, because the audit's key set is then the union of the snapshot's and the index's keys and
+is not a library total. File-level findings (`stale_markdown`, `missing_markdown`,
+`source_changed`, `duplicate_key`) are unaffected and remain valid. `library_unavailable_reason`
+is `null` here because a comparison *was* produced — branch on `inventory_available`, not on
+whether `library` is present.
+
+`inventory_error` carries the failing exception's type plus a written explanation, never the
+exception's own message: `SnapshotUnstableError` and `SnapshotUnsafeError` both interpolate the
+Zotero database path, and this surface does not carry local paths. The type is retained because
+it is what distinguishes a database that would not hold still (close Zotero and ask again) from
+a permission or schema failure (retrying will not help).
+
+Other `library` fields: `snapshot_time`, `snapshot_run_id` (the run directory's name, never its
+path), `snapshot_age_seconds`, `audited_generation_id`, `counts`, `counts_overlap` (always
+`true` — one attachment can hold several statuses, so the counts do not sum to
+`attachments_compared`), `ineligible_items` and `source_provenance_unknown`. The statuses
+themselves are defined under [Library Audit](#library-audit).
+
+`audited_generation_id` states which generation the audit compared against. It always equals
+`index.generation_id` in a returned response: the index is measured first, and a publication
+landing before the audit reads the pointer produces a mismatch, which is refused as an
+unavailable comparison rather than returned as a mixed one.
+
+The audit half is cached briefly and keyed on both inputs it reads — the published generation
+and the mapping snapshot's path and modification time — so neither `rebuild-index` nor
+`dry-run` can leave a stale comparison in place. Results that tell the caller to fix something
+and ask again are never cached: no config, a config whose paths are missing, no snapshot, a
+failed audit, a mid-measurement publication, and an audit that could not read Zotero. Nor is
+anything cached when the snapshot's modification time cannot be read, since its identity is
+then unknown. `from_cache` and `cache_age_seconds` report reuse; `cache_age_seconds`
+truncates to whole seconds, so `from_cache` is the reliable flag.
+
+`measured_at` dates the response, and therefore the `index` half, which is measured on every
+call. It does not date the audit: when `from_cache` is true the `library` half is older.
+`library.snapshot_time` is when the audit itself ran.
+
+The tool takes no arguments. The mapping snapshot is discovered server-side so no local path
+crosses the boundary in either direction, and `--full` re-hashing is deliberately unreachable
+from MCP — it re-hashes every source PDF, which is a cost a user types a command for. When no
+index generation is published the call answers `index_not_published` and names `rebuild-index`.
+
 ## Zotero Write Plan
 
 `zotero-write plan` writes JSONL with one row per candidate decision:

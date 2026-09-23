@@ -1458,6 +1458,29 @@ class LibraryStatusToolTests(unittest.TestCase):
             self.assertIs(second["from_cache"], False)
             self.assertEqual(second["library"]["snapshot_run_id"], "20260924T090000Z")
 
+    def test_an_unreadable_snapshot_identity_bypasses_the_cache(self):
+        """`None == None`, so keying on a None identity would make two failed stats a cache hit.
+
+        A snapshot whose mtime cannot be read has no known identity, and an audit reused under
+        an unknown identity is exactly the stale-snapshot answer the key exists to prevent.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            server, config = self._server(Path(tmp), with_config=True)
+            self._write_snapshot(config)
+
+            with patch(
+                "zotero_pdf_text.mcp_contract._snapshot_identity", return_value=None
+            ), patch(
+                "zotero_pdf_text.mcp_contract._library_status_data",
+                wraps=library_status_data,
+            ) as audit:
+                first = server.tools["library_status"]()
+                second = server.tools["library_status"]()
+
+            self.assertEqual(audit.call_count, 2)
+            self.assertIs(first["from_cache"], False)
+            self.assertIs(second["from_cache"], False)
+
     def test_a_publication_between_the_two_reads_refuses_the_mixed_answer(self):
         """The index is read first; a publish before the audit would mix two generations.
 

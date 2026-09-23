@@ -306,9 +306,11 @@ The safe default server exposes:
   boundary so no path crosses it, and `--full` re-hashing is deliberately not reachable from
   MCP.
 
-  `library` is `null` only when no comparison could be produced at all -- no config, no
-  `dry-run` snapshot, an audit that failed, or a publication landing mid-measurement --
-  and `library_unavailable_reason` then says which it was and which CLI command fixes it.
+  `library` is `null` only when no comparison could be produced at all -- no config, a
+  config whose paths are missing on this machine, no `dry-run` snapshot, an audit that
+  failed, or a publication landing mid-measurement -- and `library_unavailable_reason` then
+  says which it was and what to do: usually a CLI command to run, and for a mid-measurement
+  publication simply to ask again.
 
   A non-null `library` is **not** necessarily a complete Zotero comparison. When the audit
   ran but Zotero's database could not be read, `library` is present and partial:

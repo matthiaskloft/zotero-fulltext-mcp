@@ -104,6 +104,10 @@ DEFAULT_FTS_DB = _default_fts_db()
 # so the old spelling remains discoverable; what changes is which name the description teaches
 # and that using it prints a deprecation warning.
 DEPRECATED_INDEX_STATS_COMMAND = "coverage-report"
+# The release that drops the alias. One tagged release carries the warning first: README
+# pins an install tag, so a user upgrades deliberately and gets exactly one version in which
+# the old spelling still works and says it is going away.
+INDEX_STATS_ALIAS_REMOVED_IN = "0.7.0"
 
 
 def _resolve_managed_root(args: argparse.Namespace) -> tuple[Path, Path]:
@@ -929,7 +933,10 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command in {"index-stats", DEPRECATED_INDEX_STATS_COMMAND}:
         if args.command == DEPRECATED_INDEX_STATS_COMMAND:
-            _warn_deprecated_command(DEPRECATED_INDEX_STATS_COMMAND, "index-stats")
+            _warn_deprecated_command(
+                DEPRECATED_INDEX_STATS_COMMAND, "index-stats",
+                removed_in=INDEX_STATS_ALIAS_REMOVED_IN,
+            )
         try:
             resolved = resolve_reader_generation(args.db)
             report = index_statistics(
@@ -1530,16 +1537,19 @@ def _print_fulltext_result(result: dict[str, object]) -> None:
     print(result["text"])
 
 
-def _warn_deprecated_command(used: str, replacement: str) -> None:
+def _warn_deprecated_command(used: str, replacement: str, *, removed_in: str) -> None:
     """Tell a caller that `used` is a deprecated spelling of `replacement`.
 
-    TODO(user): decide how insistent this should be. It currently warns on stderr and runs the
-    command normally, which keeps stdout clean for `--json` consumers and never breaks an
-    existing script. The alternatives are to also name a removal version, or to refuse the old
-    spelling outright once a release has warned about it.
+    Warns and runs the command normally. It goes to stderr so `--json` output on stdout stays
+    parseable, and it names the release that removes the old spelling: README tells users to
+    install a pinned tag rather than HEAD, so an upgrade is a deliberate act and a deadline they
+    can read is worth more than a warning that never resolves. The command still works until
+    that release -- refusing it now would break existing scripts and MCP client registrations to
+    make a point the warning already makes.
     """
     print(
-        f"warning: '{used}' is deprecated and will be removed; use '{replacement}' instead.",
+        f"warning: '{used}' is deprecated and will be removed in v{removed_in}; "
+        f"use '{replacement}' instead.",
         file=sys.stderr,
     )
 

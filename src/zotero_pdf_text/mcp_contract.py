@@ -719,9 +719,10 @@ def create_server(
         index generation: it says what was indexed, never what share of the Zotero library is
         indexed, because an attachment that was never converted appears in none of its numbers.
         `library` is the audit's comparison against Zotero and the files on disk. It is null
-        only when no comparison could be produced at all -- no config, no snapshot, a failed
-        audit, or a publication landing mid-measurement -- and `library_unavailable_reason`
-        then says which, and which CLI command fixes it.
+        only when no comparison could be produced at all -- no config, a config whose paths
+        are missing, no snapshot, a failed audit, or a publication landing mid-measurement --
+        and `library_unavailable_reason` then says which and what to do: usually a CLI
+        command, and for a mid-measurement publication simply to ask again.
 
         A non-null `library` is not necessarily a complete comparison. Check
         `inventory_available` first: when it is false, Zotero's database could not be read,
@@ -1130,19 +1131,28 @@ def _library_status_response(
             cache_age_seconds=0,
         )
 
-    identity = _snapshot_identity(snapshot)
-    (health, reason), age, from_cache = cache.get_or_compute(
-        lambda: _library_health(
+    def audit() -> tuple[LibraryHealth | None, str | None]:
+        return _library_health(
             config,
             snapshot,
             index_root=db_path.parent,
             expected_generation_id=index["generation_id"],
-        ),
-        # A `None` identity means the snapshot's mtime could not be read, so the key can never
-        # match and the audit is recomputed -- the safe direction.
-        key=None if identity is None else (index["generation_id"], identity),
-        should_cache=_is_cacheable_health,
-    )
+        )
+
+    identity = _snapshot_identity(snapshot)
+    if identity is None:
+        # The snapshot's mtime could not be read, so there is no way to tell whether it changed.
+        # Bypass the cache entirely -- neither reuse nor store. Passing `key=None` instead would
+        # not do this: `None == None`, so two unreadable stats in a row would be a cache *hit*,
+        # serving an audit whose snapshot identity was never known.
+        health, reason = audit()
+        age, from_cache = 0, False
+    else:
+        (health, reason), age, from_cache = cache.get_or_compute(
+            audit,
+            key=(index["generation_id"], identity),
+            should_cache=_is_cacheable_health,
+        )
     return LibraryStatusResponse(
         index=index,
         library=health,
