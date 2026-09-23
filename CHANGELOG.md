@@ -11,6 +11,8 @@ unannounced rather than absent: present, inert unless explicitly configured and 
 validated for general use. Its config shape and output conventions may still change. It moves into a
 dated section once it has been stress-tested against a large library.
 
+## [0.6.0] - 2026-09-23
+
 ### Added
 
 - Public project metadata, citation, contributor and security guidance, an SVG preview, and
@@ -645,7 +647,8 @@ author's own machine.
 
 Initial import of the Zotero full-text conversion pipeline, CLI, and MCP server. Not tagged.
 
-[Unreleased]: https://github.com/matthiaskloft/zotero-fulltext-mcp/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/matthiaskloft/zotero-fulltext-mcp/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.6.0
 [0.5.0]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.5.0
 [0.4.0]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.4.0
 [0.2.0]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.2.0
