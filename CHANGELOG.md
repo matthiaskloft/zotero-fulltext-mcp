@@ -146,8 +146,9 @@ dated section once it has been stress-tested against a large library.
   question index rows cannot answer: an attachment Zotero holds but that was never converted is
   absent from every number in the report. The payload now states its own scope
   (`indexed_snapshot`) and names the generation and publication time it read, so two reports
-  taken across a re-publish are distinguishable. `coverage-report` remains as a deprecated alias
-  that warns on stderr, leaving `--json` output on stdout parseable.
+  taken across a re-publish are distinguishable. `coverage-report` remains as a deprecated
+  alias that warns on stderr -- leaving `--json` output on stdout parseable -- and names
+  v0.7.0 as the release that removes it.
 - Index aggregates no longer pull every metadata row into memory. The previous implementation
   ran `SELECT *` over the whole metadata table and counted in Python to produce eight numbers,
   so its cost scaled with the library and with the width of the text-bearing columns it never
@@ -160,6 +161,11 @@ dated section once it has been stress-tested against a large library.
   being recomputed or cleared.
 
 ### Fixed
+
+- `docs/data-dictionary.md` now documents the `library_status` MCP response. Its three
+  states -- no comparison, complete comparison, and partial comparison with Zotero's
+  inventory unreadable -- were described only in Python docstrings, and the partial state
+  is the one a client is most likely to misread as complete.
 
 - Path-containment assertions on the MCP surface could not fail on Windows. They compared a
   local path against `json.dumps` output, where every backslash is escaped, so the raw path

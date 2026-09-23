@@ -42,7 +42,7 @@ Risk levels used below:
 | 6 | Package 5 step 4: adversarial and containment tests | hardening plan | none | DONE | Tampered `current.json` generation identifiers, path escapes on MCP reads and maintenance writes, lock-ownership races, untrusted instruction text in titles and snippets. `resolve_generation_dir` already validates and contains; this proves it against hostile input. Covers shipped code, so nothing gates it. |
 | 7 | Package 5 step 2: schema-compatibility tests | hardening plan | none | DONE | An index written by an older version must migrate through a documented command or fail with a precise recovery instruction, never a raw SQLite error. Covers Package 2, which shipped at rank 4. |
 | 8 | Package 3 steps 4 + 7: `audit-library` and `library_status` (JSONL only; FTS comparison not included) | hardening plan | none | DONE | The read-only half of Package 3. Compares represented attachments, source availability, canonical files, JSONL and FTS metadata, reporting `current`, `unindexed`, `stale_markdown`, `source_changed`, `metadata_changed`, `missing_source`, `missing_markdown`, `orphaned_index` and `duplicate_key` with per-item evidence. It moves no files. It is also the honest precondition for rank 10: the plan says to start migration only once the timestamped-run layout is an actual pain point, and this is the command that answers whether it is, instead of guessing. Requires a new `library.py` (none exists today) and the `is_canonical_eligible` predicate from step 3, used here in report-only form. |
-| 9 | Package 4B step 2: SQL aggregates and truthful status | hardening plan | none | READY | Move aggregate reporting to SQL and expose rank 8's `library_status`. `coverage_report` currently does `SELECT *` over the whole metadata table and counts in Python, and reports index row counts under the name "coverage" — the exact overstatement this step exists to fix. Needs rank 8 first, because status can only distinguish indexed-snapshot statistics from source-library health once an audit can produce that comparison. |
+| 9 | Package 4B step 2: SQL aggregates and truthful status | hardening plan | none | DONE | Shipped as PRs #8, #9 and #10. `coverage_report` became `index-stats`, computing its aggregates in SQL instead of `SELECT *`-and-count-in-Python, reporting the generation it read, and stating in its own payload that index row counts are not library coverage. `library_status` reached a CLI command and a read-only MCP tool; the MCP response keeps indexed-snapshot statistics and source-library health as two fields that are never merged, with the comparison withheld or marked partial rather than guessed. `coverage-report` remains as a deprecated alias. |
 | 10 | Package 3 steps 1, 2, 3, 5, 6: canonical layout, migration, reconciliation | hardening plan | **high** | OPTIONAL / GATED | The destructive half: `library/markdown` and `library/images` as canonical locations, publication through the artifact layer, `migrate-library-layout` dry-run and apply, and reconciliation-plan upserts replacing key-only incrementality. This is the package the plan calls its highest-risk item, and the gate is unchanged — start only if rank 8's audit shows the timestamped-run layout is an actual practical pain point. Take a manual filesystem backup of `output_root` before `--apply`, independent of the dry-run report. |
 | 11 | Package 5 steps 3, 5, 6: fixture tests, upgrade guide, performance baselines | hardening plan | none | FOLLOWS 8/10 | Step 6 (index build time and size, audit time, p95 search latency) can be recorded once rank 8 exists. Steps 3 and 5 document and exercise migration end to end, so they follow rank 10 and only exist if it ships. |
 
@@ -66,10 +66,23 @@ Risk levels used below:
 
 ## Next action
 
-Ranks 1-8 are done. **Rank 9** (SQL aggregates and exposing `library_status`) is next. The
-`library_status` data function already exists from rank 8, per Package 3 step 7's wording ("a
-truthful `library_status` data function for later CLI/MCP use"); rank 9 is what exposes it and
-moves `coverage_report` off its `SELECT *`-and-count-in-Python implementation.
+Ranks 1-9 are done. What remains is one gated decision and one piece of unblocked work.
+
+**Rank 10 is a decision before it is a task.** Its gate is unchanged: start only if the
+timestamped-run layout is an actual practical pain point. Rank 9 is what makes that answerable
+without guessing — run `library-status --full --mapping-report <run>` against a real library and
+read the health counts. Two cautions carry over from rank 8, both still live:
+
+- A low `source_changed` count is weak evidence while `source_provenance_unknown` is high.
+  Provenance is established per attachment only when it is genuinely reconverted, so check that
+  number before reading a quiet audit as a healthy library.
+- The counts overlap and do not sum to the attachment total, and when Zotero's database cannot
+  be read the membership statuses are withheld rather than computed. `inventory_available` says
+  which kind of answer you are looking at.
+
+If the gate says no, **rank 11 step 6 is the remaining zero-risk work** and is unblocked now:
+record index build time and size, audit time, and p95 search latency. Steps 3 and 5 document and
+exercise migration end to end, so they exist only if rank 10 ships.
 
 ### Note on rank 8's scope
 

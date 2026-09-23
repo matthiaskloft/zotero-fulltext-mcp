@@ -1445,6 +1445,15 @@ class IndexStatsCliTests(unittest.TestCase):
         self.assertIn("Records: 2", stdout)
         self.assertIn("deprecated", stderr)
 
+    def test_the_warning_names_the_release_that_removes_the_alias(self):
+        """A deprecation without a deadline never resolves; users pin tags, so it can have one."""
+        from zotero_pdf_text.cli import INDEX_STATS_ALIAS_REMOVED_IN
+
+        _, _, stderr, _ = self._run(["coverage-report"])
+
+        self.assertIn(f"removed in v{INDEX_STATS_ALIAS_REMOVED_IN}", stderr)
+        self.assertIn("index-stats", stderr)
+
     def test_the_deprecation_notice_stays_off_stdout(self):
         """`--json` output is parsed by scripts; a warning on stdout would corrupt it."""
         _, stdout, stderr, _ = self._run(["coverage-report", "--json"])
