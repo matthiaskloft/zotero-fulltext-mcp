@@ -16,33 +16,36 @@ dated section once it has been stress-tested against a large library.
 - `library_status` MCP tool: the same health answer on the read-only MCP surface, deliberately
   shaped so index row counts can never be read as library coverage. It reports the published
   generation's statistics and the audit's comparison as two separate fields. The comparison is
-  `null`, with a reason, only when none could be produced at all: no config, no snapshot, a
-  failed audit, or a publication landing mid-measurement. When the audit ran but Zotero could
-  not be read it is present and explicitly partial -- `inventory_available` false, membership
-  statuses withheld under `membership_unchecked`, `attachments_compared` null -- so a client
-  must check `inventory_available` rather than treat any non-null comparison as complete. It takes no arguments -- the mapping snapshot is discovered server-side so no local
-  path crosses the boundary, and the expensive `--full` re-hash is not reachable from MCP.
-  Only the audit half is cached, for two minutes; the index half is measured on every call,
-  so a re-publish cannot be reported under the previous generation's id. The response states
-  `from_cache` and `cache_age_seconds`, so a reused answer is never presented as freshly
-  measured. `inventory_error` reports the failing exception's type plus a written
-  explanation rather than its message, because several of those messages embed the Zotero
-  database path. When no index generation is published the tool answers
-  `index_not_published` and names `rebuild-index` instead of falling through to the generic
-  `operation_unavailable`. `attachments_compared` is withheld when Zotero could not be read,
-  since it is not a library total in that case. The cached audit is keyed on the index
-  generation *and* the mapping snapshot it ran against, and the payload reports the audited
-  generation, so neither a `rebuild-index` nor a `dry-run` can leave a stale comparison in
-  place. The audit is also pointed at the same index root the server reads, and a response
-  whose two halves would describe different generations is refused rather than returned. An
-  audit that could not read Zotero is not cached at all, because its own message tells the
-  user to close Zotero and ask again.
+  `null`, with a reason, only when none could be produced at all: no config, a config whose
+  paths are missing, no snapshot, a failed audit, or a publication landing mid-measurement.
+  When the audit ran but Zotero could not be read it is present and explicitly partial --
+  `inventory_available` false, membership statuses withheld under `membership_unchecked`, and
+  `attachments_compared` null because the key set is then not a library total -- so a client
+  must check `inventory_available` rather than treat any non-null comparison as complete.
+  `inventory_error` reports the failing exception's type plus a written explanation rather
+  than its message, because several of those messages embed the Zotero database path.
+
+  It takes no arguments: the mapping snapshot is discovered server-side so no local path
+  crosses the boundary, and the expensive `--full` re-hash is not reachable from MCP. The
+  audit is pointed at the same index root the server reads. When no index generation is
+  published the tool answers `index_not_published` and names `rebuild-index`, instead of
+  falling through to the generic `operation_unavailable`.
+
+  Only the audit half is cached, for two minutes; the index half is measured on every call.
+  The cached audit is keyed on the index generation *and* the mapping snapshot it ran against,
+  and the payload reports the audited generation, so neither a `rebuild-index` nor a `dry-run`
+  can leave a stale comparison in place; a response whose two halves would describe different
+  generations is refused rather than returned. Results that tell the user to fix something and
+  ask again -- including an audit that could not read Zotero -- are never cached. The response
+  states `from_cache` and `cache_age_seconds`, so a reused answer is never presented as freshly
+  measured.
 
 - `library-status`: the summary form of `audit-library`, reporting the same read-only
   comparison as counts without the per-item evidence. It names the published generation and its
   publication time, states that the health counts overlap, and says in its own output that these
-  are source-library health counts rather than index statistics. The audit that produces them
-  has existed since v0.5.0 but was reachable from no command.
+  are source-library health counts rather than index statistics. The underlying audit has been
+  available as `audit-library` since v0.5.0; what had no command was this summary of it, the
+  `library_status` data function rank 8 built for exactly this use.
 
 - `ocr-images --key <ATTACHMENT_KEY>`: recover the equations, tables and figure content that
   conversion left stranded in extracted PNGs. `pymupdf4llm` pulls vector-drawn display equations
@@ -141,6 +144,12 @@ dated section once it has been stress-tested against a large library.
 
 ### Changed
 
+- `docs/data-dictionary.md` documents the `library_status` MCP response under the MCP
+  Response Contract, including its three states: no comparison, complete comparison, and
+  partial comparison with Zotero's inventory unreadable. Package 4B named the data dictionary
+  as a file to update and rank 9 had not touched it; the README and docstrings already
+  described the contract, and this puts it in the reference document it belongs in.
+
 - `coverage-report` is now `index-stats`, and its aggregates are computed in SQL. The old
   command reported index row counts under a word that means "share of the library", which is a
   question index rows cannot answer: an attachment Zotero holds but that was never converted is
@@ -161,11 +170,6 @@ dated section once it has been stress-tested against a large library.
   being recomputed or cleared.
 
 ### Fixed
-
-- `docs/data-dictionary.md` now documents the `library_status` MCP response. Its three
-  states -- no comparison, complete comparison, and partial comparison with Zotero's
-  inventory unreadable -- were described only in Python docstrings, and the partial state
-  is the one a client is most likely to misread as complete.
 
 - Path-containment assertions on the MCP surface could not fail on Windows. They compared a
   local path against `json.dumps` output, where every backslash is escaped, so the raw path

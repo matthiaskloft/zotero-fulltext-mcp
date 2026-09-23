@@ -44,7 +44,7 @@ Risk levels used below:
 | 8 | Package 3 steps 4 + 7: `audit-library` and `library_status` (JSONL only; FTS comparison not included) | hardening plan | none | DONE | The read-only half of Package 3. Compares represented attachments, source availability, canonical files, JSONL and FTS metadata, reporting `current`, `unindexed`, `stale_markdown`, `source_changed`, `metadata_changed`, `missing_source`, `missing_markdown`, `orphaned_index` and `duplicate_key` with per-item evidence. It moves no files. It is also the honest precondition for rank 10: the plan says to start migration only once the timestamped-run layout is an actual pain point, and this is the command that answers whether it is, instead of guessing. Requires a new `library.py` (none exists today) and the `is_canonical_eligible` predicate from step 3, used here in report-only form. |
 | 9 | Package 4B step 2: SQL aggregates and truthful status | hardening plan | none | DONE | Shipped as PRs #8, #9 and #10. `coverage_report` became `index-stats`, computing its aggregates in SQL instead of `SELECT *`-and-count-in-Python, reporting the generation it read, and stating in its own payload that index row counts are not library coverage. `library_status` reached a CLI command and a read-only MCP tool; the MCP response keeps indexed-snapshot statistics and source-library health as two fields that are never merged, with the comparison withheld or marked partial rather than guessed. `coverage-report` remains as a deprecated alias. |
 | 10 | Package 3 steps 1, 2, 3, 5, 6: canonical layout, migration, reconciliation | hardening plan | **high** | OPTIONAL / GATED | The destructive half: `library/markdown` and `library/images` as canonical locations, publication through the artifact layer, `migrate-library-layout` dry-run and apply, and reconciliation-plan upserts replacing key-only incrementality. This is the package the plan calls its highest-risk item, and the gate is unchanged — start only if rank 8's audit shows the timestamped-run layout is an actual practical pain point. Take a manual filesystem backup of `output_root` before `--apply`, independent of the dry-run report. |
-| 11 | Package 5 steps 3, 5, 6: fixture tests, upgrade guide, performance baselines | hardening plan | none | FOLLOWS 8/10 | Step 6 (index build time and size, audit time, p95 search latency) can be recorded once rank 8 exists. Steps 3 and 5 document and exercise migration end to end, so they follow rank 10 and only exist if it ships. |
+| 11 | Package 5 steps 3, 5, 6: fixture tests, upgrade guide, performance baselines | hardening plan | none | PARTLY READY | Step 6 (index build time and size, audit time in fast/full modes, p95 search latency, bounded passage latency) is unblocked. Step 3's fixture tests are unblocked except its migration case, which follows rank 10. Step 5, the upgrade guide, is migration end to end, so it follows rank 10 and only exists if it ships. |
 
 ## Rationale for this ordering
 
@@ -69,9 +69,10 @@ Risk levels used below:
 Ranks 1-9 are done. What remains is one gated decision and one piece of unblocked work.
 
 **Rank 10 is a decision before it is a task.** Its gate is unchanged: start only if the
-timestamped-run layout is an actual practical pain point. Rank 9 is what makes that answerable
-without guessing — run `library-status --full --mapping-report <run>` against a real library and
-read the health counts. Two cautions carry over from rank 8, both still live:
+timestamped-run layout is an actual practical pain point. The evidence for that decision is
+rank 8's audit; rank 9 made it quicker to read. Run `library-status --full --mapping-report
+<run>` against a real library for the health counts, and `audit-library` when you need to see
+which attachments are behind a count. Two cautions carry over from rank 8, both still live:
 
 - A low `source_changed` count is weak evidence while `source_provenance_unknown` is high.
   Provenance is established per attachment only when it is genuinely reconverted, so check that
@@ -80,9 +81,18 @@ read the health counts. Two cautions carry over from rank 8, both still live:
   be read the membership statuses are withheld rather than computed. `inventory_available` says
   which kind of answer you are looking at.
 
-If the gate says no, **rank 11 step 6 is the remaining zero-risk work** and is unblocked now:
-record index build time and size, audit time, and p95 search latency. Steps 3 and 5 document and
-exercise migration end to end, so they exist only if rank 10 ships.
+Rank 11 does not wait on that decision, except for its migration parts. Unblocked now, and
+zero-risk:
+
+- **Step 6:** performance baselines — index build time and size, audit time in fast and full
+  modes, p95 search latency, and bounded passage latency. The plan treats these as release
+  guardrails rather than hard requirements.
+- **Most of step 3:** end-to-end fixture tests for default MCP registration, explicit DB-only
+  startup, optional BibTeX startup, a complete staged conversion/reindex cycle, interruption
+  recovery, and audit/status output. Only its migration case depends on rank 10.
+
+**Step 5**, the upgrade guide, is migration end to end — dry-run, apply, verify, prune — and
+exists only if rank 10 ships.
 
 ### Note on rank 8's scope
 

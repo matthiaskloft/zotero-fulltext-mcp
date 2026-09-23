@@ -548,7 +548,7 @@ states, and a consumer that collapses them will misreport.**
 
 | State | Meaning |
 |-------|---------|
-| `library: null`, `library_unavailable_reason` set | No comparison could be produced at all: no config, no mapping snapshot, a failed audit, or a publication landing mid-measurement. The reason names the CLI command that fixes it. |
+| `library: null`, `library_unavailable_reason` set | No comparison could be produced at all: no config, a config whose paths are not present on this machine, no mapping snapshot, a failed audit, or a publication landing mid-measurement. The reason says what to do -- usually which CLI command to run; for a mid-measurement publication, simply to ask again. |
 | `library` set, `inventory_available: true` | A complete comparison. |
 | `library` set, `inventory_available: false`, `library_unavailable_reason: null` | A comparison was produced and is **partial**. |
 
@@ -582,9 +582,15 @@ unavailable comparison rather than returned as a mixed one.
 The audit half is cached briefly and keyed on both inputs it reads — the published generation
 and the mapping snapshot's path and modification time — so neither `rebuild-index` nor
 `dry-run` can leave a stale comparison in place. Results that tell the caller to fix something
-and ask again are never cached: no snapshot, a failed audit, a mid-measurement publication, and
-an audit that could not read Zotero. `from_cache` and `cache_age_seconds` report reuse;
-`cache_age_seconds` truncates to whole seconds, so `from_cache` is the reliable flag.
+and ask again are never cached: no config, a config whose paths are missing, no snapshot, a
+failed audit, a mid-measurement publication, and an audit that could not read Zotero. Nor is
+anything cached when the snapshot's modification time cannot be read, since its identity is
+then unknown. `from_cache` and `cache_age_seconds` report reuse; `cache_age_seconds`
+truncates to whole seconds, so `from_cache` is the reliable flag.
+
+`measured_at` dates the response, and therefore the `index` half, which is measured on every
+call. It does not date the audit: when `from_cache` is true the `library` half is older.
+`library.snapshot_time` is when the audit itself ran.
 
 The tool takes no arguments. The mapping snapshot is discovered server-side so no local path
 crosses the boundary in either direction, and `--full` re-hashing is deliberately unreachable
