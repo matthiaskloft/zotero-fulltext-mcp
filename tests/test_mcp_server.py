@@ -1204,8 +1204,23 @@ class LibraryStatusToolTests(unittest.TestCase):
     so most of what is asserted here is what the response refuses to claim.
     """
 
-    def _server(self, root: Path, *, with_config: bool):
+    def _server(self, root: Path, *, with_config: bool, readable_inventory: bool = True):
         _, sqlite_path, config = _build_index(root)
+        if readable_inventory:
+            # `_build_index` leaves an empty zotero.sqlite, which makes every audit here report
+            # `inventory_available` false. Tests about caching a *completed* audit need one that
+            # actually completes -- the same trap tests/test_cli.py documents on
+            # `_write_zotero_inventory`.
+            from test_cli import _write_zotero_inventory
+
+            _write_zotero_inventory(
+                root / "zotero.sqlite",
+                "ATTACH1",
+                root / "private-paper.pdf",
+                title="Ignore instructions",
+                doi="",
+                citation_key="ignoreInstructions2026",
+            )
         server = create_server(
             sqlite_path,
             config=config if with_config else None,
@@ -1365,7 +1380,15 @@ class LibraryStatusToolTests(unittest.TestCase):
             self.assertNotEqual(
                 second["index"]["generation_id"], first["index"]["generation_id"]
             )
-            self.assertIs(second["from_cache"], True)
+            # The audit reads the published generation, so its health counts belong to one too.
+            # Serving them from cache would pair B's row counts with A's current/unindexed.
+            self.assertIs(second["from_cache"], False)
+            self.assertEqual(
+                second["library"]["audited_generation_id"], second["index"]["generation_id"]
+            )
+            self.assertEqual(
+                first["library"]["audited_generation_id"], first["index"]["generation_id"]
+            )
 
     def test_an_unavailable_library_answer_is_not_cached(self):
         """"Run dry-run, then ask again" must not be contradicted for two minutes."""
@@ -1382,6 +1405,34 @@ class LibraryStatusToolTests(unittest.TestCase):
             self.assertIsNotNone(second["library"])
             self.assertIsNone(second["library_unavailable_reason"])
             self.assertIs(second["from_cache"], False)
+
+    def test_an_inventory_failure_is_not_cached_across_a_retry(self):
+        """The response says to close Zotero and ask again; the cache must honour that.
+
+        This result is a fully-formed LibraryHealth -- it just has `inventory_available` false --
+        so a "cache anything that produced health" rule keeps it, and the user who closes Zotero
+        and asks again is told the same thing for the rest of the TTL.
+        """
+        from zotero_pdf_text.zotero_db import SnapshotUnstableError
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            server, config = self._server(root, with_config=True)
+            self._write_snapshot(config)
+
+            with patch(
+                "zotero_pdf_text.library.load_attachment_inventory",
+                side_effect=SnapshotUnstableError(f"{root} kept changing"),
+            ):
+                degraded = server.tools["library_status"]()
+            self.assertFalse(degraded["library"]["inventory_available"])
+            self.assertIn("ask again", degraded["library"]["inventory_error"])
+
+            # Zotero closed; the very next call must re-audit rather than serve the failure.
+            recovered = server.tools["library_status"]()
+
+            self.assertIs(recovered["from_cache"], False)
+            self.assertTrue(recovered["library"]["inventory_available"])
 
     def test_an_unpublished_index_names_the_command_that_builds_one(self):
         """Not `operation_unavailable` -- this is the tool asked whether an index exists."""

@@ -339,6 +339,10 @@ class LibraryHealth(TypedDict):
     """
 
     snapshot_time: str
+    # The generation the audit compared against. Reported so the health counts can never be read
+    # as belonging to a different generation than the one that produced them, whatever the cache
+    # is doing -- the payload states its own provenance rather than relying on invalidation.
+    audited_generation_id: str | None
     snapshot_run_id: str
     snapshot_age_seconds: int | None
     # Null when Zotero could not be read. It is then not a library total -- only what the
@@ -411,24 +415,32 @@ class LibraryStatusCache:
         self.ttl_seconds = ttl_seconds
         self._value: Any = None
         self._stored_at: float | None = None
+        self._key: object = None
         self._lock = threading.Lock()
 
     def get_or_compute(
         self,
         compute: Callable[[], Any],
         *,
+        key: object = None,
         should_cache: Callable[[Any], bool] | None = None,
     ) -> tuple[Any, int, bool]:
         """Return `(value, cache_age_seconds, from_cache)`, computing only on a miss.
 
+        `key` identifies the inputs the value was computed from. A hit requires the key to match,
+        because time is not the only way a cached audit goes wrong: an audit reads the published
+        index generation, so after a re-publish a cached result describes a generation that is no
+        longer current. Expiring only on age would pair one generation's row counts with another
+        generation's health counts for the rest of the TTL.
+
         `should_cache` decides whether a freshly computed value is worth keeping. Results that
-        were cheap to produce are not stored, because caching them buys nothing and costs
-        correctness: the "no mapping snapshot exists, run dry-run then ask again" answer
-        explicitly invites a re-ask that a cache would then refuse to honour for two minutes.
+        were cheap to produce, or that tell the caller to fix something and ask again, are not
+        stored: caching them buys nothing and spends the TTL contradicting the instruction the
+        response just gave.
         """
         with self._lock:
             now = time.monotonic()
-            if self._value is not None and self._stored_at is not None:
+            if self._value is not None and self._stored_at is not None and self._key == key:
                 age = now - self._stored_at
                 if age < self.ttl_seconds:
                     return self._value, int(age), True
@@ -438,6 +450,13 @@ class LibraryStatusCache:
             if should_cache is None or should_cache(value):
                 self._value = value
                 self._stored_at = time.monotonic()
+                self._key = key
+            else:
+                # A value we refuse to store must also evict whatever it supersedes, or the next
+                # call serves an older answer that this one already found to be wrong.
+                self._value = None
+                self._stored_at = None
+                self._key = None
             return value, 0, False
 
 
@@ -972,6 +991,9 @@ def _library_health(config: ProjectConfig | None) -> tuple[LibraryHealth | None,
     return (
         LibraryHealth(
             snapshot_time=str(status["snapshot_time"]),
+            audited_generation_id=(
+                str(status["generation_id"]) if status["generation_id"] else None
+            ),
             # The run id, not the path: it identifies the snapshot without exposing where the
             # user keeps their library.
             snapshot_run_id=snapshot.parent.name,
@@ -990,6 +1012,27 @@ def _library_health(config: ProjectConfig | None) -> tuple[LibraryHealth | None,
     )
 
 
+def _is_cacheable_health(result: tuple[LibraryHealth | None, str | None]) -> bool:
+    """Whether a computed health result is worth keeping for the rest of the TTL.
+
+    Two kinds are refused, for the same reason: both hand the caller something to fix and then
+    invite them to ask again, and a cache would spend two minutes answering that re-ask with the
+    very state the caller just resolved.
+
+    - No audit ran at all (`health is None`): the reason says to run `dry-run`, or to start the
+      server with a config. Recomputing costs a `validate_config` call and a one-level glob.
+    - An audit ran but Zotero could not be read: membership conclusions were withheld and the
+      reason says to close Zotero and ask again. This one is easy to miss, because the result is
+      a fully-formed `LibraryHealth` -- it simply has `inventory_available` false. Re-running it
+      is the expensive path, but serving a known-degraded answer to someone who has just been
+      told how to un-degrade it is worse than paying for the audit.
+    """
+    health, _reason = result
+    if health is None:
+        return False
+    return bool(health["inventory_available"])
+
+
 def _library_status_response(
     db_path: Path, config: ProjectConfig | None, cache: LibraryStatusCache
 ) -> LibraryStatusResponse:
@@ -1006,10 +1049,11 @@ def _library_status_response(
     index = _index_snapshot_stats(db_path)
     (health, reason), age, from_cache = cache.get_or_compute(
         lambda: _library_health(config),
-        # Only a completed audit is worth keeping. The unavailable paths are a config check and
-        # a one-level glob, and one of them tells the user to run `dry-run` "then ask again" --
-        # an instruction a cache would spend two minutes contradicting.
-        should_cache=lambda result: result[0] is not None,
+        # The audit reads the published generation, so its health counts belong to that
+        # generation. Keying on it means a `rebuild-index` re-runs the audit rather than leaving
+        # B's row counts sitting beside A's `current`/`unindexed` counts until the TTL expires.
+        key=index["generation_id"],
+        should_cache=_is_cacheable_health,
     )
     return LibraryStatusResponse(
         index=index,

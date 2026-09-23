@@ -306,8 +306,10 @@ The safe default server exposes:
   database could produce that comparison, with `library_unavailable_reason` naming the CLI
   command that fixes it. Read-only. It takes no arguments: the snapshot is discovered on
   this side of the boundary so no path crosses it, and `--full` re-hashing is deliberately
-  not reachable from MCP. The audit half is cached briefly; the response reports
-  `from_cache` and `cache_age_seconds`, and the index half is always measured fresh.
+  not reachable from MCP. The audit half is cached briefly, keyed on the index generation it
+  ran against and never when it failed to read Zotero; the response reports `from_cache`,
+  `cache_age_seconds` and the generation the audit compared against, and the index half is
+  always measured fresh.
 
 Optional tools:
 
