@@ -422,6 +422,24 @@ An attachment can hold several statuses at once, so the reported counts overlap 
 to the attachment total. See the Library Audit section of `docs/data-dictionary.md` for what each
 status means.
 
+`library-status` is the same comparison reported as counts only, without the per-item evidence:
+
+```powershell
+& $python -m zotero_pdf_text library-status `
+  --config .\config.json `
+  --mapping-report $data\runs\<run-id>\mapping_report.jsonl
+```
+
+It takes the same `--config`, `--mapping-report` and `--full` arguments and costs the same, since
+it runs the same audit. Use it for "is my library still in shape", and `audit-library` when you
+need to know which attachments are behind a count.
+
+The two status commands answer different questions and are not interchangeable. `index-stats`
+describes what one published index generation holds. `library-status` describes whether the
+source library still matches it. An index row count is not library coverage: an attachment
+Zotero holds but that was never converted contributes to neither the numerator nor the
+denominator of anything `index-stats` prints.
+
 ## Better BibTeX For LaTeX
 
 LLMs should use the `citation_key` from full-text search results in LaTeX, then
