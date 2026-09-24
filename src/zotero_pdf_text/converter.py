@@ -8,6 +8,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from collections import Counter
 from dataclasses import asdict, dataclass
@@ -47,6 +48,7 @@ DRAWING_DENSITY_DIVISOR = 10.0
 MAX_DRAWING_TIMEOUT_MULTIPLIER = 5.0
 
 SKIP_LIST_FILENAME = "timeout_skip_list.json"
+NATIVE_CRASH_EXIT_STATUS = 0xC000070A
 
 
 class PrimaryExtractorTimeoutError(RuntimeError):
@@ -255,18 +257,69 @@ def _convert_mapping_rows(
                     indexed_rows,
                 )
     )
+    retry_workers = min(2, workers - 1)
+    retry_indexes = [
+        index for index, (result, _) in enumerate(row_outcomes)
+        if retry_workers > 0 and _has_native_crash(result.error)
+    ]
+    retry_counts = Counter()
+    if retry_indexes:
+        def retry(index: int) -> tuple[ConversionResult, TimeoutCandidate | None]:
+            row_number, row = indexed_rows[index]
+            return _convert_row(
+                row, markdown_dir, images_root, row_number, timeout_seconds,
+                force=True, skip_keys=skip_keys, retry=True,
+            )
+
+        with ThreadPoolExecutor(max_workers=retry_workers) as executor:
+            retried = list(executor.map(retry, retry_indexes))
+        for index, retry_outcome in zip(retry_indexes, retried):
+            initial_result, initial_candidate = row_outcomes[index]
+            retry_result, retry_candidate = retry_outcome
+            if retry_result.status == "converted" and retry_result.extraction_tool == PRIMARY_EXTRACTION_TOOL:
+                retry_counts["recovered"] += 1
+                row_outcomes[index] = retry_result, retry_candidate
+            elif retry_result.status == "converted":
+                retry_counts["fallback_only"] += 1
+                if initial_result.status == "error":
+                    row_outcomes[index] = retry_result, retry_candidate
+            else:
+                retry_counts["fallback_only" if initial_result.status == "converted" else "still_failed"] += 1
+            if row_outcomes[index][0] is initial_result:
+                initial_result.error += "; native crash retry: " + _retry_diagnostic(retry_result)
     results = [result for result, _candidate in row_outcomes]
     candidates = [candidate for _result, candidate in row_outcomes if candidate is not None]
     _write_manifest(run_dir / "manifest.csv", results)
     _write_jsonl(run_dir / "manifest.jsonl", results)
-    _write_summary(run_dir / "summary.md", mapping_report, results, workers, timeout_seconds, force, classifications)
+    _write_summary(
+        run_dir / "summary.md", mapping_report, results, workers, timeout_seconds,
+        force, classifications, len(retry_indexes), retry_workers, retry_counts,
+    )
     write_run_candidates(run_dir, candidates)
     append_master_candidates(output_root / "index" / "timeout_candidates.jsonl", candidates)
     return run_dir
 
 
 def default_worker_count() -> int:
-    return max(1, (os.cpu_count() or 1) - 4)
+    workers = max(1, (os.cpu_count() or 1) - 4)
+    # PDF extraction runs in separate native-code processes. On Windows, high
+    # concurrency has produced STATUS_THREADPOOL_HANDLE_EXCEPTION child crashes;
+    # keep the automatic setting conservative while allowing explicit overrides.
+    return min(workers, 2) if sys.platform == "win32" else workers
+
+
+def _has_native_crash(error: str) -> bool:
+    return f"NativeExtractorCrash: exit status {NATIVE_CRASH_EXIT_STATUS}" in error
+
+
+def _retry_diagnostic(result: ConversionResult) -> str:
+    if result.status == "converted":
+        return "fallback only"
+    if _has_native_crash(result.error):
+        return f"native exit status {NATIVE_CRASH_EXIT_STATUS}"
+    if "timed out" in result.error.lower() or "TimeoutExpired" in result.error:
+        return "timeout"
+    return "extractor error"
 
 
 def _verified_rows(mapping_report: Path, limit: int | None) -> list[dict[str, str]]:
@@ -306,11 +359,14 @@ def _convert_row(
     *,
     force: bool,
     skip_keys: frozenset[str] = frozenset(),
+    retry: bool = False,
 ) -> tuple[ConversionResult, TimeoutCandidate | None]:
     source_path = Path(row["source_path"])
     output_path = markdown_dir / f"{index:04d}_{_output_stem(row)}.md"
     raw_output_path = output_path.with_name(f"{output_path.stem}.raw.tmp")
     images_dir = images_root / output_path.stem
+    staged_images_root: Path | None = None
+    extraction_images_dir = images_dir
     math_sidecar_path = raw_output_path.with_suffix(".math.json")
     effective_timeout = _effective_timeout(row, timeout_seconds, source_path)
     try:
@@ -331,7 +387,11 @@ def _convert_row(
                 ),
                 None,
             )
-        if force:
+        if force and output_path.exists():
+            images_root.mkdir(parents=True, exist_ok=True)
+            staged_images_root = Path(tempfile.mkdtemp(prefix=".conversion-", dir=images_root))
+            extraction_images_dir = staged_images_root / output_path.stem
+        elif force:
             shutil.rmtree(images_dir, ignore_errors=True)
         skip_primary = row.get("zotero_attachment_key") in skip_keys
         # Hash before and after extraction, not only after. The extractor reads the PDF at
@@ -343,7 +403,7 @@ def _convert_row(
         # pathological write pattern.
         source_sha256_before = _source_sha256(source_path)
         extraction_tool, fallback_note, primary_timed_out = _extract_markdown(
-            source_path, raw_output_path, images_dir, effective_timeout, skip_primary=skip_primary
+            source_path, raw_output_path, extraction_images_dir, effective_timeout, skip_primary=skip_primary
         )
         source_sha256 = _source_sha256(source_path)
         if source_sha256 != source_sha256_before:
@@ -360,11 +420,37 @@ def _convert_row(
                 ),
                 None,
             )
+        if output_path.exists() and (_has_native_crash(fallback_note) or (retry and fallback_note)):
+            # A native primary crash must not replace an already usable conversion
+            # with fallback text while the lower-concurrency retry is pending.
+            return _result(row, output_path, "error", fallback_note + "; existing Markdown retained"), None
         markdown = raw_output_path.read_text(encoding="utf-8")
+        if staged_images_root is not None and extraction_tool == PRIMARY_EXTRACTION_TOOL:
+            markdown = markdown.replace(extraction_images_dir.as_posix(), images_dir.as_posix())
+            markdown = markdown.replace(str(extraction_images_dir), str(images_dir))
         has_math = _read_math_sidecar(math_sidecar_path)
-        output_path.write_text(
-            _with_front_matter(row, markdown, extraction_tool, has_math=has_math), encoding="utf-8", newline="\n"
-        )
+        if staged_images_root is not None:
+            staged_markdown = staged_images_root / output_path.name
+            staged_markdown.write_text(
+                _with_front_matter(row, markdown, extraction_tool, has_math=has_math), encoding="utf-8", newline="\n"
+            )
+            backup_images = staged_images_root / "previous-images"
+            if images_dir.exists():
+                images_dir.rename(backup_images)
+            try:
+                if extraction_tool == PRIMARY_EXTRACTION_TOOL and extraction_images_dir.exists():
+                    extraction_images_dir.rename(images_dir)
+                os.replace(staged_markdown, output_path)
+            except Exception:
+                if images_dir.exists():
+                    shutil.rmtree(images_dir)
+                if backup_images.exists():
+                    backup_images.rename(images_dir)
+                raise
+        else:
+            output_path.write_text(
+                _with_front_matter(row, markdown, extraction_tool, has_math=has_math), encoding="utf-8", newline="\n"
+            )
         result = _result(
             row,
             output_path,
@@ -388,13 +474,15 @@ def _convert_row(
         return _result(row, output_path, "error", f"TimeoutExpired: exceeded {effective_timeout} seconds"), None
     except subprocess.CalledProcessError as exc:
         stderr = (exc.stderr or "").strip()
-        message = stderr[-1000:] if stderr else str(exc)
+        message = stderr[-1000:] if stderr else f"exit status {exc.returncode}"
         return _result(row, output_path, "error", f"CalledProcessError: {message}"), None
     except Exception as exc:
         return _result(row, output_path, "error", f"{type(exc).__name__}: {exc}"), None
     finally:
         raw_output_path.unlink(missing_ok=True)
         math_sidecar_path.unlink(missing_ok=True)
+        if staged_images_root is not None:
+            shutil.rmtree(staged_images_root, ignore_errors=True)
 
 
 def _build_timeout_candidate(
@@ -563,8 +651,12 @@ def _run_extractor(
 
 
 def _stderr_tail(exc: subprocess.CalledProcessError) -> str:
+    if exc.returncode & 0xFFFFFFFF == NATIVE_CRASH_EXIT_STATUS:
+        return f"NativeExtractorCrash: exit status {NATIVE_CRASH_EXIT_STATUS}"
     stderr = (exc.stderr or "").strip()
-    return stderr[-1000:] if stderr else str(exc)
+    if stderr:
+        return stderr[-1000:].replace("NativeExtractorCrash:", "extractor stderr:")
+    return f"exit status {exc.returncode}"
 
 
 def _with_front_matter(
@@ -704,11 +796,24 @@ def _write_summary(
     timeout_seconds: int,
     force: bool,
     classifications: set[str],
+    retry_attempted: int = 0,
+    retry_workers: int = 0,
+    retry_counts: Counter[str] | None = None,
 ) -> None:
+    retry_counts = retry_counts or Counter()
     converted = sum(1 for result in results if result.status == "converted")
     skipped = sum(1 for result in results if result.status == "skipped_existing")
     errors = sum(1 for result in results if result.status == "error")
     tool_counts = Counter(result.extraction_tool for result in results)
+    exit_counts = Counter(
+        code for result in results for code in set(re.findall(r"\bexit status (\d+)\b", result.error))
+    )
+    unresolved_native = sum(result.status == "error" and _has_native_crash(result.error) for result in results)
+    timeout_errors = sum(
+        result.status == "error" and not _has_native_crash(result.error)
+        and ("TimeoutExpired" in result.error or "timed out" in result.error.lower())
+        for result in results
+    )
     lines = [
         "# Markdown Conversion Summary",
         "",
@@ -718,6 +823,14 @@ def _write_summary(
         f"- Converted: {converted}",
         f"- Skipped existing: {skipped}",
         f"- Errors: {errors}",
+        f"- Unresolved native crash errors: {unresolved_native}",
+        f"- Timeout errors: {timeout_errors}",
+        f"- Other errors: {errors - unresolved_native - timeout_errors}",
+        f"- Native crash retries attempted: {retry_attempted} (workers: {retry_workers})",
+        f"- Native crash retries recovered: {retry_counts['recovered']}",
+        f"- Native crash retries fallback-only: {retry_counts['fallback_only']}",
+        f"- Native crash retries still-failed: {retry_counts['still_failed']}",
+        *[f"- Child process exit status {code}: {count} attachments" for code, count in sorted(exit_counts.items())],
         "- Extraction tools:",
         *[f"  - `{tool}`: {count}" for tool, count in sorted(tool_counts.items())],
         f"- Workers: {workers}",

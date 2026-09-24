@@ -270,6 +270,11 @@ governed by that config. The generated registration adds `skip_timeout_extractio
 `retry_timeout_extraction`; both require their own literal `confirm` string and should be called
 only after the user approves that specific decision.
 
+Conversion also makes one automatic lower-concurrency retry when a child extractor
+exits with Windows native crash status `0xC000070A`. The run summary separates
+recovered, fallback-only, and still-failed retries. Ordinary errors and timeouts
+do not trigger this retry.
+
 Verify:
 
 ```powershell

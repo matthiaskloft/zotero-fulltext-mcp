@@ -13,11 +13,226 @@ from zotero_pdf_text.converter import convert_sample, convert_unverified, conver
 
 
 class ConverterTests(unittest.TestCase):
-    def test_default_worker_count_leaves_four_cores_available(self):
+    def test_default_worker_count_caps_windows_concurrency(self):
         with patch("zotero_pdf_text.converter.os.cpu_count", return_value=12):
-            self.assertEqual(default_worker_count(), 8)
+            with patch("zotero_pdf_text.converter.sys.platform", "win32"):
+                self.assertEqual(default_worker_count(), 2)
+            with patch("zotero_pdf_text.converter.sys.platform", "linux"):
+                self.assertEqual(default_worker_count(), 8)
         with patch("zotero_pdf_text.converter.os.cpu_count", return_value=4):
-            self.assertEqual(default_worker_count(), 1)
+            with patch("zotero_pdf_text.converter.sys.platform", "win32"):
+                self.assertEqual(default_worker_count(), 1)
+
+    def test_native_failure_without_stderr_reports_code_without_source_path(self):
+        from zotero_pdf_text.converter import _stderr_tail
+
+        error = subprocess.CalledProcessError(0xC000070A, ["python", "private-paper.pdf"])
+        self.assertEqual(_stderr_tail(error), "NativeExtractorCrash: exit status 3221227274")
+
+    def test_native_primary_crash_retries_fallback_at_lower_concurrency(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            pdf = root / "paper.pdf"
+            pdf.write_bytes(b"%PDF")
+            report = root / "mapping_report.csv"
+            _write_mapping_report(report, pdf)
+            calls = []
+
+            def extract(args, **kwargs):
+                tool = args[args.index("--tool") + 1]
+                calls.append(tool)
+                if len(calls) == 1:
+                    raise subprocess.CalledProcessError(0xC000070A, args, stderr="private path")
+                Path(args[4]).write_text("Fallback" if len(calls) == 2 else "Primary", encoding="utf-8")
+
+            config = ProjectConfig(root, root, root, root / "output")
+            with patch("zotero_pdf_text.converter.subprocess.run", side_effect=extract):
+                run_dir = convert_verified(config, report, workers=4)
+            with (run_dir / "manifest.csv").open(encoding="utf-8-sig", newline="") as handle:
+                result = next(csv.DictReader(handle))
+            self.assertEqual(calls, ["pymupdf4llm.to_markdown", "pymupdf.get_text", "pymupdf4llm.to_markdown"])
+            self.assertEqual(result["status"], "converted")
+            self.assertEqual(result["extraction_tool"], "pymupdf4llm.to_markdown")
+            self.assertEqual(len(result["source_sha256"]), 64)
+            self.assertIn("Primary", Path(result["output_path"]).read_text(encoding="utf-8"))
+            summary = (run_dir / "summary.md").read_text(encoding="utf-8")
+            self.assertIn("Native crash retries attempted: 1 (workers: 2)", summary)
+            self.assertIn("Native crash retries recovered: 1", summary)
+            self.assertNotIn("private path", summary)
+
+    def test_native_retry_failure_preserves_existing_markdown_and_images(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            pdf = root / "paper.pdf"
+            pdf.write_bytes(b"%PDF")
+            report = root / "mapping_report.csv"
+            _write_mapping_report(report, pdf)
+            run_dir = root / "output" / "run"
+            markdown = run_dir / "markdown" / "0001_zotero_PARENT.md"
+            markdown.parent.mkdir(parents=True)
+            markdown.write_text("Usable old text", encoding="utf-8")
+            image_dir = run_dir / "images" / markdown.stem
+            image_dir.mkdir(parents=True)
+            image = image_dir / "figure.png"
+            image.write_bytes(b"old image")
+            calls = []
+
+            def crash(args, **kwargs):
+                calls.append(args[args.index("--tool") + 1])
+                raise subprocess.CalledProcessError(0xC000070A, args, stderr="private path")
+
+            config = ProjectConfig(root, root, root, root / "output")
+            with patch("zotero_pdf_text.converter.subprocess.run", side_effect=crash):
+                convert_verified(config, report, output_dir=run_dir, resume=True, force=True, workers=4)
+            self.assertEqual(len(calls), 4)
+            self.assertEqual(markdown.read_text(encoding="utf-8"), "Usable old text")
+            self.assertEqual(image.read_bytes(), b"old image")
+            with (run_dir / "manifest.csv").open(encoding="utf-8-sig", newline="") as handle:
+                result = next(csv.DictReader(handle))
+            self.assertEqual(result["status"], "error")
+            self.assertIn("native crash retry: native exit status 3221227274", result["error"])
+            self.assertNotIn("private path", result["error"])
+            self.assertIn("Native crash retries still-failed: 1", (run_dir / "summary.md").read_text(encoding="utf-8"))
+
+    def test_native_fallback_does_not_replace_existing_markdown_before_retry(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            pdf = root / "paper.pdf"
+            pdf.write_bytes(b"%PDF")
+            report = root / "mapping_report.csv"
+            _write_mapping_report(report, pdf)
+            run_dir = root / "output" / "run"
+            markdown = run_dir / "markdown" / "0001_zotero_PARENT.md"
+            markdown.parent.mkdir(parents=True)
+            markdown.write_text("Previously indexed body", encoding="utf-8")
+            calls = []
+
+            def extract(args, **kwargs):
+                calls.append(args[args.index("--tool") + 1])
+                if len(calls) == 2:
+                    Path(args[4]).write_text("Inferior fallback", encoding="utf-8")
+                    return
+                raise subprocess.CalledProcessError(0xC000070A, args)
+
+            config = ProjectConfig(root, root, root, root / "output")
+            with patch("zotero_pdf_text.converter.subprocess.run", side_effect=extract):
+                convert_verified(config, report, output_dir=run_dir, resume=True, force=True, workers=4)
+            self.assertEqual(len(calls), 4)
+            self.assertEqual(markdown.read_text(encoding="utf-8"), "Previously indexed body")
+            with (run_dir / "manifest.csv").open(encoding="utf-8-sig", newline="") as handle:
+                result = next(csv.DictReader(handle))
+            self.assertEqual(result["status"], "error")
+            self.assertIn("existing Markdown retained", result["error"])
+
+    def test_fully_failed_native_crash_recovers_in_one_retry(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            pdf = root / "paper.pdf"
+            pdf.write_bytes(b"%PDF")
+            report = root / "mapping_report.csv"
+            _write_mapping_report(report, pdf)
+            calls = []
+
+            def extract(args, **kwargs):
+                calls.append(args[args.index("--tool") + 1])
+                if len(calls) <= 2:
+                    raise subprocess.CalledProcessError(0xC000070A, args)
+                Path(args[4]).write_text("Recovered primary", encoding="utf-8")
+
+            config = ProjectConfig(root, root, root, root / "output")
+            with patch("zotero_pdf_text.converter.subprocess.run", side_effect=extract):
+                run_dir = convert_verified(config, report, workers=4)
+            self.assertEqual(len(calls), 3)
+            with (run_dir / "manifest.csv").open(encoding="utf-8-sig", newline="") as handle:
+                result = next(csv.DictReader(handle))
+            self.assertEqual(result["status"], "converted")
+            self.assertEqual(result["extraction_tool"], "pymupdf4llm.to_markdown")
+            self.assertEqual(len(result["source_sha256"]), 64)
+            self.assertIn("Native crash retries recovered: 1", (run_dir / "summary.md").read_text(encoding="utf-8"))
+
+    def test_failed_upgrade_keeps_initial_fallback(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            pdf = root / "paper.pdf"
+            pdf.write_bytes(b"%PDF")
+            report = root / "mapping_report.csv"
+            _write_mapping_report(report, pdf)
+            calls = []
+
+            def extract(args, **kwargs):
+                calls.append(args[args.index("--tool") + 1])
+                if len(calls) == 1:
+                    raise subprocess.CalledProcessError(0xC000070A, args)
+                if len(calls) == 3:
+                    raise subprocess.CalledProcessError(1, args, stderr="ordinary failure")
+                Path(args[4]).write_text(
+                    "Usable fallback" if len(calls) == 2 else "Different fallback", encoding="utf-8"
+                )
+
+            config = ProjectConfig(root, root, root, root / "output")
+            with patch("zotero_pdf_text.converter.subprocess.run", side_effect=extract):
+                run_dir = convert_verified(config, report, workers=4)
+            self.assertEqual(len(calls), 4)
+            with (run_dir / "manifest.csv").open(encoding="utf-8-sig", newline="") as handle:
+                result = next(csv.DictReader(handle))
+            self.assertEqual(result["status"], "converted")
+            self.assertEqual(result["extraction_tool"], "pymupdf.get_text")
+            self.assertIn("Usable fallback", Path(result["output_path"]).read_text(encoding="utf-8"))
+            self.assertIn("Native crash retries fallback-only: 1", (run_dir / "summary.md").read_text(encoding="utf-8"))
+
+    def test_successful_forced_conversion_promotes_staged_images(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            pdf = root / "paper.pdf"
+            pdf.write_bytes(b"%PDF")
+            report = root / "mapping_report.csv"
+            _write_mapping_report(report, pdf)
+            run_dir = root / "output" / "run"
+            markdown = run_dir / "markdown" / "0001_zotero_PARENT.md"
+            markdown.parent.mkdir(parents=True)
+            markdown.write_text("Old body", encoding="utf-8")
+            image_dir = run_dir / "images" / markdown.stem
+            image_dir.mkdir(parents=True)
+            (image_dir / "old.png").write_bytes(b"old")
+
+            def extract(args, **kwargs):
+                staged_dir = Path(args[args.index("--image-dir") + 1])
+                staged_dir.mkdir(parents=True)
+                (staged_dir / "new.png").write_bytes(b"new")
+                Path(args[4]).write_text(f"![figure]({(staged_dir / 'new.png').as_posix()})", encoding="utf-8")
+
+            config = ProjectConfig(root, root, root, root / "output")
+            with patch("zotero_pdf_text.converter.subprocess.run", side_effect=extract):
+                convert_verified(config, report, output_dir=run_dir, resume=True, force=True, workers=1)
+            self.assertEqual((image_dir / "new.png").read_bytes(), b"new")
+            self.assertFalse((image_dir / "old.png").exists())
+            self.assertIn((image_dir / "new.png").as_posix(), markdown.read_text(encoding="utf-8"))
+
+    def test_ordinary_extractor_error_and_timeout_do_not_retry(self):
+        for first_error in (
+            subprocess.CalledProcessError(1, ["python"], stderr="ordinary failure"),
+            subprocess.CalledProcessError(1, ["python"], stderr="NativeExtractorCrash: exit status 3221227274"),
+            subprocess.TimeoutExpired(["python"], 5),
+        ):
+            with self.subTest(first_error=type(first_error).__name__), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                pdf = root / "paper.pdf"
+                pdf.write_bytes(b"%PDF")
+                report = root / "mapping_report.csv"
+                _write_mapping_report(report, pdf)
+                calls = []
+
+                def extract(args, **kwargs):
+                    calls.append(args[args.index("--tool") + 1])
+                    if len(calls) == 1:
+                        raise first_error
+                    Path(args[4]).write_text("Fallback", encoding="utf-8")
+
+                config = ProjectConfig(root, root, root, root / "output")
+                with patch("zotero_pdf_text.converter.subprocess.run", side_effect=extract):
+                    run_dir = convert_verified(config, report, workers=4)
+                self.assertEqual(len(calls), 2)
+                self.assertIn("Native crash retries attempted: 0", (run_dir / "summary.md").read_text(encoding="utf-8"))
 
     def test_convert_sample_writes_markdown_and_manifest_for_verified_rows(self):
         with tempfile.TemporaryDirectory() as tmp:

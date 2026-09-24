@@ -61,7 +61,14 @@ Zotero metadata changes, including updated citation keys.
   --resume
 ```
 
-Default worker count is `max(1, CPU cores - 4)`. Use `--workers` to override.
+Default worker count is `max(1, CPU cores - 4)`, capped at 2 on Windows because
+parallel native PDF extraction can crash on some systems. Use `--workers` to override.
+If an extractor exits with Windows status `0xC000070A`, conversion makes one retry
+pass after the main pool drains, with fewer workers (at most 2). This includes
+attachments that initially produced only fallback text. A successful primary retry
+replaces that fallback; a failed retry keeps any usable Markdown and images. With
+one worker, no lower-concurrency retry is possible. The run summary reports retry
+attempts and outcomes separately from timeout and other errors.
 
 Force reconversion reruns PDF extraction and overwrites existing Markdown only
 after extraction succeeds:
