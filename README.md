@@ -316,6 +316,10 @@ The safe default server exposes:
   boundary so no path crosses it, and `--full` re-hashing is deliberately not reachable from
   MCP.
 
+  If multiple mapping rows share a Zotero attachment key, the audit matches the indexed source
+  and Zotero path. Unresolved cases appear as `mapping_ambiguous` in CLI audit results and in
+  `library_status` health counts; inspect the mapping report before treating them as current.
+
   `library` is `null` only when no comparison could be produced at all -- no config, a
   config whose paths are missing on this machine, no `dry-run` snapshot, an audit that
   failed, or a publication landing mid-measurement -- and `library_unavailable_reason` then
