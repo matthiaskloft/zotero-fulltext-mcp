@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Iterable, Literal
 
 from ._atomic import replace_with_retry
+from .identity import strip_markdown_images
 from .zotero_db import read_only_uri
 
 
@@ -366,10 +367,12 @@ def _chunk_facts_for_chunks(
 ) -> dict[int, _ChunkFacts]:
     """Compute precise matched_fields and a chunk content hash for already-selected chunks.
 
-    Comparing each highlighted value with its source detects FTS-inserted markers without
-    mistaking marker-like control characters already present in scholarly text for a match. This
-    requires the full stored text of each field, so it is scoped to the caller's final result
-    rows (bounded by the search `limit`) rather than the full ranking candidate set.
+    Comparing each highlighted value with its indexed source detects FTS-inserted markers without
+    mistaking marker-like control characters already present in scholarly text for a match. The
+    body comparison uses the same image-free representation inserted into FTS; its hash still
+    covers the original stored chunk. This requires the full stored text of each field, so it is
+    scoped to the caller's final result rows (bounded by the search `limit`) rather than the full
+    ranking candidate set.
 
     The chunk hash is computed here rather than in a query of its own precisely because this one
     already reads `c.text` for exactly these rows: hashing rides along for free, and the ranking
@@ -403,13 +406,13 @@ def _chunk_facts_for_chunks(
         result[row_dict["chunk_id"]] = _ChunkFacts(
             matched_fields=[
                 field
-                for field, original_field in (
-                    ("title", "title"),
-                    ("creators", "creators"),
-                    ("text", "stored_text"),
-                    ("citation_key", "citation_key"),
+                for field, original_value in (
+                    ("title", row_dict["title"]),
+                    ("creators", row_dict["creators"]),
+                    ("text", strip_markdown_images(row_dict["stored_text"])),
+                    ("citation_key", row_dict["citation_key"]),
                 )
-                if row_dict[f"{field}_highlighted"] != row_dict[original_field]
+                if row_dict[f"{field}_highlighted"] != original_value
             ],
             text_sha256=chunk_sha256(row_dict["stored_text"]),
         )
@@ -937,7 +940,7 @@ def _insert_chunk(
             chunk_id,
             _string(record.get("title")),
             _string(record.get("creators")),
-            text,
+            strip_markdown_images(text),
             _string(record.get("citation_key")),
             record_id,
             chunk_id,

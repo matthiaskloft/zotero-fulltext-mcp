@@ -55,6 +55,39 @@ class ConnectReadonlyPathTests(unittest.TestCase):
 
 
 class FtsTests(unittest.TestCase):
+    def test_image_targets_are_not_body_search_text_or_snippet_content(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            jsonl = root / "index.jsonl"
+            sqlite_db = root / "index.sqlite"
+            _write_jsonl(jsonl)
+            record = json.loads(jsonl.read_text(encoding="utf-8").splitlines()[0])
+            image_target = str(root / "private" / "images" / "PathOnlyImageToken.png")
+            record["text"] = (
+                f"![]({image_target})\n\n"
+                "The article discusses unrelated calibration techniques.\n\n"
+                "BodySearchToken appears in this visible paragraph.\n\n"
+                "[VisibleLinkToken](https://example.invalid/destination)"
+            )
+            record["char_count"] = len(record["text"])
+            record["word_count"] = len(record["text"].split())
+            jsonl.write_text(json.dumps(record) + "\n", encoding="utf-8")
+            build_fts_index(jsonl, sqlite_db)
+
+            path_only = search_fts(sqlite_db, "PathOnlyImageToken")
+            body_match = search_fts(sqlite_db, "BodySearchToken")[0]
+            link_match = search_fts(sqlite_db, "VisibleLinkToken")[0]
+
+            self.assertEqual(path_only, [])
+            self.assertEqual(body_match.matched_fields, ["text"])
+            self.assertIn("BodySearchToken", body_match.snippet)
+            self.assertNotIn(image_target, body_match.snippet)
+            self.assertEqual(link_match.matched_fields, ["text"])
+            self.assertIn("VisibleLinkToken", link_match.snippet)
+
+            passage = get_fulltext(sqlite_db, attachment_key="ATTACH1", chunk_index=body_match.chunk_index)
+            self.assertIn(image_target, passage.text)
+
     def test_build_search_and_fetch_fulltext(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

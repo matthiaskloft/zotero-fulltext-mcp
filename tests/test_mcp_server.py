@@ -210,6 +210,41 @@ class McpServerTests(unittest.TestCase):
             self.assertEqual(passage["source_locator"], result["source_locator"])
             self.assertEqual((passage["chunk_count"], passage["has_more"]), (1, False))
 
+    def test_search_ignores_image_targets_but_preserves_searchable_prose_and_passages(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, sqlite_path, _ = _build_index(Path(tmp))
+            jsonl_path = root / "output" / "index" / "zotero_text_index.jsonl"
+            record = json.loads(jsonl_path.read_text(encoding="utf-8").splitlines()[0])
+            image_target = str(root / "private" / "images" / "PathOnlyImageToken.png")
+            record["text"] = (
+                f"![]({image_target})\n\n"
+                "The article discusses unrelated calibration techniques.\n\n"
+                "BodySearchToken appears in this visible paragraph.\n\n"
+                "[VisibleLinkToken](https://example.invalid/destination)"
+            )
+            record["char_count"] = len(record["text"])
+            record["word_count"] = len(record["text"].split())
+            jsonl_path.write_text(json.dumps(record) + "\n", encoding="utf-8")
+            _republish(root)
+            server = create_server(sqlite_path, mcp_factory=FakeFastMCP)
+
+            path_only = server.tools["search_fulltext"]("PathOnlyImageToken", search_mode="phrase")
+            body_search = server.tools["search_fulltext"]("BodySearchToken", search_mode="phrase")
+            result = body_search["results"][0]
+            link_search = server.tools["search_fulltext"]("VisibleLinkToken", search_mode="phrase")
+            passage = server.tools["get_fulltext_chunk"](
+                "ATTACH1",
+                chunk_index=result["source_locator"]["chunk_index"],
+                chunk_sha256=result["source_locator"]["chunk_sha256"],
+            )
+
+            self.assertTrue(path_only["no_results"])
+            self.assertEqual(result["matched_fields"], ["text"])
+            self.assertIn("BodySearchToken", result["snippet"])
+            self.assertNotIn(image_target, result["snippet"])
+            self.assertIn("VisibleLinkToken", link_search["results"][0]["snippet"])
+            self.assertIn(image_target, passage["text"])
+
     def test_get_item_context_bounds_records_via_the_mcp_contract_limit(self):
         with tempfile.TemporaryDirectory() as tmp:
             _, sqlite_path, _ = _build_index(Path(tmp))
