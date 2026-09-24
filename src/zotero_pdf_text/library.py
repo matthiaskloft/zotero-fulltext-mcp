@@ -187,6 +187,8 @@ def is_canonical_eligible(record: object) -> bool:
     Applied in report-only form by this audit: a non-eligible row is reported as quarantine or
     unverified rather than treated as library content.
     """
+    if getattr(record, "mapping_match_count", 0) > 1:
+        return False
     classification = _field(record, "classification")
     identity_status = _field(record, "identity_status")
     return (
@@ -470,7 +472,7 @@ def classify_item(observation: ItemObservation) -> frozenset[str]:
     #    `unverified_indexed` requires `in_mapping`, which is what separates it from
     #    `orphaned_index`: the two name different repairs -- verify the identity, versus drop a
     #    row for an attachment Zotero no longer represents.
-    if not_retired and obs.in_index and not eligible:
+    if not_retired and obs.in_index and not eligible and obs.mapping_match_count <= 1:
         statuses.add(STATUS_UNVERIFIED_INDEXED)
     #    An ineligible item is never `unindexed`. It is correctly absent from the library, and
     #    reporting it as a gap would manufacture a backlog that should not be worked -- the exact
@@ -656,6 +658,7 @@ def build_observations(
             if source_matches:
                 plausible = source_matches
         mapping = plausible[0] if len(plausible) == 1 else None
+        identity_index = indexed if len(plausible) <= 1 else None
 
         # Where the snapshot and the index believe the PDF lives. Kept as provenance: it is
         # what the indexed text was extracted from, and it is what `indexed_source_path`
@@ -701,9 +704,9 @@ def build_observations(
                 in_mapping=bool(candidates),
                 mapping_row_count=len(candidates),
                 mapping_match_count=len(plausible),
-                classification=_text(mapping, "classification") or _text(indexed, "classification"),
-                identity_status=_text(mapping, "identity_status") or _text(indexed, "identity_status"),
-                identity_rule=_text(mapping, "identity_rule") or _text(indexed, "identity_rule"),
+                classification=_text(mapping, "classification") or _text(identity_index, "classification"),
+                identity_status=_text(mapping, "identity_status") or _text(identity_index, "identity_status"),
+                identity_rule=_text(mapping, "identity_rule") or _text(identity_index, "identity_rule"),
                 parent_key=(
                     _text(mapping, "zotero_parent_key") or _text(indexed, "zotero_parent_key")
                 ),

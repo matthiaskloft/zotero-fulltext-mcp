@@ -823,6 +823,10 @@ class AuditEndToEndTests(unittest.TestCase):
             item = audit.items[0]
             self.assertIn(STATUS_MAPPING_AMBIGUOUS, item.statuses)
             self.assertNotIn(STATUS_CURRENT, item.statuses)
+            self.assertNotIn(STATUS_UNVERIFIED_INDEXED, item.statuses)
+            self.assertFalse(item.canonical_eligible)
+            self.assertEqual(item.observation.classification, "")
+            self.assertEqual(item.observation.identity_status, "")
             self.assertEqual(item.observation.mapping_match_count, 2)
             self.assertEqual(library_status(config, snapshot, index_root=index_root)["health"][STATUS_MAPPING_AMBIGUOUS], 1)
 

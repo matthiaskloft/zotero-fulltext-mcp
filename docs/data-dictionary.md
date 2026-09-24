@@ -412,7 +412,8 @@ the library.
   comparing the indexed source path and Zotero attachment path. The audit preserves all rows
   rather than choosing whichever appeared last. Inspect the mapping report for that key before
   treating the attachment as current; `mapping_row_count` and `mapping_match_count` in CLI audit
-  JSON evidence show how many rows existed and how many remained plausible.
+  JSON evidence show how many rows existed and how many remained plausible. An ambiguous item is
+  not certified as `canonical_eligible` based on the index's older identity fields.
 
 Two counts sit outside the status vocabulary and explain it:
 
