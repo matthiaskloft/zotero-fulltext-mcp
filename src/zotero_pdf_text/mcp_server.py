@@ -5,6 +5,8 @@ import json
 import logging
 import os
 import sqlite3
+import sys
+from contextlib import contextmanager
 from pathlib import Path
 
 from .artifacts import ArtifactError, ManagedIndexMissingError, resolve_reader_db_path
@@ -72,6 +74,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.bibtex_endpoint is not None and not args.enable_bibtex:
         raise SystemExit(_startup_error("invalid_bibtex_endpoint", "--bibtex-endpoint requires --enable-bibtex."))
     _validate_startup_database(db_path)
+    with _protocol_only_stdout():
+        return _serve(db_path, config, args)
+
+
+def _serve(db_path: Path, config, args: argparse.Namespace) -> int:
     try:
         mcp = create_server(
             db_path,
@@ -91,9 +98,57 @@ def main(argv: list[str] | None = None) -> int:
             )
         ) from exc
 
+    if args.enable_reconvert or args.enable_retry_timeout:
+        _preload_write_tool_dependencies()
     logging.getLogger("mcp").setLevel(logging.WARNING)
     mcp.run()
     return 0
+
+
+def _preload_write_tool_dependencies() -> None:
+    """Import the optional write tools' heavy dependencies before stdio starts reading.
+
+    On Windows, loading native extensions (numpy via pymupdf4llm) while the transport's reader
+    thread blocks on the stdin pipe can deadlock the first tool call, so do it up front.
+    """
+    from . import indexer, math_ocr, retry_timeout  # noqa: F401
+
+
+class _StderrTextWithProtocolBuffer:
+    """``sys.stdout`` stand-in: text writes go to stderr, ``.buffer`` is the protocol pipe.
+
+    The MCP stdio transport wraps ``sys.stdout.buffer`` once at startup; everything else that
+    writes to ``sys.stdout`` (e.g. a lazily imported dependency's diagnostics) lands on stderr.
+    """
+
+    def __init__(self, buffer, stderr):
+        self.buffer = buffer
+        self._stderr = stderr
+
+    def __getattr__(self, name):
+        return getattr(self._stderr, name)
+
+
+@contextmanager
+def _protocol_only_stdout():
+    """Reserve the real stdout exclusively for JSON-RPC while the server runs.
+
+    The protocol keeps a private duplicate of fd 1; fd 1 itself and ``sys.stdout`` text writes
+    are redirected to stderr so no non-JSON output can corrupt the response stream.
+    """
+    sys.stdout.flush()
+    saved_stdout = sys.stdout
+    saved_fd = os.dup(1)
+    protocol = os.fdopen(os.dup(1), "wb", buffering=0)
+    os.dup2(2, 1)
+    sys.stdout = _StderrTextWithProtocolBuffer(protocol, sys.stderr)
+    try:
+        yield
+    finally:
+        sys.stdout = saved_stdout
+        os.dup2(saved_fd, 1)
+        os.close(saved_fd)
+        protocol.close()
 
 
 def _load_server_config(path: Path):

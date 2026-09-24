@@ -352,6 +352,18 @@ both:
    health check from a normal terminal or with sandbox escalation before
    assuming the registration itself is broken.
 
+## MCP Client Reports "Failed To Parse JSONRPC Message" Or A Write Tool Hangs
+
+The stdio server reserves stdout for JSON-RPC. While it runs, anything else written to stdout
+(for example a dependency's diagnostic printed during a lazy import) is redirected to stderr, so a
+non-JSON line on the protocol stream indicates an older install; update it. The project imports
+PyMuPDF as `pymupdf` (not the deprecated `fitz` alias), which requires `pymupdf>=1.24.3`.
+
+When `--enable-reconvert` or `--enable-retry-timeout` is set, the server imports those tools'
+conversion dependencies at startup rather than on the first call. On Windows, loading native
+extensions such as numpy while the transport is blocked reading stdin can otherwise hang the first
+write-tool call indefinitely. Startup with those flags is therefore a second or two slower.
+
 ## Zotero Sync Stalls With "Cannot Change Attachment LinkMode"
 
 This can occur if you sync the same Zotero library across multiple machines via Zotero's own
