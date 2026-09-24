@@ -113,6 +113,23 @@ For every subsequent manifest (new items, promoted `apply-verification` rows, et
   --manifest <new-or-promoted>\manifest.csv
 ```
 
+To publish improved text for attachment keys already in the index, pass `--replace-existing`
+with the new conversion manifest. Existing keys are replaced only when the row is a completed
+(`converted`) verified conversion, its parent and PDF path match the indexed record,
+its Markdown front matter names that attachment, and its recorded source hash still matches the
+PDF. `skipped_existing` and failed rows cannot replace indexed text. Duplicate attachment keys
+in the input manifest are rejected. A new conversion run directory is supported; the replacement
+record points to the new Markdown file. The command reports `added_records`, `replaced_records`,
+and `skipped_records`;
+without the flag, `update-index` remains add-only and reports zero replacements.
+
+```powershell
+& $python -m zotero_pdf_text update-index `
+  --config .\config.json `
+  --manifest <reconversion-run>\manifest.csv `
+  --replace-existing
+```
+
 If either command (or the machine) dies mid-publication, the next write command recovers
 deterministically from the publish journal: it either completes the interrupted publication of
 the already-validated generation or rolls it back, and readers meanwhile keep resolving the

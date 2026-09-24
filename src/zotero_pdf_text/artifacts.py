@@ -22,6 +22,7 @@ deliberately deferred piece of work (Package 3 in plan-mcp-server-hardening.md).
 from __future__ import annotations
 
 import contextlib
+import csv
 import hashlib
 import json
 import os
@@ -37,7 +38,8 @@ from typing import Callable
 from ._atomic import replace_with_retry
 from .zotero_db import read_only_uri
 from .fts import DEFAULT_CHUNK_CHARS, DEFAULT_OVERLAP_CHARS, FtsBuildSummary, build_fts_index
-from .indexer import TextIndexRecord, _converted_rows, _record_from_manifest_row
+from .identity import front_matter_fields
+from .indexer import TextIndexRecord, _converted_rows, _record_from_manifest_row, _sha256
 
 ARTIFACT_SCHEMA_VERSION = 1
 GENERATIONS_DIRNAME = "generations"
@@ -568,6 +570,92 @@ def write_jsonl_appending_manifest(
                 handle.write(json.dumps(_record_dict(record), ensure_ascii=False) + "\n")
 
     return _write, len(new_rows)
+
+
+def write_jsonl_replacing_manifest(
+    current_jsonl: Path, manifest_csv: Path
+) -> tuple[Callable[[Path], None], int, int, int]:
+    """Merge completed conversions into a generation, retaining untouched records verbatim."""
+    if not manifest_csv.exists():
+        raise FileNotFoundError(manifest_csv)
+    with manifest_csv.open("r", encoding="utf-8-sig", newline="") as handle:
+        rows = list(csv.DictReader(handle))
+    seen: set[str] = set()
+    for row in rows:
+        key = row.get("zotero_attachment_key", "")
+        if key and key in seen:
+            raise ValueError(f"Manifest has a duplicate attachment key: {key}.")
+        if key:
+            seen.add(key)
+    selected_keys = seen
+    existing: dict[str, dict[str, object]] = {}
+    with current_jsonl.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            if line.strip():
+                record = json.loads(line)
+                key = str(record["zotero_attachment_key"])
+                if key in selected_keys:
+                    existing[key] = record
+
+    additions: dict[str, TextIndexRecord] = {}
+    replacements: dict[str, TextIndexRecord] = {}
+    skipped = 0
+    for row in rows:
+        key = row.get("zotero_attachment_key", "")
+        if row.get("status") not in {"converted", "skipped_existing"} or not row.get("output_path"):
+            skipped += 1
+            continue
+        if not key:
+            raise ValueError("Manifest has a conversion row without an attachment key.")
+        old = existing.get(key)
+        if old is None:
+            additions[key] = _record_from_manifest_row(row)
+            continue
+        if row["status"] != "converted":
+            skipped += 1
+            continue
+        if row.get("classification") != "mapped_verified" or row.get("identity_status") not in {
+            "verified", "fulltext_verified"
+        }:
+            raise ValueError(f"Cannot replace {key}: conversion identity is not verified.")
+        if not row.get("source_path") or not old.get("source_path") or (
+            row.get("zotero_parent_key") != old.get("zotero_parent_key")
+            or Path(row["source_path"]).resolve() != Path(str(old["source_path"])).resolve()
+        ):
+            raise ValueError(f"Cannot replace {key}: attachment parent or source path changed.")
+        source_hash = row.get("source_sha256", "")
+        if not isinstance(source_hash, str) or len(source_hash) != 64 or any(
+            c not in "0123456789abcdef" for c in source_hash
+        ):
+            raise ValueError(f"Cannot replace {key}: completed conversion has no valid source hash.")
+        try:
+            current_source_hash = _sha256(Path(row["source_path"]))
+        except OSError as exc:
+            raise ValueError(f"Cannot replace {key}: source PDF cannot be read.") from exc
+        if current_source_hash != source_hash:
+            raise ValueError(f"Cannot replace {key}: source PDF changed since conversion.")
+        fields = front_matter_fields(Path(row["output_path"]).read_text(encoding="utf-8"))
+        if fields.get("zotero_attachment_key") != key:
+            raise ValueError(f"Cannot replace {key}: Markdown front matter does not identify this attachment.")
+        replacements[key] = _record_from_manifest_row(row)
+
+    def _write(jsonl_path: Path) -> None:
+        with current_jsonl.open("r", encoding="utf-8") as source, jsonl_path.open(
+            "w", encoding="utf-8", newline="\n"
+        ) as target:
+            for line in source:
+                if not line.strip():
+                    continue
+                key = json.loads(line)["zotero_attachment_key"]
+                record = replacements.get(key)
+                if record:
+                    target.write(json.dumps(_record_dict(record), ensure_ascii=False) + "\n")
+                else:
+                    target.write(line.rstrip("\n") + "\n")
+            for record in additions.values():
+                target.write(json.dumps(_record_dict(record), ensure_ascii=False) + "\n")
+
+    return _write, len(additions), len(replacements), skipped
 
 
 def write_jsonl_upserting_record(

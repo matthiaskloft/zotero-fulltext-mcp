@@ -32,6 +32,7 @@ from .artifacts import (
     resolve_reader_generation,
     stage_and_publish,
     write_jsonl_appending_manifest,
+    write_jsonl_replacing_manifest,
     write_jsonl_from_conversion_manifest,
     write_jsonl_from_existing,
 )
@@ -308,7 +309,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Explicit output root to manage instead of the config's output_root (advanced/standalone use).",
     )
     update_index.add_argument(
-        "--manifest", type=Path, required=True, help="Manifest.csv with the new rows to add (e.g. from apply-verification)."
+        "--manifest", type=Path, required=True,
+        help="Conversion manifest.csv with rows to add or explicitly replace (e.g. from apply-verification).",
+    )
+    update_index.add_argument(
+        "--replace-existing", action="store_true",
+        help="Replace indexed keys from completed, verified conversions with matching source provenance.",
     )
     ensure = subparsers.add_parser("ensure-zotero", help="Start Zotero if needed and report connector health.")
     ensure.add_argument("--zotero-exe", type=Path, default=DEFAULT_ZOTERO_EXE, help="Path to zotero.exe.")
@@ -872,17 +878,26 @@ def main(argv: list[str] | None = None) -> int:
                         file=sys.stderr,
                     )
                     return 2
-                writer, new_records = write_jsonl_appending_manifest(current_jsonl, args.manifest)
+                if args.replace_existing:
+                    writer, added, replaced, skipped = write_jsonl_replacing_manifest(current_jsonl, args.manifest)
+                else:
+                    writer, added = write_jsonl_appending_manifest(current_jsonl, args.manifest)
+                    replaced = 0
+                    with args.manifest.open("r", encoding="utf-8-sig", newline="") as handle:
+                        skipped = sum(1 for _ in csv.DictReader(handle)) - added
                 info = stage_and_publish(index_root, writer, command="update-index")
         except PipelineLockedError as exc:
             print(str(exc), file=sys.stderr)
             return 2
-        except (ArtifactError, FileNotFoundError, ValueError) as exc:
+        except (ArtifactError, OSError, ValueError) as exc:
             print(str(exc), file=sys.stderr)
             return 2
         result = info.summary.to_dict()
         result["generation_id"] = info.generation_id
-        result["new_records"] = new_records
+        result["new_records"] = added
+        result["added_records"] = added
+        result["replaced_records"] = replaced
+        result["skipped_records"] = skipped
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0
     if args.command == "ensure-zotero":

@@ -36,6 +36,24 @@ def strip_front_matter(markdown: str) -> str:
     return markdown[end + len("\n---\n") :].strip()
 
 
+def front_matter_fields(markdown: str) -> dict[str, str]:
+    """Read a leading flat YAML front-matter block as key/value pairs."""
+    if not markdown.startswith("---\n"):
+        return {}
+    end = markdown.find("\n---\n", 4)
+    if end == -1:
+        return {}
+    fields: dict[str, str] = {}
+    for line in markdown[4:end].split("\n"):
+        key, separator, value = line.partition(":")
+        if separator and key.strip():
+            value = value.strip()
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+                value = value[1:-1]
+            fields[key.strip()] = value
+    return fields
+
+
 def _evidence_window(text: str) -> str:
     return text[:EVIDENCE_WINDOW_CHARS]
 
