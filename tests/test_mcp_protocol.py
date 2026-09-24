@@ -2,8 +2,13 @@ from __future__ import annotations
 
 import asyncio
 import importlib.util
+import json
+import os
+import subprocess
+import sys
 import tempfile
 import unittest
+from importlib.metadata import version
 from pathlib import Path
 from unittest.mock import patch
 
@@ -12,7 +17,7 @@ from mcp.types import CallToolRequest, CallToolRequestParams
 
 from zotero_pdf_text.bibtex import BibtexExport
 from zotero_pdf_text.math_ocr import ReconvertResult
-from test_mcp_server import _build_index
+from test_mcp_server import _build_index, _write_config
 from zotero_pdf_text.mcp_contract import create_server
 
 
@@ -230,6 +235,88 @@ class McpProtocolTests(unittest.TestCase):
             )
             self.assertTrue(limited.isError)
             self.assertIn("reconversion_rate_limited: ", limited.content[0].text)
+
+    def test_optional_write_tools_keep_stdout_clear_on_pymupdf_release_with_fitz_warning(self):
+        pymupdf_version = tuple(int(part) for part in version("pymupdf").split(".")[:3])
+        if pymupdf_version < (1, 28, 2):
+            self.skipTest("PyMuPDF 1.28.0 does not emit the deprecated fitz import warning")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root, sqlite_path, config = _build_index(Path(tmp) / "library")
+            config_path = root / "config.json"
+            _write_config(config_path, config)
+            bootstrap = "\n".join(
+                [
+                    "from unittest.mock import patch",
+                    "from zotero_pdf_text.mcp_server import main",
+                    "with patch('zotero_pdf_text.mcp_contract.marker_dependency_available', return_value=True):",
+                    "    raise SystemExit(main())",
+                ]
+            )
+            calls = (
+                (
+                    "reconvert_with_math_ocr",
+                    {"attachment_key": "MISSING", "confirm": "reconvert"},
+                    "attachment_not_found",
+                ),
+                (
+                    "skip_timeout_extraction",
+                    {"attachment_key": "MISSING", "reason": "offline test", "confirm": "skip_timeout"},
+                    "timeout_candidate_not_found",
+                ),
+                (
+                    "retry_timeout_extraction",
+                    {"attachment_key": "MISSING", "confirm": "retry_timeout"},
+                    "timeout_candidate_not_found",
+                ),
+            )
+            for name, arguments, error_code in calls:
+                requests = [
+                    {
+                        "jsonrpc": "2.0",
+                        "id": 1,
+                        "method": "initialize",
+                        "params": {
+                            "protocolVersion": "2025-03-26",
+                            "capabilities": {},
+                            "clientInfo": {"name": "regression-test", "version": "1"},
+                        },
+                    },
+                    {"jsonrpc": "2.0", "method": "notifications/initialized"},
+                    {
+                        "jsonrpc": "2.0",
+                        "id": 2,
+                        "method": "tools/call",
+                        "params": {"name": name, "arguments": arguments},
+                    },
+                ]
+                completed = subprocess.run(
+                    [
+                        sys.executable,
+                        "-c",
+                        bootstrap,
+                        "--db",
+                        str(sqlite_path),
+                        "--config",
+                        str(config_path),
+                        "--enable-reconvert",
+                        "--enable-retry-timeout",
+                    ],
+                    input="\n".join(json.dumps(request) for request in requests) + "\n",
+                    capture_output=True,
+                    check=False,
+                    text=True,
+                    timeout=20,
+                    env=os.environ.copy(),
+                )
+                self.assertEqual(completed.returncode, 0, completed.stderr)
+                responses = [json.loads(line) for line in completed.stdout.splitlines()]
+                self.assertEqual({response["id"] for response in responses}, {1, 2}, name)
+                result = next(response["result"] for response in responses if response["id"] == 2)
+                self.assertTrue(result["isError"], name)
+                message = result["content"][0]["text"]
+                self.assertIn(f"{error_code}: ", message, name)
+                self.assertNotIn(str(root), message, name)
 
     @staticmethod
     def _call(server, name: str, arguments: dict[str, object]):

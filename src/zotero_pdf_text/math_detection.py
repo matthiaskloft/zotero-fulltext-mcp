@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-import fitz
+import pymupdf as fitz
 
 MATH_FONT_SUBSTRINGS: frozenset[str] = frozenset(
     {
