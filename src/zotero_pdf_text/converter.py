@@ -287,7 +287,6 @@ def _convert_mapping_rows(
                 retry_counts["fallback_only" if initial_result.status == "converted" else "still_failed"] += 1
             if row_outcomes[index][0] is initial_result:
                 initial_result.error += "; native crash retry: " + _retry_diagnostic(retry_result)
-                row_outcomes[index] = initial_result, initial_candidate
     results = [result for result, _candidate in row_outcomes]
     candidates = [candidate for _result, candidate in row_outcomes if candidate is not None]
     _write_manifest(run_dir / "manifest.csv", results)
