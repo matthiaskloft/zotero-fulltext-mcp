@@ -1,3 +1,5 @@
+import csv
+import hashlib
 import io
 import json
 import os
@@ -942,6 +944,115 @@ class ManagedIndexCliTests(unittest.TestCase):
                     ["update-index", "--output-root", str(output_root), "--manifest", str(manifest)]
                 )
             self.assertEqual(exit_code, 2)
+
+    def test_update_index_replaces_only_verified_completed_rows(self):
+        from zotero_pdf_text.artifacts import current_generation_jsonl, read_current_pointer, resolve_reader_db_path
+        from zotero_pdf_text.fts import search_fts
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            output_root = root / "output"
+            source = root / "paper.pdf"
+            source.write_bytes(b"%PDF-1.4 source")
+            markdown = root / "paper.md"
+            markdown.write_text("Old searchable body", encoding="utf-8")
+            manifest = root / "manifest.csv"
+            fields = self._MANIFEST_HEADER.strip().split(",") + ["source_sha256"]
+            row = dict.fromkeys(fields, "")
+            row.update(
+                status="converted", output_path=str(markdown), zotero_attachment_key="A1",
+                zotero_parent_key="P1", title="Paper", source_path=str(source),
+                extraction_tool="plain_text_fallback", classification="mapped_verified",
+                identity_status="verified", identity_rule="doi_exact",
+                source_sha256=hashlib.sha256(source.read_bytes()).hexdigest(),
+            )
+
+            def write_manifest(rows):
+                with manifest.open("w", encoding="utf-8", newline="") as handle:
+                    writer = csv.DictWriter(handle, fieldnames=fields)
+                    writer.writeheader()
+                    writer.writerows(rows)
+
+            write_manifest([row])
+            with redirect_stdout(io.StringIO()):
+                self.assertEqual(main(["rebuild-index", "--output-root", str(output_root), "--manifest", str(manifest)]), 0)
+            index_root = output_root / "index"
+            original = read_current_pointer(index_root)["current_generation"]
+            reconverted = root / "later-run" / "paper.md"
+            reconverted.parent.mkdir()
+            reconverted.write_text(
+                '---\nzotero_attachment_key: "A1"\n---\nImproved searchable body', encoding="utf-8"
+            )
+            replacement_row = {
+                **row, "output_path": str(reconverted),
+                "extraction_tool": "pymupdf4llm.to_markdown",
+            }
+            write_manifest([replacement_row])
+            output = io.StringIO()
+            with redirect_stdout(output):
+                self.assertEqual(main(["update-index", "--output-root", str(output_root), "--manifest", str(manifest)]), 0)
+            self.assertEqual(json.loads(output.getvalue())["new_records"], 0)
+            self.assertEqual(json.loads(output.getvalue())["skipped_records"], 1)
+            current = json.loads(current_generation_jsonl(index_root).read_text(encoding="utf-8"))
+            self.assertEqual(current["text"], "Old searchable body")
+
+            new_markdown = root / "new.md"
+            new_markdown.write_text("New searchable body", encoding="utf-8")
+            new_row = {**row, "zotero_attachment_key": "A2", "zotero_parent_key": "P2", "output_path": str(new_markdown)}
+            write_manifest([replacement_row, new_row])
+            output = io.StringIO()
+            with redirect_stdout(output):
+                self.assertEqual(main(["update-index", "--replace-existing", "--output-root", str(output_root), "--manifest", str(manifest)]), 0)
+            result = json.loads(output.getvalue())
+            self.assertEqual((result["added_records"], result["replaced_records"], result["skipped_records"]), (1, 1, 0))
+            self.assertNotEqual(result["generation_id"], original)
+            current, added = [json.loads(line) for line in current_generation_jsonl(index_root).read_text(encoding="utf-8").splitlines()]
+            self.assertEqual(current["text"], "Improved searchable body")
+            self.assertEqual(current["source_sha256"], row["source_sha256"])
+            self.assertEqual(current["markdown_path"], str(reconverted))
+            self.assertEqual(current["extraction_tool"], "pymupdf4llm.to_markdown")
+            self.assertEqual(added["text"], "New searchable body")
+            current_db = resolve_reader_db_path(index_root / "zotero_text_index.sqlite")
+            self.assertEqual(len(search_fts(current_db, "Improved")), 1)
+            self.assertEqual(len(search_fts(current_db, "Old")), 0)
+
+            published = read_current_pointer(index_root)["current_generation"]
+            write_manifest([replacement_row, {**replacement_row, "status": "error", "output_path": ""}])
+            with redirect_stderr(io.StringIO()) as error:
+                self.assertEqual(main(["update-index", "--replace-existing", "--output-root", str(output_root), "--manifest", str(manifest)]), 2)
+            self.assertIn("duplicate attachment key", error.getvalue())
+            self.assertEqual(read_current_pointer(index_root)["current_generation"], published)
+
+            for bad_row in (
+                {**replacement_row, "source_sha256": ""},
+                {**replacement_row, "identity_status": "unverified"},
+                {**replacement_row, "zotero_parent_key": "OTHER"},
+            ):
+                write_manifest([bad_row])
+                with redirect_stderr(io.StringIO()):
+                    self.assertEqual(main(["update-index", "--replace-existing", "--output-root", str(output_root), "--manifest", str(manifest)]), 2)
+                self.assertEqual(read_current_pointer(index_root)["current_generation"], published)
+
+            wrong_markdown = root / "wrong.md"
+            wrong_markdown.write_text('---\nzotero_attachment_key: "A2"\n---\nWrong body', encoding="utf-8")
+            write_manifest([{**replacement_row, "output_path": str(wrong_markdown)}])
+            with redirect_stderr(io.StringIO()):
+                self.assertEqual(main(["update-index", "--replace-existing", "--output-root", str(output_root), "--manifest", str(manifest)]), 2)
+            self.assertEqual(read_current_pointer(index_root)["current_generation"], published)
+
+            source.write_bytes(b"%PDF-1.4 changed")
+            write_manifest([replacement_row])
+            with redirect_stderr(io.StringIO()):
+                self.assertEqual(main(["update-index", "--replace-existing", "--output-root", str(output_root), "--manifest", str(manifest)]), 2)
+            self.assertEqual(read_current_pointer(index_root)["current_generation"], published)
+
+            write_manifest([{**replacement_row, "status": "error", "output_path": ""}])
+            output = io.StringIO()
+            with redirect_stdout(output):
+                self.assertEqual(main(["update-index", "--replace-existing", "--output-root", str(output_root), "--manifest", str(manifest)]), 0)
+            self.assertEqual(json.loads(output.getvalue())["skipped_records"], 1)
+            current = json.loads(current_generation_jsonl(index_root).read_text(encoding="utf-8").splitlines()[0])
+            self.assertEqual(current["text"], "Improved searchable body")
 
     def test_rebuild_index_reports_duplicate_attachment_keys(self):
         with tempfile.TemporaryDirectory() as tmp:

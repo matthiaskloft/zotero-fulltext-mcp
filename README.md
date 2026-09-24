@@ -180,6 +180,11 @@ review of unverified matches, rebuilding vs. updating the index, etc.); see `doc
 unverified matches, orphan PDFs, or duplicate attachments — common early on while a library is
 still being built up — see `docs/library-cleanup.md` for which command to run and in what order.
 
+After reconverting an already indexed PDF, publish the improved text with
+`update-index --manifest <reconversion-run>\manifest.csv --replace-existing --config .\config.json`.
+The replacement requires a completed verified conversion whose source hash still matches the PDF;
+ordinary `update-index` remains add-only. See `docs/operations.md` for details.
+
 Smoke-test the index directly:
 
 ```powershell
