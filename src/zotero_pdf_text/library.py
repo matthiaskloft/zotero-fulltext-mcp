@@ -81,6 +81,7 @@ STATUS_ORPHANED_INDEX = "orphaned_index"
 # mapping snapshot cannot settle it -- an attachment whose PDF is missing never reaches it.
 STATUS_MEMBERSHIP_UNCHECKED = "membership_unchecked"
 STATUS_DUPLICATE_KEY = "duplicate_key"
+STATUS_MAPPING_AMBIGUOUS = "mapping_ambiguous"
 # Not one of the nine the plan lists. The plan wrote that vocabulary before the index recorded
 # enough provenance to detect this condition, and it names something serious enough not to leave
 # as a footnote: an attachment Zotero represents but whose identity was never verified, which is
@@ -101,6 +102,7 @@ ALL_STATUSES: tuple[str, ...] = (
     STATUS_MEMBERSHIP_UNCHECKED,
     STATUS_UNVERIFIED_INDEXED,
     STATUS_DUPLICATE_KEY,
+    STATUS_MAPPING_AMBIGUOUS,
 )
 
 # Identity states that may publish to the canonical library. Defined once here (plan step 3) so
@@ -185,6 +187,8 @@ def is_canonical_eligible(record: object) -> bool:
     Applied in report-only form by this audit: a non-eligible row is reported as quarantine or
     unverified rather than treated as library content.
     """
+    if getattr(record, "mapping_match_count", 0) > 1:
+        return False
     classification = _field(record, "classification")
     identity_status = _field(record, "identity_status")
     return (
@@ -234,6 +238,8 @@ class ItemObservation:
 
     # --- mapper snapshot: what the last dry-run matched on disk ---
     in_mapping: bool = False
+    mapping_row_count: int = 0
+    mapping_match_count: int = 0
     classification: str = ""
     identity_status: str = ""
     identity_rule: str = ""
@@ -407,6 +413,8 @@ def classify_item(observation: ItemObservation) -> frozenset[str]:
     #    is a fact about the library, not a judgement about whether the item belongs in it.
     if obs.index_row_count > 1:
         statuses.add(STATUS_DUPLICATE_KEY)
+    if obs.mapping_match_count > 1:
+        statuses.add(STATUS_MAPPING_AMBIGUOUS)
     if obs.in_index and member is False:
         statuses.add(STATUS_ORPHANED_INDEX)
     if member is None:
@@ -464,7 +472,7 @@ def classify_item(observation: ItemObservation) -> frozenset[str]:
     #    `unverified_indexed` requires `in_mapping`, which is what separates it from
     #    `orphaned_index`: the two name different repairs -- verify the identity, versus drop a
     #    row for an attachment Zotero no longer represents.
-    if not_retired and obs.in_index and not eligible:
+    if not_retired and obs.in_index and not eligible and obs.mapping_match_count <= 1:
         statuses.add(STATUS_UNVERIFIED_INDEXED)
     #    An ineligible item is never `unindexed`. It is correctly absent from the library, and
     #    reporting it as a gap would manufacture a backlog that should not be worked -- the exact
@@ -595,7 +603,10 @@ def audit_library(
         items=tuple(items),
         inventory_available=inventory_available,
         inventory_error=inventory_error,
-        ineligible_items=sum(1 for item in items if not item.canonical_eligible),
+        ineligible_items=sum(
+            1 for item in items
+            if not item.canonical_eligible and not item.has(STATUS_MAPPING_AMBIGUOUS)
+        ),
         source_provenance_unknown=sum(
             1
             for item in items
@@ -607,7 +618,7 @@ def audit_library(
 def build_observations(
     config: ProjectConfig,
     *,
-    mapping_rows: dict[str, dict[str, object]],
+    mapping_rows: dict[str, list[dict[str, object]]],
     index_rows: dict[str, list[dict[str, object]]],
     inventory: dict[str, AttachmentRecord] | None = None,
     inventory_available: bool = False,
@@ -624,10 +635,30 @@ def build_observations(
     inventory = inventory or {}
     observations: list[ItemObservation] = []
     for key in sorted(set(mapping_rows) | set(index_rows) | set(inventory)):
-        mapping = mapping_rows.get(key)
+        candidates = mapping_rows.get(key, [])
         rows = index_rows.get(key, [])
         indexed = rows[0] if rows else None
         attachment = inventory.get(key)
+        plausible = candidates
+        # Current Zotero provenance wins before the indexed source: after a relink, the
+        # snapshot may contain both PDFs, and the current row's hash detects source drift.
+        zotero_path = attachment.zotero_path if attachment else ""
+        if zotero_path:
+            path_matches = [row for row in plausible if _text(row, "zotero_path") == zotero_path]
+            if path_matches:
+                plausible = path_matches
+        if len(plausible) > 1 and attachment:
+            current_path = _inventory_source_path(attachment, config.linked_attachments)
+            current_matches = [row for row in plausible if _text(row, "source_path") == current_path]
+            if current_matches:
+                plausible = current_matches
+        indexed_source = _text(indexed, "source_path")
+        if len(plausible) > 1 and indexed_source:
+            source_matches = [row for row in plausible if _text(row, "source_path") == indexed_source]
+            if source_matches:
+                plausible = source_matches
+        mapping = plausible[0] if len(plausible) == 1 else None
+        identity_index = indexed if len(plausible) <= 1 else None
 
         # Where the snapshot and the index believe the PDF lives. Kept as provenance: it is
         # what the indexed text was extracted from, and it is what `indexed_source_path`
@@ -670,10 +701,12 @@ def build_observations(
                 in_zotero=attachment is not None,
                 zotero_metadata=_attachment_metadata(attachment),
                 inventory_available=inventory_available,
-                in_mapping=mapping is not None,
-                classification=_text(mapping, "classification") or _text(indexed, "classification"),
-                identity_status=_text(mapping, "identity_status") or _text(indexed, "identity_status"),
-                identity_rule=_text(mapping, "identity_rule") or _text(indexed, "identity_rule"),
+                in_mapping=bool(candidates),
+                mapping_row_count=len(candidates),
+                mapping_match_count=len(plausible),
+                classification=_text(mapping, "classification") or _text(identity_index, "classification"),
+                identity_status=_text(mapping, "identity_status") or _text(identity_index, "identity_status"),
+                identity_rule=_text(mapping, "identity_rule") or _text(identity_index, "identity_rule"),
                 parent_key=(
                     _text(mapping, "zotero_parent_key") or _text(indexed, "zotero_parent_key")
                 ),
@@ -745,8 +778,8 @@ def library_status(
 # --------------------------------------------------------------------------------------
 
 
-def load_mapping_snapshot(mapping_report: Path) -> dict[str, dict[str, object]]:
-    """Load a mapper `mapping_report.jsonl` snapshot, keyed by attachment key.
+def load_mapping_snapshot(mapping_report: Path) -> dict[str, list[dict[str, object]]]:
+    """Load all mapper rows for each attachment key from `mapping_report.jsonl`.
 
     Accepts either the JSONL file itself or the run directory containing it. Rows without an
     attachment key are skipped: they are orphan or unsupported sources, which this audit does not
@@ -761,11 +794,11 @@ def load_mapping_snapshot(mapping_report: Path) -> dict[str, dict[str, object]]:
             "--mapping-report pointing at an existing run directory."
         )
 
-    rows: dict[str, dict[str, object]] = {}
+    rows: dict[str, list[dict[str, object]]] = {}
     for row in _read_jsonl(path):
         key = str(row.get("zotero_attachment_key") or "").strip()
         if key:
-            rows[key] = row
+            rows.setdefault(key, []).append(row)
     return rows
 
 

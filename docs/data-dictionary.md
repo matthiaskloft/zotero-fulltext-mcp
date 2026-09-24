@@ -408,6 +408,12 @@ the library.
   it is in the published index and is being returned by search. Distinct from `orphaned_index`:
   the repair is to verify the identity, not to drop the row.
 - `duplicate_key`: more than one index row shares an attachment key.
+- `mapping_ambiguous`: multiple mapping snapshot rows remain plausible for the attachment after
+  comparing the indexed source path and Zotero attachment path. The audit preserves all rows
+  rather than choosing whichever appeared last. Inspect the mapping report for that key before
+  treating the attachment as current; `mapping_row_count` and `mapping_match_count` in CLI audit
+  JSON evidence show how many rows existed and how many remained plausible. An ambiguous item is
+  not certified as `canonical_eligible` based on the index's older identity fields.
 
 Two counts sit outside the status vocabulary and explain it:
 

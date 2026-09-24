@@ -20,6 +20,7 @@ from zotero_pdf_text.library import (
     METADATA_KEYS,
     STATUS_CURRENT,
     STATUS_DUPLICATE_KEY,
+    STATUS_MAPPING_AMBIGUOUS,
     STATUS_METADATA_CHANGED,
     STATUS_MISSING_MARKDOWN,
     STATUS_MISSING_SOURCE,
@@ -518,6 +519,19 @@ class SnapshotLoadingTests(unittest.TestCase):
             )
             self.assertEqual(set(load_mapping_snapshot(path)), {"AAAA1111"})
 
+    def test_rows_sharing_an_attachment_key_are_preserved(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "mapping_report.jsonl"
+            path.write_text(
+                "\n".join(json.dumps({"zotero_attachment_key": "AAAA1111", "source_path": name})
+                          for name in ("first.pdf", "second.pdf")) + "\n",
+                encoding="utf-8",
+            )
+            self.assertEqual(
+                [row["source_path"] for row in load_mapping_snapshot(path)["AAAA1111"]],
+                ["first.pdf", "second.pdf"],
+            )
+
     def test_malformed_json_names_the_file_and_line(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "mapping_report.jsonl"
@@ -737,6 +751,114 @@ class AuditEndToEndTests(unittest.TestCase):
             "".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8"
         )
         return path
+
+    def test_shared_key_resolves_verified_row_in_either_order_for_audit_and_status(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config = _config(root)
+            index_root = root / "index"
+            pdf = root / "verified.pdf"
+            other = root / "candidate.pdf"
+            pdf.write_bytes(b"verified")
+            other.write_bytes(b"candidate")
+            markdown = root / "AAAA1111.md"
+            markdown.write_text("hello world", encoding="utf-8")
+            self._publish(index_root, [_index_record(
+                "AAAA1111", source_path=str(pdf), source_sha256=_sha256_text("verified"),
+                markdown_path=str(markdown), markdown_sha256=_sha256_text("hello world"),
+            )])
+            _write_zotero_inventory(config, {"AAAA1111": str(pdf)})
+            verified = {
+                "zotero_attachment_key": "AAAA1111", "source_path": str(pdf),
+                "zotero_path": str(pdf), "sha256": _sha256_text("verified"), **ELIGIBLE,
+            }
+            candidate = {
+                "zotero_attachment_key": "AAAA1111", "source_path": str(other),
+                "zotero_path": str(other), "sha256": _sha256_text("candidate"),
+                "classification": "mapped_unverified", "identity_status": "unverified",
+            }
+            for order in ((verified, candidate), (candidate, verified)):
+                with self.subTest(last=order[-1]["classification"]):
+                    snapshot = self._snapshot(root / "runs" / "r1", list(order))
+                    audit = audit_library(config, snapshot, index_root=index_root)
+                    item = audit.items[0]
+                    self.assertEqual(item.observation.mapping_row_count, 2)
+                    self.assertEqual(item.observation.mapping_match_count, 1)
+                    self.assertEqual(item.observation.source_sha256_mapping, _sha256_text("verified"))
+                    self.assertNotIn(STATUS_UNVERIFIED_INDEXED, item.statuses)
+                    self.assertNotIn(STATUS_SOURCE_UNCHECKED, item.statuses)
+                    self.assertNotIn(STATUS_MAPPING_AMBIGUOUS, item.statuses)
+                    self.assertIn(STATUS_CURRENT, item.statuses)
+                    status = library_status(config, snapshot, index_root=index_root)
+                    self.assertEqual(status["health"][STATUS_UNVERIFIED_INDEXED], 0)
+                    self.assertEqual(status["health"][STATUS_MAPPING_AMBIGUOUS], 0)
+
+    def test_same_source_uses_zotero_path_then_reports_remaining_ambiguity(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config = _config(root)
+            pdf = root / "shared.pdf"
+            pdf.write_bytes(b"pdf")
+            _write_zotero_inventory(config, {"AAAA1111": str(pdf)})
+            index_root = root / "index"
+            self._publish(index_root, [_index_record(
+                "AAAA1111", source_path=str(pdf), source_sha256=_sha256_text("pdf"),
+            )])
+            verified = {
+                "zotero_attachment_key": "AAAA1111", "source_path": str(pdf),
+                "zotero_path": str(pdf), **ELIGIBLE,
+            }
+            candidate = {
+                "zotero_attachment_key": "AAAA1111", "source_path": str(pdf),
+                "zotero_path": str(root / "other.pdf"),
+                "classification": "mapped_unverified", "identity_status": "unverified",
+            }
+            snapshot = self._snapshot(root / "runs" / "r1", [candidate, verified])
+            resolved = audit_library(config, snapshot, index_root=index_root).items[0]
+            self.assertEqual(resolved.observation.mapping_match_count, 1)
+            self.assertTrue(resolved.canonical_eligible)
+
+            snapshot = self._snapshot(root / "runs" / "r1", [verified, dict(verified)])
+            audit = audit_library(config, snapshot, index_root=index_root)
+            item = audit.items[0]
+            self.assertIn(STATUS_MAPPING_AMBIGUOUS, item.statuses)
+            self.assertNotIn(STATUS_CURRENT, item.statuses)
+            self.assertNotIn(STATUS_UNVERIFIED_INDEXED, item.statuses)
+            self.assertFalse(item.canonical_eligible)
+            self.assertEqual(item.observation.classification, "")
+            self.assertEqual(item.observation.identity_status, "")
+            self.assertEqual(item.observation.mapping_match_count, 2)
+            self.assertEqual(library_status(config, snapshot, index_root=index_root)["health"][STATUS_MAPPING_AMBIGUOUS], 1)
+
+    def test_relinked_source_uses_current_mapping_row_hash(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config = _config(root)
+            old_pdf = root / "old.pdf"
+            new_pdf = root / "new.pdf"
+            old_pdf.write_bytes(b"old")
+            new_pdf.write_bytes(b"new")
+            _write_zotero_inventory(config, {"AAAA1111": str(new_pdf)})
+            index_root = root / "index"
+            self._publish(index_root, [_index_record(
+                "AAAA1111", source_path=str(old_pdf), source_sha256=_sha256_text("old"),
+            )])
+            old_row = {
+                "zotero_attachment_key": "AAAA1111", "source_path": str(old_pdf),
+                "zotero_path": str(old_pdf), "sha256": _sha256_text("old"), **ELIGIBLE,
+            }
+            new_row = {
+                "zotero_attachment_key": "AAAA1111", "source_path": str(new_pdf),
+                "zotero_path": str(new_pdf), "sha256": _sha256_text("new"), **ELIGIBLE,
+            }
+            for order in ((old_row, new_row), (new_row, old_row)):
+                with self.subTest(last=order[-1]["source_path"]):
+                    snapshot = self._snapshot(root / "runs" / "r1", list(order))
+                    audit = audit_library(config, snapshot, index_root=index_root)
+                    item = audit.items[0]
+                    self.assertEqual(item.observation.source_sha256_mapping, _sha256_text("new"))
+                    self.assertIn(STATUS_SOURCE_CHANGED, item.statuses)
+                    self.assertNotIn(STATUS_SOURCE_UNCHECKED, item.statuses)
 
     def test_audit_joins_mapping_filesystem_and_index(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -1502,12 +1624,12 @@ class RelinkedAttachmentTests(unittest.TestCase):
         observations = build_observations(
             config,
             mapping_rows={
-                "AAAA1111": {
+                "AAAA1111": [{
                     "zotero_attachment_key": "AAAA1111",
                     "source_path": str(old_pdf),
                     "sha256": _sha256_text("%PDF old"),
                     **ELIGIBLE,
-                }
+                }]
             },
             index_rows={"AAAA1111": [indexed]},
             inventory={"AAAA1111": attachment},
@@ -1572,12 +1694,12 @@ class RelinkedAttachmentTests(unittest.TestCase):
         observations = build_observations(
             _config(Path("/nonexistent")),
             mapping_rows={
-                "AAAA1111": {
+                "AAAA1111": [{
                     "zotero_attachment_key": "AAAA1111",
                     "source_path": "recorded.pdf",
                     "sha256": "src-hash",
                     **ELIGIBLE,
-                }
+                }]
             },
             index_rows={},
             inventory={"AAAA1111": _attachment_record("AAAA1111", zotero_path="storage:x.pdf")},
@@ -1614,13 +1736,13 @@ class LiveMetadataTests(unittest.TestCase):
         mapping_rows = {}
         if in_mapping:
             mapping_rows = {
-                "AAAA1111": {
+                "AAAA1111": [{
                     "zotero_attachment_key": "AAAA1111",
                     "source_path": str(pdf),
                     "sha256": _sha256_text("%PDF"),
                     **snapshot_metadata,
                     **ELIGIBLE,
-                }
+                }]
             }
         indexed = _index_record(
             "AAAA1111",
