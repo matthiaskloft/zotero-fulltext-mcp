@@ -38,6 +38,7 @@ from typing import Callable
 from ._atomic import replace_with_retry
 from .zotero_db import read_only_uri
 from .fts import DEFAULT_CHUNK_CHARS, DEFAULT_OVERLAP_CHARS, FtsBuildSummary, build_fts_index
+from .identity import front_matter_fields
 from .indexer import TextIndexRecord, _converted_rows, _record_from_manifest_row, _sha256
 
 ARTIFACT_SCHEMA_VERSION = 1
@@ -633,18 +634,9 @@ def write_jsonl_replacing_manifest(
             raise ValueError(f"Cannot replace {key}: source PDF cannot be read.") from exc
         if current_source_hash != source_hash:
             raise ValueError(f"Cannot replace {key}: source PDF changed since conversion.")
-        with Path(row["output_path"]).open("r", encoding="utf-8") as handle:
-            header = []
-            closed = False
-            if handle.readline().strip() == "---":
-                for _ in range(20):
-                    line = handle.readline().strip()
-                    if line == "---":
-                        closed = True
-                        break
-                    header.append(line)
-            if not closed or f'zotero_attachment_key: "{key}"' not in header:
-                raise ValueError(f"Cannot replace {key}: Markdown front matter does not identify this attachment.")
+        fields = front_matter_fields(Path(row["output_path"]).read_text(encoding="utf-8"))
+        if fields.get("zotero_attachment_key") != key:
+            raise ValueError(f"Cannot replace {key}: Markdown front matter does not identify this attachment.")
         replacements[key] = _record_from_manifest_row(row)
 
     def _write(jsonl_path: Path) -> None:

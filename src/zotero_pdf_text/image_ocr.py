@@ -36,7 +36,7 @@ from .artifacts import (
 from .config import ImageOcrSettings
 from .converter import _with_front_matter
 from .fts import get_item_context
-from .identity import MARKDOWN_IMAGE_RE, strip_front_matter
+from .identity import MARKDOWN_IMAGE_RE, front_matter_fields, strip_front_matter
 from .indexer import TextIndexRecord, _sha256, load_indexed_keys
 from .lock import PipelineLockedError, pipeline_write_lock
 
@@ -461,25 +461,6 @@ def splice(body: str, replacements: list[tuple[tuple[int, int], str]]) -> str:
     for (start, end), text in sorted(replacements, key=lambda item: item[0][0], reverse=True):
         result = result[:start] + text + result[end:]
     return result
-
-
-def front_matter_fields(markdown: str) -> dict[str, str]:
-    """Read the leading YAML front-matter block as flat key -> unquoted-value pairs.
-
-    Only used to detect prior enrichment; the record fields themselves come from the index, not
-    from parsing the document.
-    """
-    if not markdown.startswith("---\n"):
-        return {}
-    end = markdown.find("\n---\n", 4)
-    if end == -1:
-        return {}
-    fields: dict[str, str] = {}
-    for line in markdown[4:end].split("\n"):
-        key, separator, value = line.partition(":")
-        if separator and key.strip():
-            fields[key.strip()] = value.strip().strip('"')
-    return fields
 
 
 def resolve_under_output_root(stored: Path, output_root: Path) -> Path | None:

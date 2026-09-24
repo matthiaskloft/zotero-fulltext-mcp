@@ -981,7 +981,10 @@ class ManagedIndexCliTests(unittest.TestCase):
             reconverted = root / "later-run" / "paper.md"
             reconverted.parent.mkdir()
             reconverted.write_text(
-                '---\nzotero_attachment_key: "A1"\n---\nImproved searchable body', encoding="utf-8"
+                "---\nzotero_attachment_key: A1\n"
+                + "".join(f"extra_{i}: value\n" for i in range(25))
+                + "---\nImproved searchable body",
+                encoding="utf-8",
             )
             replacement_row = {
                 **row, "output_path": str(reconverted),
