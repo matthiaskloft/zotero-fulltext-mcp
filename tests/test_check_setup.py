@@ -1,13 +1,16 @@
 import io
 import json
+import sqlite3
 import tempfile
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
+from zotero_pdf_text.artifacts import resolve_reader_db_path, stage_and_publish, write_jsonl_from_existing
 from zotero_pdf_text.cli import (
     _check_output_root_writable,
+    _shell_quote,
     main,
     run_setup_checks,
 )
@@ -273,6 +276,122 @@ class CheckSetupCliTests(unittest.TestCase):
             payload = json.loads(buffer.getvalue())
             self.assertIsInstance(payload, list)
             self.assertTrue(any(entry["name"] == "config" for entry in payload))
+
+
+def _write_setup_config(root: Path) -> Path:
+    for name in ("project_root", "zotero_data", "attachments"):
+        (root / name).mkdir()
+    (root / "zotero_data" / "zotero.sqlite").write_text("")
+    config_path = root / "config.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "zotero_root": str(root / "project_root"),
+                "zotero_data_directory": str(root / "zotero_data"),
+                "linked_attachments": str(root / "attachments"),
+                "output_root": str(root / "output"),
+            }
+        ),
+        encoding="utf-8",
+    )
+    return config_path
+
+
+def _publish_fixture_generation(output_root: Path) -> Path:
+    index_root = output_root / "index"
+    index_root.mkdir(parents=True)
+    jsonl_path = output_root / "fixture.jsonl"
+    jsonl_path.write_text(
+        json.dumps(
+            {
+                "zotero_parent_key": "PARENT1",
+                "zotero_attachment_key": "ATTACH1",
+                "title": "Fixture paper",
+                "creators": "Someone",
+                "year": "2026",
+                "source_path": str(output_root / "fixture.pdf"),
+                "markdown_path": str(output_root / "fixture.md"),
+                "markdown_sha256": "abc123",
+                "extraction_tool": "pymupdf4llm.to_markdown",
+                "classification": "mapped_verified",
+                "identity_status": "verified",
+                "text": "Searchable fixture text.",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    stage_and_publish(index_root, write_jsonl_from_existing(jsonl_path), command="test")
+    return resolve_reader_db_path(index_root / "zotero_text_index.sqlite")
+
+
+class PublishedIndexCheckTests(unittest.TestCase):
+    def _index_result(self, config_path: Path, *, require_mcp: bool = True):
+        results = run_setup_checks(config_path, require_mcp=require_mcp)
+        return next((r for r in results if r.name == "published_index"), None)
+
+    def test_only_checked_with_require_mcp(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config_path = _write_setup_config(Path(tmp))
+            self.assertIsNone(self._index_result(config_path, require_mcp=False))
+
+    def test_current_schema_passes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config_path = _write_setup_config(root)
+            _publish_fixture_generation(root / "output")
+
+            result = self._index_result(config_path)
+
+            self.assertTrue(result.ok, result.detail)
+            self.assertTrue(result.required)
+            self.assertNotIn(str(root / "output"), result.detail)
+
+    def test_old_schema_fails_with_rebuild_index_command(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config_path = _write_setup_config(root)
+            db_path = _publish_fixture_generation(root / "output")
+            # Reproduce a generation published before these columns existed.
+            con = sqlite3.connect(db_path)
+            try:
+                con.execute("ALTER TABLE metadata DROP COLUMN source_sha256")
+                con.execute("ALTER TABLE metadata DROP COLUMN indexed_at")
+                con.commit()
+            finally:
+                con.close()
+            before = db_path.read_bytes()
+
+            result = self._index_result(config_path)
+
+            self.assertFalse(result.ok)
+            self.assertTrue(result.required)
+            self.assertIn(f"zotero-pdf-text rebuild-index --config {_shell_quote(str(config_path))}", result.detail)
+            self.assertNotIn(str(root / "output"), result.detail)
+            self.assertEqual(db_path.read_bytes(), before)
+
+    def test_missing_generation_fails_with_distinct_message(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config_path = _write_setup_config(root)
+
+            result = self._index_result(config_path)
+
+            self.assertFalse(result.ok)
+            self.assertIn("no published index generation", result.detail)
+            self.assertIn(f"zotero-pdf-text convert-new --config {_shell_quote(str(config_path))}", result.detail)
+            self.assertNotIn("rebuild-index", result.detail)
+            self.assertFalse((root / "output").exists())
+
+    def test_recovery_command_quotes_config_path_with_spaces(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "My Library"
+            root.mkdir()
+            config_path = _write_setup_config(root)
+
+            result = self._index_result(config_path)
+
+            self.assertIn(f'convert-new --config "{config_path}"', result.detail)
 
 
 if __name__ == "__main__":
