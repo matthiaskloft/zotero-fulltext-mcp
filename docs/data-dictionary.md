@@ -36,6 +36,15 @@ Each converted Markdown file starts with front matter:
   as unverifiable and never as evidence that the source is current.
 - `error`
 
+`checkpoints/000001.json`, etc. are atomically replaced after each conversion row completes. A
+checkpoint records the row and attachment identity, source/output paths, extraction-time source
+hash, Markdown and extracted-image digests, result, and any timeout candidate. Resume reuses a
+converted row only when the source hash and all published output digests still match. A checkpoint
+for pre-existing Markdown records only the source fingerprint observed when it was skipped; its
+manifest `source_sha256` remains empty because that fingerprint cannot prove which PDF produced the
+old text. Markdown is published atomically before its checkpoint is written. The final manifest,
+summary, and timeout-candidate artifacts are rebuilt from the selected rows and valid checkpoints.
+
 ### Extraction Timeout and Fallback
 
 `convert-verified`/`convert-sample`/`verify-unverified` try `pymupdf4llm.to_markdown` (the primary

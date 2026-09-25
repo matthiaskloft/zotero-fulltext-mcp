@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import hashlib
+import io
 import json
 import os
 import re
@@ -9,14 +10,17 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from concurrent.futures import ThreadPoolExecutor
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
 
 from .config import ProjectConfig
 from .indexer import load_indexed_keys
+from ._atomic import replace_with_retry
 from .timeout_candidates import (
     TimeoutCandidate,
     append_master_candidates,
@@ -38,6 +42,7 @@ PRIMARY_EXTRACTION_TOOL = "pymupdf4llm.to_markdown"
 FALLBACK_EXTRACTION_TOOL = "pymupdf.get_text"
 EXTRACTION_TOOL = PRIMARY_EXTRACTION_TOOL
 SECONDS_PER_PAGE_TIMEOUT = 4
+CHECKPOINT_SCHEMA_VERSION = 1
 
 # pymupdf4llm's layout parser walks every vector path to reconstruct structure, so
 # pages dense with vector drawings (statistical plots, diagrams) cost far more than
@@ -238,57 +243,136 @@ def _convert_mapping_rows(
     markdown_dir = run_dir / "markdown"
     markdown_dir.mkdir(parents=True, exist_ok=exist_ok)
     images_root = run_dir / "images"
+    checkpoint_dir = run_dir / "checkpoints"
+    checkpoint_dir.mkdir(parents=True, exist_ok=True)
     skip_keys = _load_persisted_skip_keys(output_root)
 
     rows = _selected_rows(mapping_report, limit, classifications, skip_attachment_keys=skip_attachment_keys)
     indexed_rows = list(enumerate(rows, start=1))
+    row_outcomes: list[tuple[ConversionResult, TimeoutCandidate | None] | None] = [None] * len(indexed_rows)
+    completed_rows = 0
+    progress_lock = threading.Lock()
+
+    def persist_outcome(
+        row_number: int,
+        row: dict[str, str],
+        outcome: tuple[ConversionResult, TimeoutCandidate | None],
+        *,
+        progress_label: str,
+    ) -> None:
+        nonlocal completed_rows
+        result, _candidate = outcome
+        output_path = markdown_dir / f"{row_number:04d}_{_output_stem(row)}.md"
+        _write_row_checkpoint(
+            checkpoint_dir / f"{row_number:06d}.json",
+            row_number,
+            row,
+            output_path,
+            images_root / output_path.stem,
+            outcome,
+        )
+        with progress_lock:
+            completed_rows += 1
+            print(
+                f"Conversion progress: {completed_rows}/{len(indexed_rows)} rows complete "
+                f"(row {row_number}: {progress_label or result.status})",
+                flush=True,
+            )
+
+    def record_outcome(
+        position: int,
+        row_number: int,
+        row: dict[str, str],
+        outcome: tuple[ConversionResult, TimeoutCandidate | None],
+        *,
+        progress_label: str,
+    ) -> None:
+        persist_outcome(row_number, row, outcome, progress_label=progress_label)
+        row_outcomes[position] = outcome
+
+    pending_rows: list[tuple[int, int, dict[str, str]]] = []
+    for position, (row_number, row) in enumerate(indexed_rows):
+        output_path = markdown_dir / f"{row_number:04d}_{_output_stem(row)}.md"
+        checkpoint_path = checkpoint_dir / f"{row_number:06d}.json"
+        resumed = None if force else _load_row_checkpoint(checkpoint_path, row_number, row, output_path, images_root / output_path.stem)
+        if resumed is None:
+            pending_rows.append((position, row_number, row))
+            continue
+        record_outcome(position, row_number, row, resumed, progress_label="resumed validated checkpoint")
+
+    def convert(item: tuple[int, int, dict[str, str]]) -> tuple[int, int, dict[str, str], tuple[ConversionResult, TimeoutCandidate | None]]:
+        position, row_number, row = item
+        outcome = _convert_row(
+            row, markdown_dir, images_root, row_number, timeout_seconds, force=force, skip_keys=skip_keys
+        )
+        persist_outcome(row_number, row, outcome, progress_label="")
+        return position, row_number, row, outcome
+
     if workers == 1:
-        row_outcomes = [
-            _convert_row(row, markdown_dir, images_root, index, timeout_seconds, force=force, skip_keys=skip_keys)
-            for index, row in indexed_rows
-        ]
-    else:
+        for item in pending_rows:
+            position, row_number, row, outcome = convert(item)
+            row_outcomes[position] = outcome
+    elif pending_rows:
         with ThreadPoolExecutor(max_workers=workers) as executor:
-            row_outcomes = list(
-                executor.map(
-                    lambda item: _convert_row(
-                        item[1], markdown_dir, images_root, item[0], timeout_seconds, force=force, skip_keys=skip_keys
-                    ),
-                    indexed_rows,
-                )
-    )
+            futures = {executor.submit(convert, item): item for item in pending_rows}
+            for future in as_completed(futures):
+                position, row_number, row, outcome = future.result()
+                row_outcomes[position] = outcome
     retry_workers = min(2, workers - 1)
     retry_indexes = [
-        index for index, (result, _) in enumerate(row_outcomes)
-        if retry_workers > 0 and _has_native_crash(result.error)
+        index for index, outcome in enumerate(row_outcomes)
+        if retry_workers > 0 and outcome is not None and _has_native_crash(outcome[0].error)
     ]
     retry_counts = Counter()
     if retry_indexes:
-        def retry(index: int) -> tuple[ConversionResult, TimeoutCandidate | None]:
+        def retry(
+            index: int,
+        ) -> tuple[int, tuple[ConversionResult, TimeoutCandidate | None], str]:
             row_number, row = indexed_rows[index]
-            return _convert_row(
+            initial = row_outcomes[index]
+            if initial is None:
+                raise RuntimeError(f"Missing initial conversion result for row {row_number}")
+            initial_result, _initial_candidate = initial
+            retry_outcome = _convert_row(
                 row, markdown_dir, images_root, row_number, timeout_seconds,
                 force=True, skip_keys=skip_keys, retry=True,
             )
+            retry_result, _retry_candidate = retry_outcome
+            if retry_result.status == "converted" and retry_result.extraction_tool == PRIMARY_EXTRACTION_TOOL:
+                final_outcome = retry_outcome
+                retry_kind = "recovered"
+            elif retry_result.status == "converted":
+                final_outcome = retry_outcome if initial_result.status == "error" else initial
+                retry_kind = "fallback_only"
+            else:
+                initial_result.error += "; native crash retry: " + _retry_diagnostic(retry_result)
+                final_outcome = initial
+                retry_kind = "fallback_only" if initial_result.status == "converted" else "still_failed"
+
+            output_path = markdown_dir / f"{row_number:04d}_{_output_stem(row)}.md"
+            _write_row_checkpoint(
+                checkpoint_dir / f"{row_number:06d}.json",
+                row_number,
+                row,
+                output_path,
+                images_root / output_path.stem,
+                final_outcome,
+            )
+            with progress_lock:
+                print(f"Conversion retry complete for row {row_number}: {retry_result.status}", flush=True)
+            return index, final_outcome, retry_kind
 
         with ThreadPoolExecutor(max_workers=retry_workers) as executor:
-            retried = list(executor.map(retry, retry_indexes))
-        for index, retry_outcome in zip(retry_indexes, retried):
-            initial_result, initial_candidate = row_outcomes[index]
-            retry_result, retry_candidate = retry_outcome
-            if retry_result.status == "converted" and retry_result.extraction_tool == PRIMARY_EXTRACTION_TOOL:
-                retry_counts["recovered"] += 1
-                row_outcomes[index] = retry_result, retry_candidate
-            elif retry_result.status == "converted":
-                retry_counts["fallback_only"] += 1
-                if initial_result.status == "error":
-                    row_outcomes[index] = retry_result, retry_candidate
-            else:
-                retry_counts["fallback_only" if initial_result.status == "converted" else "still_failed"] += 1
-            if row_outcomes[index][0] is initial_result:
-                initial_result.error += "; native crash retry: " + _retry_diagnostic(retry_result)
-    results = [result for result, _candidate in row_outcomes]
-    candidates = [candidate for _result, candidate in row_outcomes if candidate is not None]
+            futures = {executor.submit(retry, index): index for index in retry_indexes}
+            for future in as_completed(futures):
+                index, final_outcome, retry_kind = future.result()
+                row_outcomes[index] = final_outcome
+                retry_counts[retry_kind] += 1
+    outcomes = [outcome for outcome in row_outcomes if outcome is not None]
+    if len(outcomes) != len(indexed_rows):
+        raise RuntimeError("Conversion did not produce a result for every selected row")
+    results = [result for result, _candidate in outcomes]
+    candidates = [candidate for _result, candidate in outcomes if candidate is not None]
     _write_manifest(run_dir / "manifest.csv", results)
     _write_jsonl(run_dir / "manifest.jsonl", results)
     _write_summary(
@@ -374,8 +458,9 @@ def _convert_row(
             extraction_tool = _existing_extraction_tool(output_path)
             has_math = _existing_has_math(output_path)
             body = _existing_markdown_body(output_path)
-            output_path.write_text(
-                _with_front_matter(row, body, extraction_tool, has_math=has_math), encoding="utf-8", newline="\n"
+            _atomic_write_text(
+                output_path,
+                _with_front_matter(row, body, extraction_tool, has_math=has_math),
             )
             return (
                 _result(
@@ -387,12 +472,11 @@ def _convert_row(
                 ),
                 None,
             )
-        if force and output_path.exists():
-            images_root.mkdir(parents=True, exist_ok=True)
-            staged_images_root = Path(tempfile.mkdtemp(prefix=".conversion-", dir=images_root))
-            extraction_images_dir = staged_images_root / output_path.stem
-        elif force:
+        if force and not output_path.exists():
             shutil.rmtree(images_dir, ignore_errors=True)
+        images_root.mkdir(parents=True, exist_ok=True)
+        staged_images_root = Path(tempfile.mkdtemp(prefix=".conversion-", dir=images_root))
+        extraction_images_dir = staged_images_root / output_path.stem
         skip_primary = row.get("zotero_attachment_key") in skip_keys
         # Hash before and after extraction, not only after. The extractor reads the PDF at
         # `source_path` over a long window; if the file is replaced while it runs, hashing only
@@ -440,7 +524,7 @@ def _convert_row(
             try:
                 if extraction_tool == PRIMARY_EXTRACTION_TOOL and extraction_images_dir.exists():
                     extraction_images_dir.rename(images_dir)
-                os.replace(staged_markdown, output_path)
+                replace_with_retry(staged_markdown, output_path)
             except Exception:
                 if images_dir.exists():
                     shutil.rmtree(images_dir)
@@ -448,8 +532,9 @@ def _convert_row(
                     backup_images.rename(images_dir)
                 raise
         else:
-            output_path.write_text(
-                _with_front_matter(row, markdown, extraction_tool, has_math=has_math), encoding="utf-8", newline="\n"
+            _atomic_write_text(
+                output_path,
+                _with_front_matter(row, markdown, extraction_tool, has_math=has_math),
             )
         result = _result(
             row,
@@ -732,6 +817,193 @@ def _source_sha256(source_path: Path) -> str:
         return ""
 
 
+def _load_row_checkpoint(
+    checkpoint_path: Path,
+    row_number: int,
+    row: dict[str, str],
+    output_path: Path,
+    images_dir: Path,
+) -> tuple[ConversionResult, TimeoutCandidate | None] | None:
+    try:
+        payload = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+        if not isinstance(payload, dict) or payload.get("schema_version") != CHECKPOINT_SCHEMA_VERSION:
+            return None
+        attachment_key = row.get("zotero_attachment_key", "")
+        if not attachment_key or payload.get("row_number") != row_number:
+            return None
+        if payload.get("attachment_key") != attachment_key:
+            return None
+        if not _same_path(str(payload.get("source_path", "")), row.get("source_path", "")):
+            return None
+        if not _same_path(str(payload.get("output_path", "")), str(output_path)):
+            return None
+
+        result_data = payload.get("result")
+        if not isinstance(result_data, dict):
+            return None
+        result = ConversionResult(**result_data)
+        if result.zotero_attachment_key != attachment_key:
+            return None
+        if not _same_path(result.source_path, row.get("source_path", "")):
+            return None
+        if not _same_path(result.output_path, str(output_path)):
+            return None
+        if result.status not in {"converted", "skipped_existing"}:
+            return None
+
+        source_sha256 = payload.get("source_sha256")
+        source_validation_sha256 = payload.get("source_validation_sha256")
+        if result.status == "converted":
+            if not isinstance(source_sha256, str) or not source_sha256 or result.source_sha256 != source_sha256:
+                return None
+            if _source_sha256(Path(row["source_path"])) != source_sha256:
+                return None
+            if source_validation_sha256 != source_sha256:
+                return None
+        else:
+            if (
+                source_sha256
+                or result.source_sha256
+                or not isinstance(source_validation_sha256, str)
+                or not source_validation_sha256
+            ):
+                return None
+            if _source_sha256(Path(row["source_path"])) != source_validation_sha256:
+                return None
+
+        output_sha256 = payload.get("output_sha256")
+        images_sha256 = payload.get("images_sha256")
+        if not isinstance(output_sha256, str) or not output_sha256 or not output_path.is_file():
+            return None
+        if _source_sha256(output_path) != output_sha256:
+            return None
+        if not isinstance(images_sha256, str) or _directory_sha256(images_dir) != images_sha256:
+            return None
+
+        candidate_data = payload.get("candidate")
+        candidate = None
+        if candidate_data is not None:
+            if not isinstance(candidate_data, dict):
+                return None
+            candidate = TimeoutCandidate(**candidate_data)
+
+        body = _existing_markdown_body(output_path)
+        _atomic_write_text(
+            output_path,
+            _with_front_matter(
+                row,
+                body,
+                result.extraction_tool,
+                has_math=result.has_math == "true",
+            ),
+        )
+        refreshed = _result(
+            row,
+            output_path,
+            result.status,
+            error=result.error,
+            extraction_tool=result.extraction_tool,
+            has_math=result.has_math == "true",
+            source_sha256=result.source_sha256,
+        )
+        return refreshed, candidate
+    except (OSError, ValueError, TypeError, KeyError, RuntimeError):
+        return None
+
+
+def _write_row_checkpoint(
+    checkpoint_path: Path,
+    row_number: int,
+    row: dict[str, str],
+    output_path: Path,
+    images_dir: Path,
+    outcome: tuple[ConversionResult, TimeoutCandidate | None],
+) -> None:
+    result, candidate = outcome
+    output_sha256 = _source_sha256(output_path) if result.output_path else ""
+    images_sha256 = _directory_sha256(images_dir) if result.output_path else ""
+    source_validation_sha256 = result.source_sha256
+    if result.status == "skipped_existing":
+        source_validation_sha256 = _source_sha256(Path(row["source_path"]))
+    _atomic_write_json(
+        checkpoint_path,
+        {
+            "schema_version": CHECKPOINT_SCHEMA_VERSION,
+            "row_number": row_number,
+            "attachment_key": row.get("zotero_attachment_key", ""),
+            "source_path": row.get("source_path", ""),
+            "output_path": str(output_path),
+            "source_sha256": result.source_sha256,
+            "source_validation_sha256": source_validation_sha256,
+            "output_sha256": output_sha256,
+            "images_sha256": images_sha256,
+            "result": asdict(result),
+            "candidate": candidate.to_dict() if candidate is not None else None,
+        },
+    )
+
+
+def _same_path(left: str, right: str) -> bool:
+    if not left or not right:
+        return False
+    try:
+        return os.path.normcase(str(Path(left).resolve())) == os.path.normcase(str(Path(right).resolve()))
+    except (OSError, RuntimeError):
+        return False
+
+
+def _directory_sha256(directory: Path) -> str | None:
+    if not directory.exists():
+        return ""
+    if not directory.is_dir():
+        return None
+    try:
+        files = sorted(path for path in directory.rglob("*") if path.is_file())
+        if not files:
+            return ""
+        digest = hashlib.sha256()
+        for path in files:
+            relative = path.relative_to(directory).as_posix().encode("utf-8")
+            file_sha256 = _source_sha256(path)
+            if not file_sha256:
+                return None
+            digest.update(relative)
+            digest.update(b"\0")
+            digest.update(file_sha256.encode("ascii"))
+            digest.update(b"\n")
+        return digest.hexdigest()
+    except OSError:
+        return None
+
+
+def _atomic_write_json(path: Path, payload: dict[str, object]) -> None:
+    _atomic_write_text(path, json.dumps(payload, ensure_ascii=False) + "\n")
+
+
+def _atomic_write_text(path: Path, content: str, *, encoding: str = "utf-8") -> None:
+    _atomic_write_file(path, lambda temp_path: temp_path.write_text(content, encoding=encoding, newline="\n"))
+
+
+def _atomic_write_file(path: Path, writer: Callable[[Path], object]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    file_descriptor, temp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+    temp_path = Path(temp_name)
+    os.close(file_descriptor)
+    try:
+        writer(temp_path)
+        with temp_path.open("r+b") as handle:
+            os.fsync(handle.fileno())
+        replace_with_retry(temp_path, path)
+        if os.name != "nt":
+            directory_fd = os.open(path.parent, os.O_RDONLY)
+            try:
+                os.fsync(directory_fd)
+            finally:
+                os.close(directory_fd)
+    finally:
+        temp_path.unlink(missing_ok=True)
+
+
 def _result(
     row: dict[str, str],
     output_path: Path,
@@ -775,17 +1047,19 @@ def _yaml_escape(value: str) -> str:
 
 def _write_manifest(path: Path, results: list[ConversionResult]) -> None:
     fieldnames = list(asdict(results[0]).keys()) if results else list(ConversionResult.__dataclass_fields__)
-    with path.open("w", encoding="utf-8-sig", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fieldnames)
-        writer.writeheader()
-        for result in results:
-            writer.writerow(asdict(result))
+    output = io.StringIO(newline="")
+    writer = csv.DictWriter(output, fieldnames=fieldnames)
+    writer.writeheader()
+    for result in results:
+        writer.writerow(asdict(result))
+    _atomic_write_text(path, output.getvalue(), encoding="utf-8-sig")
 
 
 def _write_jsonl(path: Path, results: list[ConversionResult]) -> None:
-    with path.open("w", encoding="utf-8", newline="\n") as handle:
-        for result in results:
-            handle.write(json.dumps(asdict(result), ensure_ascii=False) + "\n")
+    _atomic_write_text(
+        path,
+        "".join(json.dumps(asdict(result), ensure_ascii=False) + "\n" for result in results),
+    )
 
 
 def _write_summary(
@@ -843,6 +1117,7 @@ def _write_summary(
         "",
         "- `manifest.csv`: spreadsheet-friendly conversion manifest",
         "- `manifest.jsonl`: line-delimited manifest for tools",
+        "- `checkpoints/`: per-row resume records",
         "- `markdown/`: converted Markdown files with Zotero front matter",
     ]
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    _atomic_write_text(path, "\n".join(lines) + "\n")

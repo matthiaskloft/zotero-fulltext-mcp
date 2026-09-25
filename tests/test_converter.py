@@ -1,4 +1,6 @@
 import csv
+import hashlib
+import io
 import itertools
 import json
 import subprocess
@@ -13,6 +15,191 @@ from zotero_pdf_text.converter import convert_sample, convert_unverified, conver
 
 
 class ConverterTests(unittest.TestCase):
+    def test_multi_worker_checkpoint_resume_rebuilds_manifests_without_reextracting(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            first_pdf = root / "first.pdf"
+            second_pdf = root / "second.pdf"
+            first_pdf.write_bytes(b"%PDF first")
+            second_pdf.write_bytes(b"%PDF second")
+            report = root / "mapping_report.csv"
+            _write_mapping_report(report, first_pdf)
+            with report.open("r", encoding="utf-8", newline="") as handle:
+                rows = list(csv.DictReader(handle))
+                fieldnames = list(rows[0])
+            second_row = {
+                **rows[-1],
+                "source_path": str(second_pdf),
+                "safe_folder_id": "zotero_SECOND",
+                "zotero_parent_key": "SECOND",
+                "zotero_attachment_key": "ATTACH2",
+                "title": "Second title",
+            }
+            with report.open("a", encoding="utf-8", newline="") as handle:
+                writer = csv.DictWriter(handle, fieldnames=fieldnames)
+                writer.writerow(second_row)
+            run_dir = root / "output" / "run"
+            config = ProjectConfig(root, root, root, root / "output")
+            extracted: list[str] = []
+
+            def extract(args, **kwargs):
+                extracted.append(Path(args[3]).name)
+                Path(args[4]).write_text(f"Body from {Path(args[3]).stem}", encoding="utf-8")
+
+            progress = io.StringIO()
+            with patch("zotero_pdf_text.converter.subprocess.run", side_effect=extract), patch(
+                "sys.stdout", progress
+            ):
+                convert_verified(config, report, output_dir=run_dir, workers=2)
+
+            self.assertCountEqual(extracted, ["first.pdf", "second.pdf"])
+            self.assertEqual(len(list((run_dir / "checkpoints").glob("*.json"))), 2)
+            self.assertIn("2/2 rows complete", progress.getvalue())
+
+            with patch("zotero_pdf_text.converter.subprocess.run", side_effect=AssertionError("re-extracted")), patch(
+                "sys.stdout", io.StringIO()
+            ):
+                convert_verified(config, report, output_dir=run_dir, resume=True, workers=2)
+
+            with (run_dir / "manifest.jsonl").open(encoding="utf-8") as handle:
+                manifest = [json.loads(line) for line in handle if line.strip()]
+            self.assertEqual(len(manifest), 2)
+            self.assertEqual({row["status"] for row in manifest}, {"converted"})
+            self.assertEqual(
+                {row["source_sha256"] for row in manifest},
+                {hashlib.sha256(first_pdf.read_bytes()).hexdigest(), hashlib.sha256(second_pdf.read_bytes()).hexdigest()},
+            )
+            self.assertIn("Requested rows: 2", (run_dir / "summary.md").read_text(encoding="utf-8"))
+
+    def test_source_change_invalidates_checkpoint_and_keeps_provenance_unknown(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            pdf = root / "paper.pdf"
+            pdf.write_bytes(b"%PDF original")
+            report = root / "mapping_report.csv"
+            _write_mapping_report(report, pdf)
+            run_dir = root / "output" / "run"
+            config = ProjectConfig(root, root, root, root / "output")
+            extracted: list[str] = []
+
+            def extract(args, **kwargs):
+                extracted.append("called")
+                Path(args[4]).write_text("Re-extracted body", encoding="utf-8")
+
+            with patch("zotero_pdf_text.converter.subprocess.run", side_effect=extract), patch(
+                "sys.stdout", io.StringIO()
+            ):
+                convert_verified(config, report, output_dir=run_dir, workers=1)
+            old_checkpoint = json.loads((run_dir / "checkpoints" / "000001.json").read_text(encoding="utf-8"))
+            pdf.write_bytes(b"%PDF replaced")
+
+            with patch("zotero_pdf_text.converter.subprocess.run", side_effect=extract), patch(
+                "sys.stdout", io.StringIO()
+            ):
+                convert_verified(config, report, output_dir=run_dir, resume=True, workers=1)
+
+            self.assertEqual(len(extracted), 1)
+            checkpoint = json.loads((run_dir / "checkpoints" / "000001.json").read_text(encoding="utf-8"))
+            self.assertNotEqual(old_checkpoint["source_sha256"], hashlib.sha256(pdf.read_bytes()).hexdigest())
+            self.assertEqual(checkpoint["source_sha256"], "")
+            self.assertEqual(checkpoint["source_validation_sha256"], hashlib.sha256(pdf.read_bytes()).hexdigest())
+            with (run_dir / "manifest.jsonl").open(encoding="utf-8") as handle:
+                row = json.loads(next(handle))
+            self.assertEqual(row["status"], "skipped_existing")
+            self.assertEqual(row["source_sha256"], "")
+
+    def test_output_change_invalidates_checkpoint_and_keeps_provenance_unknown(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            pdf = root / "paper.pdf"
+            pdf.write_bytes(b"%PDF source")
+            report = root / "mapping_report.csv"
+            _write_mapping_report(report, pdf)
+            run_dir = root / "output" / "run"
+            config = ProjectConfig(root, root, root, root / "output")
+
+            def extract(args, **kwargs):
+                Path(args[4]).write_text("Extracted body", encoding="utf-8")
+
+            with patch("zotero_pdf_text.converter.subprocess.run", side_effect=extract), patch(
+                "sys.stdout", io.StringIO()
+            ):
+                convert_verified(config, report, output_dir=run_dir, workers=1)
+            markdown = next((run_dir / "markdown").glob("*.md"))
+            markdown.write_text("Externally changed body", encoding="utf-8")
+
+            with patch("zotero_pdf_text.converter.subprocess.run", side_effect=AssertionError("re-extracted")), patch(
+                "sys.stdout", io.StringIO()
+            ):
+                convert_verified(config, report, output_dir=run_dir, resume=True, workers=1)
+
+            with (run_dir / "manifest.jsonl").open(encoding="utf-8") as handle:
+                row = json.loads(next(handle))
+            checkpoint = json.loads((run_dir / "checkpoints" / "000001.json").read_text(encoding="utf-8"))
+            self.assertEqual(row["status"], "skipped_existing")
+            self.assertEqual(row["source_sha256"], "")
+            self.assertEqual(checkpoint["source_sha256"], "")
+            self.assertIn("Externally changed body", markdown.read_text(encoding="utf-8"))
+
+    def test_interruption_after_checkpoint_resumes_without_dropping_rows(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            first_pdf = root / "first.pdf"
+            second_pdf = root / "second.pdf"
+            first_pdf.write_bytes(b"%PDF first")
+            second_pdf.write_bytes(b"%PDF second")
+            report = root / "mapping_report.csv"
+            _write_mapping_report(report, first_pdf)
+            with report.open("r", encoding="utf-8", newline="") as handle:
+                rows = list(csv.DictReader(handle))
+                fieldnames = list(rows[0])
+            with report.open("a", encoding="utf-8", newline="") as handle:
+                writer = csv.DictWriter(handle, fieldnames=fieldnames)
+                writer.writerow(
+                    {
+                        **rows[-1],
+                        "source_path": str(second_pdf),
+                        "safe_folder_id": "zotero_SECOND",
+                        "zotero_parent_key": "SECOND",
+                        "zotero_attachment_key": "ATTACH2",
+                        "title": "Second title",
+                    }
+                )
+            run_dir = root / "output" / "run"
+            config = ProjectConfig(root, root, root, root / "output")
+            from zotero_pdf_text import converter
+
+            write_checkpoint = converter._write_row_checkpoint
+            interrupt = True
+
+            def checkpoint_then_interrupt(*args, **kwargs):
+                nonlocal interrupt
+                write_checkpoint(*args, **kwargs)
+                if interrupt:
+                    interrupt = False
+                    raise KeyboardInterrupt
+
+            def extract(args, **kwargs):
+                Path(args[4]).write_text(f"Body from {Path(args[3]).stem}", encoding="utf-8")
+
+            with patch("zotero_pdf_text.converter.subprocess.run", side_effect=extract), patch(
+                "zotero_pdf_text.converter._write_row_checkpoint", side_effect=checkpoint_then_interrupt
+            ), patch("sys.stdout", io.StringIO()):
+                with self.assertRaises(KeyboardInterrupt):
+                    convert_verified(config, report, output_dir=run_dir, workers=2)
+
+            self.assertEqual(len(list((run_dir / "checkpoints").glob("*.json"))), 2)
+            with patch("zotero_pdf_text.converter.subprocess.run", side_effect=AssertionError("unexpected extraction")), patch(
+                "sys.stdout", io.StringIO()
+            ):
+                convert_verified(config, report, output_dir=run_dir, resume=True, workers=2)
+
+            with (run_dir / "manifest.jsonl").open(encoding="utf-8") as handle:
+                manifest = [json.loads(line) for line in handle if line.strip()]
+            self.assertEqual(len(manifest), 2)
+            self.assertEqual({row["zotero_attachment_key"] for row in manifest}, {"ATTACH", "ATTACH2"})
+            self.assertEqual(sum(bool(row["source_sha256"]) for row in manifest), 2)
+
     def test_default_worker_count_caps_windows_concurrency(self):
         with patch("zotero_pdf_text.converter.os.cpu_count", return_value=12):
             with patch("zotero_pdf_text.converter.sys.platform", "win32"):
@@ -286,7 +473,11 @@ class ConverterTests(unittest.TestCase):
             expected_images_dir = run_dir / "images" / markdown_files[0].stem
             self.assertEqual(len(calls), 1)
             self.assertIn("--image-dir", calls[0])
-            self.assertEqual(calls[0][calls[0].index("--image-dir") + 1], str(expected_images_dir))
+            extraction_images_dir = Path(calls[0][calls[0].index("--image-dir") + 1])
+            self.assertEqual(extraction_images_dir.name, expected_images_dir.name)
+            self.assertEqual(extraction_images_dir.parent.parent, expected_images_dir.parent)
+            self.assertTrue(extraction_images_dir.parent.name.startswith(".conversion-"))
+            self.assertFalse(any(expected_images_dir.parent.glob(".conversion-*")))
             self.assertEqual(calls[0][calls[0].index("--tool") + 1], "pymupdf4llm.to_markdown")
 
     def test_convert_sample_scales_timeout_for_long_documents(self):
@@ -761,6 +952,7 @@ class ConverterTests(unittest.TestCase):
                 rows = list(csv.DictReader(handle))
             self.assertEqual(rows[0]["status"], "skipped_existing")
             self.assertEqual(rows[0]["citation_key"], "newKey2024")
+            self.assertEqual(rows[0]["source_sha256"], "")
 
     def test_force_reconverts_existing_markdown(self):
         with tempfile.TemporaryDirectory() as tmp:
