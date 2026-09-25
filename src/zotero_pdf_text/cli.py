@@ -1950,19 +1950,19 @@ def _check_published_index(config_path: Path, db_path: Path) -> tuple[bool, str]
     except ManagedIndexMissingError:
         return False, (
             "no published index generation yet; convert and publish one with "
-            f"'zotero-pdf-text convert-new --config {config_path}'"
+            f"'zotero-pdf-text convert-new --config {_shell_quote(str(config_path))}'"
         )
     except ArtifactError:
         return False, (
             "the current index pointer is invalid or names a missing generation; re-publish with "
-            f"'zotero-pdf-text rebuild-index --config {config_path}'"
+            f"'zotero-pdf-text rebuild-index --config {_shell_quote(str(config_path))}'"
         )
     try:
         connect_readonly(resolved.db_path).close()
     except IndexSchemaUnsupportedError:
         return False, (
             f"generation {resolved.generation_id} uses an unsupported index schema; upgrade it with "
-            f"'zotero-pdf-text rebuild-index --config {config_path}'"
+            f"'zotero-pdf-text rebuild-index --config {_shell_quote(str(config_path))}'"
         )
     except (sqlite3.DatabaseError, OSError) as exc:
         return False, f"generation {resolved.generation_id} could not be opened ({type(exc).__name__})"
