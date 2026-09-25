@@ -68,7 +68,6 @@ class FakeFastMCP:
         self.instructions = instructions
         self.tools: dict[str, object] = {}
         self.tool_metadata: dict[str, dict[str, object]] = {}
-        self.ran = False
 
     def tool(self, **metadata):
         def register(function):
@@ -78,8 +77,6 @@ class FakeFastMCP:
 
         return register
 
-    def run(self) -> None:
-        self.ran = True
 
 
 class McpServerTests(unittest.TestCase):
@@ -619,12 +616,15 @@ class McpServerTests(unittest.TestCase):
             config_path = root / "config.json"
             _write_config(config_path, config)
             fake_server = FakeFastMCP("test", "test")
-            with patch("zotero_pdf_text.mcp_server.create_server", return_value=fake_server) as factory:
+            with (
+                patch("zotero_pdf_text.mcp_server.create_server", return_value=fake_server) as factory,
+                patch("zotero_pdf_text.mcp_server._run_stdio") as run_stdio,
+            ):
                 self.assertEqual(
                     main(["--db", str(sqlite_path), "--config", str(config_path), "--enable-reconvert"]),
                     0,
                 )
-            self.assertTrue(fake_server.ran)
+            self.assertIs(run_stdio.call_args.args[0], fake_server)
             self.assertTrue(factory.call_args.kwargs["enable_reconvert"])
             self.assertEqual(factory.call_args.kwargs["config"], config)
 
@@ -716,10 +716,13 @@ class McpServerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             _, sqlite_path, _ = _build_index(Path(tmp))
             fake_server = FakeFastMCP("zotero-fulltext", "")
-            with patch("zotero_pdf_text.mcp_server.create_server", return_value=fake_server) as create:
+            with (
+                patch("zotero_pdf_text.mcp_server.create_server", return_value=fake_server) as create,
+                patch("zotero_pdf_text.mcp_server._run_stdio") as run_stdio,
+            ):
                 self.assertEqual(main(["--db", str(sqlite_path)]), 0)
             create.assert_called_once()
-            self.assertTrue(fake_server.ran)
+            self.assertIs(run_stdio.call_args.args[0], fake_server)
 
     def test_missing_database_is_a_path_free_structured_startup_error(self):
         with tempfile.TemporaryDirectory() as tmp:

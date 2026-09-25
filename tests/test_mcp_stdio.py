@@ -13,7 +13,8 @@ from zotero_pdf_text.mcp_contract import marker_dependency_available
 from test_mcp_server import _build_index, _write_config
 
 # Simulates a dependency that prints diagnostics when an optional tool lazily imports it (the
-# PyMuPDF `fitz` deprecation notice): both a Python-level print and a raw fd-1 write.
+# PyMuPDF `fitz` deprecation notice): a Python-level print, a binary
+# ``sys.stdout.buffer`` write, and a raw fd-1 write.
 NOISY_SERVER = textwrap.dedent(
     """
     import os, sys
@@ -25,6 +26,8 @@ NOISY_SERVER = textwrap.dedent(
         print("noise from a lazily imported dependency")
         sys.stdout.flush()
         os.write(1, b"raw fd noise\\n")
+        sys.stdout.buffer.write(b"binary buffer noise\\n")
+        sys.stdout.buffer.flush()
         return original(config)
 
     mcp_contract.validate_config = noisy_validate_config
@@ -76,3 +79,4 @@ class McpStdioTests(unittest.TestCase):
             self.assertNotIn(str(root), str(result.content), name)
         self.assertIn("noise from a lazily imported dependency", stderr)
         self.assertIn("raw fd noise", stderr)
+        self.assertIn("binary buffer noise", stderr)

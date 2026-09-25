@@ -7,6 +7,7 @@ import os
 import sqlite3
 import sys
 from contextlib import contextmanager
+from io import TextIOWrapper
 from pathlib import Path
 
 from .artifacts import ArtifactError, ManagedIndexMissingError, resolve_reader_db_path
@@ -74,11 +75,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.bibtex_endpoint is not None and not args.enable_bibtex:
         raise SystemExit(_startup_error("invalid_bibtex_endpoint", "--bibtex-endpoint requires --enable-bibtex."))
     _validate_startup_database(db_path)
-    with _protocol_only_stdout():
-        return _serve(db_path, config, args)
+    with _private_protocol_stdout() as protocol:
+        return _serve(db_path, config, args, protocol)
 
 
-def _serve(db_path: Path, config, args: argparse.Namespace) -> int:
+def _serve(db_path: Path, config, args: argparse.Namespace, protocol) -> int:
     try:
         mcp = create_server(
             db_path,
@@ -101,8 +102,26 @@ def _serve(db_path: Path, config, args: argparse.Namespace) -> int:
     if args.enable_reconvert or args.enable_retry_timeout:
         _preload_write_tool_dependencies()
     logging.getLogger("mcp").setLevel(logging.WARNING)
-    mcp.run()
+    _run_stdio(mcp, protocol)
     return 0
+
+
+def _run_stdio(mcp, protocol) -> None:
+    """Serve MCP over stdin and the private ``protocol`` stream (not ``sys.stdout``)."""
+    if protocol is None:
+        mcp.run()
+        return
+    import anyio
+    from mcp.server.stdio import stdio_server
+
+    server = mcp._mcp_server
+
+    async def serve() -> None:
+        stdout = anyio.wrap_file(TextIOWrapper(protocol, encoding="utf-8"))
+        async with stdio_server(stdout=stdout) as (read_stream, write_stream):
+            await server.run(read_stream, write_stream, server.create_initialization_options())
+
+    anyio.run(serve)
 
 
 def _preload_write_tool_dependencies() -> None:
@@ -114,30 +133,17 @@ def _preload_write_tool_dependencies() -> None:
     from . import indexer, math_ocr, retry_timeout  # noqa: F401
 
 
-class _StderrTextWithProtocolBuffer:
-    """``sys.stdout`` stand-in: text writes go to stderr, ``.buffer`` is the protocol pipe.
-
-    The MCP stdio transport wraps ``sys.stdout.buffer`` once at startup; everything else that
-    writes to ``sys.stdout`` (e.g. a lazily imported dependency's diagnostics) lands on stderr.
-    """
-
-    def __init__(self, buffer, stderr):
-        self.buffer = buffer
-        self._stderr = stderr
-
-    def __getattr__(self, name):
-        return getattr(self._stderr, name)
-
-
 @contextmanager
-def _protocol_only_stdout():
+def _private_protocol_stdout():
     """Reserve the real stdout exclusively for JSON-RPC while the server runs.
 
-    The protocol keeps a private duplicate of fd 1; fd 1 itself and ``sys.stdout`` text writes
-    are redirected to stderr so no non-JSON output can corrupt the response stream.
+    Yields a private binary stream on a duplicate of fd 1 for the MCP transport. fd 1 itself and
+    ``sys.stdout`` (text and ``.buffer``) are redirected to stderr, so nothing else -- e.g. a lazily
+    imported dependency's diagnostics -- can corrupt the response stream. Yields ``None`` when
+    there are no console streams (e.g. pythonw); there is nothing to protect then.
     """
     if sys.stdout is None or sys.stderr is None:
-        yield  # no console streams (e.g. pythonw); nothing to protect or redirect to
+        yield None
         return
     sys.stdout.flush()
     saved_stdout = sys.stdout
@@ -146,13 +152,13 @@ def _protocol_only_stdout():
     try:
         protocol = os.fdopen(os.dup(1), "wb", buffering=0)
         os.dup2(2, 1)
-        sys.stdout = _StderrTextWithProtocolBuffer(protocol, sys.stderr)
-        yield
+        sys.stdout = sys.stderr
+        yield protocol
     finally:
         sys.stdout = saved_stdout
         os.dup2(saved_fd, 1)
         os.close(saved_fd)
-        if protocol is not None:
+        if protocol is not None and not protocol.closed:
             protocol.close()
 
 

@@ -13,8 +13,9 @@ dated section once it has been stress-tested against a large library.
 
 ### Fixed
 
-- The MCP stdio server keeps stdout exclusively for JSON-RPC: dependency output printed while it
-  runs (Python-level or raw file-descriptor writes) is redirected to stderr instead of breaking
+- The MCP stdio server keeps stdout exclusively for JSON-RPC: the transport writes to a private
+  duplicate of stdout, and other output while it runs (`print()`, `sys.stdout.buffer`, or raw
+  file-descriptor writes) is redirected to stderr instead of breaking
   the client's message parsing.
 - PyMuPDF is imported as `pymupdf` instead of the deprecated `fitz` alias, whose import notice
   could reach the protocol stream; the minimum is now `pymupdf>=1.24.3`.

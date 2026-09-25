@@ -354,8 +354,10 @@ both:
 
 ## MCP Client Reports "Failed To Parse JSONRPC Message" Or A Write Tool Hangs
 
-The stdio server reserves stdout for JSON-RPC. While it runs, anything else written to stdout
-(for example a dependency's diagnostic printed during a lazy import) is redirected to stderr, so a
+The stdio server reserves stdout for JSON-RPC. While it runs, the transport writes to a private
+duplicate of the stdout handle, and everything else written to stdout -- `print()`,
+`sys.stdout.buffer`, or the raw file descriptor, e.g. a dependency's diagnostic during a lazy
+import -- is redirected to stderr, so a
 non-JSON line on the protocol stream indicates an older install; update it. The project imports
 PyMuPDF as `pymupdf` (not the deprecated `fitz` alias), which requires `pymupdf>=1.24.3`.
 
