@@ -132,6 +132,16 @@ class RetryTimeoutCandidateTests(unittest.TestCase):
             self.assertEqual(candidate["status"], "resolved")
             self.assertEqual(candidate["resolved_via"], "retry")
 
+            from zotero_pdf_text.mcp_contract import _list_timeout_candidates
+
+            listed = _list_timeout_candidates(
+                output_root / "index" / "zotero_text_index.sqlite", status="all", limit=20
+            )["candidates"][0]
+            self.assertEqual(listed["status"], "resolved")
+            self.assertEqual(listed["status_source"], "candidate_history")
+            self.assertEqual(listed["current_index_state"], "verified")
+            self.assertEqual(listed["current_extraction_tool"], "pymupdf4llm.to_markdown")
+
     def test_retry_success_replaces_existing_index_record(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

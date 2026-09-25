@@ -34,7 +34,12 @@ from .artifacts import (
 )
 from .bibtex import DEFAULT_BBT_ENDPOINT, DEFAULT_BBT_TRANSLATOR, export_bibtex_entries
 from .config import ProjectConfig, validate_config
-from .library import MAPPING_REPORT_JSONL, LibraryAuditError, library_status as _library_status_data
+from .library import (
+    MAPPING_REPORT_JSONL,
+    LibraryAuditError,
+    is_canonical_eligible,
+    library_status as _library_status_data,
+)
 from .fts import (
     ChunkNotFoundError,
     DEFAULT_CONTEXT_RECORD_LIMIT,
@@ -48,6 +53,7 @@ from .fts import (
     SearchMode,
     SearchResult,
     StaleLocatorError,
+    connect_readonly,
     get_fulltext,
     get_item_context as get_item_context_fn,
     search_fts,
@@ -273,6 +279,9 @@ class TimeoutCandidateRecord(TypedDict):
     fallback_outcome: str
     conversion_status: str
     status: str
+    status_source: str
+    current_index_state: str
+    current_extraction_tool: str
     occurrence_count: int
     first_detected_at: str
     last_detected_at: str
@@ -682,8 +691,10 @@ def create_server(
     ) -> ListTimeoutCandidatesResponse:
         """List attachments whose primary Markdown extraction exceeded its scaled timeout budget.
 
-        Each pending candidate either fell back to plain-text extraction (losing structure/images)
-        or failed outright after its primary extractor timed out. Pass its attachment_key to
+        `conversion_status` retains the historical timeout outcome. `status` reflects that history,
+        except that a pending candidate with a verified non-fallback record in the current published
+        index is reported as resolved with `status_source="current_index"`. Current index fields
+        also distinguish fallback-only and unverified records. Pass its attachment_key to
         skip_timeout_extraction or retry_timeout_extraction. Read-only; never triggers conversion.
         """
         return _public_call(
@@ -1522,8 +1533,78 @@ def _list_timeout_candidates(db_path: Path, *, status: object, limit: object) ->
     validated_limit = _validate_limit(limit)
     status_filter = None if validated_status == "all" else validated_status
     candidates_jsonl = db_path.parent / CANDIDATE_JSONL_FILENAME
-    records = list_candidates(candidates_jsonl, status=status_filter)[:validated_limit]
-    return {"candidates": [serialize_timeout_candidate(record) for record in records]}
+    records = list_candidates(candidates_jsonl, status=None)
+    indexed_states = _timeout_candidate_index_states(_resolve_request_db(db_path), records)
+    candidates: list[TimeoutCandidateRecord] = []
+    for record in records:
+        candidate = serialize_timeout_candidate(record)
+        current_state, extraction_tool = indexed_states.get(
+            candidate["attachment_key"], ("not_indexed", "")
+        )
+        candidate["current_index_state"] = current_state
+        candidate["current_extraction_tool"] = extraction_tool
+        candidate["status_source"] = "candidate_history"
+        if candidate["status"] == STATUS_PENDING and current_state == "verified":
+            candidate["status"] = STATUS_RESOLVED
+            candidate["status_source"] = "current_index"
+        if status_filter is not None and candidate["status"] != status_filter:
+            continue
+        candidates.append(candidate)
+        if len(candidates) == validated_limit:
+            break
+    return {"candidates": candidates}
+
+
+def _timeout_candidate_index_states(
+    db_path: Path, records: list[dict[str, object]]
+) -> dict[str, tuple[str, str]]:
+    keys = list(
+        dict.fromkeys(
+            str(record.get("zotero_attachment_key", ""))
+            for record in records
+            if record.get("zotero_attachment_key")
+        )
+    )
+    if not keys:
+        return {}
+
+    con = connect_readonly(db_path)
+    con.row_factory = sqlite3.Row
+    states: dict[str, tuple[str, str]] = {}
+    priority = {"indexed_unverified": 1, "fallback_only": 2, "verified": 3}
+    try:
+        for offset in range(0, len(keys), 500):
+            batch = keys[offset : offset + 500]
+            placeholders = ",".join("?" for _ in batch)
+            rows = con.execute(
+                f"""
+                SELECT zotero_attachment_key, extraction_tool, classification, identity_status
+                FROM metadata
+                WHERE zotero_attachment_key IN ({placeholders})
+                ORDER BY record_id
+                """,
+                batch,
+            ).fetchall()
+            for row in rows:
+                key = str(row["zotero_attachment_key"])
+                extraction_tool = str(row["extraction_tool"] or "")
+                index_record = {
+                    "classification": row["classification"],
+                    "identity_status": row["identity_status"],
+                }
+                if not is_canonical_eligible(index_record) or not extraction_tool:
+                    state = "indexed_unverified"
+                elif extraction_tool == "pymupdf.get_text":
+                    state = "fallback_only"
+                else:
+                    state = "verified"
+
+                previous = states.get(key)
+                if previous is None or priority[state] > priority[previous[0]]:
+                    states[key] = (state, extraction_tool)
+    finally:
+        con.close()
+    return states
 
 
 def _list_orphan_candidates(db_path: Path, *, status: object, limit: object) -> ListOrphanCandidatesResponse:

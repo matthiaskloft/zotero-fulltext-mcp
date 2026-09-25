@@ -764,6 +764,99 @@ class TimeoutCandidateMcpTests(unittest.TestCase):
                 self, lambda: server.tools["list_timeout_candidates"](status="bogus"), "invalid_status"
             )
 
+    def test_list_timeout_candidates_reflects_verified_publication_outside_retry_workflow(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, sqlite_path, config = _build_index(Path(tmp))
+            source_path = root / "long-book.pdf"
+            _seed_timeout_candidate(
+                config.output_root,
+                source_path,
+                attachment_key="SLOWKEY",
+                conversion_status="error",
+                fallback_outcome="fallback_failed",
+            )
+            _seed_timeout_candidate(
+                config.output_root,
+                source_path,
+                attachment_key="SLOWKEY",
+                conversion_status="error",
+                fallback_outcome="fallback_failed",
+            )
+
+            from zotero_pdf_text.artifacts import (
+                current_generation_jsonl,
+                stage_and_publish,
+                write_jsonl_from_existing,
+            )
+            from zotero_pdf_text.timeout_candidates import find_candidate
+
+            index_root = config.output_root / "index"
+            current_jsonl = current_generation_jsonl(index_root)
+            self.assertIsNotNone(current_jsonl)
+            original = json.loads(current_jsonl.read_text(encoding="utf-8").splitlines()[0])
+            recovered = {
+                **original,
+                "zotero_attachment_key": "SLOWKEY",
+                "title": "A Long Book",
+                "extraction_tool": "pymupdf4llm.to_markdown",
+                "classification": "mapped_verified",
+                "identity_status": "verified",
+            }
+            conversion_jsonl = root / "other-conversion.jsonl"
+            conversion_jsonl.write_text(
+                current_jsonl.read_text(encoding="utf-8")
+                + json.dumps(recovered, ensure_ascii=False)
+                + "\n",
+                encoding="utf-8",
+            )
+            stage_and_publish(
+                index_root,
+                write_jsonl_from_existing(conversion_jsonl),
+                command="other-conversion",
+            )
+            server = create_server(sqlite_path, mcp_factory=FakeFastMCP)
+
+            all_candidates = server.tools["list_timeout_candidates"](status="all")["candidates"]
+            candidate = next(item for item in all_candidates if item["attachment_key"] == "SLOWKEY")
+            self.assertEqual(candidate["status"], "resolved")
+            self.assertEqual(candidate["status_source"], "current_index")
+            self.assertEqual(candidate["current_index_state"], "verified")
+            self.assertEqual(candidate["current_extraction_tool"], "pymupdf4llm.to_markdown")
+            self.assertEqual(candidate["conversion_status"], "error")
+            self.assertEqual(candidate["occurrence_count"], 2)
+            pending = server.tools["list_timeout_candidates"]()["candidates"]
+            self.assertNotIn("SLOWKEY", [item["attachment_key"] for item in pending])
+
+            persisted = find_candidate(index_root / "timeout_candidates.jsonl", "SLOWKEY")
+            self.assertEqual(persisted["status"], "pending")
+            self.assertEqual(persisted["occurrence_count"], 2)
+
+    def test_list_timeout_candidates_keeps_fallback_only_quality_work_pending(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, sqlite_path, config = _build_index(Path(tmp))
+            jsonl_path = config.output_root / "index" / "zotero_text_index.jsonl"
+            record = json.loads(jsonl_path.read_text(encoding="utf-8").splitlines()[0])
+            record["extraction_tool"] = "pymupdf.get_text"
+            jsonl_path.write_text(json.dumps(record) + "\n", encoding="utf-8")
+            _republish(root)
+            _seed_timeout_candidate(
+                config.output_root,
+                root / "long-book.pdf",
+                attachment_key="ATTACH1",
+                conversion_status="error",
+                fallback_outcome="fallback_failed",
+            )
+            server = create_server(sqlite_path, mcp_factory=FakeFastMCP)
+
+            pending = server.tools["list_timeout_candidates"]()["candidates"]
+
+            self.assertEqual(len(pending), 1)
+            self.assertEqual(pending[0]["status"], "pending")
+            self.assertEqual(pending[0]["status_source"], "candidate_history")
+            self.assertEqual(pending[0]["current_index_state"], "fallback_only")
+            self.assertEqual(pending[0]["current_extraction_tool"], "pymupdf.get_text")
+            self.assertEqual(pending[0]["conversion_status"], "error")
+
     def test_list_timeout_candidates_is_read_only_and_default_on(self):
         with tempfile.TemporaryDirectory() as tmp:
             _, sqlite_path, _ = _build_index(Path(tmp))
@@ -1020,6 +1113,8 @@ def _seed_timeout_candidate(
     *,
     attachment_key: str = "SLOWKEY",
     status: str = "pending",
+    conversion_status: str = "converted",
+    fallback_outcome: str = "fallback_used",
 ) -> None:
     from datetime import datetime
 
@@ -1041,8 +1136,8 @@ def _seed_timeout_candidate(
         drawing_density=12.0,
         attempted_timeout_seconds=2400,
         suggested_next_timeout_seconds=4800,
-        fallback_outcome="fallback_used",
-        conversion_status="converted",
+        fallback_outcome=fallback_outcome,
+        conversion_status=conversion_status,
         detected_at=datetime.now().isoformat(timespec="seconds"),
     )
     master_path = output_root / "index" / "timeout_candidates.jsonl"

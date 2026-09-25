@@ -311,8 +311,10 @@ The safe default server exposes:
   whether a `max_chars` limit truncated the stored chunk.
 - `get_item_context(parent_key | attachment_key)` — path-free bibliographic, extraction, and
   identity context for the supplied key.
-- `list_timeout_candidates(status="pending")` — attachments whose primary extractor exceeded its
-  scaled timeout budget and fell back to plain-text extraction (or failed outright). Read-only;
+- `list_timeout_candidates(status="pending")` — timeout history combined with the current published
+  index. `conversion_status` remains historical; a verified non-fallback index record reports a
+  pending candidate as resolved with `status_source="current_index"`. The response identifies the
+  current index state and extraction tool, and plain-text fallback records remain pending. Read-only;
   pass a returned `attachment_key` to `skip_timeout_extraction` or `retry_timeout_extraction`.
 - `list_orphan_candidates(status="pending")` — plausible Zotero parents found for orphan PDFs by
   content (title/DOI/author/year), not filename. Read-only; never triggers discovery itself.

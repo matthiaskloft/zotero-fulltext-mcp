@@ -64,6 +64,12 @@ of `pending`, `skipped`, or `resolved` and an `occurrence_count` that increments
 A later automatic conversion run never reopens a `skipped`/`resolved` entry — only the commands
 below change status.
 
+The read-only MCP response also compares each candidate with the current published generation.
+It reports `current_index_state` and `current_extraction_tool`; an eligible non-fallback record
+projects a still-pending candidate as `resolved` with `status_source="current_index"`, without
+rewriting the master file. `conversion_status` remains the historical timeout outcome, and
+fallback-only records remain pending.
+
 Use `retry-timeout` to resolve a pending candidate, either permanently:
 
 ```powershell
