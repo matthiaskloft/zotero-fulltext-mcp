@@ -1523,48 +1523,77 @@ def _print_codex_registration_drift(
 ) -> None:
     """Compare the existing Codex registration with the generated one. Never writes.
 
-    Only command, args and enabled_tools are compared; timeouts and per-tool approval overrides
-    are the user's to keep and are not reported as drift.
+    Command, args, enabled/disabled tools and `enabled` are compared; timeouts and per-tool
+    approval overrides are the user's to keep and are not reported as drift.
     """
     try:
         with config_path.open("rb") as handle:
             servers = tomllib.load(handle).get("mcp_servers", {})
     except FileNotFoundError:
         servers = {}
-    except (OSError, tomllib.TOMLDecodeError) as exc:
+    # ValueError covers TOMLDecodeError and UnicodeDecodeError (e.g. a config saved as cp1252).
+    except (OSError, ValueError) as exc:
         print(f"# Codex registration check: could not read {config_path} ({exc}); nothing compared.")
         return
     if not isinstance(servers, dict):
         servers = {}
     # The generated block uses the TOML-safe name; a hand-written entry may use the original one.
-    name = next((n for n in names if isinstance(servers.get(n), dict)), names[0])
-    entry = servers.get(name)
-    if not isinstance(entry, dict):
+    # Codex launches every entry, so a second, stale one under the other name is reported too.
+    found = [(n, servers[n]) for n in dict.fromkeys(names) if isinstance(servers.get(n), dict)]
+    if not found:
         print(f"# Codex registration check: no [mcp_servers.{names[0]}] in {config_path}.")
         print("# Paste the block above, then restart Codex.")
         return
+    if len(found) > 1:
+        print(
+            f"# Codex registration check: {config_path} registers this server twice "
+            f"({', '.join(f'[mcp_servers.{n}]' for n, _ in found)}); keep only [mcp_servers.{names[0]}]."
+        )
+    for name, entry in found:
+        differences = _codex_entry_differences(entry, command, args, tools)
+        if not differences:
+            print(f"# Codex registration check: [mcp_servers.{name}] in {config_path} is current.")
+            continue
+        print(f"# Codex registration check: [mcp_servers.{name}] in {config_path} differs from the generated block:")
+        for difference in differences:
+            print(f"#   {difference}")
+        print(f"# Update [mcp_servers.{name}] to match the block above, then restart Codex.")
+
+
+def _codex_entry_differences(entry: dict, command: str, args: list[str], tools: list[str]) -> list[str]:
     differences = []
-    if entry.get("command") != command:
-        differences.append(f"command: {entry.get('command')!r} -> {command!r}")
+    existing_command = entry.get("command")
+    if not isinstance(existing_command, str) or _normalized_path(existing_command) != _normalized_path(command):
+        differences.append(f"command: {existing_command!r} -> {command!r}")
     if entry.get("args") != args:
         differences.append(f"args: {entry.get('args')!r} -> {args!r}")
     existing_tools = entry.get("enabled_tools")
-    if existing_tools is not None and set(existing_tools) != set(tools):
-        missing = sorted(set(tools) - set(existing_tools))
-        removed = sorted(set(existing_tools) - set(tools))
-        if missing:
-            differences.append(f"enabled_tools missing: {', '.join(missing)}")
-        if removed:
-            differences.append(f"enabled_tools no longer provided: {', '.join(removed)}")
+    if existing_tools is not None:
+        if not isinstance(existing_tools, list) or not all(isinstance(t, str) for t in existing_tools):
+            differences.append(f"enabled_tools: unexpected value {existing_tools!r}")
+        elif set(existing_tools) != set(tools):
+            missing = sorted(set(tools) - set(existing_tools))
+            removed = sorted(set(existing_tools) - set(tools))
+            if missing:
+                differences.append(f"enabled_tools missing: {', '.join(missing)}")
+            if removed:
+                differences.append(f"enabled_tools no longer provided: {', '.join(removed)}")
+    # Codex applies disabled_tools after enabled_tools, so it can hide a tool the block enables.
+    disabled_tools = entry.get("disabled_tools")
+    if disabled_tools is not None:
+        if not isinstance(disabled_tools, list) or not all(isinstance(t, str) for t in disabled_tools):
+            differences.append(f"disabled_tools: unexpected value {disabled_tools!r}")
+        else:
+            hidden = sorted(set(disabled_tools) & set(tools))
+            if hidden:
+                differences.append(f"disabled_tools hides: {', '.join(hidden)}")
     if entry.get("enabled") is False:
         differences.append("enabled = false")
-    if not differences:
-        print(f"# Codex registration check: [mcp_servers.{name}] in {config_path} is current.")
-        return
-    print(f"# Codex registration check: [mcp_servers.{name}] in {config_path} differs from the generated block:")
-    for difference in differences:
-        print(f"#   {difference}")
-    print(f"# Update [mcp_servers.{name}] to match the block above, then restart Codex.")
+    return differences
+
+
+def _normalized_path(path: str) -> str:
+    return os.path.normcase(os.path.normpath(path))
 
 
 def _claude_user_config_path() -> Path:

@@ -255,8 +255,10 @@ and `--apply`. Codex's
 `config.toml` is never edited automatically; paste the printed block in yourself. `install-mcp`
 does read it (`$CODEX_HOME/config.toml`, else `~/.codex/config.toml`, or `--codex-config PATH`)
 and reports whether the existing Codex entry is current, missing, or differs in executable,
-arguments, `enabled_tools`, or `enabled`. Timeouts and per-tool approval overrides are yours and
-are not compared. After changing the entry, restart Codex.
+arguments, `enabled_tools`, `disabled_tools`, or `enabled`, including a second entry under the
+hyphenated name. Timeouts and per-tool approval overrides are yours and are not compared. A
+project-scoped `.codex/config.toml` can override the user entry and is not checked. After
+changing the entry, restart Codex.
 
 The generated registration enables the safe default MCP surface. To additionally expose the
 local Better BibTeX export bridge, opt in at registration time with `--enable-bibtex`; its

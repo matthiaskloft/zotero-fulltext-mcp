@@ -1,6 +1,8 @@
 import io
 import json
+import os
 import tempfile
+import tomllib
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
@@ -122,6 +124,64 @@ class CodexRegistrationDriftTests(unittest.TestCase):
 
         self.assertIn("could not read", output)
         self.assertIn("nothing compared", output)
+
+    def test_non_utf8_config_is_reported_not_raised(self):
+        self.codex_config.write_bytes("# Kommentar mit ä\n".encode("cp1252"))
+
+        output = self._run()
+
+        self.assertIn("could not read", output)
+
+    def test_malformed_enabled_tools_is_reported_as_drift(self):
+        block = self._generated_block(self._run())
+        for bad_value in ("5", '[["a"]]', '"search_fulltext"'):
+            with self.subTest(bad_value=bad_value):
+                lines = [
+                    f"enabled_tools = {bad_value}" if line.startswith("enabled_tools") else line
+                    for line in block.splitlines()
+                ]
+                self.codex_config.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+                output = self._run()
+
+                self.assertIn("enabled_tools: unexpected value", output)
+
+    def test_disabled_tools_hiding_a_generated_tool_is_drift(self):
+        block = self._generated_block(self._run())
+        self.codex_config.write_text(
+            block + 'disabled_tools = ["search_fulltext", "unrelated"]\n', encoding="utf-8"
+        )
+
+        output = self._run()
+
+        self.assertIn("disabled_tools hides: search_fulltext", output)
+
+    def test_second_stale_entry_under_hyphenated_name_is_reported(self):
+        block = self._generated_block(self._run())
+        stale = '[mcp_servers."zotero-fulltext"]\ncommand = "old-venv/zotero-fulltext-mcp"\nargs = []\n'
+        self.codex_config.write_text(block + "\n" + stale, encoding="utf-8")
+
+        output = self._run()
+
+        self.assertIn("registers this server twice", output)
+        self.assertIn("[mcp_servers.zotero_fulltext] in", output)
+        self.assertIn("is current", output)
+        self.assertIn("[mcp_servers.zotero-fulltext] in", output)
+        self.assertIn("differs from the generated block", output)
+
+    def test_equivalent_command_spelling_is_not_drift(self):
+        block = self._generated_block(self._run())
+        server_exe = tomllib.loads(block)["mcp_servers"]["zotero_fulltext"]["command"]
+        respelled = os.path.join(os.path.dirname(server_exe), ".", os.path.basename(server_exe))
+        if os.name == "nt":
+            respelled = respelled.upper()
+        respelled_block = block.replace(json.dumps(server_exe), json.dumps(respelled))
+        self.assertNotEqual(respelled_block, block)
+        self.codex_config.write_text(respelled_block, encoding="utf-8")
+
+        output = self._run()
+
+        self.assertIn("is current", output)
 
     def test_default_path_follows_codex_home(self):
         codex_home = self.root / "codex-home"

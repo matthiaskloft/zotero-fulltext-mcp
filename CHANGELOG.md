@@ -11,13 +11,17 @@ unannounced rather than absent: present, inert unless explicitly configured and 
 validated for general use. Its config shape and output conventions may still change. It moves into a
 dated section once it has been stress-tested against a large library.
 
-### Fixed
+### Added
 
 - `install-mcp` now compares the existing Codex registration in `config.toml` with the generated
-  block and reports it as current, missing, or drifted, listing executable, argument,
-  `enabled_tools`, and `enabled` differences and when Codex needs a restart. It only reads the file;
-  other servers, timeouts, and per-tool approval overrides are left alone. `--codex-config` selects
+  block and reports it as current, missing, or drifted. It lists differences in the executable,
+  arguments, `enabled_tools`, `disabled_tools` and `enabled`, flags a second registration under the
+  other server-name spelling, and says when Codex needs a restart. It only reads the file; other
+  servers, timeouts, and per-tool approval overrides are left alone. `--codex-config` selects
   another file (#49).
+
+### Fixed
+
 - `install-mcp --apply` can be re-run for an existing server name: an identical user-scope Claude
   Code registration is reported as current and left alone, a changed one (new `--config`, `--db`,
   or optional tools) is replaced, and if the replacement `claude mcp add` fails the previous
