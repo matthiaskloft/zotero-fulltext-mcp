@@ -10,6 +10,7 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+import tomllib
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import cast
@@ -61,6 +62,13 @@ from .library import (
     LibraryStatus,
     audit_library,
     library_status,
+)
+from .install_health import (
+    DIST_NAME,
+    SERVER_EXECUTABLE,
+    install_version_status,
+    reinstall_command,
+    running_server_count,
 )
 from .lock import PipelineLockedError, pipeline_write_lock
 from .output_status import output_status
@@ -725,6 +733,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--apply",
         action="store_true",
         help="Also run 'claude mcp add' to register the server, instead of only printing it.",
+    )
+    install_mcp.add_argument(
+        "--codex-config",
+        type=Path,
+        default=None,
+        help="Codex config.toml to compare against (read-only). Default: $CODEX_HOME/config.toml or ~/.codex/config.toml.",
     )
     return parser
 
@@ -1489,6 +1503,22 @@ def _install_mcp(args: argparse.Namespace) -> int:
     print()
     print("# Codex registration -- paste into your config.toml (this command does not edit it for you):")
     print(codex_block)
+    print()
+    # Older reconvert entries kept the 30s startup timeout that marker's cold import overruns.
+    minimum_timeouts = (
+        {"startup_timeout_sec": RECONVERT_STARTUP_TIMEOUT_SECONDS, "tool_timeout_sec": RECONVERT_TOOL_TIMEOUT_SECONDS}
+        if args.enable_reconvert
+        else {}
+    )
+    _print_codex_registration_drift(
+        _codex_config_path(args.codex_config),
+        (toml_name, server_name),
+        str(server_exe),
+        server_args,
+        enabled_tools,
+        minimum_timeouts,
+        explicit_path=args.codex_config is not None,
+    )
 
     if args.apply:
         print()
@@ -1502,6 +1532,127 @@ def _install_mcp(args: argparse.Namespace) -> int:
             return 2
         return _apply_claude_registration(claude_exe, server_name, str(server_exe), server_args, claude_add_args)
     return 0
+
+
+def _codex_config_path(override: Path | None) -> Path:
+    if override is not None:
+        return override
+    codex_home = os.environ.get("CODEX_HOME")
+    return (Path(codex_home) if codex_home else Path.home() / ".codex") / "config.toml"
+
+
+def _print_codex_registration_drift(
+    config_path: Path,
+    names: tuple[str, str],
+    command: str,
+    args: list[str],
+    tools: list[str],
+    minimum_timeouts: dict[str, int],
+    *,
+    explicit_path: bool = False,
+) -> None:
+    """Compare the existing Codex registration with the generated one. Never writes.
+
+    Command, args, enabled/disabled tools, `enabled` and, when a mode needs them, minimum
+    timeouts are compared; larger timeouts and per-tool approval overrides are the user's to keep
+    and are not reported as drift.
+    """
+    try:
+        with config_path.open("rb") as handle:
+            servers = tomllib.load(handle).get("mcp_servers", {})
+    except FileNotFoundError:
+        if explicit_path:
+            print(f"# Codex registration check: --codex-config {config_path} does not exist; nothing compared.")
+            return
+        servers = {}
+    # ValueError covers TOMLDecodeError and UnicodeDecodeError (e.g. a config saved as cp1252).
+    except (OSError, ValueError) as exc:
+        print(f"# Codex registration check: could not read {config_path} ({exc}); nothing compared.")
+        return
+    if not isinstance(servers, dict):
+        print(f"# Codex registration check: mcp_servers in {config_path} is not a table; Codex rejects it.")
+        return
+    misshapen = [n for n in dict.fromkeys(names) if n in servers and not isinstance(servers[n], dict)]
+    for name in misshapen:
+        print(
+            f"# Codex registration check: mcp_servers.{name} in {config_path} is not a single table "
+            f"(e.g. [[...]]); replace it with the block above."
+        )
+    # The generated block uses the TOML-safe name; a hand-written entry may use the original one.
+    # Codex launches every entry, so a second, stale one under the other name is reported too.
+    found = [(n, servers[n]) for n in dict.fromkeys(names) if isinstance(servers.get(n), dict)]
+    if not found:
+        if not misshapen:
+            print(f"# Codex registration check: no [mcp_servers.{names[0]}] in {config_path}.")
+            print("# Paste the block above, then restart Codex.")
+        return
+    if len(found) > 1:
+        # Only the generated name is compared; every other spelling is a second server to remove.
+        for name, _ in found[1:]:
+            print(
+                f"# Codex registration check: [mcp_servers.{name}] in {config_path} registers this server "
+                f"a second time; remove it and restart Codex."
+            )
+        found = found[:1]
+    name, entry = found[0]
+    # A deliberate per-surface choice, not drift, but it explains tools missing from those surfaces.
+    omitted_from = entry.get("omit_tools_from")
+    if omitted_from:
+        print(f"# Codex registration check: note: [mcp_servers.{name}] omits its tools from {omitted_from!r}.")
+    differences = _codex_entry_differences(entry, command, args, tools, minimum_timeouts)
+    if not differences:
+        print(f"# Codex registration check: [mcp_servers.{name}] in {config_path} is current.")
+        return
+    print(f"# Codex registration check: [mcp_servers.{name}] in {config_path} differs from the generated block:")
+    for difference in differences:
+        print(f"#   {difference}")
+    print(f"# Update [mcp_servers.{name}] to match the block above, then restart Codex.")
+
+
+def _codex_entry_differences(
+    entry: dict, command: str, args: list[str], tools: list[str], minimum_timeouts: dict[str, int]
+) -> list[str]:
+    differences = []
+    existing_command = entry.get("command")
+    if not isinstance(existing_command, str) or _normalized_path(existing_command) != _normalized_path(command):
+        differences.append(f"command: {existing_command!r} -> {command!r}")
+    if entry.get("args") != args:
+        differences.append(f"args: {entry.get('args')!r} -> {args!r}")
+    existing_tools = entry.get("enabled_tools")
+    if existing_tools is not None:
+        if not isinstance(existing_tools, list) or not all(isinstance(t, str) for t in existing_tools):
+            differences.append(f"enabled_tools: unexpected value {existing_tools!r}")
+        elif set(existing_tools) != set(tools):
+            missing = sorted(set(tools) - set(existing_tools))
+            removed = sorted(set(existing_tools) - set(tools))
+            if missing:
+                differences.append(f"enabled_tools missing: {', '.join(missing)}")
+            if removed:
+                differences.append(f"enabled_tools no longer provided: {', '.join(removed)}")
+    # Codex applies disabled_tools after enabled_tools, so it can hide a tool the block enables.
+    disabled_tools = entry.get("disabled_tools")
+    if disabled_tools is not None:
+        if not isinstance(disabled_tools, list) or not all(isinstance(t, str) for t in disabled_tools):
+            differences.append(f"disabled_tools: unexpected value {disabled_tools!r}")
+        else:
+            hidden = sorted(set(disabled_tools) & set(tools))
+            if hidden:
+                differences.append(f"disabled_tools hides: {', '.join(hidden)}")
+    enabled = entry.get("enabled", True)
+    if enabled is False:
+        differences.append("enabled = false")
+    elif not isinstance(enabled, bool):
+        differences.append(f"enabled: unexpected value {enabled!r} (Codex needs true or false)")
+    for key, minimum in minimum_timeouts.items():
+        value = entry.get(key)
+        # bool is an int subclass; Codex's own default applies when the key is absent.
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or value < minimum:
+            differences.append(f"{key}: {value!r} is below the {minimum} this mode needs")
+    return differences
+
+
+def _normalized_path(path: str) -> str:
+    return os.path.normcase(os.path.normpath(path))
 
 
 def _claude_user_config_path() -> Path:
@@ -1896,6 +2047,7 @@ def run_setup_checks(config_path: Path, *, require_mcp: bool = False) -> list[Se
             required=True,
         )
     ]
+    results.extend(_install_health_checks())
 
     try:
         config = load_config(config_path)
@@ -1920,7 +2072,7 @@ def run_setup_checks(config_path: Path, *, require_mcp: bool = False) -> list[Se
     output_ok, output_detail = _check_output_root_writable(config.output_root)
     results.append(SetupCheckResult("output_root", output_ok, output_detail, required=True))
 
-    for extra_name, module_name in (("mcp", "mcp"), ("zotero-write", "pyzotero"), ("marker", "marker")):
+    for extra_name, module_name in _EXTRA_MODULES:
         available = importlib.util.find_spec(module_name) is not None
         detail = "installed" if available else "not installed (optional extra)"
         required = require_mcp and extra_name == "mcp"
@@ -1939,6 +2091,78 @@ def run_setup_checks(config_path: Path, *, require_mcp: bool = False) -> list[Se
         SetupCheckResult("image-ocr runtime", status.ok, status.detail, required=False)
     )
 
+    return results
+
+
+_EXTRA_MODULES = (("mcp", "mcp"), ("zotero-write", "pyzotero"), ("marker", "marker"))
+
+
+def _install_health_checks() -> list[SetupCheckResult]:
+    """Warn, never fail, about an editable install that has drifted from its source checkout.
+
+    Runs before the config is loaded so a stale install is reported even when the config is the
+    thing that's broken. On Windows, running server executables are reported alongside, since
+    they make the recommended reinstall fail partway (WinError 32) and leave it half-uninstalled.
+    """
+    status = install_version_status()
+    if status.installed_version is None:
+        version_result = SetupCheckResult(
+            "install_version", True, f"{DIST_NAME} package metadata not found (running from source)", required=False
+        )
+    elif not status.editable:
+        version_result = SetupCheckResult(
+            "install_version", True, f"{status.installed_version} (not an editable install)", required=False
+        )
+    elif status.source_is_other_project:
+        version_result = SetupCheckResult(
+            "install_version",
+            True,
+            f"{status.installed_version} (editable); its source checkout now holds another project, not compared",
+            required=False,
+        )
+    elif status.source_version is None:
+        version_result = SetupCheckResult(
+            "install_version",
+            False,
+            f"{status.installed_version} (editable); could not read this project's version from its "
+            f"source checkout {status.source_dir}",
+            required=False,
+        )
+    elif status.stale:
+        # The test extra has no setup row but is part of the documented development install;
+        # leaving it out would reinstall without the tooling the developer has.
+        extras = [
+            extra
+            for extra, module in (*_EXTRA_MODULES, ("test", "pytest"))
+            if importlib.util.find_spec(module) is not None
+        ]
+        shell_note = " (PowerShell)" if sys.platform == "win32" else ""
+        version_result = SetupCheckResult(
+            "install_version",
+            False,
+            f"installed metadata says {status.installed_version} but the editable source checkout declares "
+            f"{status.source_version}; refresh with{shell_note}: {reinstall_command(status, extras)}",
+            required=False,
+        )
+    else:
+        version_result = SetupCheckResult(
+            "install_version", True, f"{status.installed_version} (editable, matches source checkout)", required=False
+        )
+    results = [version_result]
+
+    running = running_server_count()
+    if running:
+        results.append(
+            SetupCheckResult(
+                "running_server",
+                # Harmless in normal use; only a problem for the reinstall a stale install needs.
+                not status.stale,
+                f"{running} {SERVER_EXECUTABLE} process(es) running (from any environment); quit the MCP "
+                "clients (Claude Code, Codex, ...) using this environment before reinstalling or upgrading, "
+                "or Windows keeps its executable locked",
+                required=False,
+            )
+        )
     return results
 
 

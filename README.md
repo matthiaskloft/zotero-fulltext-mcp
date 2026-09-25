@@ -74,6 +74,14 @@ needed for `reconvert-math` and the opt-in `reconvert_with_math_ocr` MCP tool, G
 `[test]` (pytest, needed to run the test suite — `pip install -e .[mcp,test]`). A plain
 `pip install -e .` with no extras gets you the conversion pipeline and CLI but not the MCP server.
 
+Editable installs keep the version they were installed with until you reinstall; `git pull` alone
+leaves the package metadata behind. After pulling, run `check-setup`: its `install_version` line
+warns when the installed version differs from the checkout's and prints the reinstall command. On
+Windows, quit Claude Code, Codex and any other MCP client first. A running
+`zotero-fulltext-mcp.exe` blocks the reinstall and can leave the package half-uninstalled;
+`check-setup` lists running copies as `running_server`, and
+[troubleshooting](docs/troubleshooting.md#updating-an-existing-install-with-write-extras-2026-07-15) covers recovery.
+
 ### Experimental: local image OCR for equations and figures
 
 > **Present in the install, but not yet supported.** This command is packaged with every
@@ -252,7 +260,15 @@ registration for you (falls back to printing the command if `claude` isn't on PA
 example a new `--config`, `--db`, or optional-tool flag) replaces the old entry, restoring it if
 the new registration fails. To update a registration, rerun `install-mcp` with the new options
 and `--apply`. Codex's
-`config.toml` is never edited automatically; paste the printed block in yourself.
+`config.toml` is never edited automatically; paste the printed block in yourself. `install-mcp`
+does read it (`$CODEX_HOME/config.toml`, else `~/.codex/config.toml`, or `--codex-config PATH`)
+and reports whether the existing Codex entry is current, missing, or differs in executable,
+arguments, `enabled_tools`, `disabled_tools`, or `enabled`, including a second entry under the
+hyphenated name. With `--enable-reconvert` it also reports timeouts below what that mode
+needs; larger timeouts and per-tool approval overrides are yours and are not compared. A
+project-scoped `.codex/config.toml` can override the user entry and is not checked; an
+`omit_tools_from` setting is shown as a note, not as drift. After
+changing the entry, restart Codex.
 
 The generated registration enables the safe default MCP surface. To additionally expose the
 local Better BibTeX export bridge, opt in at registration time with `--enable-bibtex`; its
