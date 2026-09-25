@@ -23,6 +23,12 @@ dated section once it has been stress-tested against a large library.
 
 ### Fixed
 
+- `install-mcp` now registers absolute `--config` and `--db` paths (including a default index
+  derived from a relative `output_root`), since the MCP client starts the server from its own
+  working directory. On macOS and Linux it no longer follows the venv's `python` symlink out of
+  the venv, which pointed the registration at a missing executable. A server name that is not a
+  bare TOML key (e.g. containing `.`) is quoted in the Codex block instead of becoming a nested
+  table (#56).
 - `install-mcp --apply` can be re-run for an existing server name: an identical user-scope Claude
   Code registration is reported as current and left alone, a changed one (new `--config`, `--db`,
   or optional tools) is replaced, and if the replacement `claude mcp add` fails the previous

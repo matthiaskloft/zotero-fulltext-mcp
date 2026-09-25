@@ -564,7 +564,7 @@ class InstallMcpCliTests(unittest.TestCase):
             # _install_mcp resolves sys.executable's parent (Path.resolve()), which on macOS
             # follows the /tmp -> /private/tmp (and /var -> /private/var) symlink -- resolve here
             # too so the expectation matches on macOS runners, not just Windows/Linux.
-            expected_exe = str((root / "Scripts" / exe_name).resolve())
+            expected_exe = str(root / "Scripts" / exe_name)
             # Exact ordered argv, not just membership -- catches regressions like a dropped '--'
             # separator, which would make Claude parse '--db'/'--config' as its own options
             # instead of forwarding them to the server.
@@ -614,7 +614,7 @@ class InstallMcpCliTests(unittest.TestCase):
         exe_name = "zotero-fulltext-mcp.exe" if os.name == "nt" else "zotero-fulltext-mcp"
         return {
             "type": "stdio",
-            "command": str((root / "Scripts" / exe_name).resolve()),
+            "command": str(root / "Scripts" / exe_name),
             "args": [
                 "--db", str(root / "converted_text" / "index" / "zotero_text_index.sqlite"),
                 "--config", str(root / "config.json"),
@@ -809,7 +809,7 @@ class InstallMcpCliTests(unittest.TestCase):
                 )
             self.assertEqual(exit_code, 0)
             exe_name = "zotero-fulltext-mcp.exe" if os.name == "nt" else "zotero-fulltext-mcp"
-            expected_exe = str((root / "Scripts" / exe_name).resolve())
+            expected_exe = str(root / "Scripts" / exe_name)
             expected_db = str(output_root / "index" / "zotero_text_index.sqlite")
             self.assertEqual(
                 mock_run.call_args[0][0],
