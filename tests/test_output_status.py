@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from zotero_pdf_text.cli import main
 from zotero_pdf_text.output_status import output_status
 from zotero_pdf_text.config import ProjectConfig
@@ -51,3 +53,33 @@ def test_latest_mapping_snapshot_accepts_new_and_old_names(tmp_path: Path):
     new.parent.mkdir(parents=True)
     new.write_text("", encoding="utf-8")
     assert latest_mapping_snapshot(config) == new
+
+
+def test_missing_previous_generation_does_not_hide_current(tmp_path: Path):
+    root = tmp_path / "output"
+    index_root = root / "index"
+    current_id = "20260925T120000Z-1234abcd"
+    previous_id = "20260924T120000Z-1234abcd"
+    generation = index_root / "generations" / current_id
+    generation.mkdir(parents=True)
+    (generation / "index.jsonl").write_text("", encoding="utf-8")
+    (index_root / "current.json").write_text(
+        json.dumps({"current_generation": current_id, "previous_generation": previous_id}), encoding="utf-8"
+    )
+
+    report = output_status(root)
+    assert report["current"]["records"] == 0
+    assert report["previous"] == {"generation_id": previous_id, "error": "previous generation unavailable"}
+
+
+def test_invalid_record_names_generation_and_line(tmp_path: Path):
+    root = tmp_path / "output"
+    index_root = root / "index"
+    generation_id = "20260925T120000Z-1234abcd"
+    generation = index_root / "generations" / generation_id
+    generation.mkdir(parents=True)
+    (generation / "index.jsonl").write_text('{"markdown_path":"paper.md"}\n{}\n', encoding="utf-8")
+    (index_root / "current.json").write_text(json.dumps({"current_generation": generation_id}), encoding="utf-8")
+
+    with pytest.raises(ValueError, match=f"{generation_id}.*line 2"):
+        output_status(root)

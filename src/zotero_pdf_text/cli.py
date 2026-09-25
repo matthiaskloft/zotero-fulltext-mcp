@@ -933,6 +933,9 @@ def main(argv: list[str] | None = None) -> int:
                 generation = report[label]
                 if generation is None:
                     continue
+                if "error" in generation:
+                    print(f"{label.title()} generation: {generation['generation_id']} ({generation['error']})")
+                    continue
                 print(f"{label.title()} generation: {generation['generation_id']} "
                       f"({generation['records']} records; {generation['missing_markdown']} missing Markdown files)")
                 for folder in generation["folders"]:

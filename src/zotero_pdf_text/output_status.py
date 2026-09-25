@@ -21,10 +21,19 @@ def output_status(output_root: Path, *, list_files: bool = False) -> dict[str, o
         paths: set[str] = set()
         missing = 0
         with jsonl_path.open("r", encoding="utf-8") as handle:
-            for line in handle:
+            for line_number, line in enumerate(handle, start=1):
                 if not line.strip():
                     continue
-                path = Path(json.loads(line)["markdown_path"])
+                try:
+                    record = json.loads(line)
+                    raw_path = record["markdown_path"]
+                    if not isinstance(raw_path, str) or not raw_path:
+                        raise ValueError("markdown_path must be a nonempty string")
+                except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
+                    raise ValueError(
+                        f"Index generation {generation_id} has an invalid record at line {line_number}: {exc}"
+                    ) from exc
+                path = Path(raw_path)
                 folders[(str(path.parent), str(path.parent.resolve()))] += 1
                 paths.add(str(path))
                 if not path.is_file():
@@ -44,7 +53,12 @@ def output_status(output_root: Path, *, list_files: bool = False) -> dict[str, o
 
     current = describe(str(pointer["current_generation"]))
     previous_id = pointer.get("previous_generation")
-    previous = describe(str(previous_id)) if previous_id else None
+    previous = None
+    if previous_id:
+        try:
+            previous = describe(str(previous_id))
+        except OSError:
+            previous = {"generation_id": str(previous_id), "error": "previous generation unavailable"}
     return {
         "output_root": str(output_root),
         "mapping_snapshots": str(output_root / "mapping-runs"),
