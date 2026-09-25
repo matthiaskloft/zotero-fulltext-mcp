@@ -11,6 +11,21 @@ unannounced rather than absent: present, inert unless explicitly configured and 
 validated for general use. Its config shape and output conventions may still change. It moves into a
 dated section once it has been stress-tested against a large library.
 
+## [0.8.0] - 2026-09-25
+
+### Added
+
+- `output-status` (read-only) shows the Markdown folders of the current and previous index
+  generations, including the physical paths behind compatibility junctions.
+
+### Changed
+
+- New mapping snapshots are written under `mapping-runs/` and conversions under
+  `conversion-runs/{verified,samples,unverified-review}/`. MCP audit discovery still reads legacy
+  `runs/` snapshots.
+- Development: Ruff linting and incremental mypy checks run in CI; `ruff` and `mypy` are added to
+  the `test` extra.
+
 ### Fixed
 
 - The MCP stdio server keeps stdout exclusively for JSON-RPC: the transport writes to a private
@@ -682,7 +697,8 @@ author's own machine.
 
 Initial import of the Zotero full-text conversion pipeline, CLI, and MCP server. Not tagged.
 
-[Unreleased]: https://github.com/matthiaskloft/zotero-fulltext-mcp/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/matthiaskloft/zotero-fulltext-mcp/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.8.0
 [0.7.0]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.7.0
 [0.6.0]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.6.0
 [0.5.0]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.5.0
