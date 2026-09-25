@@ -69,8 +69,11 @@ target-version = "py311"
 files = [
   "src/zotero_pdf_text/_atomic.py",
   "src/zotero_pdf_text/_ollama_client.py",
+  "src/zotero_pdf_text/artifacts.py",
   "src/zotero_pdf_text/config.py",
+  "src/zotero_pdf_text/converter.py",
   "src/zotero_pdf_text/duplicate_attachments.py",
+  "src/zotero_pdf_text/fts.py",
   "src/zotero_pdf_text/indexer.py",
   "src/zotero_pdf_text/lock.py",
   "src/zotero_pdf_text/math_detection.py",
@@ -83,4 +86,8 @@ follow_imports = "silent"
 
 [[tool.mypy.overrides]]
 module = "fitz"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["pymupdf4llm", "marker.*"]
 ignore_missing_imports = true

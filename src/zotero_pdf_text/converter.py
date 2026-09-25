@@ -14,6 +14,7 @@ from collections import Counter
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
+from types import ModuleType
 
 from .config import ProjectConfig
 from .indexer import load_indexed_keys
@@ -30,6 +31,7 @@ try:
 except Exception:  # pragma: no cover - exercised only if dependency is missing
     pymupdf4llm = None
 
+fitz: ModuleType | None
 try:
     import pymupdf as fitz
 except Exception:  # pragma: no cover - exercised only if dependency is missing
@@ -263,7 +265,7 @@ def _convert_mapping_rows(
         index for index, (result, _) in enumerate(row_outcomes)
         if retry_workers > 0 and _has_native_crash(result.error)
     ]
-    retry_counts = Counter()
+    retry_counts: Counter[str] = Counter()
     if retry_indexes:
         def retry(index: int) -> tuple[ConversionResult, TimeoutCandidate | None]:
             row_number, row = indexed_rows[index]

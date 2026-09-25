@@ -9,7 +9,7 @@ import re
 import sqlite3
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Iterable, Literal
+from typing import Iterable, Literal, cast
 
 from ._atomic import replace_with_retry
 from .zotero_db import read_only_uri
@@ -901,7 +901,7 @@ def _insert_metadata(con: sqlite3.Connection, record: dict[str, object]) -> int:
     values: list[object] = []
     for column in columns:
         if column in integer_columns:
-            values.append(int(record.get(column) or 0))
+            values.append(int(cast("int | str", record.get(column) or 0)))
         elif column in boolean_columns:
             values.append(int(bool(record.get(column, False))))
         else:
@@ -910,7 +910,7 @@ def _insert_metadata(con: sqlite3.Connection, record: dict[str, object]) -> int:
         f"INSERT INTO metadata ({','.join(columns)}) VALUES ({','.join('?' for _ in columns)})",
         values,
     )
-    return int(cursor.lastrowid)
+    return int(cast(int, cursor.lastrowid))
 
 
 def _insert_chunk(
@@ -927,7 +927,7 @@ def _insert_chunk(
         """,
         (record_id, chunk_index, start_char, end_char, text),
     )
-    chunk_id = int(cursor.lastrowid)
+    chunk_id = int(cast(int, cursor.lastrowid))
     con.execute(
         """
         INSERT INTO chunks_fts (rowid, title, creators, text, citation_key, record_id, chunk_id)
