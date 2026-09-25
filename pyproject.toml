@@ -48,6 +48,8 @@ marker = [
 ]
 test = [
   "pytest>=7.0",
+  "ruff>=0.15,<0.16",
+  "mypy>=1.19,<2",
 ]
 
 [project.urls]
@@ -59,3 +61,26 @@ Changelog = "https://github.com/matthiaskloft/zotero-fulltext-mcp/blob/master/CH
 [tool.pytest.ini_options]
 pythonpath = ["src", "benchmarks"]
 testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py311"
+
+[tool.mypy]
+files = [
+  "src/zotero_pdf_text/_atomic.py",
+  "src/zotero_pdf_text/_ollama_client.py",
+  "src/zotero_pdf_text/config.py",
+  "src/zotero_pdf_text/duplicate_attachments.py",
+  "src/zotero_pdf_text/indexer.py",
+  "src/zotero_pdf_text/lock.py",
+  "src/zotero_pdf_text/math_detection.py",
+  "src/zotero_pdf_text/pdf_probe.py",
+  "src/zotero_pdf_text/runtime.py",
+  "src/zotero_pdf_text/zotero_db.py",
+]
+check_untyped_defs = true
+follow_imports = "silent"
+
+[[tool.mypy.overrides]]
+module = "fitz"
+ignore_missing_imports = true

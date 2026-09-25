@@ -1111,7 +1111,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.write_command == "plan":
             config = load_config(args.config)
             validate_config(config)
-            records = build_write_plan(args.input, config.zotero_sqlite, args.output)
+            build_write_plan(args.input, config.zotero_sqlite, args.output)
             print(json.dumps(write_plan_status(args.output), ensure_ascii=False, indent=2))
             print(f"Write plan created: {args.output}")
             print(

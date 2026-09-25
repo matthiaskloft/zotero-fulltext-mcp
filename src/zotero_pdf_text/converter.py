@@ -596,7 +596,7 @@ def _extract_markdown(
         try:
             _run_extractor(source_path, raw_output_path, PRIMARY_EXTRACTION_TOOL, timeout_seconds, image_dir=images_dir)
             return PRIMARY_EXTRACTION_TOOL, "", False
-        except subprocess.TimeoutExpired as exc:
+        except subprocess.TimeoutExpired:
             primary_error = f"TimeoutExpired: exceeded {timeout_seconds} seconds"
             primary_timed_out = True
         except subprocess.CalledProcessError as exc:

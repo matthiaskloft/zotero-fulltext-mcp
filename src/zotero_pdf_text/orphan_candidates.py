@@ -5,7 +5,6 @@ import csv
 import json
 import os
 from dataclasses import asdict, dataclass
-from datetime import datetime
 from pathlib import Path
 
 from ._atomic import replace_with_retry
