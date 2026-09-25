@@ -74,6 +74,14 @@ needed for `reconvert-math` and the opt-in `reconvert_with_math_ocr` MCP tool, G
 `[test]` (pytest, needed to run the test suite — `pip install -e .[mcp,test]`). A plain
 `pip install -e .` with no extras gets you the conversion pipeline and CLI but not the MCP server.
 
+Editable installs keep the version they were installed with until you reinstall; `git pull` alone
+leaves the package metadata behind. After pulling, run `check-setup`: its `install_version` line
+warns when the installed version differs from the checkout's and prints the reinstall command. On
+Windows, quit Claude Code, Codex and any other MCP client first. A running
+`zotero-fulltext-mcp.exe` blocks the reinstall and can leave the package half-uninstalled;
+`check-setup` lists running copies as `running_server`, and
+[troubleshooting](docs/troubleshooting.md#updating-an-existing-install-2026-07-13) covers recovery.
+
 ### Experimental: local image OCR for equations and figures
 
 > **Present in the install, but not yet supported.** This command is packaged with every

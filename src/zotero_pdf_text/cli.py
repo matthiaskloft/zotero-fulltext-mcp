@@ -58,6 +58,13 @@ from .library import (
     audit_library,
     library_status,
 )
+from .install_health import (
+    DIST_NAME,
+    SERVER_EXECUTABLE,
+    install_version_status,
+    reinstall_command,
+    running_server_count,
+)
 from .lock import PipelineLockedError, pipeline_write_lock
 from .output_status import output_status
 from .mapper import run_dry_run
@@ -1892,6 +1899,7 @@ def run_setup_checks(config_path: Path, *, require_mcp: bool = False) -> list[Se
             required=True,
         )
     ]
+    results.extend(_install_health_checks())
 
     try:
         config = load_config(config_path)
@@ -1916,7 +1924,7 @@ def run_setup_checks(config_path: Path, *, require_mcp: bool = False) -> list[Se
     output_ok, output_detail = _check_output_root_writable(config.output_root)
     results.append(SetupCheckResult("output_root", output_ok, output_detail, required=True))
 
-    for extra_name, module_name in (("mcp", "mcp"), ("zotero-write", "pyzotero"), ("marker", "marker")):
+    for extra_name, module_name in _EXTRA_MODULES:
         available = importlib.util.find_spec(module_name) is not None
         detail = "installed" if available else "not installed (optional extra)"
         required = require_mcp and extra_name == "mcp"
@@ -1935,6 +1943,63 @@ def run_setup_checks(config_path: Path, *, require_mcp: bool = False) -> list[Se
         SetupCheckResult("image-ocr runtime", status.ok, status.detail, required=False)
     )
 
+    return results
+
+
+_EXTRA_MODULES = (("mcp", "mcp"), ("zotero-write", "pyzotero"), ("marker", "marker"))
+
+
+def _install_health_checks() -> list[SetupCheckResult]:
+    """Warn, never fail, about an editable install that has drifted from its source checkout.
+
+    Runs before the config is loaded so a stale install is reported even when the config is the
+    thing that's broken. On Windows, running server executables are reported alongside, since
+    they make the recommended reinstall fail partway (WinError 32) and leave it half-uninstalled.
+    """
+    status = install_version_status()
+    if status.installed_version is None:
+        version_result = SetupCheckResult(
+            "install_version", True, f"{DIST_NAME} package metadata not found (running from source)", required=False
+        )
+    elif not status.editable:
+        version_result = SetupCheckResult(
+            "install_version", True, f"{status.installed_version} (not an editable install)", required=False
+        )
+    elif status.source_version is None:
+        version_result = SetupCheckResult(
+            "install_version",
+            False,
+            f"{status.installed_version} (editable); could not read this project's version from its "
+            f"source checkout {status.source_dir}",
+            required=False,
+        )
+    elif status.stale:
+        extras = [extra for extra, module in _EXTRA_MODULES if importlib.util.find_spec(module) is not None]
+        version_result = SetupCheckResult(
+            "install_version",
+            False,
+            f"installed metadata says {status.installed_version} but the editable source checkout declares "
+            f"{status.source_version}; refresh with: {reinstall_command(status, extras)}",
+            required=False,
+        )
+    else:
+        version_result = SetupCheckResult(
+            "install_version", True, f"{status.installed_version} (editable, matches source checkout)", required=False
+        )
+    results = [version_result]
+
+    running = running_server_count()
+    if running:
+        results.append(
+            SetupCheckResult(
+                "running_server",
+                # Harmless in normal use; only a problem for the reinstall a stale install needs.
+                not status.stale,
+                f"{running} {SERVER_EXECUTABLE} process(es) running; quit the MCP client (Claude Code, "
+                "Codex, ...) before reinstalling or upgrading, or Windows keeps the executable locked",
+                required=False,
+            )
+        )
     return results
 
 
