@@ -29,6 +29,11 @@ class InstallVersionStatus:
     source_dir: Path | None = None
     source_version: str | None = None
     installer: str | None = None
+    source_project: str | None = None
+
+    @property
+    def source_is_other_project(self) -> bool:
+        return self.source_project is not None and self.source_project != DIST_NAME
 
     @property
     def stale(self) -> bool:
@@ -55,12 +60,15 @@ def install_version_status(dist: metadata.Distribution | None = None) -> Install
     source_dir = _editable_source_dir(dist)
     if source_dir is None:
         return InstallVersionStatus(dist.version, editable=False, installer=installer)
+    source_project, source_version = _source_project(source_dir)
     return InstallVersionStatus(
         dist.version,
         editable=True,
         source_dir=source_dir,
-        source_version=_source_version(source_dir),
+        # A checkout that now holds another project says nothing about this install's version.
+        source_version=source_version if source_project == DIST_NAME else None,
         installer=installer,
+        source_project=source_project,
     )
 
 
@@ -83,17 +91,18 @@ def _editable_source_dir(dist: metadata.Distribution) -> Path | None:
     return Path(url2pathname(parsed.path))
 
 
-def _source_version(source_dir: Path) -> str | None:
-    """Read the version the checkout declares, only if the checkout is still this project."""
+def _source_project(source_dir: Path) -> tuple[str | None, str | None]:
+    """Read the project name and version the checkout declares; (None, None) if unreadable."""
     try:
         with (source_dir / "pyproject.toml").open("rb") as handle:
             project = tomllib.load(handle).get("project", {})
-    except (OSError, tomllib.TOMLDecodeError):
-        return None
-    if project.get("name") != DIST_NAME:
-        return None
-    version = project.get("version")
-    return version if isinstance(version, str) else None
+    # ValueError covers TOMLDecodeError and a pyproject.toml that is not UTF-8.
+    except (OSError, ValueError):
+        return None, None
+    if not isinstance(project, dict):
+        return None, None
+    name, version = project.get("name"), project.get("version")
+    return (name if isinstance(name, str) else None), (version if isinstance(version, str) else None)
 
 
 def reinstall_command(status: InstallVersionStatus, extras: list[str]) -> str:

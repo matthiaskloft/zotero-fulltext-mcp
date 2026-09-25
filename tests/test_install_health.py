@@ -84,7 +84,20 @@ class InstallVersionStatusTests(unittest.TestCase):
 
         self.assertTrue(status.editable)
         self.assertIsNone(status.source_version)
+        self.assertTrue(status.source_is_other_project)
         self.assertFalse(status.stale)
+
+    def test_unreadable_or_non_utf8_pyproject_is_unknown_not_foreign(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp)
+            missing = install_version_status(_editable_dist("0.2.0", source))
+            (source / "pyproject.toml").write_bytes('[project]\nname = "zotero-fulltext-mcp"\n# ä\n'.encode("cp1252"))
+            non_utf8 = install_version_status(_editable_dist("0.2.0", source))
+
+        for status in (missing, non_utf8):
+            self.assertIsNone(status.source_version)
+            self.assertFalse(status.source_is_other_project)
+            self.assertFalse(status.stale)
 
     def test_reinstall_command_follows_the_installer(self):
         source = Path("checkout")
@@ -183,6 +196,31 @@ class InstallHealthCheckResultTests(unittest.TestCase):
 
         self.assertTrue(results["install_version"].ok)
         self.assertTrue(results["running_server"].ok)
+
+    def test_checkout_holding_another_project_passes(self):
+        status = InstallVersionStatus("0.2.0", True, Path("checkout"), None, source_project="something-else")
+
+        result = self._checks(status, running=None)["install_version"]
+
+        self.assertTrue(result.ok)
+        self.assertIn("another project", result.detail)
+
+    def test_unreadable_checkout_warns(self):
+        status = InstallVersionStatus("0.2.0", True, Path("checkout"), None)
+
+        result = self._checks(status, running=None)["install_version"]
+
+        self.assertFalse(result.ok)
+        self.assertFalse(result.required)
+        self.assertIn("could not read", result.detail)
+
+    def test_stale_reinstall_keeps_the_test_extra(self):
+        status = InstallVersionStatus("0.2.0", True, Path("checkout"), "0.8.0", installer="pip")
+        installed = {"mcp", "pytest"}
+        with patch("zotero_pdf_text.cli.importlib.util.find_spec", side_effect=lambda name: name if name in installed else None):
+            detail = self._checks(status, running=None)["install_version"].detail
+
+        self.assertIn('"checkout[mcp,test]"', detail)
 
     def test_pinned_install_passes_and_no_server_row_without_processes(self):
         results = self._checks(InstallVersionStatus("0.8.0", False), running=0)

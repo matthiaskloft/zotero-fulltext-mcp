@@ -1965,6 +1965,13 @@ def _install_health_checks() -> list[SetupCheckResult]:
         version_result = SetupCheckResult(
             "install_version", True, f"{status.installed_version} (not an editable install)", required=False
         )
+    elif status.source_is_other_project:
+        version_result = SetupCheckResult(
+            "install_version",
+            True,
+            f"{status.installed_version} (editable); its source checkout now holds another project, not compared",
+            required=False,
+        )
     elif status.source_version is None:
         version_result = SetupCheckResult(
             "install_version",
@@ -1974,7 +1981,13 @@ def _install_health_checks() -> list[SetupCheckResult]:
             required=False,
         )
     elif status.stale:
-        extras = [extra for extra, module in _EXTRA_MODULES if importlib.util.find_spec(module) is not None]
+        # The test extra has no setup row but is part of the documented development install;
+        # leaving it out would reinstall without the tooling the developer has.
+        extras = [
+            extra
+            for extra, module in (*_EXTRA_MODULES, ("test", "pytest"))
+            if importlib.util.find_spec(module) is not None
+        ]
         version_result = SetupCheckResult(
             "install_version",
             False,
