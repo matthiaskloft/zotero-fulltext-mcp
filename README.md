@@ -260,7 +260,15 @@ registration for you (falls back to printing the command if `claude` isn't on PA
 example a new `--config`, `--db`, or optional-tool flag) replaces the old entry, restoring it if
 the new registration fails. To update a registration, rerun `install-mcp` with the new options
 and `--apply`. Codex's
-`config.toml` is never edited automatically; paste the printed block in yourself.
+`config.toml` is never edited automatically; paste the printed block in yourself. `install-mcp`
+does read it (`$CODEX_HOME/config.toml`, else `~/.codex/config.toml`, or `--codex-config PATH`)
+and reports whether the existing Codex entry is current, missing, or differs in executable,
+arguments, `enabled_tools`, `disabled_tools`, or `enabled`, including a second entry under the
+hyphenated name. With `--enable-reconvert` it also reports timeouts below what that mode
+needs; larger timeouts and per-tool approval overrides are yours and are not compared. A
+project-scoped `.codex/config.toml` can override the user entry and is not checked; an
+`omit_tools_from` setting is shown as a note, not as drift. After
+changing the entry, restart Codex.
 
 The generated registration enables the safe default MCP surface. To additionally expose the
 local Better BibTeX export bridge, opt in at registration time with `--enable-bibtex`; its

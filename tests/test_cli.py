@@ -425,6 +425,14 @@ class ShellQuoteTests(unittest.TestCase):
 
 
 class InstallMcpCliTests(unittest.TestCase):
+    def setUp(self):
+        # install-mcp reads Codex's config.toml for its drift report; never the developer's own.
+        codex_home = tempfile.TemporaryDirectory()
+        self.addCleanup(codex_home.cleanup)
+        env = patch.dict(os.environ, {"CODEX_HOME": codex_home.name})
+        env.start()
+        self.addCleanup(env.stop)
+
     def test_cli_import_and_parser_do_not_require_mcp_dependency(self):
         code = (
             "import builtins\n"
