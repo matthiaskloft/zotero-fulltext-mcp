@@ -29,6 +29,12 @@ def setUpModule():
         unittest.addModuleCleanup(patcher.stop)
 
 
+def tearDownModule():
+    # pytest calls tearDownModule but not unittest's module cleanups; without this the patches
+    # above would stay active for every test module collected after this one.
+    unittest.case.doModuleCleanups()
+
+
 class RunSetupChecksTests(unittest.TestCase):
     def test_missing_config_fails_and_stops_early(self):
         with tempfile.TemporaryDirectory() as tmp:

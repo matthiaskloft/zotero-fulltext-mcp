@@ -2008,8 +2008,9 @@ def _install_health_checks() -> list[SetupCheckResult]:
                 "running_server",
                 # Harmless in normal use; only a problem for the reinstall a stale install needs.
                 not status.stale,
-                f"{running} {SERVER_EXECUTABLE} process(es) running; quit the MCP client (Claude Code, "
-                "Codex, ...) before reinstalling or upgrading, or Windows keeps the executable locked",
+                f"{running} {SERVER_EXECUTABLE} process(es) running (from any environment); quit the MCP "
+                "clients (Claude Code, Codex, ...) using this environment before reinstalling or upgrading, "
+                "or Windows keeps its executable locked",
                 required=False,
             )
         )
