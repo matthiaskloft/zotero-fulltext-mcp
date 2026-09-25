@@ -1,9 +1,11 @@
 import json
 import subprocess
+import sys
 import tempfile
 import unittest
 from importlib import metadata
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from zotero_pdf_text import install_health
@@ -30,6 +32,11 @@ class FakeDistribution(metadata.Distribution):
 def _editable_dist(version: str, source_dir: Path, installer: str = "pip") -> FakeDistribution:
     direct_url = {"url": source_dir.resolve().as_uri(), "dir_info": {"editable": True}}
     return FakeDistribution(version, {"direct_url.json": json.dumps(direct_url), "INSTALLER": f"{installer}\n"})
+
+
+def _fake_sys(platform: str, executable: str = sys.executable):
+    """Swap install_health's `sys` for a stand-in, so the real sys.platform never changes."""
+    return patch.object(install_health, "sys", SimpleNamespace(platform=platform, executable=executable))
 
 
 def _write_pyproject(directory: Path, version: str, name: str = "zotero-fulltext-mcp") -> None:
@@ -104,19 +111,42 @@ class InstallVersionStatusTests(unittest.TestCase):
         pip_status = InstallVersionStatus("0.2.0", True, source, "0.8.0", installer="pip")
         uv_status = InstallVersionStatus("0.2.0", True, source, "0.8.0", installer="uv")
 
-        self.assertIn('-m pip install -e "checkout[mcp,marker]"', reinstall_command(pip_status, ["mcp", "marker"]))
-        uv_command = reinstall_command(uv_status, ["mcp"])
-        self.assertTrue(uv_command.startswith("uv pip install --python "))
-        self.assertTrue(uv_command.endswith('-e "checkout[mcp]"'))
+        with _fake_sys("linux", "/opt/venv/bin/python"):
+            pip_command = reinstall_command(pip_status, ["mcp", "marker"])
+            uv_command = reinstall_command(uv_status, ["mcp"])
 
-    def test_quoted_interpreter_path_is_runnable_in_powershell(self):
+        self.assertEqual(pip_command, "/opt/venv/bin/python -m pip install -e 'checkout[mcp,marker]'")
+        self.assertEqual(uv_command, "uv pip install --python /opt/venv/bin/python -e 'checkout[mcp]'")
+
+    def test_windows_command_is_powershell_syntax(self):
         status = InstallVersionStatus("0.2.0", True, Path("checkout"), "0.8.0", installer="pip")
-        with patch.object(install_health.sys, "executable", r"C:\Program Files\py\python.exe"), patch.object(
-            install_health.sys, "platform", "win32"
-        ):
-            self.assertTrue(reinstall_command(status, []).startswith(r'& "C:\Program Files\py\python.exe" -m pip'))
-        with patch.object(install_health.sys, "executable", "/opt/venv/bin/python"):
-            self.assertTrue(reinstall_command(status, []).startswith("/opt/venv/bin/python -m pip"))
+        with _fake_sys("win32", r"C:\Program Files\py\python.exe"):
+            spaced = reinstall_command(status, [])
+        with _fake_sys("win32", r"C:\venv\Scripts\python.exe"):
+            plain = reinstall_command(status, ["mcp"])
+
+        self.assertEqual(spaced, r"& 'C:\Program Files\py\python.exe' -m pip install -e checkout")
+        self.assertEqual(plain, r"C:\venv\Scripts\python.exe -m pip install -e 'checkout[mcp]'")
+
+    def test_shell_metacharacters_stay_literal(self):
+        status = InstallVersionStatus("0.2.0", True, Path("it's $HOME"), "0.8.0", installer="pip")
+        with _fake_sys("win32", r"C:\venv\Scripts\python.exe"):
+            powershell = reinstall_command(status, [])
+        with _fake_sys("linux", "/opt/venv/bin/python"):
+            posix = reinstall_command(status, [])
+
+        self.assertTrue(powershell.endswith("-e 'it''s $HOME'"))
+        self.assertTrue(posix.endswith("""-e 'it'"'"'s $HOME'"""))
+
+    def test_project_names_compare_like_packaging(self):
+        for spelling in ("zotero_fulltext_mcp", "Zotero.Fulltext-MCP"):
+            with self.subTest(spelling=spelling), tempfile.TemporaryDirectory() as tmp:
+                _write_pyproject(Path(tmp), "0.8.0", name=spelling)
+
+                status = install_version_status(_editable_dist("0.2.0", Path(tmp)))
+
+                self.assertFalse(status.source_is_other_project)
+                self.assertTrue(status.stale)
 
     def test_unc_checkout_keeps_its_host(self):
         dist = FakeDistribution(
@@ -134,13 +164,13 @@ class RunningServerCountTests(unittest.TestCase):
 
     def test_counts_matching_processes_on_windows(self):
         rows = b'"zotero-fulltext-mcp.exe","101","Console","1","50.000 K"\r\n' * 3
-        with patch.object(install_health.sys, "platform", "win32"), patch.object(
+        with _fake_sys("win32"), patch.object(
             install_health.subprocess, "run", return_value=self._tasklist(rows)
         ):
             self.assertEqual(running_server_count(), 3)
 
     def test_no_match_info_line_counts_as_zero(self):
-        with patch.object(install_health.sys, "platform", "win32"), patch.object(
+        with _fake_sys("win32"), patch.object(
             install_health.subprocess,
             "run",
             # German Windows, OEM code page: not decodable as UTF-8 or cp1252.
@@ -149,19 +179,19 @@ class RunningServerCountTests(unittest.TestCase):
             self.assertEqual(running_server_count(), 0)
 
     def test_missing_output_counts_as_zero(self):
-        with patch.object(install_health.sys, "platform", "win32"), patch.object(
+        with _fake_sys("win32"), patch.object(
             install_health.subprocess, "run", return_value=self._tasklist(None)
         ):
             self.assertEqual(running_server_count(), 0)
 
     def test_unknown_when_tasklist_fails(self):
-        with patch.object(install_health.sys, "platform", "win32"), patch.object(
+        with _fake_sys("win32"), patch.object(
             install_health.subprocess, "run", side_effect=OSError("no tasklist")
         ):
             self.assertIsNone(running_server_count())
 
     def test_not_checked_off_windows(self):
-        with patch.object(install_health.sys, "platform", "linux"), patch.object(
+        with _fake_sys("linux"), patch.object(
             install_health.subprocess, "run"
         ) as run:
             self.assertIsNone(running_server_count())
@@ -220,7 +250,7 @@ class InstallHealthCheckResultTests(unittest.TestCase):
         with patch("zotero_pdf_text.cli.importlib.util.find_spec", side_effect=lambda name: name if name in installed else None):
             detail = self._checks(status, running=None)["install_version"].detail
 
-        self.assertIn('"checkout[mcp,test]"', detail)
+        self.assertIn("'checkout[mcp,test]'", detail)
 
     def test_pinned_install_passes_and_no_server_row_without_processes(self):
         results = self._checks(InstallVersionStatus("0.8.0", False), running=0)

@@ -9,6 +9,8 @@ modifies the environment; it only reports what a reinstall would run into.
 from __future__ import annotations
 
 import json
+import re
+import shlex
 import subprocess
 import sys
 import tomllib
@@ -33,7 +35,7 @@ class InstallVersionStatus:
 
     @property
     def source_is_other_project(self) -> bool:
-        return self.source_project is not None and self.source_project != DIST_NAME
+        return self.source_project is not None and not _is_this_project(self.source_project)
 
     @property
     def stale(self) -> bool:
@@ -66,7 +68,7 @@ def install_version_status(dist: metadata.Distribution | None = None) -> Install
         editable=True,
         source_dir=source_dir,
         # A checkout that now holds another project says nothing about this install's version.
-        source_version=source_version if source_project == DIST_NAME else None,
+        source_version=source_version if source_project and _is_this_project(source_project) else None,
         installer=installer,
         source_project=source_project,
     )
@@ -91,6 +93,11 @@ def _editable_source_dir(dist: metadata.Distribution) -> Path | None:
     return Path(url2pathname(parsed.path))
 
 
+def _is_this_project(name: str) -> bool:
+    """Compare project names the way packaging does (PEP 503): case and `-_.` runs are equal."""
+    return re.sub(r"[-_.]+", "-", name).lower() == DIST_NAME
+
+
 def _source_project(source_dir: Path) -> tuple[str | None, str | None]:
     """Read the project name and version the checkout declares; (None, None) if unreadable."""
     try:
@@ -112,17 +119,27 @@ def reinstall_command(status: InstallVersionStatus, extras: list[str]) -> str:
     be the stale environment, and removes packages (such as the test extra) it wasn't told about.
     """
     extras_suffix = f"[{','.join(extras)}]" if extras else ""
-    target = f'"{status.source_dir}{extras_suffix}"'
+    target = _shell_word(f"{status.source_dir}{extras_suffix}")
     if status.installer == "uv":
-        return f"uv pip install --python {_command_path(sys.executable)} -e {target}"
-    return f"{_command_path(sys.executable, leading=True)} -m pip install -e {target}"
+        return f"uv pip install --python {_shell_word(sys.executable)} -e {target}"
+    return f"{_shell_word(sys.executable, leading=True)} -m pip install -e {target}"
 
 
-def _command_path(path: str, *, leading: bool = False) -> str:
-    """Quote a path only when needed; PowerShell runs a quoted leading path only after `&`."""
-    if not any(char in path for char in " &()'\""):
-        return path
-    return f'& "{path}"' if leading and sys.platform == "win32" else f'"{path}"'
+_SAFE_WORD_CHARS = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.:/\\-")
+
+
+def _shell_word(value: str, *, leading: bool = False) -> str:
+    """Quote for PowerShell on Windows and for a POSIX shell elsewhere, only when needed.
+
+    Single quotes keep `$`, backticks and `[` literal in both shells. PowerShell runs a quoted
+    command path only after the call operator `&`.
+    """
+    if value and all(char in _SAFE_WORD_CHARS for char in value):
+        return value
+    if sys.platform == "win32":
+        quoted = "'" + value.replace("'", "''") + "'"
+        return f"& {quoted}" if leading else quoted
+    return shlex.quote(value)
 
 
 def running_server_count() -> int | None:

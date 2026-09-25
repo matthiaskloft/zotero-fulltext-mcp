@@ -1988,11 +1988,12 @@ def _install_health_checks() -> list[SetupCheckResult]:
             for extra, module in (*_EXTRA_MODULES, ("test", "pytest"))
             if importlib.util.find_spec(module) is not None
         ]
+        shell_note = " (PowerShell)" if sys.platform == "win32" else ""
         version_result = SetupCheckResult(
             "install_version",
             False,
             f"installed metadata says {status.installed_version} but the editable source checkout declares "
-            f"{status.source_version}; refresh with: {reinstall_command(status, extras)}",
+            f"{status.source_version}; refresh with{shell_note}: {reinstall_command(status, extras)}",
             required=False,
         )
     else:
