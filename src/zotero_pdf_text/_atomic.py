@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import os
 import time
 from pathlib import Path
@@ -25,3 +26,19 @@ def replace_with_retry(src: Path, dst: Path, *, attempts: int = 5, initial_delay
                 raise
             time.sleep(delay)
             delay *= 2
+
+
+def atomic_write_text(path: Path, content: str) -> None:
+    """Write ``content`` to a hidden sibling temp file, then replace ``path`` in one step.
+
+    The temp name starts with a dot and ends in ``.tmp-<pid>``, so an interrupted write is never
+    mistaken for a completed file; the destination keeps its previous content until the replace
+    succeeds.
+    """
+    tmp_path = path.with_name(f".{path.name}.tmp-{os.getpid()}")
+    try:
+        tmp_path.write_text(content, encoding="utf-8", newline="\n")
+        replace_with_retry(tmp_path, path)
+    finally:
+        with contextlib.suppress(OSError):
+            tmp_path.unlink(missing_ok=True)

@@ -17,9 +17,9 @@ from pathlib import Path
 
 from .config import ProjectConfig
 from .indexer import load_indexed_keys
+from ._atomic import atomic_write_text
 from .timeout_candidates import (
     TimeoutCandidate,
-    _atomic_write_text,
     append_master_candidates,
     suggested_next_timeout,
     write_run_candidates,
@@ -375,7 +375,7 @@ def _convert_row(
             extraction_tool = _existing_extraction_tool(output_path)
             has_math = _existing_has_math(output_path)
             body = _existing_markdown_body(output_path)
-            _atomic_write_text(output_path, _with_front_matter(row, body, extraction_tool, has_math=has_math))
+            atomic_write_text(output_path, _with_front_matter(row, body, extraction_tool, has_math=has_math))
             return (
                 _result(
                     row,
@@ -447,7 +447,7 @@ def _convert_row(
                     backup_images.rename(images_dir)
                 raise
         else:
-            _atomic_write_text(output_path, _with_front_matter(row, markdown, extraction_tool, has_math=has_math))
+            atomic_write_text(output_path, _with_front_matter(row, markdown, extraction_tool, has_math=has_math))
         result = _result(
             row,
             output_path,

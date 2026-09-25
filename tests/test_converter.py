@@ -825,7 +825,7 @@ class ConverterTests(unittest.TestCase):
             markdown.write_text(original, encoding="utf-8", newline="\n")
             config = ProjectConfig(root, root, root, root / "output")
 
-            with patch("zotero_pdf_text.timeout_candidates.replace_with_retry", side_effect=OSError("disk full")):
+            with patch("zotero_pdf_text._atomic.replace_with_retry", side_effect=OSError("disk full")):
                 convert_verified(config, report, output_dir=run_dir, resume=True, workers=1)
 
             self.assertEqual(markdown.read_text(encoding="utf-8"), original)
@@ -846,7 +846,7 @@ class ConverterTests(unittest.TestCase):
 
             with (
                 patch("zotero_pdf_text.converter.subprocess.run", side_effect=_write_raw_markdown),
-                patch("zotero_pdf_text.timeout_candidates.replace_with_retry", side_effect=OSError("disk full")),
+                patch("zotero_pdf_text._atomic.replace_with_retry", side_effect=OSError("disk full")),
             ):
                 convert_verified(config, report, output_dir=run_dir, resume=True, workers=1)
 
