@@ -1493,8 +1493,20 @@ def _install_mcp(args: argparse.Namespace) -> int:
     print("# Codex registration -- paste into your config.toml (this command does not edit it for you):")
     print(codex_block)
     print()
+    # Older reconvert entries kept the 30s startup timeout that marker's cold import overruns.
+    minimum_timeouts = (
+        {"startup_timeout_sec": RECONVERT_STARTUP_TIMEOUT_SECONDS, "tool_timeout_sec": RECONVERT_TOOL_TIMEOUT_SECONDS}
+        if args.enable_reconvert
+        else {}
+    )
     _print_codex_registration_drift(
-        _codex_config_path(args.codex_config), (toml_name, server_name), str(server_exe), server_args, enabled_tools
+        _codex_config_path(args.codex_config),
+        (toml_name, server_name),
+        str(server_exe),
+        server_args,
+        enabled_tools,
+        minimum_timeouts,
+        explicit_path=args.codex_config is not None,
     )
 
     if args.apply:
@@ -1519,48 +1531,72 @@ def _codex_config_path(override: Path | None) -> Path:
 
 
 def _print_codex_registration_drift(
-    config_path: Path, names: tuple[str, str], command: str, args: list[str], tools: list[str]
+    config_path: Path,
+    names: tuple[str, str],
+    command: str,
+    args: list[str],
+    tools: list[str],
+    minimum_timeouts: dict[str, int],
+    *,
+    explicit_path: bool = False,
 ) -> None:
     """Compare the existing Codex registration with the generated one. Never writes.
 
-    Command, args, enabled/disabled tools and `enabled` are compared; timeouts and per-tool
-    approval overrides are the user's to keep and are not reported as drift.
+    Command, args, enabled/disabled tools, `enabled` and, when a mode needs them, minimum
+    timeouts are compared; larger timeouts and per-tool approval overrides are the user's to keep
+    and are not reported as drift.
     """
     try:
         with config_path.open("rb") as handle:
             servers = tomllib.load(handle).get("mcp_servers", {})
     except FileNotFoundError:
+        if explicit_path:
+            print(f"# Codex registration check: --codex-config {config_path} does not exist; nothing compared.")
+            return
         servers = {}
     # ValueError covers TOMLDecodeError and UnicodeDecodeError (e.g. a config saved as cp1252).
     except (OSError, ValueError) as exc:
         print(f"# Codex registration check: could not read {config_path} ({exc}); nothing compared.")
         return
     if not isinstance(servers, dict):
-        servers = {}
+        print(f"# Codex registration check: mcp_servers in {config_path} is not a table; Codex rejects it.")
+        return
+    misshapen = [n for n in dict.fromkeys(names) if n in servers and not isinstance(servers[n], dict)]
+    for name in misshapen:
+        print(
+            f"# Codex registration check: mcp_servers.{name} in {config_path} is not a single table "
+            f"(e.g. [[...]]); replace it with the block above."
+        )
     # The generated block uses the TOML-safe name; a hand-written entry may use the original one.
     # Codex launches every entry, so a second, stale one under the other name is reported too.
     found = [(n, servers[n]) for n in dict.fromkeys(names) if isinstance(servers.get(n), dict)]
     if not found:
-        print(f"# Codex registration check: no [mcp_servers.{names[0]}] in {config_path}.")
-        print("# Paste the block above, then restart Codex.")
+        if not misshapen:
+            print(f"# Codex registration check: no [mcp_servers.{names[0]}] in {config_path}.")
+            print("# Paste the block above, then restart Codex.")
         return
     if len(found) > 1:
-        print(
-            f"# Codex registration check: {config_path} registers this server twice "
-            f"({', '.join(f'[mcp_servers.{n}]' for n, _ in found)}); keep only [mcp_servers.{names[0]}]."
-        )
-    for name, entry in found:
-        differences = _codex_entry_differences(entry, command, args, tools)
-        if not differences:
-            print(f"# Codex registration check: [mcp_servers.{name}] in {config_path} is current.")
-            continue
-        print(f"# Codex registration check: [mcp_servers.{name}] in {config_path} differs from the generated block:")
-        for difference in differences:
-            print(f"#   {difference}")
-        print(f"# Update [mcp_servers.{name}] to match the block above, then restart Codex.")
+        # Only the generated name is compared; every other spelling is a second server to remove.
+        for name, _ in found[1:]:
+            print(
+                f"# Codex registration check: [mcp_servers.{name}] in {config_path} registers this server "
+                f"a second time; remove it and restart Codex."
+            )
+        found = found[:1]
+    name, entry = found[0]
+    differences = _codex_entry_differences(entry, command, args, tools, minimum_timeouts)
+    if not differences:
+        print(f"# Codex registration check: [mcp_servers.{name}] in {config_path} is current.")
+        return
+    print(f"# Codex registration check: [mcp_servers.{name}] in {config_path} differs from the generated block:")
+    for difference in differences:
+        print(f"#   {difference}")
+    print(f"# Update [mcp_servers.{name}] to match the block above, then restart Codex.")
 
 
-def _codex_entry_differences(entry: dict, command: str, args: list[str], tools: list[str]) -> list[str]:
+def _codex_entry_differences(
+    entry: dict, command: str, args: list[str], tools: list[str], minimum_timeouts: dict[str, int]
+) -> list[str]:
     differences = []
     existing_command = entry.get("command")
     if not isinstance(existing_command, str) or _normalized_path(existing_command) != _normalized_path(command):
@@ -1587,8 +1623,16 @@ def _codex_entry_differences(entry: dict, command: str, args: list[str], tools: 
             hidden = sorted(set(disabled_tools) & set(tools))
             if hidden:
                 differences.append(f"disabled_tools hides: {', '.join(hidden)}")
-    if entry.get("enabled") is False:
+    enabled = entry.get("enabled", True)
+    if enabled is False:
         differences.append("enabled = false")
+    elif not isinstance(enabled, bool):
+        differences.append(f"enabled: unexpected value {enabled!r} (Codex needs true or false)")
+    for key, minimum in minimum_timeouts.items():
+        value = entry.get(key)
+        # bool is an int subclass; Codex's own default applies when the key is absent.
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or value < minimum:
+            differences.append(f"{key}: {value!r} is below the {minimum} this mode needs")
     return differences
 
 

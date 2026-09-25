@@ -16,9 +16,10 @@ dated section once it has been stress-tested against a large library.
 - `install-mcp` now compares the existing Codex registration in `config.toml` with the generated
   block and reports it as current, missing, or drifted. It lists differences in the executable,
   arguments, `enabled_tools`, `disabled_tools` and `enabled`, flags a second registration under the
-  other server-name spelling, and says when Codex needs a restart. It only reads the file; other
-  servers, timeouts, and per-tool approval overrides are left alone. `--codex-config` selects
-  another file (#49).
+  other server-name spelling (to remove), and says when Codex needs a restart. With
+  `--enable-reconvert` it also reports timeouts below that mode's minimums, such as an older
+  entry's 30-second startup timeout. It only reads the file; other servers, larger timeouts, and
+  per-tool approval overrides are left alone. `--codex-config` selects another file (#49).
 
 ### Fixed
 

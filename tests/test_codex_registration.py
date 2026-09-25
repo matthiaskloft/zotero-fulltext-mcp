@@ -1,6 +1,7 @@
 import io
 import json
 import os
+import re
 import tempfile
 import tomllib
 import unittest
@@ -47,12 +48,58 @@ class CodexRegistrationDriftTests(unittest.TestCase):
         end = next(i for i in range(start, len(lines)) if not lines[i].strip())
         return "\n".join(lines[start:end]) + "\n"
 
-    def test_missing_config_file_reports_missing_registration(self):
-        output = self._run()
+    def test_missing_default_config_file_reports_missing_registration(self):
+        stdout = io.StringIO()
+        with patch.dict("os.environ", {"CODEX_HOME": str(self.codex_config.parent)}), patch(
+            "sys.executable", str(self.root / "Scripts" / "python.exe")
+        ), redirect_stdout(stdout):
+            main(["install-mcp", "--config", str(self.config_path)])
+        output = stdout.getvalue()
 
         self.assertIn("no [mcp_servers.zotero_fulltext]", output)
         self.assertIn("restart Codex", output)
         self.assertFalse(self.codex_config.exists())
+
+    def test_missing_explicit_config_file_is_reported_as_such(self):
+        output = self._run()
+
+        self.assertIn("does not exist; nothing compared", output)
+        self.assertNotIn("Paste the block above", output)
+
+    def test_misshapen_entries_are_reported_not_as_missing(self):
+        for content in ("[[mcp_servers.zotero_fulltext]]\ncommand = \"x\"\n", "[[mcp_servers]]\ncommand = \"x\"\n"):
+            with self.subTest(content=content):
+                self.codex_config.write_text(content, encoding="utf-8")
+
+                output = self._run()
+
+                self.assertNotIn("Paste the block above", output)
+                self.assertIn("not a", output)
+
+    def test_non_boolean_enabled_is_drift(self):
+        block = self._generated_block(self._run()).replace("enabled = true", 'enabled = "false"')
+        self.codex_config.write_text(block, encoding="utf-8")
+
+        output = self._run()
+
+        self.assertIn("enabled: unexpected value 'false'", output)
+
+    def test_reconvert_entry_with_old_timeouts_is_drift_but_larger_ones_are_kept(self):
+        with patch("zotero_pdf_text.cli.validate_config"), patch(
+            "zotero_pdf_text.cli.marker_dependency_available", return_value=True
+        ):
+            block = self._generated_block(self._run("--enable-reconvert"))
+            old = re.sub(r"startup_timeout_sec = \d+", "startup_timeout_sec = 30", block)
+            old = re.sub(r"tool_timeout_sec = \d+", "tool_timeout_sec = 120", old)
+            self.codex_config.write_text(old, encoding="utf-8")
+            outdated = self._run("--enable-reconvert")
+            larger = re.sub(r"startup_timeout_sec = \d+", "startup_timeout_sec = 900", block)
+            self.codex_config.write_text(larger, encoding="utf-8")
+            kept = self._run("--enable-reconvert")
+
+        self.assertIn("startup_timeout_sec: 30 is below the 180", outdated)
+        self.assertIn("tool_timeout_sec: 120 is below the 6000", outdated)
+        self.assertIn("is current", kept)
 
     def test_matching_registration_is_current_and_ignores_approval_overrides(self):
         block = self._generated_block(self._run())
@@ -163,11 +210,12 @@ class CodexRegistrationDriftTests(unittest.TestCase):
 
         output = self._run()
 
-        self.assertIn("registers this server twice", output)
+        self.assertIn("[mcp_servers.zotero-fulltext] in", output)
+        self.assertIn("a second time; remove it", output)
         self.assertIn("[mcp_servers.zotero_fulltext] in", output)
         self.assertIn("is current", output)
-        self.assertIn("[mcp_servers.zotero-fulltext] in", output)
-        self.assertIn("differs from the generated block", output)
+        # Never advise updating the duplicate, which would leave two live registrations.
+        self.assertNotIn("Update [mcp_servers.zotero-fulltext]", output)
 
     def test_equivalent_command_spelling_is_not_drift(self):
         block = self._generated_block(self._run())

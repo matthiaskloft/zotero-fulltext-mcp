@@ -256,7 +256,8 @@ and `--apply`. Codex's
 does read it (`$CODEX_HOME/config.toml`, else `~/.codex/config.toml`, or `--codex-config PATH`)
 and reports whether the existing Codex entry is current, missing, or differs in executable,
 arguments, `enabled_tools`, `disabled_tools`, or `enabled`, including a second entry under the
-hyphenated name. Timeouts and per-tool approval overrides are yours and are not compared. A
+hyphenated name. With `--enable-reconvert` it also reports timeouts below what that mode
+needs; larger timeouts and per-tool approval overrides are yours and are not compared. A
 project-scoped `.codex/config.toml` can override the user entry and is not checked. After
 changing the entry, restart Codex.
 
