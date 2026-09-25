@@ -28,7 +28,7 @@ def pipeline_write_lock(root: Path, *, command: str = "") -> Iterator[Path]:
     This only serializes writers against each other; it does not protect a concurrent reader
     (e.g. a running MCP server executing a search) from observing a half-written file while a
     writer holds this lock. That guarantee comes from each writer using a temp-file-then-atomic-
-    replace pattern (see `build_fts_index` in fts.py and `_atomic_write_text` in indexer.py), not
+    replace pattern (see `build_fts_index` in fts.py and `atomic_write_text` in _atomic.py), not
     from this lock.
     """
     root.mkdir(parents=True, exist_ok=True)

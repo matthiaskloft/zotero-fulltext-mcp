@@ -21,6 +21,9 @@ dated section once it has been stress-tested against a large library.
   server does at startup. An index with an outdated schema fails with the exact
   `rebuild-index --config` command, and a missing index fails with a separate message pointing to
   `convert-new`. Before, setup passed while the server could not start (#48).
+- Conversion and resume now write final Markdown to a temporary sibling file and swap it into place
+  only once it is complete, so an interrupted write can no longer leave a truncated `.md` file that a
+  later resume accepts as a finished conversion. A failed write keeps the previous file intact.
 
 ## [0.8.0] - 2026-09-25
 

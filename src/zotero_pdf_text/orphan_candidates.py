@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-import contextlib
 import csv
 import json
-import os
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from ._atomic import replace_with_retry
+from ._atomic import atomic_write_text
 
 CANDIDATE_JSONL_FILENAME = "orphan_candidates.jsonl"
 CANDIDATE_CSV_FILENAME = "orphan_candidates.csv"
@@ -159,14 +157,4 @@ def _load_master_records(master_jsonl_path: Path) -> dict[str, dict[str, object]
 def _write_master_records(master_jsonl_path: Path, records: dict[str, dict[str, object]]) -> None:
     master_jsonl_path.parent.mkdir(parents=True, exist_ok=True)
     content = "".join(json.dumps(record, ensure_ascii=False) + "\n" for record in records.values())
-    _atomic_write_text(master_jsonl_path, content)
-
-
-def _atomic_write_text(path: Path, content: str) -> None:
-    tmp_path = path.with_name(f".{path.name}.tmp-{os.getpid()}")
-    try:
-        tmp_path.write_text(content, encoding="utf-8", newline="\n")
-        replace_with_retry(tmp_path, path)
-    finally:
-        with contextlib.suppress(OSError):
-            tmp_path.unlink(missing_ok=True)
+    atomic_write_text(master_jsonl_path, content)
