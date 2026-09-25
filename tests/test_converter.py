@@ -810,6 +810,52 @@ class ConverterTests(unittest.TestCase):
             self.assertEqual(rows[0]["status"], "error")
             self.assertIn("CalledProcessError", rows[0]["error"])
 
+    def test_resume_refresh_replace_failure_keeps_previous_markdown(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            report = root / "mapping_report.csv"
+            pdf = root / "paper.pdf"
+            pdf.write_bytes(b"%PDF")
+            _write_mapping_report(report, pdf, title="New Title")
+            run_dir = root / "output" / "run"
+            markdown_dir = run_dir / "markdown"
+            markdown_dir.mkdir(parents=True)
+            markdown = markdown_dir / "0001_zotero_PARENT.md"
+            original = '---\ntitle: "Old Title"\nextraction_tool: "pymupdf.get_text"\n---\n\n# Old Body\n'
+            markdown.write_text(original, encoding="utf-8", newline="\n")
+            config = ProjectConfig(root, root, root, root / "output")
+
+            with patch("zotero_pdf_text.timeout_candidates.replace_with_retry", side_effect=OSError("disk full")):
+                convert_verified(config, report, output_dir=run_dir, resume=True, workers=1)
+
+            self.assertEqual(markdown.read_text(encoding="utf-8"), original)
+            self.assertEqual([path.name for path in markdown_dir.iterdir()], [markdown.name])
+            with (run_dir / "manifest.csv").open("r", encoding="utf-8-sig", newline="") as handle:
+                rows = list(csv.DictReader(handle))
+            self.assertEqual(rows[0]["status"], "error")
+
+    def test_conversion_replace_failure_leaves_no_partial_markdown(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            report = root / "mapping_report.csv"
+            pdf = root / "paper.pdf"
+            pdf.write_bytes(b"%PDF")
+            _write_mapping_report(report, pdf)
+            run_dir = root / "output" / "run"
+            config = ProjectConfig(root, root, root, root / "output")
+
+            with (
+                patch("zotero_pdf_text.converter.subprocess.run", side_effect=_write_raw_markdown),
+                patch("zotero_pdf_text.timeout_candidates.replace_with_retry", side_effect=OSError("disk full")),
+            ):
+                convert_verified(config, report, output_dir=run_dir, resume=True, workers=1)
+
+            self.assertEqual(list((run_dir / "markdown").iterdir()), [])
+            with (run_dir / "manifest.csv").open("r", encoding="utf-8-sig", newline="") as handle:
+                rows = list(csv.DictReader(handle))
+            self.assertEqual(rows[0]["status"], "error")
+            self.assertIn("disk full", rows[0]["error"])
+
 
 def _write_mapping_report(
     path: Path, pdf: Path, *, citation_key: str = "smithTitle2024", title: str = "Title", page_count: str = "3"
