@@ -33,7 +33,7 @@ import sqlite3
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable
+from typing import Callable, cast
 
 from ._atomic import replace_with_retry
 from .zotero_db import read_only_uri
@@ -637,7 +637,7 @@ def write_jsonl_replacing_manifest(
         fields = front_matter_fields(Path(row["output_path"]).read_text(encoding="utf-8"))
         if fields.get("zotero_attachment_key") != key:
             raise ValueError(f"Cannot replace {key}: Markdown front matter does not identify this attachment.")
-        replacements[key] = _record_from_manifest_row(row)
+        replacements[cast(str, key)] = _record_from_manifest_row(row)
 
     def _write(jsonl_path: Path) -> None:
         with current_jsonl.open("r", encoding="utf-8") as source, jsonl_path.open(

@@ -4,10 +4,11 @@ import json
 import re
 import uuid
 import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, TypedDict, cast
 
 
 DEFAULT_BBT_ENDPOINT = "http://127.0.0.1:23119/better-bibtex/json-rpc"
@@ -194,7 +195,7 @@ def find_item_key_via_connector(
     query = (title_hint or doi).replace("/", " ")
     url = (
         f"{connector_endpoint}/api/users/0/items"
-        f"?q={urllib.request.quote(query[:100])}&limit=20"
+        f"?q={urllib.parse.quote(query[:100])}&limit=20"
     )
     try:
         req = urllib.request.Request(url, headers={"Accept": "application/json"})
@@ -509,7 +510,30 @@ def _fetch_doi_metadata(doi: str) -> dict[str, object]:
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
 
 
-def _doi_meta_to_zotero(meta: dict[str, object], doi: str) -> dict[str, object]:
+class _ZoteroCreator(TypedDict):
+    firstName: str
+    lastName: str
+    creatorType: str
+
+
+class _ZoteroConnectorItem(TypedDict):
+    itemType: str
+    title: str
+    DOI: str
+    url: str
+    date: str
+    abstractNote: str
+    publicationTitle: str
+    volume: str
+    issue: str
+    pages: str
+    publisher: str
+    creators: list[_ZoteroCreator]
+    tags: list[object]
+    relations: dict[str, object]
+
+
+def _doi_meta_to_zotero(meta: dict[str, object], doi: str) -> _ZoteroConnectorItem:
     """Convert CrossRef or DataCite metadata dict to a Zotero connector item JSON."""
     source: str = meta["source"]  # type: ignore[assignment]
     d: dict[str, object] = meta["data"]  # type: ignore[assignment]
@@ -524,17 +548,17 @@ def _doi_meta_to_zotero(meta: dict[str, object], doi: str) -> dict[str, object]:
             "posted-content": "preprint",
         }
         item_type = _type_map.get(str(d.get("type", "")), "journalArticle")
-        creators = [
+        creators: list[_ZoteroCreator] = [
             {
                 "firstName": str(a.get("given", "")),
                 "lastName": str(a.get("family", "")),
                 "creatorType": "author",
             }
-            for a in (d.get("author") or [])
+            for a in cast(list[dict[str, Any]], d.get("author") or [])
         ]
         titles: list = d.get("title") or [""]  # type: ignore[assignment]
         title = str(titles[0]) if titles else ""
-        date_parts = ((d.get("published") or {}).get("date-parts") or [[""]])[0]  # type: ignore[union-attr]
+        date_parts = (cast(dict[str, Any], d.get("published") or {}).get("date-parts") or [[""]])[0]
         year = str(date_parts[0]) if date_parts else ""
         abstract = _HTML_TAG_RE.sub("", str(d.get("abstract") or ""))
         containers: list = d.get("container-title") or [""]  # type: ignore[assignment]
@@ -555,7 +579,7 @@ def _doi_meta_to_zotero(meta: dict[str, object], doi: str) -> dict[str, object]:
                 "lastName": str(a.get("familyName", "")),
                 "creatorType": "author",
             }
-            for a in (d.get("creators") or [])
+            for a in cast(list[dict[str, Any]], d.get("creators") or [])
         ]
         dc_titles: list = d.get("titles") or [{}]  # type: ignore[assignment]
         title = str((dc_titles[0] if dc_titles else {}).get("title", ""))

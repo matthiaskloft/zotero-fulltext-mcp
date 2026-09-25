@@ -17,7 +17,7 @@ from .zotero_db import AttachmentRecord, load_attachment_records, snapshot_datab
 try:
     from rapidfuzz import fuzz
 except Exception:  # pragma: no cover - exercised only if dependency is missing
-    fuzz = None
+    fuzz = None  # type: ignore[assignment]
 
 
 @dataclass
@@ -101,9 +101,9 @@ def build_mapping_rows(
         if not _is_pdf_record(record):
             continue
         for path, method in _candidate_paths(record, config.linked_attachments):
-            source = source_by_norm.get(_norm_path(path))
-            if source is not None:
-                candidates_by_source.setdefault(source.path, []).append((record, method))
+            matched_source = source_by_norm.get(_norm_path(path))
+            if matched_source is not None:
+                candidates_by_source.setdefault(matched_source.path, []).append((record, method))
                 break
         else:
             basename = _record_basename(record)

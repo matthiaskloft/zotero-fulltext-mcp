@@ -9,7 +9,7 @@ import re
 import sqlite3
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Iterable, Literal
+from typing import Iterable, Literal, TypedDict, cast
 
 from ._atomic import replace_with_retry
 from .zotero_db import read_only_uri
@@ -727,6 +727,24 @@ INDEX_STATISTICS_SCOPE_NOTE = (
     "source-library health."
 )
 
+
+class IndexStatistics(TypedDict):
+    """The payload `index_statistics` returns, key for key and in its emitted order."""
+
+    scope: str
+    scope_note: str
+    generation_id: str | None
+    published_at: str | None
+    records: int
+    chunks: int
+    total_chars: int
+    total_words: int
+    by_classification: dict[str, int]
+    by_identity_status: dict[str, int]
+    by_extraction_tool: dict[str, int]
+    by_has_math: dict[bool, int]
+
+
 _GROUPED_STATISTIC_COLUMNS: tuple[tuple[str, str], ...] = (
     ("by_classification", "classification"),
     ("by_identity_status", "identity_status"),
@@ -739,7 +757,7 @@ def index_statistics(
     *,
     generation_id: str | None = None,
     published_at: str | None = None,
-) -> dict[str, object]:
+) -> IndexStatistics:
     """Summarize one published index generation, aggregating in SQL rather than in Python.
 
     The previous implementation pulled every metadata row with `SELECT *` and counted them in
@@ -791,7 +809,9 @@ def index_statistics(
         "chunks": int(chunks),
         "total_chars": int(totals["total_chars"]),
         "total_words": int(totals["total_words"]),
-        **grouped,
+        "by_classification": grouped["by_classification"],
+        "by_identity_status": grouped["by_identity_status"],
+        "by_extraction_tool": grouped["by_extraction_tool"],
         "by_has_math": {bool(row["flag"]): int(row["n"]) for row in has_math_rows},
     }
 
@@ -812,7 +832,7 @@ def _grouped_counts(con: sqlite3.Connection, column: str) -> dict[str, int]:
     return {str(row["value"]): int(row["n"]) for row in rows}
 
 
-def coverage_report(db_path: Path) -> dict[str, object]:
+def coverage_report(db_path: Path) -> IndexStatistics:
     """Deprecated alias for `index_statistics`, kept so existing callers keep working.
 
     It cannot report a generation, because it never received one.
@@ -901,7 +921,7 @@ def _insert_metadata(con: sqlite3.Connection, record: dict[str, object]) -> int:
     values: list[object] = []
     for column in columns:
         if column in integer_columns:
-            values.append(int(record.get(column) or 0))
+            values.append(int(cast("int | float | str", record.get(column) or 0)))
         elif column in boolean_columns:
             values.append(int(bool(record.get(column, False))))
         else:
@@ -910,7 +930,7 @@ def _insert_metadata(con: sqlite3.Connection, record: dict[str, object]) -> int:
         f"INSERT INTO metadata ({','.join(columns)}) VALUES ({','.join('?' for _ in columns)})",
         values,
     )
-    return int(cursor.lastrowid)
+    return int(cast(int, cursor.lastrowid))
 
 
 def _insert_chunk(
@@ -927,7 +947,7 @@ def _insert_chunk(
         """,
         (record_id, chunk_index, start_char, end_char, text),
     )
-    chunk_id = int(cursor.lastrowid)
+    chunk_id = int(cast(int, cursor.lastrowid))
     con.execute(
         """
         INSERT INTO chunks_fts (rowid, title, creators, text, citation_key, record_id, chunk_id)

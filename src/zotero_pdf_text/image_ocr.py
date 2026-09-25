@@ -23,6 +23,7 @@ import urllib.parse
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any, cast
 
 from ._atomic import replace_with_retry
 from ._ollama_client import OllamaError, generate, probe
@@ -616,7 +617,7 @@ def ocr_images_for_attachment(
     except ArtifactError as exc:
         return ImageOcrResult(ok=False, attachment_key=attachment_key, error=str(exc))
 
-    records = get_item_context(db_path, attachment_key=attachment_key).get("records", [])
+    records = cast(list[dict[str, Any]], get_item_context(db_path, attachment_key=attachment_key).get("records", []))
     if not records:
         return ImageOcrResult(
             ok=False,
@@ -911,7 +912,7 @@ def _save_cache(cache_path: Path, cache: dict[str, str]) -> None:
 def _commit(
     attachment_key: str,
     *,
-    record: dict[str, object],
+    record: dict[str, Any],
     source_path: Path,
     source_bytes: bytes,
     target_path: Path,

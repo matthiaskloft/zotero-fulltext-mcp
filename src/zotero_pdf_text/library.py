@@ -35,6 +35,7 @@ from collections.abc import Iterator
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import TypedDict
 
 from .artifacts import (
     GENERATION_JSONL_FILENAME,
@@ -738,13 +739,31 @@ def build_observations(
     return observations
 
 
+class LibraryStatus(TypedDict):
+    """The payload `library_status` returns, key for key and in its emitted order."""
+
+    snapshot_time: str
+    generation_id: str | None
+    last_published_at: str | None
+    mapping_report: str
+    full_audit: bool
+    total_items: int
+    health: dict[str, int]
+    inventory_available: bool
+    inventory_error: str | None
+    ineligible_items: int
+    source_provenance_unknown: int
+    counts_overlap: bool
+    counts_overlap_note: str
+
+
 def library_status(
     config: ProjectConfig,
     mapping_report: Path,
     *,
     full_audit: bool = False,
     index_root: Path | None = None,
-) -> dict[str, object]:
+) -> LibraryStatus:
     """A truthful library-health summary for CLI and MCP use.
 
     Deliberately reports health categories and the last successful publication rather than

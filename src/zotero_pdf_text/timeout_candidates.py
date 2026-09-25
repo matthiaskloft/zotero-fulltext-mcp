@@ -5,6 +5,7 @@ import json
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import Any, cast
 
 from ._atomic import atomic_write_text
 
@@ -99,7 +100,7 @@ def append_master_candidates(master_jsonl_path: Path, candidates: list[TimeoutCa
             records[key] = record
         elif existing.get("status") == STATUS_PENDING:
             first_detected_at = existing.get("first_detected_at", existing.get("detected_at", now))
-            occurrence_count = int(existing.get("occurrence_count") or 1) + 1
+            occurrence_count = int(cast(Any, existing.get("occurrence_count")) or 1) + 1
             record = candidate.to_dict()
             record["status"] = STATUS_PENDING
             record["occurrence_count"] = occurrence_count
@@ -122,7 +123,7 @@ def list_candidates(master_jsonl_path: Path, *, status: str | None = STATUS_PEND
     values = list(records.values())
     if status is not None:
         values = [record for record in values if record.get("status") == status]
-    return sorted(values, key=lambda record: record.get("last_detected_at", ""), reverse=True)
+    return sorted(values, key=lambda record: cast(Any, record.get("last_detected_at", "")), reverse=True)
 
 
 def mark_status(master_jsonl_path: Path, attachment_key: str, *, status: str, extra_fields: dict[str, object]) -> None:
@@ -146,7 +147,7 @@ def add_to_skip_list(skip_list_path: Path, attachment_key: str, *, reason: str, 
     atomic_write_text(skip_list_path, json.dumps(data, ensure_ascii=False, indent=2) + "\n")
 
 
-def _load_skip_list(skip_list_path: Path) -> dict[str, object]:
+def _load_skip_list(skip_list_path: Path) -> dict[str, Any]:
     try:
         data = json.loads(skip_list_path.read_text(encoding="utf-8"))
         if not isinstance(data, dict) or not isinstance(data.get("entries"), dict):

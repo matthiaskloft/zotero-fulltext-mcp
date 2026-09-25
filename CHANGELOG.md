@@ -58,8 +58,8 @@ dated section once it has been stress-tested against a large library.
 - New mapping snapshots are written under `mapping-runs/` and conversions under
   `conversion-runs/{verified,samples,unverified-review}/`. MCP audit discovery still reads legacy
   `runs/` snapshots.
-- Development: Ruff linting and incremental mypy checks run in CI; `ruff` and `mypy` are added to
-  the `test` extra.
+- Development: Ruff linting and mypy checks of the whole package run in CI; `ruff` and `mypy` are
+  added to the `test` extra.
 
 ### Fixed
 

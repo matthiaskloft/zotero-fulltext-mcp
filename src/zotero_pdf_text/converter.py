@@ -33,7 +33,7 @@ except Exception:  # pragma: no cover - exercised only if dependency is missing
 try:
     import pymupdf as fitz
 except Exception:  # pragma: no cover - exercised only if dependency is missing
-    fitz = None
+    fitz = None  # type: ignore[assignment]
 
 PRIMARY_EXTRACTION_TOOL = "pymupdf4llm.to_markdown"
 FALLBACK_EXTRACTION_TOOL = "pymupdf.get_text"
@@ -263,7 +263,7 @@ def _convert_mapping_rows(
         index for index, (result, _) in enumerate(row_outcomes)
         if retry_workers > 0 and _has_native_crash(result.error)
     ]
-    retry_counts = Counter()
+    retry_counts: Counter[str] = Counter()
     if retry_indexes:
         def retry(index: int) -> tuple[ConversionResult, TimeoutCandidate | None]:
             row_number, row = indexed_rows[index]

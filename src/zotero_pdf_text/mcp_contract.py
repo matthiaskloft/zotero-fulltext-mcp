@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from collections.abc import Callable
 from dataclasses import asdict
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any, cast
 from urllib.parse import urlsplit, urlunsplit
 
 try:
@@ -32,7 +32,7 @@ from .artifacts import (
     resolve_reader_db_path,
     resolve_reader_generation,
 )
-from .bibtex import DEFAULT_BBT_ENDPOINT, DEFAULT_BBT_TRANSLATOR, export_bibtex_entries
+from .bibtex import DEFAULT_BBT_ENDPOINT, DEFAULT_BBT_TRANSLATOR, BibtexExport, export_bibtex_entries
 from .config import ProjectConfig, validate_config
 from .library import MAPPING_REPORT_JSONL, library_status as _library_status_data
 from .fts import (
@@ -553,7 +553,7 @@ def create_server(
         try:
             from pydantic import WithJsonSchema
         except ImportError:
-            WithJsonSchema = None
+            WithJsonSchema = None  # type: ignore[misc, assignment]
         if WithJsonSchema is not None:
             globals().update(
                 QueryInput=Annotated[object, WithJsonSchema({"type": "string", "maxLength": MAX_QUERY_CHARS})],
@@ -596,7 +596,7 @@ def create_server(
 
         mcp_factory = FastMCP
 
-    mcp = mcp_factory("zotero-fulltext", instructions=MCP_INSTRUCTIONS)
+    mcp: Any = mcp_factory("zotero-fulltext", instructions=MCP_INSTRUCTIONS)
 
     @mcp.tool(annotations=READ_ONLY_TOOL_ANNOTATIONS)
     def search_fulltext(
@@ -1469,7 +1469,7 @@ def serialize_orphan_candidate(record: object) -> OrphanCandidateRecord:
     }
 
 
-def serialize_bibtex_export(export: object) -> BibtexResponse:
+def serialize_bibtex_export(export: BibtexExport) -> BibtexResponse:
     data = asdict(export)
     entry = str(data["entry"])
     if len(entry.encode("utf-8")) > MAX_BIBTEX_RESPONSE_BYTES:
@@ -1684,7 +1684,7 @@ def _validate_search_mode(search_mode: object) -> SearchMode:
     if not isinstance(search_mode, str) or search_mode not in SEARCH_MODES:
         modes = ", ".join(sorted(SEARCH_MODES))
         raise PublicMcpError("invalid_search_mode", f"search_mode must be one of: {modes}.")
-    return search_mode
+    return cast(SearchMode, search_mode)
 
 
 def _validate_limit(limit: object) -> int:
