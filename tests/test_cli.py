@@ -540,7 +540,9 @@ class InstallMcpCliTests(unittest.TestCase):
             )
             with patch("sys.executable", str(root / "Scripts" / "python.exe")), patch(
                 "zotero_pdf_text.cli.shutil.which", return_value="C:/fake/claude.cmd"
-            ), patch("zotero_pdf_text.cli.subprocess.run") as mock_run:
+            ), patch.dict(os.environ, {"CLAUDE_CONFIG_DIR": str(root)}), patch(
+                "zotero_pdf_text.cli.subprocess.run"
+            ) as mock_run:
                 mock_run.return_value.returncode = 0
                 exit_code = main(["install-mcp", "--config", str(config_path), "--apply"])
             self.assertEqual(exit_code, 0)
@@ -567,6 +569,111 @@ class InstallMcpCliTests(unittest.TestCase):
                     "--", "--db", expected_db, "--config", str(config_path),
                 ],
             )
+
+    def _apply_with_existing_registration(self, root, existing, returncodes, extra_args=()):
+        config_path = root / "config.json"
+        config_path.write_text(
+            json.dumps(
+                {
+                    "zotero_root": str(root),
+                    "zotero_data_directory": str(root),
+                    "linked_attachments": str(root),
+                    "output_root": str(root / "converted_text"),
+                }
+            ),
+            encoding="utf-8",
+        )
+        servers = {"unrelated": {"type": "stdio", "command": "other", "args": [], "env": {}}}
+        if existing is not None:
+            servers["zotero-fulltext"] = existing
+        (root / ".claude.json").write_text(json.dumps({"mcpServers": servers}), encoding="utf-8")
+        results = iter(returncodes)
+
+        def fake_run(argv, check=False):
+            return subprocess.CompletedProcess(argv, next(results))
+
+        with patch("sys.executable", str(root / "Scripts" / "python.exe")), patch(
+            "zotero_pdf_text.cli.shutil.which", return_value="C:/fake/claude.cmd"
+        ), patch.dict(os.environ, {"CLAUDE_CONFIG_DIR": str(root)}), patch(
+            "zotero_pdf_text.cli.subprocess.run", side_effect=fake_run
+        ) as mock_run, patch("sys.stdout"), patch("sys.stderr") as mock_stderr:
+            exit_code = main(["install-mcp", "--config", str(config_path), *extra_args, "--apply"])
+        calls = [c.args[0][1:] for c in mock_run.call_args_list]
+        errors = "".join(c.args[0] for c in mock_stderr.write.call_args_list)
+        return exit_code, calls, errors
+
+    def _expected_registration(self, root):
+        exe_name = "zotero-fulltext-mcp.exe" if os.name == "nt" else "zotero-fulltext-mcp"
+        return {
+            "type": "stdio",
+            "command": str((root / "Scripts" / exe_name).resolve()),
+            "args": [
+                "--db", str(root / "converted_text" / "index" / "zotero_text_index.sqlite"),
+                "--config", str(root / "config.json"),
+            ],
+            "env": {},
+        }
+
+    def test_apply_identical_registration_makes_no_changes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            exit_code, calls, _ = self._apply_with_existing_registration(
+                root, self._expected_registration(root), []
+            )
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(calls, [])
+
+    def test_apply_changed_registration_replaces_only_that_user_entry(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            old = self._expected_registration(root)
+            old["args"] = ["--db", "old.sqlite", "--config", "old.json"]
+            exit_code, calls, _ = self._apply_with_existing_registration(root, old, [0, 0])
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(calls[0], ["mcp", "remove", "--scope", "user", "zotero-fulltext"])
+        self.assertEqual(calls[1][:5], ["mcp", "add", "--scope", "user", "zotero-fulltext"])
+        self.assertEqual(len(calls), 2)
+
+    def test_apply_changed_optional_tools_is_treated_as_a_change(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            old = self._expected_registration(root)
+            old["args"] = [*old["args"], "--enable-bibtex"]
+            exit_code, calls, _ = self._apply_with_existing_registration(root, old, [0, 0])
+        self.assertEqual(exit_code, 0)
+        self.assertNotIn("--enable-bibtex", calls[1])
+
+    def test_apply_failed_replacement_restores_prior_registration(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            old = self._expected_registration(root)
+            old["args"] = ["--db", "old.sqlite", "--config", "old.json"]
+            exit_code, calls, errors = self._apply_with_existing_registration(root, old, [0, 1, 0])
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(
+            calls[2], ["mcp", "add-json", "--scope", "user", "zotero-fulltext", json.dumps(old)]
+        )
+        self.assertIn("Restored the previous 'zotero-fulltext' registration", errors)
+
+    def test_apply_failed_restore_prints_manual_recovery_command(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            old = self._expected_registration(root)
+            old["args"] = ["--db", "old.sqlite", "--config", "old.json"]
+            exit_code, calls, errors = self._apply_with_existing_registration(root, old, [0, 1, 1])
+        self.assertEqual(exit_code, 1)
+        self.assertIn("Could not restore", errors)
+        self.assertIn("mcp add-json --scope user zotero-fulltext", errors)
+
+    def test_apply_failed_remove_leaves_registration_unchanged(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            old = self._expected_registration(root)
+            old["args"] = ["--db", "old.sqlite", "--config", "old.json"]
+            exit_code, calls, errors = self._apply_with_existing_registration(root, old, [3])
+        self.assertEqual(exit_code, 3)
+        self.assertEqual(len(calls), 1)
+        self.assertIn("left unchanged", errors)
 
     def test_apply_reports_error_when_claude_not_on_path(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -674,7 +781,9 @@ class InstallMcpCliTests(unittest.TestCase):
             )
             with patch("sys.executable", str(root / "Scripts" / "python.exe")), patch(
                 "zotero_pdf_text.cli.shutil.which", return_value="C:/fake/claude.cmd"
-            ), patch("zotero_pdf_text.cli.subprocess.run") as mock_run, patch(
+            ), patch.dict(os.environ, {"CLAUDE_CONFIG_DIR": str(root)}), patch(
+                "zotero_pdf_text.cli.subprocess.run"
+            ) as mock_run, patch(
                 "zotero_pdf_text.cli.marker_dependency_available", return_value=True
             ):
                 mock_run.return_value.returncode = 0

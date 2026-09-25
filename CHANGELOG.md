@@ -11,6 +11,13 @@ unannounced rather than absent: present, inert unless explicitly configured and 
 validated for general use. Its config shape and output conventions may still change. It moves into a
 dated section once it has been stress-tested against a large library.
 
+### Fixed
+
+- `install-mcp --apply` can be re-run for an existing server name: an identical user-scope Claude
+  Code registration is reported as current and left alone, a changed one (new `--config`, `--db`,
+  or optional tools) is replaced, and if the replacement `claude mcp add` fails the previous
+  registration is restored with `claude mcp add-json`. Other registrations are not touched.
+
 ## [0.8.0] - 2026-09-25
 
 ### Added

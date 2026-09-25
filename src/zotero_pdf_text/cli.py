@@ -1493,19 +1493,97 @@ def _install_mcp(args: argparse.Namespace) -> int:
         if claude_exe is None:
             print("'claude' was not found on PATH -- run the printed command manually instead.", file=sys.stderr)
             return 2
-        try:
-            result = subprocess.run([claude_exe, *claude_add_args], check=False)
-        except FileNotFoundError:
+        return _apply_claude_registration(claude_exe, server_name, str(server_exe), server_args, claude_add_args)
+    return 0
+
+
+def _claude_user_config_path() -> Path:
+    """Claude Code's user-scope config file (holds user-scope ``mcpServers``)."""
+    config_dir = os.environ.get("CLAUDE_CONFIG_DIR")
+    return (Path(config_dir) if config_dir else Path.home()) / ".claude.json"
+
+
+def _read_claude_user_registration(server_name: str) -> dict | None:
+    """Return the existing user-scope registration for ``server_name``, or None if absent.
+
+    Read-only: `claude mcp get` has no machine-readable output, so the entry is read directly
+    from Claude Code's config file. Raises OSError/ValueError if the file cannot be parsed.
+    """
+    path = _claude_user_config_path()
+    if not path.exists():
+        return None
+    data = json.loads(path.read_text(encoding="utf-8"))
+    servers = data.get("mcpServers") if isinstance(data, dict) else None
+    entry = servers.get(server_name) if isinstance(servers, dict) else None
+    return entry if isinstance(entry, dict) else None
+
+
+def _registration_matches(entry: dict, command: str, args: list[str]) -> bool:
+    return (
+        entry.get("type", "stdio") == "stdio"
+        and entry.get("command") == command
+        and entry.get("args", []) == args
+        and not entry.get("env")
+    )
+
+
+def _run_claude(claude_exe: str, claude_args: list[str]) -> int:
+    try:
+        return subprocess.run([claude_exe, *claude_args], check=False).returncode
+    except FileNotFoundError:
+        print(
+            f"'{claude_exe}' was found via PATH lookup but could not be launched -- "
+            "run the printed command manually instead.",
+            file=sys.stderr,
+        )
+        return 2
+
+
+def _apply_claude_registration(
+    claude_exe: str, server_name: str, command: str, server_args: list[str], claude_add_args: list[str]
+) -> int:
+    """Add, keep, or replace the user-scope Claude registration for ``server_name``.
+
+    Only the user-scope entry with this exact name is touched. If replacing it fails after the
+    old entry was removed, the old entry is re-added verbatim with `claude mcp add-json`.
+    """
+    try:
+        existing = _read_claude_user_registration(server_name)
+    except (OSError, ValueError) as exc:
+        print(f"Could not read Claude Code config {_claude_user_config_path()}: {exc}", file=sys.stderr)
+        print("No changes made; run the printed command manually.", file=sys.stderr)
+        return 2
+
+    if existing is not None and _registration_matches(existing, command, server_args):
+        print(f"Claude Code registration '{server_name}' is already current; no changes made.")
+        return 0
+
+    if existing is not None:
+        print(f"Replacing existing user-scope Claude Code registration '{server_name}'...")
+        returncode = _run_claude(claude_exe, ["mcp", "remove", "--scope", "user", server_name])
+        if returncode != 0:
             print(
-                f"'{claude_exe}' was found via PATH lookup but could not be launched -- "
-                "run the printed command manually instead.",
+                f"claude mcp remove failed; the existing '{server_name}' registration was left unchanged.",
                 file=sys.stderr,
             )
-            return 2
-        if result.returncode != 0:
-            print("claude mcp add failed; run the printed command manually.", file=sys.stderr)
-            return result.returncode
-        print(f"Applied. Verify with: claude mcp get {server_name}")
+            return returncode
+
+    returncode = _run_claude(claude_exe, claude_add_args)
+    if returncode != 0:
+        print("claude mcp add failed; run the printed command manually.", file=sys.stderr)
+        if existing is not None:
+            restore_args = ["mcp", "add-json", "--scope", "user", server_name, json.dumps(existing)]
+            if _run_claude(claude_exe, restore_args) == 0:
+                print(f"Restored the previous '{server_name}' registration.", file=sys.stderr)
+            else:
+                print(
+                    f"Could not restore the previous '{server_name}' registration; re-add it with:\n"
+                    "claude " + " ".join(_shell_quote(a) for a in restore_args),
+                    file=sys.stderr,
+                )
+        return returncode
+    action = "Updated" if existing is not None else "Applied"
+    print(f"{action}. Verify with: claude mcp get {server_name}")
     return 0
 
 

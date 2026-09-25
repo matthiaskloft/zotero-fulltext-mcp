@@ -480,19 +480,22 @@ extra (marker deliberately excluded). All still open unless noted.
    `install-mcp`/a dedicated update command detect running server processes and warn (or offer to
    stop them) before an editable reinstall on Windows.
 
-7. **TODO — `install-mcp --apply` refuses when the server is already registered.** If a
-   `zotero-fulltext` entry already exists in the user config, `--apply` fails with
-   `MCP server zotero-fulltext already exists in user config` (from `claude mcp add`) and does not
-   update the existing entry. To change the registration (e.g. repoint `--config` at a new path)
-   you must remove it first:
+7. **Fixed.** `install-mcp --apply` used to fail with
+   `MCP server zotero-fulltext already exists in user config` when the server name was already
+   registered. It now reads the existing user-scope entry from Claude Code's config
+   (`~/.claude.json`, or `$CLAUDE_CONFIG_DIR/.claude.json`) and:
+   - reports that the registration is current and changes nothing if it already matches;
+   - otherwise runs `claude mcp remove --scope user <name>` and then `claude mcp add`, so
+     repointing `--config`/`--db` or changing optional tools is a single command:
 
-   ```powershell
-   claude mcp remove "zotero-fulltext" -s user
-   & $python -m zotero_pdf_text install-mcp --config <new config path> --apply
-   ```
+     ```powershell
+     & $python -m zotero_pdf_text install-mcp --config <new config path> --apply
+     ```
+   - if that `add` fails, re-adds the previous entry with `claude mcp add-json --scope user` and
+     says so; if the restore also fails, it prints the exact `add-json` command to run manually.
 
-   Consider making `install-mcp --apply` idempotent (remove-then-add, or detect and update in
-   place) so repointing an existing registration is a single command.
+   Only the user-scope entry with the given `--server-name` is touched. Optional tools come only
+   from the flags you pass, so rerun with the same `--enable-*` flags to keep them enabled.
 
 8. **Fixed.** Only `install-mcp` used to auto-resolve the config; every other subcommand defaulted
    to a literal `config.json` next to cwd instead of calling `resolve_config_path()` (env var →

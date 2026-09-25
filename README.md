@@ -244,7 +244,11 @@ by closing Zotero and re-running and a permission failure is not.
 This resolves the current venv's `zotero-fulltext-mcp` executable, your config, and the FTS
 database path, then prints a ready-to-paste `claude mcp add` command and a Codex
 `config.toml` block — no manual path editing. Add `--apply` to also run the Claude Code
-registration for you (falls back to printing the command if `claude` isn't on PATH). Codex's
+registration for you (falls back to printing the command if `claude` isn't on PATH). Re-running
+`--apply` is safe: an identical user-scope registration is left unchanged, and a changed one (for
+example a new `--config`, `--db`, or optional-tool flag) replaces the old entry, restoring it if
+the new registration fails. To update a registration, rerun `install-mcp` with the new options
+and `--apply`. Codex's
 `config.toml` is never edited automatically; paste the printed block in yourself.
 
 The generated registration enables the safe default MCP surface. To additionally expose the
