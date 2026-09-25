@@ -13,6 +13,11 @@ dated section once it has been stress-tested against a large library.
 
 ### Fixed
 
+- `install-mcp` now compares the existing Codex registration in `config.toml` with the generated
+  block and reports it as current, missing, or drifted, listing executable, argument,
+  `enabled_tools`, and `enabled` differences and when Codex needs a restart. It only reads the file;
+  other servers, timeouts, and per-tool approval overrides are left alone. `--codex-config` selects
+  another file (#49).
 - `install-mcp --apply` can be re-run for an existing server name: an identical user-scope Claude
   Code registration is reported as current and left alone, a changed one (new `--config`, `--db`,
   or optional tools) is replaced, and if the replacement `claude mcp add` fails the previous

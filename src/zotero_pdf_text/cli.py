@@ -10,6 +10,7 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+import tomllib
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -721,6 +722,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--apply",
         action="store_true",
         help="Also run 'claude mcp add' to register the server, instead of only printing it.",
+    )
+    install_mcp.add_argument(
+        "--codex-config",
+        type=Path,
+        default=None,
+        help="Codex config.toml to compare against (read-only). Default: $CODEX_HOME/config.toml or ~/.codex/config.toml.",
     )
     return parser
 
@@ -1485,6 +1492,10 @@ def _install_mcp(args: argparse.Namespace) -> int:
     print()
     print("# Codex registration -- paste into your config.toml (this command does not edit it for you):")
     print(codex_block)
+    print()
+    _print_codex_registration_drift(
+        _codex_config_path(args.codex_config), (toml_name, server_name), str(server_exe), server_args, enabled_tools
+    )
 
     if args.apply:
         print()
@@ -1498,6 +1509,62 @@ def _install_mcp(args: argparse.Namespace) -> int:
             return 2
         return _apply_claude_registration(claude_exe, server_name, str(server_exe), server_args, claude_add_args)
     return 0
+
+
+def _codex_config_path(override: Path | None) -> Path:
+    if override is not None:
+        return override
+    codex_home = os.environ.get("CODEX_HOME")
+    return (Path(codex_home) if codex_home else Path.home() / ".codex") / "config.toml"
+
+
+def _print_codex_registration_drift(
+    config_path: Path, names: tuple[str, str], command: str, args: list[str], tools: list[str]
+) -> None:
+    """Compare the existing Codex registration with the generated one. Never writes.
+
+    Only command, args and enabled_tools are compared; timeouts and per-tool approval overrides
+    are the user's to keep and are not reported as drift.
+    """
+    try:
+        with config_path.open("rb") as handle:
+            servers = tomllib.load(handle).get("mcp_servers", {})
+    except FileNotFoundError:
+        servers = {}
+    except (OSError, tomllib.TOMLDecodeError) as exc:
+        print(f"# Codex registration check: could not read {config_path} ({exc}); nothing compared.")
+        return
+    if not isinstance(servers, dict):
+        servers = {}
+    # The generated block uses the TOML-safe name; a hand-written entry may use the original one.
+    name = next((n for n in names if isinstance(servers.get(n), dict)), names[0])
+    entry = servers.get(name)
+    if not isinstance(entry, dict):
+        print(f"# Codex registration check: no [mcp_servers.{names[0]}] in {config_path}.")
+        print("# Paste the block above, then restart Codex.")
+        return
+    differences = []
+    if entry.get("command") != command:
+        differences.append(f"command: {entry.get('command')!r} -> {command!r}")
+    if entry.get("args") != args:
+        differences.append(f"args: {entry.get('args')!r} -> {args!r}")
+    existing_tools = entry.get("enabled_tools")
+    if existing_tools is not None and set(existing_tools) != set(tools):
+        missing = sorted(set(tools) - set(existing_tools))
+        removed = sorted(set(existing_tools) - set(tools))
+        if missing:
+            differences.append(f"enabled_tools missing: {', '.join(missing)}")
+        if removed:
+            differences.append(f"enabled_tools no longer provided: {', '.join(removed)}")
+    if entry.get("enabled") is False:
+        differences.append("enabled = false")
+    if not differences:
+        print(f"# Codex registration check: [mcp_servers.{name}] in {config_path} is current.")
+        return
+    print(f"# Codex registration check: [mcp_servers.{name}] in {config_path} differs from the generated block:")
+    for difference in differences:
+        print(f"#   {difference}")
+    print(f"# Update [mcp_servers.{name}] to match the block above, then restart Codex.")
 
 
 def _claude_user_config_path() -> Path:
