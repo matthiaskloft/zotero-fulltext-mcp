@@ -6,6 +6,7 @@ import importlib.util
 import json
 import os
 import shutil
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -27,6 +28,7 @@ from .bibtex import (
 )
 from .artifacts import (
     ArtifactError,
+    ManagedIndexMissingError,
     current_generation_jsonl,
     resolve_reader_db_path,
     resolve_reader_generation,
@@ -41,6 +43,7 @@ from .converter import convert_sample, convert_verified, default_worker_count
 from .fts import (
     ChunkNotFoundError,
     IndexSchemaUnsupportedError,
+    connect_readonly,
     index_statistics,
     get_fulltext,
     search_fts,
@@ -1892,6 +1895,10 @@ def run_setup_checks(config_path: Path, *, require_mcp: bool = False) -> list[Se
         required = require_mcp and extra_name == "mcp"
         results.append(SetupCheckResult(f"extra:{extra_name}", available, detail, required=required))
 
+    if require_mcp:
+        index_ok, index_detail = _check_published_index(config_path, configured_index_path(config))
+        results.append(SetupCheckResult("published_index", index_ok, index_detail, required=True))
+
     # Informational: 'ocr-images' needs a running server rather than an installed package, so a
     # missing runtime is reported like an absent optional extra, never as a setup failure.
     from ._ollama_client import probe
@@ -1902,6 +1909,37 @@ def run_setup_checks(config_path: Path, *, require_mcp: bool = False) -> list[Se
     )
 
     return results
+
+
+def _check_published_index(config_path: Path, db_path: Path) -> tuple[bool, str]:
+    """Check, read-only, that the MCP server would accept the current published generation.
+
+    Reuses the server's own startup path -- pointer resolution, then a read-only connection whose
+    schema assertion is what makes the server exit with index_schema_unsupported -- so setup and
+    startup cannot disagree. The detail names the generation id, never the index location.
+    """
+    try:
+        resolved = resolve_reader_generation(db_path)
+    except ManagedIndexMissingError:
+        return False, (
+            "no published index generation yet; convert and publish one with "
+            f"'zotero-pdf-text convert-new --config {config_path}'"
+        )
+    except ArtifactError:
+        return False, (
+            "the current index pointer is invalid or names a missing generation; re-publish with "
+            f"'zotero-pdf-text rebuild-index --config {config_path}'"
+        )
+    try:
+        connect_readonly(resolved.db_path).close()
+    except IndexSchemaUnsupportedError:
+        return False, (
+            f"generation {resolved.generation_id} uses an unsupported index schema; upgrade it with "
+            f"'zotero-pdf-text rebuild-index --config {config_path}'"
+        )
+    except (sqlite3.DatabaseError, OSError) as exc:
+        return False, f"generation {resolved.generation_id} could not be opened ({type(exc).__name__})"
+    return True, f"generation {resolved.generation_id} (supported schema)"
 
 
 def _console_safe(text: str) -> str:

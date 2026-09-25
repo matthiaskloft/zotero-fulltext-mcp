@@ -17,6 +17,10 @@ dated section once it has been stress-tested against a large library.
   Code registration is reported as current and left alone, a changed one (new `--config`, `--db`,
   or optional tools) is replaced, and if the replacement `claude mcp add` fails the previous
   registration is restored with `claude mcp add-json`. Other registrations are not touched.
+- `check-setup --require-mcp` now checks the published index read-only, the same way the MCP
+  server does at startup. An index with an outdated schema fails with the exact
+  `rebuild-index --config` command, and a missing index fails with a separate message pointing to
+  `convert-new`. Before, setup passed while the server could not start (#48).
 
 ## [0.8.0] - 2026-09-25
 

@@ -158,7 +158,10 @@ This is read-only and fast — it checks that the config parses, that `zotero_da
 `linked_attachments`, and `zotero.sqlite` exist, that `output_root` exists (or is creatable) and
 is writable, and reports which optional extras (`mcp`, `zotero-write`, `marker`) are installed.
 Catching a bad path or a missing extra here takes seconds; catching it 40 minutes into a `dry-run`
-or `convert-new` does not. Add `--require-mcp` to fail if the `mcp` extra isn't installed yet.
+or `convert-new` does not. Add `--require-mcp` before registering the MCP server: it also fails
+if the `mcp` extra isn't installed, if no index generation is published yet (run `convert-new`),
+or if the published index predates the current schema (run `rebuild-index --config`). Each failure
+prints the exact recovery command.
 
 ## Build the index
 
