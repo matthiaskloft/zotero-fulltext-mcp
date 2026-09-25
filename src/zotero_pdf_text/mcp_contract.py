@@ -930,13 +930,10 @@ def _index_snapshot_stats(db_path: Path) -> IndexSnapshotStats:
             f"the indexed snapshot ({type(exc).__name__}). Build one with the CLI's "
             "`rebuild-index` command.",
         ) from None
-    stats = cast(
-        dict[str, Any],
-        index_statistics(
-            resolved.db_path,
-            generation_id=resolved.generation_id,
-            published_at=resolved.published_at,
-        ),
+    stats = index_statistics(
+        resolved.db_path,
+        generation_id=resolved.generation_id,
+        published_at=resolved.published_at,
     )
     return IndexSnapshotStats(
         scope=str(stats["scope"]),
@@ -1054,7 +1051,7 @@ def _library_health(
     user typing the command.
     """
     try:
-        status = cast(dict[str, Any], _library_status_data(config, snapshot, index_root=index_root))
+        status = _library_status_data(config, snapshot, index_root=index_root)
     except PublicMcpError:
         raise
     except Exception as exc:

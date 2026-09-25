@@ -44,6 +44,7 @@ from .converter import convert_sample, convert_verified, default_worker_count
 from .fts import (
     ChunkNotFoundError,
     IndexSchemaUnsupportedError,
+    IndexStatistics,
     SearchResult,
     connect_readonly,
     index_statistics,
@@ -57,6 +58,7 @@ from .library import (
     ALL_STATUSES,
     LibraryAudit,
     LibraryAuditError,
+    LibraryStatus,
     audit_library,
     library_status,
 )
@@ -1005,7 +1007,7 @@ def main(argv: list[str] | None = None) -> int:
             )
         try:
             resolved = resolve_reader_generation(args.db)
-            report = index_statistics(
+            stats = index_statistics(
                 resolved.db_path,
                 generation_id=resolved.generation_id,
                 published_at=resolved.published_at,
@@ -1014,9 +1016,9 @@ def main(argv: list[str] | None = None) -> int:
             print(str(exc), file=sys.stderr)
             return 2
         if args.json:
-            print(json.dumps(report, ensure_ascii=False, indent=2))
+            print(json.dumps(stats, ensure_ascii=False, indent=2))
         else:
-            _print_index_statistics(report)
+            _print_index_statistics(stats)
         return 0
     if args.command == "library-status":
         config = load_config(args.config)
@@ -1725,7 +1727,7 @@ def _warn_deprecated_command(used: str, replacement: str, *, removed_in: str) ->
     )
 
 
-def _print_index_statistics(report: dict[str, object]) -> None:
+def _print_index_statistics(report: IndexStatistics) -> None:
     """Render index statistics, naming the generation and what the numbers are about.
 
     The generation line is not decoration: without it two runs taken across a re-publish are
@@ -1738,15 +1740,15 @@ def _print_index_statistics(report: dict[str, object]) -> None:
     print(f"Chunks: {report['chunks']}")
     print(f"Total characters: {report['total_chars']}")
     print(f"Total words: {report['total_words']}")
-    for field in ["by_classification", "by_identity_status", "by_extraction_tool"]:
+    for field in ("by_classification", "by_identity_status", "by_extraction_tool"):
         print(field + ":")
-        for key, count in sorted(dict(cast("dict[str, int]", report[field])).items()):
+        for key, count in sorted(dict(report[field]).items()):
             print(f"- {key}: {count}")
     print("")
     print(str(report["scope_note"]))
 
 
-def _print_library_status(status: dict[str, object]) -> None:
+def _print_library_status(status: LibraryStatus) -> None:
     """Render library health, keeping the indexed snapshot and the source library apart.
 
     The two are different questions and the old `coverage-report` conflated them. What the index
@@ -1758,7 +1760,7 @@ def _print_library_status(status: dict[str, object]) -> None:
     # `source_provenance_unknown` means part of the answer is not computable yet -- and a wrong
     # headline is worse than none, because a reader told "all current" stops before the detail.
     # The inventory-unavailable warning below is the one case that does get stated up front.
-    health = dict(cast("dict[str, int] | None", status.get("health")) or {})
+    health = dict(status.get("health") or {})
     print(f"Snapshot: {status['snapshot_time']}")
     print(f"Mapping report: {status['mapping_report']}")
     print(f"Published generation: {status.get('generation_id') or '(none published)'}")
