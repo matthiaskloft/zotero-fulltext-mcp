@@ -30,7 +30,7 @@ except Exception:  # pragma: no cover - exercised only if dependency is missing
     pymupdf4llm = None
 
 try:
-    import fitz
+    import pymupdf as fitz
 except Exception:  # pragma: no cover - exercised only if dependency is missing
     fitz = None
 

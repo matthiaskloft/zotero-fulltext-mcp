@@ -11,6 +11,18 @@ unannounced rather than absent: present, inert unless explicitly configured and 
 validated for general use. Its config shape and output conventions may still change. It moves into a
 dated section once it has been stress-tested against a large library.
 
+### Fixed
+
+- The MCP stdio server keeps stdout exclusively for JSON-RPC: the transport writes to a private
+  duplicate of stdout, and other output while it runs (`print()`, `sys.stdout.buffer`, or raw
+  file-descriptor writes) is redirected to stderr instead of breaking
+  the client's message parsing.
+- PyMuPDF is imported as `pymupdf` instead of the deprecated `fitz` alias, whose import notice
+  could reach the protocol stream; the minimum is now `pymupdf>=1.24.3`.
+- With `--enable-reconvert` or `--enable-retry-timeout`, the server preloads the write tools'
+  conversion dependencies at startup; on Windows, lazily loading numpy during the first call
+  could deadlock against the stdin reader and hang that call indefinitely.
+
 ## [0.7.0] - 2026-09-24
 
 ### Added
