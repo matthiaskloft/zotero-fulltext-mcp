@@ -1584,6 +1584,10 @@ def _print_codex_registration_drift(
             )
         found = found[:1]
     name, entry = found[0]
+    # A deliberate per-surface choice, not drift, but it explains tools missing from those surfaces.
+    omitted_from = entry.get("omit_tools_from")
+    if omitted_from:
+        print(f"# Codex registration check: note: [mcp_servers.{name}] omits its tools from {omitted_from!r}.")
     differences = _codex_entry_differences(entry, command, args, tools, minimum_timeouts)
     if not differences:
         print(f"# Codex registration check: [mcp_servers.{name}] in {config_path} is current.")

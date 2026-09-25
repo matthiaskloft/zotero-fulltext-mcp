@@ -258,7 +258,8 @@ and reports whether the existing Codex entry is current, missing, or differs in 
 arguments, `enabled_tools`, `disabled_tools`, or `enabled`, including a second entry under the
 hyphenated name. With `--enable-reconvert` it also reports timeouts below what that mode
 needs; larger timeouts and per-tool approval overrides are yours and are not compared. A
-project-scoped `.codex/config.toml` can override the user entry and is not checked. After
+project-scoped `.codex/config.toml` can override the user entry and is not checked; an
+`omit_tools_from` setting is shown as a note, not as drift. After
 changing the entry, restart Codex.
 
 The generated registration enables the safe default MCP surface. To additionally expose the

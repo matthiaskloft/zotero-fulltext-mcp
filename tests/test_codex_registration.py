@@ -76,6 +76,15 @@ class CodexRegistrationDriftTests(unittest.TestCase):
                 self.assertNotIn("Paste the block above", output)
                 self.assertIn("not a", output)
 
+    def test_omit_tools_from_is_a_note_not_drift(self):
+        block = self._generated_block(self._run())
+        self.codex_config.write_text(block + 'omit_tools_from = ["code_mode"]\n', encoding="utf-8")
+
+        output = self._run()
+
+        self.assertIn("omits its tools from ['code_mode']", output)
+        self.assertIn("is current", output)
+
     def test_non_boolean_enabled_is_drift(self):
         block = self._generated_block(self._run()).replace("enabled = true", 'enabled = "false"')
         self.codex_config.write_text(block, encoding="utf-8")
