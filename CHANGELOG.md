@@ -23,6 +23,12 @@ dated section once it has been stress-tested against a large library.
 
 ### Fixed
 
+- `install-mcp` now registers absolute `--config` and `--db` paths (including a default index
+  derived from a relative `output_root`), since the MCP client starts the server from its own
+  working directory. On macOS and Linux it no longer follows the venv's `python` symlink out of
+  the venv, which pointed the registration at a missing executable. A server name that is not a
+  bare TOML key (e.g. containing `.`) is quoted in the Codex block instead of becoming a nested
+  table (#56).
 - `check-setup` warns when an editable install is stale: it compares the installed version with the
   `pyproject.toml` of the checkout the install points to, not the working directory, and prints the
   reinstall command. Pinned installs are not compared. On Windows it also lists running

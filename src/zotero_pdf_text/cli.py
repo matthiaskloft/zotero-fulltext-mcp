@@ -5,6 +5,7 @@ import csv
 import importlib.util
 import json
 import os
+import re
 import shutil
 import sqlite3
 import subprocess
@@ -1409,9 +1410,12 @@ def _install_mcp(args: argparse.Namespace) -> int:
         print(f"No project config found at {config_path}.", file=sys.stderr)
         print("Set ZOTERO_PDF_TEXT_CONFIG, pass --config, or create config.json for this machine.", file=sys.stderr)
         return 2
+    # The client starts the server from its own working directory, so a relative path that works
+    # here would not resolve there. abspath, not resolve(): no symlink or 8.3-name rewriting.
+    config_path = Path(os.path.abspath(config_path))
     config = load_config(config_path)
-    expected_db_path = configured_index_path(config)
-    db_path = args.db if args.db is not None else expected_db_path
+    expected_db_path = Path(os.path.abspath(configured_index_path(config)))
+    db_path = Path(os.path.abspath(args.db)) if args.db is not None else expected_db_path
     if args.enable_reconvert:
         try:
             validate_config(config)
@@ -1434,7 +1438,9 @@ def _install_mcp(args: argparse.Namespace) -> int:
             print("--enable-retry-timeout requires --db to be the index governed by the project config.", file=sys.stderr)
             return 2
 
-    venv_scripts_dir = Path(sys.executable).resolve().parent
+    # Not resolve(): a POSIX venv's bin/python is a symlink to the base interpreter, whose bin/
+    # has no zotero-fulltext-mcp. The console script lives next to the venv's own interpreter.
+    venv_scripts_dir = Path(os.path.abspath(sys.executable)).parent
     exe_name = "zotero-fulltext-mcp.exe" if os.name == "nt" else "zotero-fulltext-mcp"
     server_exe = venv_scripts_dir / exe_name
     if not server_exe.exists():
@@ -1457,6 +1463,9 @@ def _install_mcp(args: argparse.Namespace) -> int:
     claude_cmd = "claude " + " ".join(_shell_quote(a) for a in claude_add_args)
 
     toml_name = server_name.replace("-", "_")
+    # A bare TOML key may only hold [A-Za-z0-9_-]; any other name (e.g. with ".") must be quoted,
+    # or `[mcp_servers.a.b]` becomes a nested table instead of the server "a.b".
+    toml_key = toml_name if re.fullmatch(r"[A-Za-z0-9_-]+", toml_name) else json.dumps(toml_name)
     enabled_tools = list(DEFAULT_MCP_TOOL_NAMES)
     if args.enable_bibtex:
         enabled_tools.append(BIBTEX_MCP_TOOL_NAME)
@@ -1471,7 +1480,7 @@ def _install_mcp(args: argparse.Namespace) -> int:
     toml_args = ", ".join(json.dumps(arg) for arg in server_args)
     toml_tools = ", ".join(json.dumps(tool) for tool in enabled_tools)
     codex_block = (
-        f"[mcp_servers.{toml_name}]\n"
+        f"[mcp_servers.{toml_key}]\n"
         f"command = {json.dumps(str(server_exe))}\n"
         f"args = [{toml_args}]\n"
         "enabled = true\n"
