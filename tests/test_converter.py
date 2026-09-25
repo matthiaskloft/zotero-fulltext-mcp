@@ -48,6 +48,7 @@ class ConverterTests(unittest.TestCase):
             config = ProjectConfig(root, root, root, root / "output")
             with patch("zotero_pdf_text.converter.subprocess.run", side_effect=extract):
                 run_dir = convert_verified(config, report, workers=4)
+            self.assertEqual(run_dir.parent, config.output_root / "conversion-runs" / "verified")
             with (run_dir / "manifest.csv").open(encoding="utf-8-sig", newline="") as handle:
                 result = next(csv.DictReader(handle))
             self.assertEqual(calls, ["pymupdf4llm.to_markdown", "pymupdf.get_text", "pymupdf4llm.to_markdown"])

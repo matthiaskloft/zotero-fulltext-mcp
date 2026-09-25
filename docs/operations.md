@@ -45,7 +45,7 @@ connector endpoint is unavailable.
 ```
 
 The mapper reads a copied Zotero database and writes reports under
-`converted_text\runs\<timestamp>`.
+`converted_text\mapping-runs\<timestamp>`.
 
 ## Conversion
 
@@ -56,8 +56,8 @@ Zotero metadata changes, including updated citation keys.
 ```powershell
 & $python -m zotero_pdf_text convert-verified `
   --config .\config.json `
-  --mapping-report $data\runs\20260602_145352\mapping_report.csv `
-  --output-dir $data\verified\20260601_032323 `
+  --mapping-report $data\mapping-runs\20260602_145352\mapping_report.csv `
+  --output-dir $data\conversion-runs\verified\20260601_032323 `
   --resume
 ```
 
@@ -76,13 +76,31 @@ after extraction succeeds:
 ```powershell
 & $python -m zotero_pdf_text convert-verified `
   --config .\config.json `
-  --mapping-report $data\runs\20260602_145352\mapping_report.csv `
-  --output-dir $data\verified\20260601_032323 `
+  --mapping-report $data\mapping-runs\20260602_145352\mapping_report.csv `
+  --output-dir $data\conversion-runs\verified\20260601_032323 `
   --resume `
   --force
 ```
 
 ## Managed Index Generations
+
+The output root has several roles: `mapping-runs/` holds mapping snapshots;
+`conversion-runs/verified/`, `conversion-runs/samples/`, and
+`conversion-runs/unverified-review/` hold conversion runs and their Markdown; and
+`index/generations/` holds published search indexes. A published index can refer to
+Markdown in several conversion runs. To find the folders that actually supply the
+current and previous indexes, run:
+
+```powershell
+& $python -m zotero_pdf_text output-status --config .\config.json
+```
+
+Add `--list-files` to show every referenced Markdown file, or `--json` for structured
+output. When a legacy path is a directory junction, the report shows both its physical
+folder and the path stored in the index. Existing `runs/`, `verified/`, `samples/`, and
+`unverified_review/` paths may still be referenced by published indexes. The command
+does not move, replace, or delete files. An older run folder is not automatically
+obsolete just because a newer run exists.
 
 The derived index (JSONL sidecar plus SQLite FTS database) is published as immutable
 *generations* under `$data\index\generations\<generation-id>\`, each containing `index.jsonl`,
@@ -165,7 +183,7 @@ agent batches.
 ```powershell
 & $python -m zotero_pdf_text verify-unverified `
   --config .\config.json `
-  --mapping-report $data\runs\20260602_145352\mapping_report.csv
+  --mapping-report $data\mapping-runs\20260602_145352\mapping_report.csv
 ```
 
 Before converting, this command checks the sidecar full-text index (default
@@ -179,7 +197,7 @@ signals alone and has no memory of past promotions. This check is fail-open, sam
 conversion failure.
 
 Outputs are written under
-`converted_text\unverified_review\<timestamp>`:
+`converted_text\conversion-runs\unverified-review\<timestamp>`:
 
 - `markdown\`: quarantine Markdown for candidate PDFs.
 - `manifest.csv`: conversion manifest for the reviewed candidates.
@@ -193,8 +211,8 @@ Resume a review folder without reconverting existing Markdown:
 ```powershell
 & $python -m zotero_pdf_text verify-unverified `
   --config .\config.json `
-  --mapping-report $data\runs\20260602_145352\mapping_report.csv `
-  --output-dir $data\unverified_review\<timestamp> `
+  --mapping-report $data\mapping-runs\20260602_145352\mapping_report.csv `
+  --output-dir $data\conversion-runs\unverified-review\<timestamp> `
   --resume
 ```
 
@@ -206,8 +224,8 @@ prepended copy of the entire existing library.
 
 ```powershell
 & $python -m zotero_pdf_text apply-verification `
-  --review $data\unverified_review\<timestamp>\review_merged.jsonl `
-  --output-manifest $data\unverified_review\<timestamp>\promoted_manifest.csv `
+  --review $data\conversion-runs\unverified-review\<timestamp>\review_merged.jsonl `
+  --output-manifest $data\conversion-runs\unverified-review\<timestamp>\promoted_manifest.csv `
   --min-confidence 0.92
 ```
 
@@ -286,7 +304,7 @@ whose recorded path no longer resolves to a real file on disk):
 ```powershell
 & $python -m zotero_pdf_text find-orphan-parents `
   --config .\config.json `
-  --mapping-report $data\runs\20260602_145352\mapping_report.csv
+  --mapping-report $data\mapping-runs\20260602_145352\mapping_report.csv
 ```
 
 Only `high`-confidence pairings are reported (`classify_identity` itself considers the match
@@ -334,7 +352,7 @@ not a missing case.
 ```powershell
 & $python -m zotero_pdf_text find-duplicate-attachments `
   --config .\config.json `
-  --mapping-report $data\runs\20260602_145352\mapping_report.csv
+  --mapping-report $data\mapping-runs\20260602_145352\mapping_report.csv
 ```
 
 Within a group of attachments sharing the same parent and file hash, the group is auto-resolved
@@ -428,7 +446,7 @@ of `zotero.sqlite` rather than the live file):
 ```powershell
 & $python -m zotero_pdf_text audit-library `
   --config .\config.json `
-  --mapping-report $data\runs\<run-id>\mapping_report.jsonl
+  --mapping-report $data\mapping-runs\<run-id>\mapping_report.jsonl
 ```
 
 The audit consumes an existing `dry-run` snapshot, so produce one first if none is current. Add
@@ -454,7 +472,7 @@ status means.
 ```powershell
 & $python -m zotero_pdf_text library-status `
   --config .\config.json `
-  --mapping-report $data\runs\<run-id>\mapping_report.jsonl
+  --mapping-report $data\mapping-runs\<run-id>\mapping_report.jsonl
 ```
 
 It takes the same `--config`, `--mapping-report` and `--full` arguments and costs the same, since

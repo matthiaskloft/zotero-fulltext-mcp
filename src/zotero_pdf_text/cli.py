@@ -56,6 +56,7 @@ from .library import (
     library_status,
 )
 from .lock import PipelineLockedError, pipeline_write_lock
+from .output_status import output_status
 from .mapper import run_dry_run
 from .mcp_contract import (
     BIBTEX_MCP_TOOL_NAME,
@@ -316,6 +317,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--replace-existing", action="store_true",
         help="Replace indexed keys from completed, verified conversions with matching source provenance.",
     )
+    output_status_parser = subparsers.add_parser(
+        "output-status",
+        help="Show where the published index's converted Markdown files live. Read-only.",
+    )
+    output_status_parser.add_argument("--config", type=Path, default=None, help="Path to project config JSON.")
+    output_status_parser.add_argument("--output-root", type=Path, default=None, help="Explicit output root instead of config.")
+    output_status_parser.add_argument("--list-files", action="store_true", help="List every indexed Markdown path.")
+    output_status_parser.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
     ensure = subparsers.add_parser("ensure-zotero", help="Start Zotero if needed and report connector health.")
     ensure.add_argument("--zotero-exe", type=Path, default=DEFAULT_ZOTERO_EXE, help="Path to zotero.exe.")
     ensure.add_argument("--wait-seconds", type=int, default=15, help="Seconds to wait for Zotero startup.")
@@ -899,6 +908,40 @@ def main(argv: list[str] | None = None) -> int:
         result["replaced_records"] = replaced
         result["skipped_records"] = skipped
         print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0
+    if args.command == "output-status":
+        try:
+            output_root, _ = _resolve_managed_root(args)
+            report = output_status(output_root, list_files=args.list_files)
+        except (ArtifactError, OSError, ValueError, KeyError, TypeError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print(f"Output root: {report['output_root']}")
+            print(f"Mapping snapshots: {report['mapping_snapshots']}")
+            print("Conversion run roots:")
+            for path in report["conversion_runs"]:
+                print(f"  {path}")
+            if report["legacy_roots"]:
+                print("Older run roots (kept in place):")
+                for path in report["legacy_roots"]:
+                    print(f"  {path}")
+            print(f"Active index pointer: {report['index_pointer']}")
+            for label in ("current", "previous"):
+                generation = report[label]
+                if generation is None:
+                    continue
+                print(f"{label.title()} generation: {generation['generation_id']} "
+                      f"({generation['records']} records; {generation['missing_markdown']} missing Markdown files)")
+                for folder in generation["folders"]:
+                    print(f"  {folder['records']:>5}  {folder['physical_path']}")
+                    if folder["path"] != folder["physical_path"]:
+                        print(f"         indexed via: {folder['path']}")
+                if args.list_files:
+                    for path in generation["markdown_files"]:
+                        print(f"    {path}")
         return 0
     if args.command == "ensure-zotero":
         status = ensure_zotero_running(

@@ -851,7 +851,7 @@ def create_server(
 
 
 def latest_mapping_snapshot(config: ProjectConfig) -> Path | None:
-    """Return the newest `runs/<id>/mapping_report.jsonl` under `output_root`, or None.
+    """Return the newest mapping snapshot under `output_root`, including legacy runs.
 
     The CLI takes the snapshot path as an argument. An MCP client must not: a path is local
     diagnostic detail the retrieval surface is specified to keep on this side of the boundary,
@@ -864,12 +864,10 @@ def latest_mapping_snapshot(config: ProjectConfig) -> Path | None:
     today, but a copied or restored run directory keeps its old name and would otherwise be
     treated as current.
     """
-    runs_root = config.output_root / "runs"
-    if not runs_root.is_dir():
-        return None
     snapshots = [
         candidate
-        for candidate in runs_root.glob("*/" + MAPPING_REPORT_JSONL)
+        for dirname in ("mapping-runs", "runs")
+        for candidate in (config.output_root / dirname).glob("*/" + MAPPING_REPORT_JSONL)
         if candidate.is_file()
     ]
     if not snapshots:
