@@ -3130,7 +3130,7 @@ wheels = [
 
 [[package]]
 name = "zotero-fulltext-mcp"
-version = "0.6.0"
+version = "0.7.0"
 source = { editable = "." }
 dependencies = [
     { name = "pymupdf" },
@@ -3160,7 +3160,7 @@ requires-dist = [
     { name = "marker-pdf", marker = "extra == 'marker'", specifier = ">=1.0" },
     { name = "mcp", marker = "extra == 'mcp'", specifier = ">=1.28,<2" },
     { name = "mypy", marker = "extra == 'test'", specifier = ">=1.19,<2" },
-    { name = "pymupdf", specifier = ">=1.24" },
+    { name = "pymupdf", specifier = ">=1.24.3" },
     { name = "pymupdf4llm", specifier = ">=0.0.17" },
     { name = "pytest", marker = "extra == 'test'", specifier = ">=7.0" },
     { name = "pyyaml", specifier = ">=6.0" },

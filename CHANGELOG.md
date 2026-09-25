@@ -11,6 +11,41 @@ unannounced rather than absent: present, inert unless explicitly configured and 
 validated for general use. Its config shape and output conventions may still change. It moves into a
 dated section once it has been stress-tested against a large library.
 
+### Fixed
+
+- The MCP stdio server keeps stdout exclusively for JSON-RPC: the transport writes to a private
+  duplicate of stdout, and other output while it runs (`print()`, `sys.stdout.buffer`, or raw
+  file-descriptor writes) is redirected to stderr instead of breaking
+  the client's message parsing.
+- PyMuPDF is imported as `pymupdf` instead of the deprecated `fitz` alias, whose import notice
+  could reach the protocol stream; the minimum is now `pymupdf>=1.24.3`.
+- With `--enable-reconvert` or `--enable-retry-timeout`, the server preloads the write tools'
+  conversion dependencies at startup; on Windows, lazily loading numpy during the first call
+  could deadlock against the stdin reader and hang that call indefinitely.
+
+## [0.7.0] - 2026-09-24
+
+### Added
+
+- `update-index --replace-existing` atomically publishes successful, verified reconversions for
+  attachment keys already in the index. It validates identity, Markdown front matter, and source
+  provenance, preserves unrelated records, and reports added, replaced, and skipped counts.
+
+### Fixed
+
+- `audit-library`, CLI `library-status`, and MCP `library_status` resolve duplicate mapping rows
+  against the indexed source and Zotero attachment path. Genuinely unresolved rows are reported
+  as `mapping_ambiguous` instead of silently taking the last row.
+- Conversion retries Windows native extractor crashes with status `0xC000070A` once at lower
+  concurrency after the main worker pool drains. A successful retry can upgrade plain-text
+  fallback output to primary Markdown; a failed retry preserves usable output. Summaries
+  distinguish these crashes from timeouts without exposing private paths.
+
+### Changed
+
+- Automatic Windows conversion concurrency is capped at two workers. Explicit `--workers`
+  values still override the default.
+
 ## [0.6.0] - 2026-09-23
 
 ### Added
@@ -647,7 +682,8 @@ author's own machine.
 
 Initial import of the Zotero full-text conversion pipeline, CLI, and MCP server. Not tagged.
 
-[Unreleased]: https://github.com/matthiaskloft/zotero-fulltext-mcp/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/matthiaskloft/zotero-fulltext-mcp/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.7.0
 [0.6.0]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.6.0
 [0.5.0]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.5.0
 [0.4.0]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.4.0

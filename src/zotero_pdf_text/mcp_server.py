@@ -5,6 +5,9 @@ import json
 import logging
 import os
 import sqlite3
+import sys
+from contextlib import contextmanager
+from io import TextIOWrapper
 from pathlib import Path
 
 from .artifacts import ArtifactError, ManagedIndexMissingError, resolve_reader_db_path
@@ -72,6 +75,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.bibtex_endpoint is not None and not args.enable_bibtex:
         raise SystemExit(_startup_error("invalid_bibtex_endpoint", "--bibtex-endpoint requires --enable-bibtex."))
     _validate_startup_database(db_path)
+    with _private_protocol_stdout() as protocol:
+        return _serve(db_path, config, args, protocol)
+
+
+def _serve(db_path: Path, config, args: argparse.Namespace, protocol) -> int:
     try:
         mcp = create_server(
             db_path,
@@ -91,9 +99,67 @@ def main(argv: list[str] | None = None) -> int:
             )
         ) from exc
 
+    if args.enable_reconvert or args.enable_retry_timeout:
+        _preload_write_tool_dependencies()
     logging.getLogger("mcp").setLevel(logging.WARNING)
-    mcp.run()
+    _run_stdio(mcp, protocol)
     return 0
+
+
+def _run_stdio(mcp, protocol) -> None:
+    """Serve MCP over stdin and the private ``protocol`` stream (not ``sys.stdout``)."""
+    if protocol is None:
+        mcp.run()
+        return
+    import anyio
+    from mcp.server.stdio import stdio_server
+
+    server = mcp._mcp_server
+
+    async def serve() -> None:
+        stdout = anyio.wrap_file(TextIOWrapper(protocol, encoding="utf-8"))
+        async with stdio_server(stdout=stdout) as (read_stream, write_stream):
+            await server.run(read_stream, write_stream, server.create_initialization_options())
+
+    anyio.run(serve)
+
+
+def _preload_write_tool_dependencies() -> None:
+    """Import the optional write tools' heavy dependencies before stdio starts reading.
+
+    On Windows, loading native extensions (numpy via pymupdf4llm) while the transport's reader
+    thread blocks on the stdin pipe can deadlock the first tool call, so do it up front.
+    """
+    from . import indexer, math_ocr, retry_timeout  # noqa: F401
+
+
+@contextmanager
+def _private_protocol_stdout():
+    """Reserve the real stdout exclusively for JSON-RPC while the server runs.
+
+    Yields a private binary stream on a duplicate of fd 1 for the MCP transport. fd 1 itself and
+    ``sys.stdout`` (text and ``.buffer``) are redirected to stderr, so nothing else -- e.g. a lazily
+    imported dependency's diagnostics -- can corrupt the response stream. Yields ``None`` when
+    there are no console streams (e.g. pythonw); there is nothing to protect then.
+    """
+    if sys.stdout is None or sys.stderr is None:
+        yield None
+        return
+    sys.stdout.flush()
+    saved_stdout = sys.stdout
+    saved_fd = os.dup(1)
+    protocol = None
+    try:
+        protocol = os.fdopen(os.dup(1), "wb", buffering=0)
+        os.dup2(2, 1)
+        sys.stdout = sys.stderr
+        yield protocol
+    finally:
+        sys.stdout = saved_stdout
+        os.dup2(saved_fd, 1)
+        os.close(saved_fd)
+        if protocol is not None and not protocol.closed:
+            protocol.close()
 
 
 def _load_server_config(path: Path):

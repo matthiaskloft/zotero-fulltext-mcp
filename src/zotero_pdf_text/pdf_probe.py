@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 def extract_early_text(path: Path, *, pages: int, max_page_chars: int) -> tuple[str, int]:
-    import fitz
+    import pymupdf as fitz
 
     chunks: list[str] = []
     with fitz.open(path) as doc:

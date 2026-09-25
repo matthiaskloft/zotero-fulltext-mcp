@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "zotero-fulltext-mcp"
-version = "0.6.0"
+version = "0.7.0"
 description = "Convert a Zotero library's linked PDF attachments to Markdown, build a full-text search index, and expose it via an MCP server."
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -23,7 +23,7 @@ classifiers = [
   "Topic :: Scientific/Engineering :: Information Analysis",
 ]
 dependencies = [
-  "pymupdf>=1.24",
+  "pymupdf>=1.24.3",
   "pymupdf4llm>=0.0.17",
   "pyyaml>=6.0",
   "rapidfuzz>=3.6",

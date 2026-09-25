@@ -5,7 +5,7 @@ import json
 import sys
 from pathlib import Path
 
-import fitz
+import pymupdf as fitz
 import pymupdf4llm
 
 from .math_detection import detect_math
