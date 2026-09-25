@@ -10,6 +10,7 @@ from unittest.mock import patch
 from zotero_pdf_text.artifacts import resolve_reader_db_path, stage_and_publish, write_jsonl_from_existing
 from zotero_pdf_text.cli import (
     _check_output_root_writable,
+    _shell_quote,
     main,
     run_setup_checks,
 )
@@ -365,7 +366,7 @@ class PublishedIndexCheckTests(unittest.TestCase):
 
             self.assertFalse(result.ok)
             self.assertTrue(result.required)
-            self.assertIn(f"zotero-pdf-text rebuild-index --config {config_path}", result.detail)
+            self.assertIn(f"zotero-pdf-text rebuild-index --config {_shell_quote(str(config_path))}", result.detail)
             self.assertNotIn(str(root / "output"), result.detail)
             self.assertEqual(db_path.read_bytes(), before)
 
@@ -378,9 +379,19 @@ class PublishedIndexCheckTests(unittest.TestCase):
 
             self.assertFalse(result.ok)
             self.assertIn("no published index generation", result.detail)
-            self.assertIn(f"zotero-pdf-text convert-new --config {config_path}", result.detail)
+            self.assertIn(f"zotero-pdf-text convert-new --config {_shell_quote(str(config_path))}", result.detail)
             self.assertNotIn("rebuild-index", result.detail)
             self.assertFalse((root / "output").exists())
+
+    def test_recovery_command_quotes_config_path_with_spaces(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "My Library"
+            root.mkdir()
+            config_path = _write_setup_config(root)
+
+            result = self._index_result(config_path)
+
+            self.assertIn(f'convert-new --config "{config_path}"', result.detail)
 
 
 if __name__ == "__main__":

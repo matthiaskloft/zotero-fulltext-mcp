@@ -1581,13 +1581,40 @@ def _apply_claude_registration(
             else:
                 print(
                     f"Could not restore the previous '{server_name}' registration; re-add it with:\n"
-                    "claude " + " ".join(_shell_quote(a) for a in restore_args),
+                    + _manual_restore_command(server_name, existing),
                     file=sys.stderr,
                 )
         return returncode
     action = "Updated" if existing is not None else "Applied"
     print(f"{action}. Verify with: claude mcp get {server_name}")
     return 0
+
+
+def _manual_restore_command(server_name: str, entry: dict) -> str:
+    """A pasteable command that re-creates ``entry``.
+
+    A stdio entry is rendered as plain `claude mcp add` arguments, which `_shell_quote` handles in
+    every supported shell; inline JSON for `add-json` cannot be quoted portably across them.
+    """
+    command = entry.get("command")
+    args = entry.get("args", [])
+    env = entry.get("env") or {}
+    if (
+        entry.get("type", "stdio") == "stdio"
+        and isinstance(command, str)
+        and isinstance(args, list)
+        and isinstance(env, dict)
+        and set(entry) <= {"type", "command", "args", "env"}
+    ):
+        parts = ["mcp", "add", "--scope", "user"]
+        for key, value in env.items():
+            parts += ["-e", f"{key}={value}"]
+        parts += [server_name, command, "--", *map(str, args)]
+        return "claude " + " ".join(_shell_quote(a) for a in parts)
+    return (
+        f"claude mcp add-json --scope user {_shell_quote(server_name)} '<json>'\n"
+        f"with this JSON as <json>: {json.dumps(entry)}"
+    )
 
 
 _SHELL_SAFE_CHARS = frozenset(
@@ -1923,19 +1950,19 @@ def _check_published_index(config_path: Path, db_path: Path) -> tuple[bool, str]
     except ManagedIndexMissingError:
         return False, (
             "no published index generation yet; convert and publish one with "
-            f"'zotero-pdf-text convert-new --config {config_path}'"
+            f"'zotero-pdf-text convert-new --config {_shell_quote(str(config_path))}'"
         )
     except ArtifactError:
         return False, (
             "the current index pointer is invalid or names a missing generation; re-publish with "
-            f"'zotero-pdf-text rebuild-index --config {config_path}'"
+            f"'zotero-pdf-text rebuild-index --config {_shell_quote(str(config_path))}'"
         )
     try:
         connect_readonly(resolved.db_path).close()
     except IndexSchemaUnsupportedError:
         return False, (
             f"generation {resolved.generation_id} uses an unsupported index schema; upgrade it with "
-            f"'zotero-pdf-text rebuild-index --config {config_path}'"
+            f"'zotero-pdf-text rebuild-index --config {_shell_quote(str(config_path))}'"
         )
     except (sqlite3.DatabaseError, OSError) as exc:
         return False, f"generation {resolved.generation_id} could not be opened ({type(exc).__name__})"

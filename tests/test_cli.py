@@ -11,7 +11,7 @@ from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
-from zotero_pdf_text.cli import _shell_quote, build_parser, main
+from zotero_pdf_text.cli import _manual_restore_command, _shell_quote, build_parser, main
 from zotero_pdf_text.library import ALL_STATUSES
 from zotero_pdf_text.config import resolve_config_path
 from zotero_pdf_text.fts import ChunkNotFoundError, SearchResult
@@ -659,11 +659,20 @@ class InstallMcpCliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             old = self._expected_registration(root)
-            old["args"] = ["--db", "old.sqlite", "--config", "old.json"]
+            old["args"] = ["--db", "old.sqlite", "--config", "My Library/old.json"]
             exit_code, calls, errors = self._apply_with_existing_registration(root, old, [0, 1, 1])
         self.assertEqual(exit_code, 1)
         self.assertIn("Could not restore", errors)
-        self.assertIn("mcp add-json --scope user zotero-fulltext", errors)
+        # Plain `mcp add` arguments, not inline JSON, so the command survives every shell.
+        self.assertIn("mcp add --scope user zotero-fulltext", errors)
+        self.assertIn('-- --db old.sqlite --config "My Library/old.json"', errors)
+        self.assertNotIn("{", errors)
+
+    def test_manual_restore_command_falls_back_to_json_for_non_stdio_entries(self):
+        entry = {"type": "http", "url": "http://localhost:1/mcp"}
+        command = _manual_restore_command("zotero-fulltext", entry)
+        self.assertIn("claude mcp add-json --scope user zotero-fulltext '<json>'", command)
+        self.assertIn(json.dumps(entry), command)
 
     def test_apply_failed_remove_leaves_registration_unchanged(self):
         with tempfile.TemporaryDirectory() as tmp:
