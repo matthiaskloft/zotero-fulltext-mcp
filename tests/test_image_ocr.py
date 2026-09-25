@@ -579,7 +579,7 @@ class CacheKeyTests(unittest.TestCase):
     def test_run_ocr_does_not_reuse_another_models_cached_output(self):
         with tempfile.TemporaryDirectory() as tmp:
             images_dir = Path(tmp)
-            png = _write_png(images_dir, "crop.png", 537, 28)
+            _write_png(images_dir, "crop.png", 537, 28)
             ref = find_crop_refs("![](crop.png)", images_dir)[0]
             plan = CropPlan(ref, CLASS_FORMULA)
 

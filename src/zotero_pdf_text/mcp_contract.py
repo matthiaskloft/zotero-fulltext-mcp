@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from collections.abc import Callable
 from dataclasses import asdict
 from pathlib import Path
-from typing import Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any
 from urllib.parse import urlsplit, urlunsplit
 
 try:
@@ -34,7 +34,7 @@ from .artifacts import (
 )
 from .bibtex import DEFAULT_BBT_ENDPOINT, DEFAULT_BBT_TRANSLATOR, export_bibtex_entries
 from .config import ProjectConfig, validate_config
-from .library import MAPPING_REPORT_JSONL, LibraryAuditError, library_status as _library_status_data
+from .library import MAPPING_REPORT_JSONL, library_status as _library_status_data
 from .fts import (
     ChunkNotFoundError,
     DEFAULT_CONTEXT_RECORD_LIMIT,
@@ -54,6 +54,24 @@ from .fts import (
 )
 from .orphan_candidates import list_candidates as list_orphan_candidate_records
 from .timeout_candidates import STATUS_PENDING, STATUS_RESOLVED, STATUS_SKIPPED, list_candidates
+
+if TYPE_CHECKING:
+    # Runtime aliases are installed by create_server() for Pydantic's schema generation.
+    QueryInput = object
+    LimitInput = object
+    SearchModeInput = object
+    AttachmentKeyInput = object
+    MaxCharsInput = object
+    ChunkIndexInput = object
+    ChunkSha256Input = object
+    ContentSha256Input = object
+    ContextKeyInput = object
+    CitationKeysInput = object
+    ConfirmationInput = object
+    TimeoutCandidateStatusInput = object
+    TimeoutSecondsInput = object
+    MultiplierInput = object
+    ReasonInput = object
 
 
 MAX_SEARCH_RESULTS = 20

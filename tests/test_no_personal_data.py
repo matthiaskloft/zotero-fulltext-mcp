@@ -18,6 +18,7 @@ recognising which names are real, it recognises the short list that is allowed a
 """
 
 import hashlib
+import os
 import re
 import subprocess
 import tempfile
@@ -116,9 +117,19 @@ TEXT_SUFFIXES = frozenset(
 )
 
 
-def _git(repo_root: Path, *args: str) -> subprocess.CompletedProcess:
+def _git(repo_root: Path, *args: str, text: bool = True, check: bool = True) -> subprocess.CompletedProcess:
+    env = None
+    if repo_root != REPO_ROOT:
+        # Hooks export repository-local Git variables; clear them for temporary repos.
+        local_vars = subprocess.check_output(
+            ["git", "rev-parse", "--local-env-vars"], cwd=REPO_ROOT, text=True
+        ).splitlines()
+        env = os.environ.copy()
+        for name in local_vars:
+            if not name.startswith("GIT_CONFIG"):
+                env.pop(name, None)
     return subprocess.run(
-        ["git", *args], cwd=repo_root, capture_output=True, text=True, check=True
+        ["git", *args], cwd=repo_root, env=env, capture_output=True, text=text, check=check
     )
 
 
@@ -153,9 +164,7 @@ def _read_worktree(repo_root: Path, relative_path: str) -> str | None:
 
 def _read_staged(repo_root: Path, relative_path: str) -> str | None:
     """The stage-0 blob for a path, or None if there isn't one to read."""
-    result = subprocess.run(
-        ["git", "show", f":{relative_path}"], cwd=repo_root, capture_output=True, check=False
-    )
+    result = _git(repo_root, "show", f":{relative_path}", text=False, check=False)
     if result.returncode != 0:
         return None  # Staged as deleted, or an unmerged path with no stage 0.
     try:
