@@ -12,6 +12,7 @@ import sys
 import tempfile
 from dataclasses import asdict, dataclass
 from pathlib import Path
+from typing import cast
 
 from .bibtex import (
     DEFAULT_BBT_ENDPOINT,
@@ -43,6 +44,7 @@ from .converter import convert_sample, convert_verified, default_worker_count
 from .fts import (
     ChunkNotFoundError,
     IndexSchemaUnsupportedError,
+    SearchResult,
     connect_readonly,
     index_statistics,
     get_fulltext,
@@ -925,15 +927,15 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Output root: {report['output_root']}")
             print(f"Mapping snapshots: {report['mapping_snapshots']}")
             print("Conversion run roots:")
-            for path in report["conversion_runs"]:
+            for path in cast("list[str]", report["conversion_runs"]):
                 print(f"  {path}")
             if report["legacy_roots"]:
                 print("Older run roots (kept in place):")
-                for path in report["legacy_roots"]:
+                for path in cast("list[str]", report["legacy_roots"]):
                     print(f"  {path}")
             print(f"Active index pointer: {report['index_pointer']}")
             for label in ("current", "previous"):
-                generation = report[label]
+                generation = cast("dict[str, object] | None", report[label])
                 if generation is None:
                     continue
                 if "error" in generation:
@@ -941,12 +943,12 @@ def main(argv: list[str] | None = None) -> int:
                     continue
                 print(f"{label.title()} generation: {generation['generation_id']} "
                       f"({generation['records']} records; {generation['missing_markdown']} missing Markdown files)")
-                for folder in generation["folders"]:
+                for folder in cast("list[dict[str, object]]", generation["folders"]):
                     print(f"  {folder['records']:>5}  {folder['physical_path']}")
                     if folder["path"] != folder["physical_path"]:
                         print(f"         indexed via: {folder['path']}")
                 if args.list_files:
-                    for path in generation["markdown_files"]:
+                    for path in cast("list[str]", generation["markdown_files"]):
                         print(f"    {path}")
         return 0
     if args.command == "ensure-zotero":
@@ -964,24 +966,24 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "search-fts":
         try:
             db_path = resolve_reader_db_path(args.db)
-            results = search_fts(db_path, args.query, limit=args.limit, search_mode=args.search_mode)
+            search_results = search_fts(db_path, args.query, limit=args.limit, search_mode=args.search_mode)
         except (ArtifactError, IndexSchemaUnsupportedError) as exc:
             print(str(exc), file=sys.stderr)
             return 2
         if args.json:
             print(
                 json.dumps(
-                    {"search_mode": args.search_mode, "no_results": not results, "results": [result.to_dict() for result in results]},
+                    {"search_mode": args.search_mode, "no_results": not search_results, "results": [result.to_dict() for result in search_results]},
                     ensure_ascii=False,
                     indent=2,
                 )
             )
         else:
-            _print_search_results(results, search_mode=args.search_mode)
+            _print_search_results(search_results, search_mode=args.search_mode)
         return 0
     if args.command == "get-fulltext":
         try:
-            result = get_fulltext(
+            fulltext_result = get_fulltext(
                 resolve_reader_db_path(args.db),
                 attachment_key=args.attachment_key,
                 max_chars=args.max_chars,
@@ -991,9 +993,9 @@ def main(argv: list[str] | None = None) -> int:
             print(str(exc), file=sys.stderr)
             return 2
         if args.json:
-            print(json.dumps(result.to_dict(), ensure_ascii=False, indent=2))
+            print(json.dumps(fulltext_result.to_dict(), ensure_ascii=False, indent=2))
         else:
-            _print_fulltext_result(result.to_dict())
+            _print_fulltext_result(fulltext_result.to_dict())
         return 0
     if args.command in {"index-stats", DEPRECATED_INDEX_STATS_COMMAND}:
         if args.command == DEPRECATED_INDEX_STATS_COMMAND:
@@ -1020,14 +1022,14 @@ def main(argv: list[str] | None = None) -> int:
         config = load_config(args.config)
         validate_config(config)
         try:
-            status = library_status(config, args.mapping_report, full_audit=args.full)
+            library_report = library_status(config, args.mapping_report, full_audit=args.full)
         except (LibraryAuditError, ArtifactError, IndexSchemaUnsupportedError) as exc:
             print(str(exc), file=sys.stderr)
             return 2
         if args.json:
-            print(json.dumps(status, ensure_ascii=False, indent=2))
+            print(json.dumps(library_report, ensure_ascii=False, indent=2))
         else:
-            _print_library_status(status)
+            _print_library_status(library_report)
         return 0
     if args.command == "audit-library":
         config = load_config(args.config)
@@ -1076,7 +1078,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"BibTeX export complete: {args.output}")
         return 0
     if args.command == "bibtex-add":
-        result = append_bibtex_entries(
+        bibtex_result = append_bibtex_entries(
             _citation_keys_from_args(args),
             args.references_bib,
             translator=args.translator,
@@ -1084,13 +1086,13 @@ def main(argv: list[str] | None = None) -> int:
             library_id=args.library_id,
         )
         if args.json:
-            print(json.dumps(result.to_dict(), ensure_ascii=False, indent=2))
+            print(json.dumps(bibtex_result.to_dict(), ensure_ascii=False, indent=2))
         else:
-            print(f"references.bib: {result.references_bib}")
-            print(f"added: {', '.join(result.added_keys) if result.added_keys else '(none)'}")
+            print(f"references.bib: {bibtex_result.references_bib}")
+            print(f"added: {', '.join(bibtex_result.added_keys) if bibtex_result.added_keys else '(none)'}")
             print(
                 "skipped_existing: "
-                + (", ".join(result.skipped_existing_keys) if result.skipped_existing_keys else "(none)")
+                + (", ".join(bibtex_result.skipped_existing_keys) if bibtex_result.skipped_existing_keys else "(none)")
             )
         return 0
     if args.command == "ingest-candidates":
@@ -1123,9 +1125,9 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 0
         if args.write_command == "validate":
-            result = validate_write_plan(args.plan, require_approved=args.require_approved)
-            print(json.dumps(result.to_dict(), ensure_ascii=False, indent=2))
-            return 0 if result.ok else 1
+            validation_result = validate_write_plan(args.plan, require_approved=args.require_approved)
+            print(json.dumps(validation_result.to_dict(), ensure_ascii=False, indent=2))
+            return 0 if validation_result.ok else 1
         if args.write_command == "approve":
             try:
                 result = approve_write_plan_rows(args.plan, _row_numbers_from_arg(args.rows))
@@ -1136,7 +1138,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.write_command == "apply":
             try:
-                result = apply_write_plan(
+                apply_result = apply_write_plan(
                     args.plan,
                     args.out_script,
                     approve=args.approve,
@@ -1145,7 +1147,7 @@ def main(argv: list[str] | None = None) -> int:
             except (PermissionError, ValueError, FileNotFoundError) as exc:
                 print(str(exc), file=sys.stderr)
                 return 2
-            print(json.dumps(result.to_dict(), ensure_ascii=False, indent=2))
+            print(json.dumps(apply_result.to_dict(), ensure_ascii=False, indent=2))
             return 0
         if args.write_command == "status":
             print(json.dumps(write_plan_status(args.plan), ensure_ascii=False, indent=2))
@@ -1163,14 +1165,14 @@ def main(argv: list[str] | None = None) -> int:
                              ensure_ascii=False, indent=2))
             return 0
 
-        result = import_doi_via_connector(
+        import_result = import_doi_via_connector(
             doi,
             connector_endpoint=args.connector_endpoint,
             debug_bridge_endpoint=args.debug_bridge_endpoint,
             debug_bridge_token=args.debug_bridge_token,
         )
-        if not result.ok:
-            print(json.dumps(result.to_dict(), ensure_ascii=False, indent=2), file=sys.stderr)
+        if not import_result.ok:
+            print(json.dumps(import_result.to_dict(), ensure_ascii=False, indent=2), file=sys.stderr)
             return 1
 
         # Poll Zotero connector REST API for the newly created item (connector returns 201 with no body).
@@ -1179,7 +1181,7 @@ def main(argv: list[str] | None = None) -> int:
         for _ in range(5):
             time.sleep(1)
             new_key = find_item_key_via_connector(
-                doi, title_hint=result.title, connector_endpoint=args.connector_endpoint
+                doi, title_hint=import_result.title, connector_endpoint=args.connector_endpoint
             )
             if new_key:
                 break
@@ -1187,8 +1189,8 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps({
             "status": "imported",
             "doi": doi,
-            "title": result.title,
-            "item_type": result.item_type,
+            "title": import_result.title,
+            "item_type": import_result.item_type,
             "key": new_key,
         }, ensure_ascii=False, indent=2))
         return 0
@@ -1201,28 +1203,28 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(result, ensure_ascii=False, indent=2))
         elif result["found"]:
             print(f"PDF attachment found for {args.key}:")
-            for att in result["attachments"]:
+            for att in cast("list[dict[str, object]]", result["attachments"]):
                 print(f"  key={att['key']}  path={att['path']}")
         else:
             print(f"No PDF attachment found for {args.key}.")
         return 0
     if args.command == "find-pdf":
-        result = find_available_pdf_for_item(
+        find_result = find_available_pdf_for_item(
             args.key,
             debug_bridge_endpoint=args.debug_bridge_endpoint,
             debug_bridge_token=args.debug_bridge_token,
         )
-        print(json.dumps(result.to_dict(), ensure_ascii=False, indent=2))
-        return 0 if result.ok else 1
+        print(json.dumps(find_result.to_dict(), ensure_ascii=False, indent=2))
+        return 0 if find_result.ok else 1
     if args.command == "link-pdf":
-        result = link_local_pdf(
+        link_result = link_local_pdf(
             args.key,
             args.file,
             debug_bridge_endpoint=args.debug_bridge_endpoint,
             debug_bridge_token=args.debug_bridge_token,
         )
-        print(json.dumps(result.to_dict(), ensure_ascii=False, indent=2))
-        return 0 if result.ok else 1
+        print(json.dumps(link_result.to_dict(), ensure_ascii=False, indent=2))
+        return 0 if link_result.ok else 1
     if args.command == "convert-new":
         config = load_config(args.config)
         validate_config(config)
@@ -1278,21 +1280,21 @@ def main(argv: list[str] | None = None) -> int:
 
         config = load_config(args.config)
         validate_config(config)
-        result = reconvert_with_marker(
+        reconvert_result = reconvert_with_marker(
             args.key,
             index_root=config.output_root / "index",
             lock_root=config.output_root,
             timeout_seconds=args.timeout_seconds,
         )
-        print(json.dumps(result.to_dict(), ensure_ascii=False, indent=2))
-        return 0 if result.ok else 1
+        print(json.dumps(reconvert_result.to_dict(), ensure_ascii=False, indent=2))
+        return 0 if reconvert_result.ok else 1
     if args.command == "ocr-images":
         from .image_ocr import CropPlan, ocr_images_for_attachment
 
         config = load_config(args.config)
         validate_config(config)
         plans: list[CropPlan] = []
-        result = ocr_images_for_attachment(
+        ocr_result = ocr_images_for_attachment(
             args.key,
             index_root=config.output_root / "index",
             lock_root=config.output_root,
@@ -1302,10 +1304,10 @@ def main(argv: list[str] | None = None) -> int:
             dry_run=args.dry_run,
             plans_out=plans,
         )
-        if args.dry_run and result.ok:
+        if args.dry_run and ocr_result.ok:
             _print_crop_table(plans)
-        print(json.dumps(result.to_dict(), ensure_ascii=False, indent=2))
-        return 0 if result.ok else 1
+        print(json.dumps(ocr_result.to_dict(), ensure_ascii=False, indent=2))
+        return 0 if ocr_result.ok else 1
     if args.command == "retry-timeout":
         if args.timeout_seconds is not None and args.multiplier is not None:
             print("--timeout-seconds and --multiplier are mutually exclusive.", file=sys.stderr)
@@ -1313,16 +1315,16 @@ def main(argv: list[str] | None = None) -> int:
         config = load_config(args.config)
         validate_config(config)
         if args.skip:
-            result = retry_timeout_module.skip_timeout_candidate(args.key, config=config, reason=args.reason)
+            retry_result = retry_timeout_module.skip_timeout_candidate(args.key, config=config, reason=args.reason)
         else:
-            result = retry_timeout_module.retry_timeout_candidate(
+            retry_result = retry_timeout_module.retry_timeout_candidate(
                 args.key,
                 config=config,
                 timeout_seconds=args.timeout_seconds,
                 multiplier=args.multiplier,
             )
-        print(json.dumps(result.to_dict(), ensure_ascii=False, indent=2))
-        return 0 if result.ok else 1
+        print(json.dumps(retry_result.to_dict(), ensure_ascii=False, indent=2))
+        return 0 if retry_result.ok else 1
     if args.command == "find-orphan-parents":
         config = load_config(args.config)
         validate_config(config)
@@ -1362,15 +1364,15 @@ def main(argv: list[str] | None = None) -> int:
         config = load_config(args.config)
         validate_config(config)
         if args.skip:
-            result = orphan_discovery_module.skip_orphan_candidate(
+            orphan_result = orphan_discovery_module.skip_orphan_candidate(
                 config, args.orphan_sha256, args.parent_key, reason=args.reason
             )
         else:
-            result = orphan_discovery_module.mark_orphan_candidate_resolved(
+            orphan_result = orphan_discovery_module.mark_orphan_candidate_resolved(
                 config, args.orphan_sha256, args.parent_key, note=args.note
             )
-        print(json.dumps(result.to_dict(), ensure_ascii=False, indent=2))
-        return 0 if result.ok else 1
+        print(json.dumps(orphan_result.to_dict(), ensure_ascii=False, indent=2))
+        return 0 if orphan_result.ok else 1
     if args.command == "install-mcp":
         return _install_mcp(args)
     parser.error(f"Unknown command: {args.command}")
@@ -1643,7 +1645,7 @@ def _print_zotero_status(status: dict[str, object]) -> None:
     print(f"Launched: {status['launched']}")
     print(f"Connector OK: {status['connector_ok']}")
     print(f"Connector message: {status['connector_message']}")
-    troubleshooting = status.get("troubleshooting") or []
+    troubleshooting = cast("list[str]", status.get("troubleshooting") or [])
     if troubleshooting:
         print("Troubleshooting:")
         for item in troubleshooting:
@@ -1677,7 +1679,7 @@ def _configure_stdio() -> None:
             stream.reconfigure(encoding="utf-8", errors="replace")
 
 
-def _print_search_results(results: list[object], *, search_mode: str) -> None:
+def _print_search_results(results: list[SearchResult], *, search_mode: str) -> None:
     print(f"search_mode: {search_mode}")
     if not results:
         print("No results.")
@@ -1738,7 +1740,7 @@ def _print_index_statistics(report: dict[str, object]) -> None:
     print(f"Total words: {report['total_words']}")
     for field in ["by_classification", "by_identity_status", "by_extraction_tool"]:
         print(field + ":")
-        for key, count in sorted(dict(report[field]).items()):
+        for key, count in sorted(dict(cast("dict[str, int]", report[field])).items()):
             print(f"- {key}: {count}")
     print("")
     print(str(report["scope_note"]))
@@ -1756,7 +1758,7 @@ def _print_library_status(status: dict[str, object]) -> None:
     # `source_provenance_unknown` means part of the answer is not computable yet -- and a wrong
     # headline is worse than none, because a reader told "all current" stops before the detail.
     # The inventory-unavailable warning below is the one case that does get stated up front.
-    health = dict(status.get("health") or {})
+    health = dict(cast("dict[str, int] | None", status.get("health")) or {})
     print(f"Snapshot: {status['snapshot_time']}")
     print(f"Mapping report: {status['mapping_report']}")
     print(f"Published generation: {status.get('generation_id') or '(none published)'}")

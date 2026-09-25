@@ -901,7 +901,7 @@ def _insert_metadata(con: sqlite3.Connection, record: dict[str, object]) -> int:
     values: list[object] = []
     for column in columns:
         if column in integer_columns:
-            values.append(int(cast("int | str", record.get(column) or 0)))
+            values.append(int(cast("int | float | str", record.get(column) or 0)))
         elif column in boolean_columns:
             values.append(int(bool(record.get(column, False))))
         else:
