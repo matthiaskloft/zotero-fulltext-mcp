@@ -9,7 +9,7 @@ from pathlib import Path
 try:
     from rapidfuzz import fuzz
 except Exception:  # pragma: no cover - exercised when dependency is absent
-    fuzz = None
+    fuzz = None  # type: ignore[assignment]
 
 
 DOI_RE = re.compile(r"\b10\.\d{4,9}/[-._;()/:A-Z0-9]+\b", re.IGNORECASE)

@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from collections.abc import Callable
 from dataclasses import asdict
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any, cast
 from urllib.parse import urlsplit, urlunsplit
 
 try:
@@ -553,7 +553,7 @@ def create_server(
         try:
             from pydantic import WithJsonSchema
         except ImportError:
-            WithJsonSchema = None
+            WithJsonSchema = None  # type: ignore[misc, assignment]
         if WithJsonSchema is not None:
             globals().update(
                 QueryInput=Annotated[object, WithJsonSchema({"type": "string", "maxLength": MAX_QUERY_CHARS})],
@@ -596,7 +596,7 @@ def create_server(
 
         mcp_factory = FastMCP
 
-    mcp = mcp_factory("zotero-fulltext", instructions=MCP_INSTRUCTIONS)
+    mcp: Any = mcp_factory("zotero-fulltext", instructions=MCP_INSTRUCTIONS)
 
     @mcp.tool(annotations=READ_ONLY_TOOL_ANNOTATIONS)
     def search_fulltext(
@@ -930,10 +930,13 @@ def _index_snapshot_stats(db_path: Path) -> IndexSnapshotStats:
             f"the indexed snapshot ({type(exc).__name__}). Build one with the CLI's "
             "`rebuild-index` command.",
         ) from None
-    stats = index_statistics(
-        resolved.db_path,
-        generation_id=resolved.generation_id,
-        published_at=resolved.published_at,
+    stats = cast(
+        dict[str, Any],
+        index_statistics(
+            resolved.db_path,
+            generation_id=resolved.generation_id,
+            published_at=resolved.published_at,
+        ),
     )
     return IndexSnapshotStats(
         scope=str(stats["scope"]),
@@ -1051,7 +1054,7 @@ def _library_health(
     user typing the command.
     """
     try:
-        status = _library_status_data(config, snapshot, index_root=index_root)
+        status = cast(dict[str, Any], _library_status_data(config, snapshot, index_root=index_root))
     except PublicMcpError:
         raise
     except Exception as exc:
@@ -1470,7 +1473,7 @@ def serialize_orphan_candidate(record: object) -> OrphanCandidateRecord:
 
 
 def serialize_bibtex_export(export: object) -> BibtexResponse:
-    data = asdict(export)
+    data = asdict(cast(Any, export))
     entry = str(data["entry"])
     if len(entry.encode("utf-8")) > MAX_BIBTEX_RESPONSE_BYTES:
         raise PublicMcpError("response_too_large", "BibTeX export exceeds the MCP response limit.")
@@ -1684,7 +1687,7 @@ def _validate_search_mode(search_mode: object) -> SearchMode:
     if not isinstance(search_mode, str) or search_mode not in SEARCH_MODES:
         modes = ", ".join(sorted(SEARCH_MODES))
         raise PublicMcpError("invalid_search_mode", f"search_mode must be one of: {modes}.")
-    return search_mode
+    return cast(SearchMode, search_mode)
 
 
 def _validate_limit(limit: object) -> int:

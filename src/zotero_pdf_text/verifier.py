@@ -7,6 +7,7 @@ import re
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import Any, cast
 
 from .config import ProjectConfig
 from .converter import ConversionResult, convert_unverified
@@ -165,7 +166,7 @@ def apply_verification(
 
 
 def _duplicate_index(rows: list[dict[str, str]]) -> dict[str, set[str]]:
-    index = {
+    index: dict[str, set[str]] = {
         "attachment": set(),
         "parent": set(),
         "doi": set(),
@@ -615,7 +616,7 @@ def _clean_snippet(value: str, *, limit: int = 300) -> str:
 
 def _float(value: object) -> float:
     try:
-        return float(value)
+        return float(cast(Any, value))
     except (TypeError, ValueError):
         return 0.0
 

@@ -9,6 +9,7 @@ import tempfile
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any, cast
 
 from ._atomic import replace_with_retry
 from .artifacts import (
@@ -73,7 +74,7 @@ def reconvert_with_marker(
     except ArtifactError as exc:
         return _error_result(attachment_key, str(exc))
     context = get_item_context(db_path, attachment_key=attachment_key)
-    records = context.get("records", [])
+    records = cast(list[dict[str, Any]], context.get("records", []))
     if not records:
         return _error_result(attachment_key, f"No indexed record found for attachment key {attachment_key}")
     if attachment_key not in load_indexed_keys(jsonl_path):

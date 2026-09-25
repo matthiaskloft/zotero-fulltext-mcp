@@ -5,6 +5,7 @@ import re
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import Any, cast
 
 from .artifacts import (
     current_generation_jsonl,
@@ -140,7 +141,7 @@ def retry_timeout_candidate(
         return _error_result("retry", attachment_key, str(exc))
     previous_status = str(candidate.get("status", STATUS_PENDING))
 
-    attempted_timeout_seconds = int(candidate.get("attempted_timeout_seconds") or 0)
+    attempted_timeout_seconds = int(cast(Any, candidate.get("attempted_timeout_seconds")) or 0)
     if timeout_seconds is not None:
         if timeout_seconds < 1 or timeout_seconds > MAX_RETRY_TIMEOUT_SECONDS:
             return _error_result(
@@ -157,7 +158,7 @@ def retry_timeout_candidate(
             )
         next_timeout = max(1, min(int(attempted_timeout_seconds * multiplier), MAX_RETRY_TIMEOUT_SECONDS))
     else:
-        next_timeout = min(int(candidate.get("suggested_next_timeout_seconds") or attempted_timeout_seconds), MAX_RETRY_TIMEOUT_SECONDS)
+        next_timeout = min(int(cast(Any, candidate.get("suggested_next_timeout_seconds")) or attempted_timeout_seconds), MAX_RETRY_TIMEOUT_SECONDS)
 
     row = {
         "classification": str(candidate.get("classification", "mapped_verified")),
