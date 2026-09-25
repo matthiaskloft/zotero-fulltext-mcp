@@ -8,7 +8,7 @@ import urllib.parse
 import urllib.request
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, TypedDict, cast
 
 
 DEFAULT_BBT_ENDPOINT = "http://127.0.0.1:23119/better-bibtex/json-rpc"
@@ -510,7 +510,30 @@ def _fetch_doi_metadata(doi: str) -> dict[str, object]:
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
 
 
-def _doi_meta_to_zotero(meta: dict[str, object], doi: str) -> dict[str, Any]:
+class _ZoteroCreator(TypedDict):
+    firstName: str
+    lastName: str
+    creatorType: str
+
+
+class _ZoteroConnectorItem(TypedDict):
+    itemType: str
+    title: str
+    DOI: str
+    url: str
+    date: str
+    abstractNote: str
+    publicationTitle: str
+    volume: str
+    issue: str
+    pages: str
+    publisher: str
+    creators: list[_ZoteroCreator]
+    tags: list[object]
+    relations: dict[str, object]
+
+
+def _doi_meta_to_zotero(meta: dict[str, object], doi: str) -> _ZoteroConnectorItem:
     """Convert CrossRef or DataCite metadata dict to a Zotero connector item JSON."""
     source: str = meta["source"]  # type: ignore[assignment]
     d: dict[str, object] = meta["data"]  # type: ignore[assignment]
@@ -525,7 +548,7 @@ def _doi_meta_to_zotero(meta: dict[str, object], doi: str) -> dict[str, Any]:
             "posted-content": "preprint",
         }
         item_type = _type_map.get(str(d.get("type", "")), "journalArticle")
-        creators = [
+        creators: list[_ZoteroCreator] = [
             {
                 "firstName": str(a.get("given", "")),
                 "lastName": str(a.get("family", "")),

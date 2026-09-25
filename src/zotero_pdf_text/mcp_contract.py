@@ -32,7 +32,7 @@ from .artifacts import (
     resolve_reader_db_path,
     resolve_reader_generation,
 )
-from .bibtex import DEFAULT_BBT_ENDPOINT, DEFAULT_BBT_TRANSLATOR, export_bibtex_entries
+from .bibtex import DEFAULT_BBT_ENDPOINT, DEFAULT_BBT_TRANSLATOR, BibtexExport, export_bibtex_entries
 from .config import ProjectConfig, validate_config
 from .library import MAPPING_REPORT_JSONL, library_status as _library_status_data
 from .fts import (
@@ -1472,8 +1472,8 @@ def serialize_orphan_candidate(record: object) -> OrphanCandidateRecord:
     }
 
 
-def serialize_bibtex_export(export: object) -> BibtexResponse:
-    data = asdict(cast(Any, export))
+def serialize_bibtex_export(export: BibtexExport) -> BibtexResponse:
+    data = asdict(export)
     entry = str(data["entry"])
     if len(entry.encode("utf-8")) > MAX_BIBTEX_RESPONSE_BYTES:
         raise PublicMcpError("response_too_large", "BibTeX export exceeds the MCP response limit.")

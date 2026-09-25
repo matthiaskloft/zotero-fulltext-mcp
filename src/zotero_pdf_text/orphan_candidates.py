@@ -114,7 +114,7 @@ def list_candidates(master_jsonl_path: Path, *, status: str | None = STATUS_PEND
     values = list(records.values())
     if status is not None:
         values = [record for record in values if record.get("status") == status]
-    return sorted(values, key=lambda record: cast(str, record.get("last_detected_at", "")), reverse=True)
+    return sorted(values, key=lambda record: cast(Any, record.get("last_detected_at", "")), reverse=True)
 
 
 def mark_status(master_jsonl_path: Path, match_key: str, *, status: str, extra_fields: dict[str, object]) -> None:
