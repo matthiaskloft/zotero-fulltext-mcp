@@ -14,7 +14,6 @@ from collections import Counter
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
-from types import ModuleType
 
 from .config import ProjectConfig
 from .indexer import load_indexed_keys
@@ -31,11 +30,10 @@ try:
 except Exception:  # pragma: no cover - exercised only if dependency is missing
     pymupdf4llm = None
 
-fitz: ModuleType | None
 try:
     import pymupdf as fitz
 except Exception:  # pragma: no cover - exercised only if dependency is missing
-    fitz = None
+    fitz = None  # type: ignore[assignment]
 
 PRIMARY_EXTRACTION_TOOL = "pymupdf4llm.to_markdown"
 FALLBACK_EXTRACTION_TOOL = "pymupdf.get_text"
