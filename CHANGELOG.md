@@ -11,6 +11,11 @@ unannounced rather than absent: present, inert unless explicitly configured and 
 validated for general use. Its config shape and output conventions may still change. It moves into a
 dated section once it has been stress-tested against a large library.
 
+## [0.9.0] - 2026-09-26
+
+Installation reliability: `install-mcp` and `check-setup` catch broken, drifted, or stale
+registrations and installs before the MCP server fails to start.
+
 ### Added
 
 - `install-mcp` now compares the existing Codex registration in `config.toml` with the generated
@@ -20,6 +25,10 @@ dated section once it has been stress-tested against a large library.
   `--enable-reconvert` it also reports timeouts below that mode's minimums, such as an older
   entry's 30-second startup timeout. It only reads the file; other servers, larger timeouts, and
   per-tool approval overrides are left alone. `--codex-config` selects another file (#49).
+
+### Changed
+
+- Development: mypy now type-checks the whole package in CI instead of a subset of modules (#53).
 
 ### Fixed
 
@@ -37,14 +46,14 @@ dated section once it has been stress-tested against a large library.
 - `install-mcp --apply` can be re-run for an existing server name: an identical user-scope Claude
   Code registration is reported as current and left alone, a changed one (new `--config`, `--db`,
   or optional tools) is replaced, and if the replacement `claude mcp add` fails the previous
-  registration is restored with `claude mcp add-json`. Other registrations are not touched.
+  registration is restored with `claude mcp add-json`. Other registrations are not touched (#27).
 - `check-setup --require-mcp` now checks the published index read-only, the same way the MCP
   server does at startup. An index with an outdated schema fails with the exact
   `rebuild-index --config` command, and a missing index fails with a separate message pointing to
   `convert-new`. Before, setup passed while the server could not start (#48).
 - Conversion and resume now write final Markdown to a temporary sibling file and swap it into place
   only once it is complete, so an interrupted write can no longer leave a truncated `.md` file that a
-  later resume accepts as a finished conversion. A failed write keeps the previous file intact.
+  later resume accepts as a finished conversion. A failed write keeps the previous file intact (#28).
 
 ## [0.8.0] - 2026-09-25
 
@@ -58,8 +67,8 @@ dated section once it has been stress-tested against a large library.
 - New mapping snapshots are written under `mapping-runs/` and conversions under
   `conversion-runs/{verified,samples,unverified-review}/`. MCP audit discovery still reads legacy
   `runs/` snapshots.
-- Development: Ruff linting and mypy checks of the whole package run in CI; `ruff` and `mypy` are
-  added to the `test` extra.
+- Development: Ruff linting and incremental mypy checks run in CI; `ruff` and `mypy` are added to
+  the `test` extra.
 
 ### Fixed
 
@@ -732,7 +741,8 @@ author's own machine.
 
 Initial import of the Zotero full-text conversion pipeline, CLI, and MCP server. Not tagged.
 
-[Unreleased]: https://github.com/matthiaskloft/zotero-fulltext-mcp/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/matthiaskloft/zotero-fulltext-mcp/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.9.0
 [0.8.0]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.8.0
 [0.7.0]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.7.0
 [0.6.0]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.6.0
