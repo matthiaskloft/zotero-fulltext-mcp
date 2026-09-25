@@ -66,7 +66,7 @@ class MappingRow:
 
 def run_dry_run(config: ProjectConfig) -> Path:
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_dir = config.output_root / "runs" / timestamp
+    run_dir = config.output_root / "mapping-runs" / timestamp
     run_dir.mkdir(parents=True, exist_ok=False)
     _configure_logging(run_dir / "run.log")
     logging.info("Starting dry-run mapper")

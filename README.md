@@ -194,10 +194,18 @@ Smoke-test the index directly:
 Search uses `all_terms` by default. Pass `--search-mode any_terms` for a broader fallback, or
 `--search-mode phrase` to require the normalized query words in order.
 
+To see where the Markdown used by the published index actually lives, run
+`output-status --config .\config.json`. New runs use `mapping-runs/` for mapping
+snapshots and `conversion-runs/{verified,samples,unverified-review}/` for converted
+files. It groups active files by conversion folder and
+also shows the previous index generation's folders. Add `--list-files` for individual
+paths or `--json` for a machine-readable report. This is read-only: older conversion
+runs remain on disk and are not necessarily referenced by either index generation.
+
 Check whether the index still matches the library:
 
 ```powershell
-& $python -m zotero_pdf_text audit-library --config .\config.json --mapping-report .\converted_text\runs\<run-id>\mapping_report.jsonl
+& $python -m zotero_pdf_text audit-library --config .\config.json --mapping-report .\converted_text\mapping-runs\<run-id>\mapping_report.jsonl
 ```
 
 `audit-library` is read-only — it moves, renames and rewrites nothing, and it never opens your
@@ -212,7 +220,7 @@ For counts without the per-item listing, `library-status` runs the same comparis
 only the summary:
 
 ```powershell
-& $python -m zotero_pdf_text library-status --config .\config.json --mapping-report .\converted_text\runs\<run-id>\mapping_report.jsonl
+& $python -m zotero_pdf_text library-status --config .\config.json --mapping-report .\converted_text\mapping-runs\<run-id>\mapping_report.jsonl
 ```
 
 It is deliberately separate from `index-stats`, which summarizes what the published index
