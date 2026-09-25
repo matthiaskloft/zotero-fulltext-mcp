@@ -72,6 +72,7 @@ files = [
   "src/zotero_pdf_text/config.py",
   "src/zotero_pdf_text/duplicate_attachments.py",
   "src/zotero_pdf_text/indexer.py",
+  "src/zotero_pdf_text/install_health.py",
   "src/zotero_pdf_text/lock.py",
   "src/zotero_pdf_text/math_detection.py",
   "src/zotero_pdf_text/pdf_probe.py",

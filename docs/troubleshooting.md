@@ -420,19 +420,18 @@ checkout or a different platform still hits the underlying issue.
    now bundles it: install with `pip install -e .[mcp,test]` before running the
    suite. Expected result: `107 passed`.
 
-### TODO — Not Yet Fixed
+### Updating An Existing Install (2026-07-13)
 
-Snags hit while updating an existing install to the latest version (2026-07-13). Unlike the
-roadblocks above, these are still open:
+Snags hit while updating an existing install to the latest version (2026-07-13). Still open
+unless marked fixed:
 
-4. **TODO.** Editable installs go stale silently. `pip show zotero-fulltext-mcp` can report an
-   old version (e.g. `0.1.0`) even after the source repo has advanced past it (e.g. to `0.2.0`
-   per `pyproject.toml` / the latest git tag), because editable-install metadata is only
-   refreshed on reinstall, not on `git pull`. Neither `check-setup` nor `install-mcp` currently
-   compares the installed package version against the source repo's `pyproject.toml` version, so
-   nothing flags the drift — the fix (`pip install -U -e .[mcp]`) has to be discovered manually.
-   Consider adding a version-mismatch check to `check-setup` (or a dedicated flag) when running
-   from an editable install.
+4. **Fixed.** Editable installs go stale silently. `pip show zotero-fulltext-mcp` can report an
+   old version (e.g. `0.1.0`) even after the source repo has advanced past it (e.g. to `0.2.0`),
+   because editable-install metadata is only refreshed on reinstall, not on `git pull`.
+   `check-setup` now reads the checkout the install itself records (its `direct_url.json`, never
+   the working directory) and warns `install_version` with the exact reinstall command when that
+   checkout's `pyproject.toml` declares another version. Pinned, non-editable installs are not
+   compared against any checkout. The warning never fails the command.
 
 5. **TODO.** `claude mcp list` reports a generic `Failed to connect` for the `zotero-fulltext`
    server regardless of root cause — a broken/stale install and a missing FTS index (i.e. the
@@ -460,14 +459,26 @@ roadblocks above, these are still open:
 Snags hit while reinstalling the stable venv to the latest version and adding the `zotero-write`
 extra (marker deliberately excluded). All still open unless noted.
 
-6. **TODO — Windows: the console-script `.exe` is locked while the MCP server is running.**
-   `pip install -e .[...]` into the stable venv fails partway with
+6. **Detected, recovery is manual — Windows: the console-script `.exe` is locked while the MCP
+   server is running.** `pip install -e .[...]` into the stable venv fails partway with
    `[WinError 32] The process cannot access the file ... zotero-fulltext-mcp.exe ... used by
-   another process`. Claude Code keeps one or more `zotero-fulltext-mcp.exe` processes alive for
+   another process`. Claude Code and Codex keep `zotero-fulltext-mcp.exe` processes alive for
    the registered server, and on Windows pip cannot replace the script shim while it executes.
    Worse, pip has already uninstalled the old dist-info by the time it hits the lock, leaving the
    package **half-uninstalled** (`pip show` reports no version) plus a leftover
-   `~otero_fulltext_mcp-<ver>.dist-info` directory in `site-packages`. Recovery:
+   `~otero_fulltext_mcp-<ver>.dist-info` directory in `site-packages`.
+
+   `check-setup` reports running server processes as `running_server` (a warning when the install
+   is also stale, since that is when you are about to reinstall). It never stops them. Safe
+   upgrade sequence:
+
+   1. Quit the MCP clients (Claude Code, Codex, ...) so no `zotero-fulltext-mcp.exe` is left
+      running; `Get-Process zotero-fulltext-mcp -ErrorAction SilentlyContinue` should print nothing.
+   2. Reinstall with the command `check-setup` printed, for example
+      `& $python -m pip install -e "<repo>[mcp,zotero-write]"`.
+   3. Rerun `check-setup`; `install_version` should report the source version.
+
+   Recovery from an install that already failed this way:
 
    ```powershell
    Get-Process zotero-fulltext-mcp -ErrorAction SilentlyContinue | Stop-Process -Force
@@ -476,9 +487,7 @@ extra (marker deliberately excluded). All still open unless noted.
    Get-ChildItem <venv>\Lib\site-packages -Filter "~*" -Directory | Remove-Item -Recurse -Force
    ```
 
-   Claude Code respawns the server from the freshly installed exe on next use. Consider having
-   `install-mcp`/a dedicated update command detect running server processes and warn (or offer to
-   stop them) before an editable reinstall on Windows.
+   Claude Code respawns the server from the freshly installed exe on next use.
 
 7. **Fixed.** `install-mcp --apply` used to fail with
    `MCP server zotero-fulltext already exists in user config` when the server name was already

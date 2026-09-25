@@ -29,6 +29,11 @@ dated section once it has been stress-tested against a large library.
   the venv, which pointed the registration at a missing executable. A server name that is not a
   bare TOML key (e.g. containing `.`) is quoted in the Codex block instead of becoming a nested
   table (#56).
+- `check-setup` warns when an editable install is stale: it compares the installed version with the
+  `pyproject.toml` of the checkout the install points to, not the working directory, and prints the
+  reinstall command. Pinned installs are not compared. On Windows it also lists running
+  `zotero-fulltext-mcp.exe` processes, which block a reinstall. It never stops them. Both are
+  warnings and never fail the command (#26).
 - `install-mcp --apply` can be re-run for an existing server name: an identical user-scope Claude
   Code registration is reported as current and left alone, a changed one (new `--config`, `--db`,
   or optional tools) is replaced, and if the replacement `claude mcp add` fails the previous
