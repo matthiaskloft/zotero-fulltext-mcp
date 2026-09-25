@@ -1,128 +1,537 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-labelledby="title description">
-  <title id="title">zotero-fulltext-mcp</title>
-  <desc id="description">Linked PDFs become Markdown, a full-text index, and searchable passages exposed through MCP. All arrows point left to right.</desc>
-  <defs>
-    <radialGradient id="background" cx="48%" cy="40%" r="78%">
-      <stop offset="0" stop-color="#092034"/>
-      <stop offset="0.6" stop-color="#041221"/>
-      <stop offset="1" stop-color="#020912"/>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   width="1280"
+   height="640"
+   viewBox="0 0 1280 640"
+   role="img"
+   aria-labelledby="title description"
+   version="1.1"
+   id="svg55"
+   sodipodi:docname="zotero-fulltext-mcp-social-preview.svg"
+   inkscape:version="1.4.4 (dcaf3e7, 2026-05-05)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview55"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="0.62421875"
+     inkscape:cx="563.10388"
+     inkscape:cy="401.30163"
+     inkscape:window-width="1920"
+     inkscape:window-height="1001"
+     inkscape:window-x="-7"
+     inkscape:window-y="-7"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="svg55" />
+  <title
+     id="title">zotero-fulltext-mcp</title>
+  <desc
+     id="description">Linked PDFs become Markdown, a full-text index, and searchable passages exposed through MCP. All arrows point left to right.</desc>
+  <defs
+     id="defs14">
+    <radialGradient
+       id="background"
+       cx="48%"
+       cy="40%"
+       r="78%">
+      <stop
+         offset="0"
+         stop-color="#092034"
+         id="stop1" />
+      <stop
+         offset="0.6"
+         stop-color="#041221"
+         id="stop2" />
+      <stop
+         offset="1"
+         stop-color="#020912"
+         id="stop3" />
     </radialGradient>
-    <linearGradient id="paper" x1="0" y1="0" x2="1" y2="1">
-      <stop stop-color="#fffefa"/>
-      <stop offset="1" stop-color="#e6e9e9"/>
+    <linearGradient
+       id="paper"
+       x1="0"
+       y1="0"
+       x2="1"
+       y2="1">
+      <stop
+         stop-color="#fffefa"
+         id="stop4" />
+      <stop
+         offset="1"
+         stop-color="#e6e9e9"
+         id="stop5" />
     </linearGradient>
-    <linearGradient id="fold" x1="0" y1="1" x2="1" y2="0">
-      <stop stop-color="#aeb8bc"/>
-      <stop offset="1" stop-color="#e9eeee"/>
+    <linearGradient
+       id="fold"
+       x1="0"
+       y1="1"
+       x2="1"
+       y2="0">
+      <stop
+         stop-color="#aeb8bc"
+         id="stop6" />
+      <stop
+         offset="1"
+         stop-color="#e9eeee"
+         id="stop7" />
     </linearGradient>
-    <linearGradient id="panel" x1="0" y1="0" x2="0" y2="1">
-      <stop stop-color="#0b1c29"/>
-      <stop offset="1" stop-color="#06121e"/>
+    <linearGradient
+       id="panel"
+       x1="864.96937"
+       y1="197.19542"
+       x2="864.96937"
+       y2="384.74541"
+       gradientTransform="scale(1.0717142,0.93308454)"
+       gradientUnits="userSpaceOnUse">
+      <stop
+         stop-color="#0b1c29"
+         id="stop8" />
+      <stop
+         offset="1"
+         stop-color="#06121e"
+         id="stop9" />
     </linearGradient>
-    <pattern id="grid" width="64" height="64" patternUnits="userSpaceOnUse">
-      <path d="M64 0H0V64" fill="none" stroke="#4aa1b6" stroke-opacity="0.08"/>
+    <pattern
+       id="grid"
+       width="64"
+       height="64"
+       patternUnits="userSpaceOnUse">
+      <path
+         d="M64 0H0V64"
+         fill="none"
+         stroke="#4aa1b6"
+         stroke-opacity="0.08"
+         id="path9" />
     </pattern>
-    <pattern id="dots" width="14" height="14" patternUnits="userSpaceOnUse">
-      <circle cx="2" cy="2" r="1.3" fill="#69c9d9" opacity="0.22"/>
+    <pattern
+       id="dots"
+       width="14"
+       height="14"
+       patternUnits="userSpaceOnUse">
+      <circle
+         cx="2"
+         cy="2"
+         r="1.3"
+         fill="#69c9d9"
+         opacity="0.22"
+         id="circle9" />
     </pattern>
-    <g id="sheet">
-      <path d="M0 5Q0 0 5 0H140L174 34V232Q174 238 168 238H5Q0 238 0 232Z" fill="url(#paper)" stroke="#d8dedf" stroke-width="1.2"/>
-      <path d="M140 0V30Q140 34 145 34H174" fill="url(#fold)" stroke="#9ba6ab" stroke-width="1.2"/>
+    <g
+       id="sheet">
+      <path
+         d="M0 5Q0 0 5 0H140L174 34V232Q174 238 168 238H5Q0 238 0 232Z"
+         fill="url(#paper)"
+         stroke="#d8dedf"
+         stroke-width="1.2"
+         id="path10" />
+      <path
+         d="M140 0V30Q140 34 145 34H174"
+         fill="url(#fold)"
+         stroke="#9ba6ab"
+         stroke-width="1.2"
+         id="path11" />
     </g>
-    <g id="paper-lines" fill="none" stroke="#78838b" stroke-width="2.5">
-      <path d="M18 25H127M18 37H113M61 62H154M61 73H154M18 85H154M18 96H154M18 107H154"/>
-      <path d="M18 174H154M18 185H154M18 196H126M18 207H154M18 218H99"/>
+    <g
+       id="paper-lines"
+       fill="none"
+       stroke="#78838b"
+       stroke-width="2.5">
+      <path
+         d="M18 25H127M18 37H113M61 62H154M61 73H154M18 85H154M18 96H154M18 107H154"
+         id="path12" />
+      <path
+         d="M18 174H154M18 185H154M18 196H126M18 207H154M18 218H99"
+         id="path13" />
     </g>
-    <g id="forward" fill="none" stroke="#ff775f" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-      <circle r="19"/>
-      <path d="M-8 0H8M1-7L8 0 1 7"/>
+    <g
+       id="forward"
+       fill="none"
+       stroke="#ff775f"
+       stroke-width="2.2"
+       stroke-linecap="round"
+       stroke-linejoin="round">
+      <circle
+         r="19"
+         id="circle13" />
+      <path
+         d="M-8 0H8M1-7L8 0 1 7"
+         id="path14" />
     </g>
   </defs>
-
-  <g id="backdrop">
-    <path fill="url(#background)" d="M0 0H1280V640H0Z"/>
-    <path fill="url(#grid)" d="M0 0H1280V640H0Z"/>
-    <path fill="url(#dots)" d="M1154 34H1245V141H1154Z"/>
-    <g fill="none" stroke="#5b9cac" stroke-width="1" opacity="0.16">
-      <path d="M918 65H978V143H918ZM929 83H965M929 97H965M929 111H954M929 126H965"/>
-      <path d="M1034 35H1102L1127 60V157H1034ZM1102 35V60H1127M1050 78H1110M1050 92H1110M1050 106H1083M1050 140V121H1061V140M1073 140V111H1084V140M1096 140V101H1107V140"/>
-      <path d="M404 38L455 193M440 361L414 441M337 554H1109"/>
+  <g
+     id="backdrop">
+    <path
+       fill="url(#background)"
+       d="M0 0H1280V640H0Z"
+       id="path15" />
+    <path
+       fill="url(#grid)"
+       d="M0 0H1280V640H0Z"
+       id="path16" />
+    <path
+       fill="url(#dots)"
+       d="M1154 34H1245V141H1154Z"
+       id="path17" />
+    <g
+       fill="none"
+       stroke="#5b9cac"
+       stroke-width="1"
+       opacity="0.16"
+       id="g20">
+      <path
+         d="M918 65H978V143H918ZM929 83H965M929 97H965M929 111H954M929 126H965"
+         id="path18" />
+      <path
+         d="M1034 35H1102L1127 60V157H1034ZM1102 35V60H1127M1050 78H1110M1050 92H1110M1050 106H1083M1050 140V121H1061V140M1073 140V111H1084V140M1096 140V101H1107V140"
+         id="path19" />
+      <path
+         d="M404 38L455 193M440 361L414 441M337 554H1109"
+         id="path20" />
     </g>
   </g>
-
-  <g id="pipeline-connectors" stroke="#ff775f" fill="none" stroke-linecap="round">
-    <path d="M332 267H371M421 267H445M598 267H626M678 267H691M832 267H860M912 267H920" stroke-width="2.5" stroke-dasharray="1 8" opacity="0.85"/>
-    <use href="#forward" transform="translate(396 267)"/>
-    <use href="#forward" transform="translate(652 267)"/>
-    <use href="#forward" transform="translate(886 267)"/>
-    <path id="mcp-arrow" d="M1126 267H1151M1144 260L1151 267 1144 274" stroke-width="2.5" stroke-linejoin="round"/>
+  <g
+     id="pipeline-connectors"
+     stroke="#ff775f"
+     fill="none"
+     stroke-linecap="round"
+     transform="translate(-68.886109,-16.020024)">
+    <path
+       d="m 332,267 h 39 m 50,0 h 24 m 153,0 h 28 m 52,0 h 13 m 141,0 h 28 m 52,0 h 8"
+       stroke-width="2.5"
+       stroke-dasharray="1, 8"
+       opacity="0.85"
+       id="path21" />
+    <use
+       href="#forward"
+       transform="translate(396,267)"
+       id="use21" />
+    <use
+       href="#forward"
+       transform="translate(652,267)"
+       id="use22" />
+    <use
+       href="#forward"
+       transform="translate(886,267)"
+       id="use23" />
+    <path
+       id="mcp-arrow"
+       d="m 1126,267 h 25 m -7,-7 7,7 -7,7"
+       stroke-width="2.5"
+       stroke-linejoin="round" />
   </g>
-
-  <g id="linked-pdfs">
-    <g transform="translate(143 169)" opacity="0.8">
-      <use href="#sheet" transform="scale(0.98 0.82)"/>
-      <path d="M22 48H145M22 61H145M22 74H145M22 87H145M22 100H145M22 139H145M22 153H132M22 167H145" fill="none" stroke="#53636e" stroke-width="3"/>
+  <g
+     id="linked-pdfs"
+     transform="matrix(0.79179741,0,0,0.79288914,6.1236982,41.881647)">
+    <g
+       transform="translate(143,169)"
+       opacity="0.8"
+       id="g24">
+      <use
+         href="#sheet"
+         transform="scale(0.98,0.82)"
+         id="use24" />
+      <path
+         d="M 22,48 H 145 M 22,61 H 145 M 22,74 H 145 M 22,87 H 145 M 22,100 H 145 M 22,139 H 145 M 22,153 H 132 M 22,167 h 123"
+         fill="none"
+         stroke="#53636e"
+         stroke-width="3"
+         id="path24" />
     </g>
-    <g transform="translate(105 145)" opacity="0.94">
-      <use href="#sheet" transform="scale(1 0.9)"/>
-      <path d="M22 49H147M22 62H147M22 75H147M22 88H147M22 101H147M22 161H147M22 175H136M22 189H147" fill="none" stroke="#6f7b83" stroke-width="2.7"/>
+    <g
+       transform="translate(105,145)"
+       opacity="0.94"
+       id="g25">
+      <use
+         href="#sheet"
+         transform="scale(1,0.9)"
+         id="use25" />
+      <path
+         d="M 22,49 H 147 M 22,62 H 147 M 22,75 H 147 M 22,88 H 147 M 22,101 H 147 M 22,161 H 147 M 22,175 H 136 M 22,189 h 125"
+         fill="none"
+         stroke="#6f7b83"
+         stroke-width="2.7"
+         id="path25" />
     </g>
-    <g transform="translate(68 110)">
-      <use href="#sheet"/>
-      <use href="#paper-lines"/>
-      <text x="19" y="72" fill="#122231" font-family="Arial, sans-serif" font-size="34">A</text>
-      <path d="M18 121H83V161H18Z" fill="#b9c1c5"/>
-      <path d="M94 121H154M94 132H154M94 143H154M94 154H139" fill="none" stroke="#7a858b" stroke-width="2.5"/>
-      <path d="M91 224V212H100V224M106 224V200H115V224M121 224V206H130V224M136 224V193H145V224" fill="#a4afb5"/>
+    <g
+       transform="translate(68,110)"
+       id="g29">
+      <use
+         href="#sheet"
+         id="use26" />
+      <use
+         href="#paper-lines"
+         id="use27" />
+      <text
+         x="19"
+         y="72"
+         fill="#122231"
+         font-family="Arial, sans-serif"
+         font-size="34px"
+         id="text27">A</text>
+      <path
+         d="m 18,121 h 65 v 40 H 18 Z"
+         fill="#b9c1c5"
+         id="path27" />
+      <path
+         d="m 94,121 h 60 m -60,11 h 60 m -60,11 h 60 m -60,11 h 45"
+         fill="none"
+         stroke="#7a858b"
+         stroke-width="2.5"
+         id="path28" />
+      <path
+         d="m 91,224 v -12 h 9 v 12 m 6,0 v -24 h 9 v 24 m 6,0 v -18 h 9 v 18 m 6,0 v -31 h 9 v 31"
+         fill="#a4afb5"
+         id="path29" />
     </g>
   </g>
-
-  <g id="markdown-document" transform="translate(454 166)">
-    <use href="#sheet" transform="scale(0.76 0.76)"/>
-    <text x="15" y="70" fill="#f37965" font-family="Arial, sans-serif" font-size="44" font-weight="700">.md</text>
-    <path d="M17 89H64" fill="none" stroke="#f37965" stroke-width="5"/>
-    <path d="M17 104H112M17 116H112M17 128H112M17 140H112M17 152H96M17 164H112" fill="none" stroke="#455764" stroke-width="3"/>
+  <g
+     id="markdown-document"
+     transform="matrix(0.98237543,0,0,0.98237543,387.45262,149.97193)">
+    <use
+       href="#sheet"
+       transform="scale(0.76)"
+       id="use29" />
+    <text
+       x="15"
+       y="70"
+       fill="#f37965"
+       font-family="Arial, sans-serif"
+       font-size="44px"
+       font-weight="700"
+       id="text29">.md</text>
+    <path
+       d="M 17,89 H 64"
+       fill="none"
+       stroke="#f37965"
+       stroke-width="5"
+       id="path30" />
+    <path
+       d="m 17,104 h 95 m -95,12 h 95 m -95,12 h 95 m -95,12 h 95 m -95,12 h 79 m -79,12 h 95"
+       fill="none"
+       stroke="#455764"
+       stroke-width="3"
+       id="path31" />
   </g>
-
-  <g id="fulltext-index" fill="none" stroke="#69dbe7" stroke-width="2.5">
-    <path d="M700 199V317C700 331 725 341 757 341S814 331 814 317V199" fill="#082536" fill-opacity="0.5"/>
-    <ellipse cx="757" cy="199" rx="57" ry="21"/>
-    <path d="M700 230C700 244 725 251 757 251S814 244 814 230M700 262C700 276 725 283 757 283S814 276 814 262M700 294C700 308 725 315 757 315S814 308 814 294"/>
-    <g fill="#69dbe7" stroke="none">
-      <circle cx="723" cy="232" r="2"/><circle cx="742" cy="236" r="2"/><circle cx="761" cy="237" r="2"/><circle cx="780" cy="235" r="2"/>
-      <circle cx="723" cy="264" r="2"/><circle cx="742" cy="268" r="2"/><circle cx="761" cy="269" r="2"/><circle cx="780" cy="267" r="2"/>
-      <circle cx="723" cy="296" r="2"/><circle cx="742" cy="300" r="2"/><circle cx="761" cy="301" r="2"/>
-      <circle cx="723" cy="326" r="2"/><circle cx="742" cy="330" r="2"/><circle cx="761" cy="331" r="2"/>
+  <g
+     id="fulltext-index"
+     fill="none"
+     stroke="#69dbe7"
+     stroke-width="2.5"
+     transform="translate(-65.682103,-19.22403)">
+    <path
+       d="m 700,199 v 118 c 0,14 25,24 57,24 32,0 57,-10 57,-24 V 199"
+       fill="#082536"
+       fill-opacity="0.5"
+       id="path32" />
+    <ellipse
+       cx="757"
+       cy="199"
+       rx="57"
+       ry="21"
+       id="ellipse32" />
+    <path
+       d="m 700,230 c 0,14 25,21 57,21 32,0 57,-7 57,-21 m -114,32 c 0,14 25,21 57,21 32,0 57,-7 57,-21 m -114,32 c 0,14 25,21 57,21 32,0 57,-7 57,-21"
+       id="path33" />
+    <g
+       fill="#69dbe7"
+       stroke="none"
+       id="g46">
+      <circle
+         cx="723"
+         cy="232"
+         r="2"
+         id="circle33" />
+      <circle
+         cx="742"
+         cy="236"
+         r="2"
+         id="circle34" />
+      <circle
+         cx="761"
+         cy="237"
+         r="2"
+         id="circle35" />
+      <circle
+         cx="780"
+         cy="235"
+         r="2"
+         id="circle36" />
+      <circle
+         cx="723"
+         cy="264"
+         r="2"
+         id="circle37" />
+      <circle
+         cx="742"
+         cy="268"
+         r="2"
+         id="circle38" />
+      <circle
+         cx="761"
+         cy="269"
+         r="2"
+         id="circle39" />
+      <circle
+         cx="780"
+         cy="267"
+         r="2"
+         id="circle40" />
+      <circle
+         cx="723"
+         cy="296"
+         r="2"
+         id="circle41" />
+      <circle
+         cx="742"
+         cy="300"
+         r="2"
+         id="circle42" />
+      <circle
+         cx="761"
+         cy="301"
+         r="2"
+         id="circle43" />
+      <circle
+         cx="723"
+         cy="326"
+         r="2"
+         id="circle44" />
+      <circle
+         cx="742"
+         cy="330"
+         r="2"
+         id="circle45" />
+      <circle
+         cx="761"
+         cy="331"
+         r="2"
+         id="circle46" />
     </g>
-    <g id="search-lens">
-      <circle cx="808" cy="307" r="27" fill="#061724" stroke="#061724" stroke-width="9"/>
-      <circle cx="808" cy="307" r="25"/>
-      <path d="M821 327L841 345" stroke-width="8" stroke-linecap="round"/>
-      <path d="M795 307C795 298 800 294 807 294" stroke-linecap="round"/>
+    <g
+       id="search-lens">
+      <circle
+         cx="808"
+         cy="307"
+         r="27"
+         fill="#061724"
+         stroke="#061724"
+         stroke-width="9"
+         id="circle47" />
+      <circle
+         cx="808"
+         cy="307"
+         r="25"
+         id="circle48" />
+      <path
+         d="m 821,327 20,18"
+         stroke-width="8"
+         stroke-linecap="round"
+         id="path48" />
+      <path
+         d="m 795,307 c 0,-9 5,-13 12,-13"
+         stroke-linecap="round"
+         id="path49" />
     </g>
   </g>
-
-  <g id="search-results">
-    <rect x="928" y="185" width="199" height="173" rx="16" fill="url(#panel)" stroke="#667781" stroke-width="2"/>
-    <path d="M953 227V261M953 294V334" stroke="#64d6e2" stroke-width="2.5"/>
-    <g fill="#4bb9c9" stroke="#79e2ec" stroke-width="1">
-      <circle cx="953" cy="212" r="5.5"/>
-      <circle cx="953" cy="279" r="5.5"/>
+  <g
+     id="search-results"
+     transform="translate(-76.896121,-27.234042)">
+    <rect
+       x="928"
+       y="185"
+       width="199"
+       height="173"
+       rx="16"
+       fill="url(#panel)"
+       stroke="#667781"
+       stroke-width="2"
+       id="rect49"
+       style="fill:url(#panel)" />
+    <path
+       d="m 953,227 v 34 m 0,33 v 40"
+       stroke="#64d6e2"
+       stroke-width="2.5"
+       id="path50" />
+    <g
+       fill="#4bb9c9"
+       stroke="#79e2ec"
+       stroke-width="1"
+       id="g51">
+      <circle
+         cx="953"
+         cy="212"
+         r="5.5"
+         id="circle50" />
+      <circle
+         cx="953"
+         cy="279"
+         r="5.5"
+         id="circle51" />
     </g>
-    <g fill="none" stroke-width="4">
-      <path d="M971 212H995M971 240H1029M971 253H1008M971 279H994M971 306H1024M971 333H995" stroke="#ebf0ed"/>
-      <path d="M971 226H1005M1007 293H1046M971 320H1010" stroke="#fa7b64"/>
-      <path d="M1010 226H1060M1035 240H1080M1015 253H1051M971 293H1001M1053 293H1089M1030 306H1080M1017 320H1088M1002 333H1036" stroke="#5c737f"/>
+    <g
+       fill="none"
+       stroke-width="4"
+       id="g53">
+      <path
+         d="m 971,212 h 24 m -24,28 h 58 m -58,13 h 37 m -37,26 h 23 m -23,27 h 53 m -53,27 h 24"
+         stroke="#ebf0ed"
+         id="path51" />
+      <path
+         d="m 971,226 h 34 m 2,67 h 39 m -75,27 h 39"
+         stroke="#fa7b64"
+         id="path52" />
+      <path
+         d="m 1010,226 h 50 m -25,14 h 45 m -65,13 h 36 m -80,40 h 30 m 52,0 h 36 m -59,13 h 50 m -63,14 h 71 m -86,13 h 34"
+         stroke="#5c737f"
+         id="path53" />
     </g>
   </g>
-
-  <g id="mcp-endpoint">
-    <circle cx="1214" cy="267" r="53" fill="#071522" stroke="#ff775f" stroke-width="4"/>
-    <text x="1214" y="279" text-anchor="middle" fill="#ff775f" font-family="Arial, sans-serif" font-size="35" font-weight="700">MCP</text>
+  <g
+     id="mcp-endpoint"
+     transform="matrix(1.2621459,0,0,1.2621459,-371.11114,-87.614973)">
+    <circle
+       cx="1214"
+       cy="267"
+       r="53"
+       fill="#071522"
+       stroke="#ff775f"
+       stroke-width="4"
+       id="circle53" />
+    <text
+       x="1214"
+       y="279"
+       text-anchor="middle"
+       fill="#ff775f"
+       font-family="Arial, sans-serif"
+       font-size="35px"
+       font-weight="700"
+       id="text53">MCP</text>
   </g>
-
-  <g id="wordmark" font-family="Arial, Helvetica, sans-serif">
-    <text x="80" y="473" fill="#f7f7f2" font-size="110" font-weight="700" letter-spacing="-3">zotero-fulltext-mcp</text>
-    <text x="84" y="543" fill="#69dbe7" font-size="46" font-weight="400">Local-first full-text search for your Zotero library</text>
+  <g
+     id="wordmark"
+     font-family="Arial, Helvetica, sans-serif">
+    <text
+       x="80"
+       y="473"
+       fill="#f7f7f2"
+       font-size="110"
+       font-weight="700"
+       letter-spacing="-3"
+       id="text54">zotero-fulltext-mcp</text>
+    <text
+       x="84"
+       y="543"
+       fill="#69dbe7"
+       font-size="46"
+       font-weight="400"
+       id="text55">Local-first full-text search for your Zotero library</text>
   </g>
 </svg>
