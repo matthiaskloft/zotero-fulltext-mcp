@@ -92,15 +92,35 @@ class InstallVersionStatusTests(unittest.TestCase):
         uv_status = InstallVersionStatus("0.2.0", True, source, "0.8.0", installer="uv")
 
         self.assertIn('-m pip install -e "checkout[mcp,marker]"', reinstall_command(pip_status, ["mcp", "marker"]))
-        self.assertTrue(reinstall_command(uv_status, ["mcp"]).startswith("uv sync --extra mcp"))
+        uv_command = reinstall_command(uv_status, ["mcp"])
+        self.assertTrue(uv_command.startswith("uv pip install --python "))
+        self.assertTrue(uv_command.endswith('-e "checkout[mcp]"'))
+
+    def test_quoted_interpreter_path_is_runnable_in_powershell(self):
+        status = InstallVersionStatus("0.2.0", True, Path("checkout"), "0.8.0", installer="pip")
+        with patch.object(install_health.sys, "executable", r"C:\Program Files\py\python.exe"), patch.object(
+            install_health.sys, "platform", "win32"
+        ):
+            self.assertTrue(reinstall_command(status, []).startswith(r'& "C:\Program Files\py\python.exe" -m pip'))
+        with patch.object(install_health.sys, "executable", "/opt/venv/bin/python"):
+            self.assertTrue(reinstall_command(status, []).startswith("/opt/venv/bin/python -m pip"))
+
+    def test_unc_checkout_keeps_its_host(self):
+        dist = FakeDistribution(
+            "0.2.0", {"direct_url.json": json.dumps({"url": "file://server/share/repo", "dir_info": {"editable": True}})}
+        )
+
+        status = install_version_status(dist)
+
+        self.assertEqual(status.source_dir.as_posix().lstrip("/").split("/")[:3], ["server", "share", "repo"])
 
 
 class RunningServerCountTests(unittest.TestCase):
-    def _tasklist(self, stdout: str):
-        return subprocess.CompletedProcess(args=[], returncode=0, stdout=stdout, stderr="")
+    def _tasklist(self, stdout: bytes | None):
+        return subprocess.CompletedProcess(args=[], returncode=0, stdout=stdout, stderr=b"")
 
     def test_counts_matching_processes_on_windows(self):
-        rows = '"zotero-fulltext-mcp.exe","101","Console","1","50.000 K"\n' * 3
+        rows = b'"zotero-fulltext-mcp.exe","101","Console","1","50.000 K"\r\n' * 3
         with patch.object(install_health.sys, "platform", "win32"), patch.object(
             install_health.subprocess, "run", return_value=self._tasklist(rows)
         ):
@@ -110,7 +130,14 @@ class RunningServerCountTests(unittest.TestCase):
         with patch.object(install_health.sys, "platform", "win32"), patch.object(
             install_health.subprocess,
             "run",
-            return_value=self._tasklist("INFO: No tasks are running which match the specified criteria.\n"),
+            # German Windows, OEM code page: not decodable as UTF-8 or cp1252.
+            return_value=self._tasklist("INFORMATION: Es werden keine Aufgaben ausgeführt.\r\n".encode("cp850")),
+        ):
+            self.assertEqual(running_server_count(), 0)
+
+    def test_missing_output_counts_as_zero(self):
+        with patch.object(install_health.sys, "platform", "win32"), patch.object(
+            install_health.subprocess, "run", return_value=self._tasklist(None)
         ):
             self.assertEqual(running_server_count(), 0)
 

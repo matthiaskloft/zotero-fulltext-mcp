@@ -14,6 +14,19 @@ from zotero_pdf_text.cli import (
     main,
     run_setup_checks,
 )
+from zotero_pdf_text.install_health import InstallVersionStatus
+
+
+def setUpModule():
+    # Setup checks also inspect the installed package and running processes; keep these tests
+    # independent of the machine they run on (a localized tasklist, a stale dev venv).
+    for target, value in (
+        ("zotero_pdf_text.cli.install_version_status", InstallVersionStatus("0.0.0", editable=False)),
+        ("zotero_pdf_text.cli.running_server_count", None),
+    ):
+        patcher = patch(target, return_value=value)
+        patcher.start()
+        unittest.addModuleCleanup(patcher.stop)
 
 
 class RunSetupChecksTests(unittest.TestCase):

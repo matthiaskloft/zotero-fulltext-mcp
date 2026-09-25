@@ -77,6 +77,9 @@ def _editable_source_dir(dist: metadata.Distribution) -> Path | None:
     parsed = urlparse(str(direct_url.get("url", "")))
     if parsed.scheme != "file":
         return None
+    # A UNC checkout (\\server\share) keeps its host in netloc; dropping it loses the share.
+    if parsed.netloc and parsed.netloc != "localhost":
+        return Path(url2pathname(f"//{parsed.netloc}{parsed.path}"))
     return Path(url2pathname(parsed.path))
 
 
@@ -94,11 +97,23 @@ def _source_version(source_dir: Path) -> str | None:
 
 
 def reinstall_command(status: InstallVersionStatus, extras: list[str]) -> str:
+    """A reinstall into this interpreter's environment that adds nothing and removes nothing.
+
+    `uv sync` is deliberately not suggested: it targets the checkout's own `.venv`, which need not
+    be the stale environment, and removes packages (such as the test extra) it wasn't told about.
+    """
     extras_suffix = f"[{','.join(extras)}]" if extras else ""
+    target = f'"{status.source_dir}{extras_suffix}"'
     if status.installer == "uv":
-        flags = "".join(f" --extra {extra}" for extra in extras)
-        return f'uv sync{flags} (run in "{status.source_dir}")'
-    return f'"{sys.executable}" -m pip install -e "{status.source_dir}{extras_suffix}"'
+        return f"uv pip install --python {_command_path(sys.executable)} -e {target}"
+    return f"{_command_path(sys.executable, leading=True)} -m pip install -e {target}"
+
+
+def _command_path(path: str, *, leading: bool = False) -> str:
+    """Quote a path only when needed; PowerShell runs a quoted leading path only after `&`."""
+    if not any(char in path for char in " &()'\""):
+        return path
+    return f'& "{path}"' if leading and sys.platform == "win32" else f'"{path}"'
 
 
 def running_server_count() -> int | None:
@@ -112,13 +127,14 @@ def running_server_count() -> int | None:
     try:
         completed = subprocess.run(
             ["tasklist", "/FI", f"IMAGENAME eq {SERVER_EXECUTABLE}", "/FO", "CSV", "/NH"],
+            # Bytes, not text: the no-match INFO line is localized in the OEM code page and does
+            # not decode as UTF-8/cp1252 on e.g. German Windows. Only the ASCII rows matter.
             capture_output=True,
-            text=True,
             timeout=15,
             check=True,
         )
     except (OSError, subprocess.SubprocessError):
         return None
     # A match prints one quoted CSV row per process; no match prints a localized INFO line.
-    prefix = f'"{SERVER_EXECUTABLE.lower()}"'
-    return sum(1 for line in completed.stdout.splitlines() if line.strip().lower().startswith(prefix))
+    prefix = f'"{SERVER_EXECUTABLE.lower()}"'.encode("ascii")
+    return sum(1 for line in (completed.stdout or b"").splitlines() if line.strip().lower().startswith(prefix))

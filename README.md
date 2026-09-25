@@ -80,7 +80,7 @@ warns when the installed version differs from the checkout's and prints the rein
 Windows, quit Claude Code, Codex and any other MCP client first. A running
 `zotero-fulltext-mcp.exe` blocks the reinstall and can leave the package half-uninstalled;
 `check-setup` lists running copies as `running_server`, and
-[troubleshooting](docs/troubleshooting.md#updating-an-existing-install-2026-07-13) covers recovery.
+[troubleshooting](docs/troubleshooting.md#updating-an-existing-install-with-write-extras-2026-07-15) covers recovery.
 
 ### Experimental: local image OCR for equations and figures
 
