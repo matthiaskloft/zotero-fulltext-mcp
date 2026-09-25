@@ -136,19 +136,24 @@ def _protocol_only_stdout():
     The protocol keeps a private duplicate of fd 1; fd 1 itself and ``sys.stdout`` text writes
     are redirected to stderr so no non-JSON output can corrupt the response stream.
     """
+    if sys.stdout is None or sys.stderr is None:
+        yield  # no console streams (e.g. pythonw); nothing to protect or redirect to
+        return
     sys.stdout.flush()
     saved_stdout = sys.stdout
     saved_fd = os.dup(1)
-    protocol = os.fdopen(os.dup(1), "wb", buffering=0)
-    os.dup2(2, 1)
-    sys.stdout = _StderrTextWithProtocolBuffer(protocol, sys.stderr)
+    protocol = None
     try:
+        protocol = os.fdopen(os.dup(1), "wb", buffering=0)
+        os.dup2(2, 1)
+        sys.stdout = _StderrTextWithProtocolBuffer(protocol, sys.stderr)
         yield
     finally:
         sys.stdout = saved_stdout
         os.dup2(saved_fd, 1)
         os.close(saved_fd)
-        protocol.close()
+        if protocol is not None:
+            protocol.close()
 
 
 def _load_server_config(path: Path):

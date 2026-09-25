@@ -67,7 +67,7 @@ class McpStdioTests(unittest.TestCase):
 
             # The client logs every stdout line that is not a JSON-RPC message on this logger.
             with self.assertNoLogs("mcp.client.stdio", level="ERROR"):
-                results = asyncio.run(run())
+                results = asyncio.run(asyncio.wait_for(run(), timeout=60))
             stderr = stderr_path.read_text(encoding="utf-8")
 
         self.assertEqual(set(results), set(calls))
