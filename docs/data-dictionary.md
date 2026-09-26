@@ -506,7 +506,8 @@ Two counts sit outside the status vocabulary and explain it:
 Top-level fields of `plan.json`:
 
 - `plan_version`: `1`.
-- `plan_id`, `created_at`: plan identifier (also the run-directory name) and UTC creation time.
+- `plan_id`, `created_at`: plan identifier (`YYYYMMDD_HHMMSS_<8 hex>`, also the run-directory
+  name) and UTC creation time.
 - `mapping_report`, `generation_id`: the snapshot and the published generation the plan was built from.
 - `inventory_available`, `inventory_error`: whether Zotero's database could be read, and why not.
 - `run_dir`: `<output_root>/conversion-runs/provenance-reconvert/<plan-id>`, where
@@ -532,10 +533,12 @@ invocation: `logged_at`, `plan_id`, `run_dir`, `previous_generation_id`, `genera
 when nothing was published), `published`, `selected`, `remaining_eligible`, `counts`, and `rows`
 (`attachment_key`, `outcome`, `reason`, `markdown_path`, `source_sha256`). Outcomes:
 `published`, `conversion_failed`, `rejected`, `already_resolved`, `plan_stale`, `missing_pdf`,
-`not_eligible`, `not_in_plan`. The `selections/` subdirectory keeps each invocation's input
+`zotero_changed`, `not_eligible`, `not_in_plan`. The `selections/` subdirectory keeps each invocation's input
 mapping CSV and, when something was published, the manifest handed to the replacement path. The
 run directory itself is an ordinary conversion run (`manifest.csv`, `conversion_checkpoint.jsonl`,
-`markdown/`); its manifest describes the most recent invocation's selection only.
+`markdown/`) plus `provenance_plan.json` (`plan_id`, `created_at`, and `plan_dir` relative to
+the output root), which claims it for one plan; its manifest describes the most recent
+invocation's selection only.
 
 ## Confidence Fields
 

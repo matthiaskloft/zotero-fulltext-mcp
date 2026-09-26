@@ -13,9 +13,11 @@ from unittest.mock import patch
 from test_library import _index_record, _write_zotero_inventory
 
 from zotero_pdf_text.artifacts import (
+    IndexPaths,
     current_generation_jsonl,
     read_current_pointer,
     stage_and_publish,
+    stage_generation,
     write_jsonl_from_existing,
 )
 from zotero_pdf_text.checkpoint import CHECKPOINT_FILENAME, read_checkpoint
@@ -33,6 +35,7 @@ from zotero_pdf_text.provenance_reconvert import (
     OUTCOME_NOT_ELIGIBLE,
     OUTCOME_PLAN_STALE,
     OUTCOME_PUBLISHED,
+    OUTCOME_ZOTERO_CHANGED,
     ProvenancePlanError,
     apply_plan,
     build_plan,
@@ -214,6 +217,18 @@ class PlanTests(ProvenanceFixture):
         with self.assertRaises(ProvenancePlanError):
             write_plan(plan, plan_dir)
 
+    def test_unresolvable_current_zotero_path_is_not_eligible(self):
+        inventory = {key: str(self.pdfs[key]) for key in ALL_KEYS if key != RETIRED}
+        inventory["AAAA1111"] = "storage:AAAA1111.pdf"
+        self.config.zotero_sqlite.unlink()
+        _write_zotero_inventory(self.config, inventory)
+
+        rows = {row.attachment_key: row for row in build_plan(self.config, self.snapshot, plan_id="p").rows}
+
+        self.assertEqual(rows["AAAA1111"].bucket, BUCKET_IDENTITY_UNCERTAIN)
+        self.assertIn("does not resolve", rows["AAAA1111"].reason)
+        self.assertEqual(rows["BBBB2222"].bucket, BUCKET_ELIGIBLE)
+
     def test_unreadable_inventory_makes_nothing_eligible(self):
         self.config.zotero_sqlite.unlink()
         plan = build_plan(self.config, self.snapshot, plan_id="p")
@@ -334,6 +349,119 @@ class ApplyTests(ProvenanceFixture):
         again = self.apply(plan_path, _Extractor(), keys=["CCCC3333"])
         self.assertEqual([row.outcome for row in again.rows], [OUTCOME_ALREADY_RESOLVED])
         self.assertIsNone(again.generation_id)
+
+    def rewrite_inventory(self, inventory: dict[str, str]) -> None:
+        self.config.zotero_sqlite.unlink()
+        _write_zotero_inventory(self.config, inventory)
+
+    def current_inventory(self) -> dict[str, str]:
+        inventory = {key: str(self.pdfs[key]) for key in ALL_KEYS if key != RETIRED}
+        inventory[RELINKED] = str(self.root / "pdfs" / "relinked.pdf")
+        return inventory
+
+    def test_zotero_deletion_or_relink_after_planning_is_never_published(self):
+        plan_path = self.plan()
+        original = self.records()
+        inventory = self.current_inventory()
+        del inventory["AAAA1111"]
+        other = self.root / "pdfs" / "other.pdf"
+        other.write_bytes(b"%PDF other")
+        inventory["BBBB2222"] = str(other)
+        self.rewrite_inventory(inventory)
+
+        extractor = _Extractor()
+        report = self.apply(plan_path, extractor)
+
+        outcomes = {row.attachment_key: row.outcome for row in report.rows}
+        self.assertEqual(
+            outcomes, {"AAAA1111": OUTCOME_ZOTERO_CHANGED, "BBBB2222": OUTCOME_ZOTERO_CHANGED, "CCCC3333": OUTCOME_PUBLISHED}
+        )
+        self.assertEqual(extractor.extracted, ["CCCC3333"])
+        records = self.records()
+        self.assertEqual(records["AAAA1111"], original["AAAA1111"])
+        self.assertEqual(records["BBBB2222"], original["BBBB2222"])
+
+    def test_relink_during_conversion_is_caught_before_publication(self):
+        plan_path = self.plan()
+        original = self.records()["AAAA1111"]
+        from zotero_pdf_text.converter import convert_planned_rows
+
+        def convert_then_relink(*args, **kwargs):
+            result = convert_planned_rows(*args, **kwargs)
+            inventory = self.current_inventory()
+            inventory["AAAA1111"] = str(self.root / "pdfs" / "relinked.pdf")
+            self.rewrite_inventory(inventory)
+            return result
+
+        with patch("zotero_pdf_text.provenance_reconvert.convert_planned_rows", side_effect=convert_then_relink):
+            report = self.apply(plan_path, _Extractor(), keys=["AAAA1111"])
+
+        self.assertEqual(report.rows[0].outcome, OUTCOME_ZOTERO_CHANGED)
+        self.assertIsNone(report.generation_id)
+        self.assertEqual(self.records()["AAAA1111"], original)
+
+    def test_unreadable_inventory_at_apply_converts_and_publishes_nothing(self):
+        plan_path = self.plan()
+        before = read_current_pointer(self.index_root)["current_generation"]
+        self.config.zotero_sqlite.unlink()
+        extractor = _Extractor()
+        with self.assertRaises(ProvenancePlanError):
+            self.apply(plan_path, extractor)
+        self.assertEqual(extractor.extracted, [])
+        self.assertEqual(read_current_pointer(self.index_root)["current_generation"], before)
+
+    def test_pending_publication_is_recovered_before_the_current_generation_is_read(self):
+        plan_path = self.plan()
+        # A publication that crashed after its journal was written but before the pointer swap:
+        # its generation adds a record that the successor must keep.
+        extra = self.root / "legacy" / "ZZZZ9999.md"
+        extra.write_text("Pending body", encoding="utf-8")
+        records = list(self.records().values()) + [
+            _index_record("ZZZZ9999", markdown_path=str(extra), markdown_sha256=_sha(extra), text="Pending body")
+        ]
+        seed = self.root / "pending.jsonl"
+        seed.write_text("".join(json.dumps(record) + "\n" for record in records), encoding="utf-8")
+        info = stage_generation(self.index_root, write_jsonl_from_existing(seed), command="test")
+        paths = IndexPaths(self.index_root)
+        paths.journal_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "state": "publishing",
+                    "generation_id": info.generation_id,
+                    "previous_pointer": read_current_pointer(self.index_root),
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        report = self.apply(plan_path, _Extractor(), keys=["AAAA1111"])
+
+        self.assertEqual(report.previous_generation_id, info.generation_id)
+        records = self.records()
+        self.assertIn("ZZZZ9999", records)
+        self.assertEqual(records["AAAA1111"]["source_sha256"], _sha(self.pdfs["AAAA1111"]))
+
+    def test_run_directory_belongs_to_one_plan(self):
+        first = build_plan(self.config, self.snapshot)
+        second = build_plan(self.config, self.snapshot)
+        self.assertNotEqual(first.plan_id, second.plan_id)
+        self.assertNotEqual(first.run_dir, second.run_dir)
+
+        plan_path = self.plan()
+        self.apply(plan_path, _Extractor(), keys=["AAAA1111"])
+        # A second plan that would reuse the same run directory is refused at write time...
+        clash = build_plan(self.config, self.snapshot, plan_id="testplan")
+        with self.assertRaises(ProvenancePlanError):
+            write_plan(clash, self.config.output_root / "provenance-reconvert" / "copy")
+        # ...and a copy of the plan in another directory cannot convert into it either.
+        copy_dir = self.config.output_root / "provenance-reconvert" / "copy"
+        copy_dir.mkdir(parents=True, exist_ok=True)
+        (copy_dir / "plan.json").write_bytes(plan_path.read_bytes())
+        extractor = _Extractor()
+        with self.assertRaises(ProvenancePlanError):
+            self.apply(copy_dir, extractor, keys=["BBBB2222"])
+        self.assertEqual(extractor.extracted, [])
 
     def test_plan_outside_output_root_is_refused(self):
         plan = build_plan(self.config, self.snapshot, plan_id="outside")

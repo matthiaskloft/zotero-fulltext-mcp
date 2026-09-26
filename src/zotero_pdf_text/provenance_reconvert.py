@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import csv
 import json
+import secrets
 from collections import Counter
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
@@ -37,6 +38,7 @@ from pathlib import Path
 from .artifacts import (
     REPLACEABLE_IDENTITY_STATUSES,
     current_generation_jsonl,
+    recover_pending_publication,
     replacement_rejection,
     stage_and_publish,
     write_jsonl_replacing_manifest,
@@ -47,6 +49,7 @@ from .library import (
     ELIGIBLE_CLASSIFICATION,
     ItemObservation,
     build_observations,
+    inventory_source_path,
     load_attachment_inventory,
     load_index_records,
     load_mapping_snapshot,
@@ -58,6 +61,9 @@ PLAN_VERSION = 1
 PLAN_FILENAME = "plan.json"
 PLAN_CSV_FILENAME = "plan.csv"
 APPLY_LOG_FILENAME = "apply_log.jsonl"
+# Written into a run directory by the first apply of a plan. A run directory holds Markdown the
+# published index may reference, so it belongs to exactly one plan and is never reused by another.
+RUN_CLAIM_FILENAME = "provenance_plan.json"
 PLANS_DIRNAME = "provenance-reconvert"
 ORDINAL_FIELD = "plan_ordinal"
 COMMAND = "apply-provenance-reconvert"
@@ -81,6 +87,7 @@ OUTCOME_REJECTED = "rejected"
 OUTCOME_ALREADY_RESOLVED = "already_resolved"
 OUTCOME_PLAN_STALE = "plan_stale"
 OUTCOME_MISSING_PDF = "missing_pdf"
+OUTCOME_ZOTERO_CHANGED = "zotero_changed"
 OUTCOME_NOT_ELIGIBLE = "not_eligible"
 OUTCOME_NOT_IN_PLAN = "not_in_plan"
 
@@ -229,7 +236,9 @@ def build_plan(
     ``source_provenance_unknown`` for the same inputs.
     """
     root = index_root if index_root is not None else config.output_root / "index"
-    plan_id = plan_id or datetime.now().strftime("%Y%m%d_%H%M%S")
+    # Timestamp for readability, random suffix so two plans made in the same second can never
+    # share a run directory.
+    plan_id = plan_id or f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{secrets.token_hex(4)}"
     mapping_rows = load_mapping_snapshot(mapping_report)
     generation_id, _published_at, index_rows = load_index_records(root)
     inventory: dict[str, AttachmentRecord] = {}
@@ -257,7 +266,13 @@ def build_plan(
         indexed_source = _text(indexed, "source_path")
         source_file = Path(indexed_source) if indexed_source else None
         source_exists = source_file.is_file() if source_file else None
-        bucket, reason, mapping = _bucket(obs, indexed, mapping_rows.get(obs.attachment_key, []), source_exists)
+        bucket, reason, mapping = _bucket(
+            obs,
+            indexed,
+            mapping_rows.get(obs.attachment_key, []),
+            source_exists,
+            current_source=_current_source(inventory.get(obs.attachment_key), config),
+        )
         page_count = _optional_int(_text(mapping, "page_count") or _text(indexed, "page_count"))
         conversion_row = None
         row_ordinal = None
@@ -303,8 +318,14 @@ def _bucket(
     indexed: dict[str, object],
     candidates: list[dict[str, object]],
     source_exists: bool | None,
+    *,
+    current_source: str,
 ) -> tuple[str, str, dict[str, object] | None]:
-    """First matching bucket, in order of what must be settled before anything else can be."""
+    """First matching bucket, in order of what must be settled before anything else can be.
+
+    ``current_source`` is where Zotero's own record says the PDF is now, resolved from the
+    inventory alone -- never the snapshot's or index's path, which only say where it *was*.
+    """
     if not obs.in_zotero and not obs.inventory_available:
         return BUCKET_MEMBERSHIP_UNCHECKED, "Zotero's attachment inventory could not be read.", None
     if not obs.in_zotero:
@@ -316,10 +337,16 @@ def _bucket(
             None,
         )
     indexed_source = _text(indexed, "source_path")
-    current_source = obs.source_path
     if not indexed_source:
         return BUCKET_IDENTITY_UNCERTAIN, "The indexed record names no source PDF.", None
-    if current_source and not _same_path(current_source, indexed_source):
+    if not current_source:
+        return (
+            BUCKET_IDENTITY_UNCERTAIN,
+            "Zotero's current path for this attachment does not resolve to a linked file (for "
+            "example a stored `storage:` attachment), so nothing confirms it is still the indexed PDF.",
+            None,
+        )
+    if not _same_path(current_source, indexed_source):
         return (
             BUCKET_IDENTITY_UNCERTAIN,
             "Zotero now links this attachment to a different PDF than the one the record was "
@@ -358,6 +385,10 @@ def write_plan(plan: ProvenancePlan, plan_dir: Path) -> Path:
     plan_path = plan_dir / PLAN_FILENAME
     if plan_path.exists():
         raise ProvenancePlanError(f"A plan already exists at {plan_path}; choose another directory.")
+    if Path(plan.run_dir).exists():
+        raise ProvenancePlanError(
+            f"Run directory {plan.run_dir} already exists and may belong to another plan; plan again."
+        )
     csv_fields = ("bucket", "attachment_key", "ordinal", "reason", "title", "source_path", "source_bytes", "page_count")
     with (plan_dir / PLAN_CSV_FILENAME).open("w", encoding="utf-8-sig", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=csv_fields)
@@ -470,6 +501,10 @@ def apply_plan(
         )
     index_root = config.output_root / "index"
     with pipeline_write_lock(config.output_root, command=COMMAND):
+        # Finish or roll back an interrupted publication first. Otherwise this would read the
+        # old generation, stage_and_publish would then complete the pending one, and the
+        # successor built from the stale JSONL would silently drop that publication's records.
+        recover_pending_publication(index_root)
         previous_generation, _published_at, index_rows = load_index_records(index_root)
         current_jsonl = current_generation_jsonl(index_root)
         if previous_generation is None or current_jsonl is None:
@@ -489,9 +524,12 @@ def apply_plan(
             candidates = [row for row in candidates if row.attachment_key in set(wanted)]
         candidates.sort(key=lambda row: row.ordinal or 0)
 
+        inventory = _read_inventory(config) if candidates else {}
         selectable: list[PlanRow] = []
         for row in candidates:
-            skip = _revalidate(row, index_rows.get(row.attachment_key, []))
+            skip = _revalidate(row, index_rows.get(row.attachment_key, [])) or _zotero_change(
+                row, inventory.get(row.attachment_key), config
+            )
             if skip is not None:
                 outcomes.append(skip)
             else:
@@ -510,6 +548,7 @@ def apply_plan(
             _append_log(plan_dir, report)
             return report
 
+        _claim_run_dir(run_dir, plan, plan_dir, config.output_root)
         stamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
         selection_csv = plan_dir / "selections" / f"{stamp}_selection.csv"
         _write_csv(
@@ -521,12 +560,17 @@ def apply_plan(
             config, selection_csv, run_dir, ordinal_field=ORDINAL_FIELD, workers=workers, timeout_seconds=timeout_seconds
         )
         results = _read_manifest(run_dir / "manifest.csv")
+        # Extraction can take hours; Zotero is consulted again so an attachment deleted or
+        # relinked meanwhile is not published as the current one.
+        inventory = _read_inventory(config)
 
         accepted: list[dict[str, str]] = []
         for row in selected:
             result = results.get(row.attachment_key)
             old = index_rows[row.attachment_key][0]
-            outcome = _judge(row.attachment_key, result, old)
+            outcome = _zotero_change(row, inventory.get(row.attachment_key), config) or _judge(
+                row.attachment_key, result, old
+            )
             if outcome.outcome == OUTCOME_PUBLISHED and result is not None:
                 accepted.append(result)
             outcomes.append(outcome)
@@ -566,6 +610,66 @@ def _revalidate(row: PlanRow, current: list[dict[str, object]]) -> RowOutcome | 
     if not Path(row.source_path).is_file():
         return RowOutcome(key, OUTCOME_MISSING_PDF, "The PDF is no longer on disk.")
     return None
+
+
+def _read_inventory(config: ProjectConfig) -> dict[str, AttachmentRecord]:
+    """Zotero's attachment inventory from a temporary copy; refuses to proceed without it."""
+    try:
+        return load_attachment_inventory(config.zotero_sqlite)
+    except Exception as exc:
+        raise ProvenancePlanError(
+            f"Zotero's attachment inventory could not be read ({type(exc).__name__}: {exc}); "
+            "nothing is reconverted or published without confirming each attachment. Close "
+            "Zotero or wait for sync, then run this again."
+        ) from exc
+
+
+def _current_source(record: AttachmentRecord | None, config: ProjectConfig) -> str:
+    return inventory_source_path(record, config.linked_attachments) if record is not None else ""
+
+
+def _zotero_change(row: PlanRow, record: AttachmentRecord | None, config: ProjectConfig) -> RowOutcome | None:
+    """Why Zotero no longer confirms this row's attachment, parent and linked PDF, or None."""
+    key = row.attachment_key
+    if record is None:
+        return RowOutcome(key, OUTCOME_ZOTERO_CHANGED, "Zotero no longer lists this attachment.")
+    if (record.parent_key or "") != row.zotero_parent_key:
+        return RowOutcome(key, OUTCOME_ZOTERO_CHANGED, "Zotero now files this attachment under a different parent item.")
+    current = _current_source(record, config)
+    if not current:
+        return RowOutcome(key, OUTCOME_ZOTERO_CHANGED, "Zotero's current path for this attachment no longer resolves to a linked file.")
+    if not _same_path(current, row.source_path):
+        return RowOutcome(key, OUTCOME_ZOTERO_CHANGED, "Zotero now links this attachment to a different PDF.")
+    return None
+
+
+def _claim_run_dir(run_dir: Path, plan: ProvenancePlan, plan_dir: Path, output_root: Path) -> None:
+    """Bind ``run_dir`` to this plan, refusing one that another plan (or anything else) uses.
+
+    The claim names the plan directory relative to ``output_root``, so a copy of a plan in
+    another directory -- even with the same plan id -- cannot convert into this run directory.
+    """
+    claim_path = run_dir / RUN_CLAIM_FILENAME
+    claim = {
+        "plan_id": plan.plan_id,
+        "created_at": plan.created_at,
+        "plan_dir": plan_dir.resolve().relative_to(output_root.resolve()).as_posix(),
+    }
+    if claim_path.exists():
+        try:
+            existing = json.loads(claim_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            raise ProvenancePlanError(f"Cannot read run-directory claim {claim_path}: {exc}") from exc
+        if existing != claim:
+            raise ProvenancePlanError(
+                f"Run directory {run_dir} belongs to plan {existing.get('plan_id') if isinstance(existing, dict) else '?'}, "
+                f"not {plan.plan_id}; plan again."
+            )
+        return
+    if run_dir.exists() and any(run_dir.iterdir()):
+        raise ProvenancePlanError(f"Run directory {run_dir} is not empty and not claimed by plan {plan.plan_id}; plan again.")
+    run_dir.mkdir(parents=True, exist_ok=True)
+    claim_path.write_text(json.dumps(claim) + "\n", encoding="utf-8", newline="\n")
 
 
 def _judge(key: str, result: dict[str, str] | None, old: dict[str, object]) -> RowOutcome:

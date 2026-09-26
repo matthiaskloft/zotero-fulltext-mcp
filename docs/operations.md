@@ -216,7 +216,7 @@ extraction.
    | --- | --- | --- |
    | `membership_unchecked` | Zotero's database could not be read. | Close Zotero or wait for sync, plan again. |
    | `not_in_zotero` | Zotero no longer lists the attachment. | Nothing to reconvert (`audit-library` reports it `orphaned_index`). |
-   | `identity_uncertain` | Duplicate index records, a relink to a different PDF, no or ambiguous mapping row for the indexed PDF, a mapping identity other than `mapped_verified` + `verified`/`fulltext_verified`, or a parent mismatch. The row's `reason` says which. | Resolve the identity first; never reconverted automatically. |
+   | `identity_uncertain` | Duplicate index records, a relink to a different PDF, a current Zotero path that does not resolve to a linked file (e.g. `storage:`), no or ambiguous mapping row for the indexed PDF, a mapping identity other than `mapped_verified` + `verified`/`fulltext_verified`, or a parent mismatch. The row's `reason` says which. | Resolve the identity first; never reconverted automatically. |
    | `missing_pdf` | The PDF the record was indexed from is not on disk. | Restore or relink it, `dry-run`, plan again. |
    | `eligible` | Verified identity, same PDF as the indexed record, file present. | Apply. |
 
@@ -233,13 +233,19 @@ extraction.
    ```
 
    `--keys K1 K2 ...` restricts the selection to named eligible rows. The command takes the
-   pipeline write lock, then re-checks each selected row against the *current* generation: a
-   record that already has a hash is `already_resolved`, one whose Markdown, parent or source
-   path changed since planning is `plan_stale` (plan again), and a vanished PDF is
-   `missing_pdf`. The remaining rows are converted with the ordinary converter into
+   pipeline write lock, first finishes or rolls back any interrupted index publication, then
+   re-checks each selected row against the *current* generation: a record that already has a
+   hash is `already_resolved`, one whose Markdown, parent or source path changed since planning
+   is `plan_stale` (plan again), and a vanished PDF is `missing_pdf`. It also re-reads Zotero's
+   attachment inventory (from a temporary copy, as the plan does) and marks a row
+   `zotero_changed` if Zotero no longer lists the attachment, files it under another parent, or
+   links it to a different or unresolvable PDF; it checks this again after conversion, before
+   publishing. If the inventory cannot be read, nothing is converted or published. The remaining rows are converted with the ordinary converter into
    `$data\conversion-runs\provenance-reconvert\<plan-id>\`, with the usual conversion
    checkpoint, and each Markdown file is numbered by its plan position so every batch shares
-   that directory without collisions. Only rows that completed, carry a hash measured around
+   that directory without collisions. The run directory belongs to one plan: the first apply
+   writes `provenance_plan.json` into it, and another plan (or a copy of this plan elsewhere)
+   is refused. Only rows that completed, carry a hash measured around
    their extraction, and pass the same validation as `update-index --replace-existing`
    (verified identity, same parent and PDF path, PDF unchanged since extraction, front matter
    naming the attachment) are published, together, as one successor generation. A row that
