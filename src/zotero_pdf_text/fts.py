@@ -752,6 +752,69 @@ def get_item_context(
     return {"records": [_metadata_dict(row) for row in rows]}
 
 
+MAX_LOOKUP_PARENT_KEYS = 1000
+
+
+def lookup_citation_key(
+    db_path: Path,
+    citation_key: str,
+    *,
+    limit: int = DEFAULT_CONTEXT_RECORD_LIMIT,
+) -> dict[str, object]:
+    """Return every indexed attachment whose stored citation key equals ``citation_key`` exactly.
+
+    The comparison is case-sensitive (SQLite's default BINARY collation on the column): Better
+    BibTeX treats ``Smith2020`` and ``smith2020`` as distinct keys and LaTeX's cite command resolves
+    them distinctly, so folding case could return a different paper than the one cited. Keys are
+    never synthesized: a record whose citation key is empty is never matched.
+
+    Rows are ordered by parent key then attachment key, so a citation key shared by several
+    parents is returned deterministically and in full (up to ``limit``) rather than resolved to
+    one of them. ``truncated`` reports whether more rows matched than were returned;
+    ``parent_keys`` lists every distinct matching parent regardless of that cap.
+
+    No index on ``metadata.citation_key`` is added: the table holds one row per attachment, so a
+    scan is cheap, and adding one would change the published schema for existing indexes.
+    """
+    if limit < 1:
+        raise ValueError("limit must be at least 1")
+    if not citation_key:
+        raise ValueError("citation_key must be non-empty")
+    con = connect_readonly(db_path)
+    con.row_factory = sqlite3.Row
+    try:
+        rows = con.execute(
+            """
+            SELECT metadata.*, (
+                SELECT COUNT(*) FROM chunks WHERE chunks.record_id = metadata.record_id
+            ) AS chunk_count
+            FROM metadata
+            WHERE citation_key = ?
+            ORDER BY zotero_parent_key, zotero_attachment_key
+            LIMIT ?
+            """,
+            (citation_key, limit + 1),
+        ).fetchall()
+        # Ambiguity must not depend on the record cap: a second parent past it would otherwise be
+        # invisible. Distinct parents per key are few, but still bounded.
+        parent_keys = [
+            str(row[0])
+            for row in con.execute(
+                "SELECT DISTINCT zotero_parent_key FROM metadata WHERE citation_key = ? "
+                "ORDER BY zotero_parent_key LIMIT ?",
+                (citation_key, MAX_LOOKUP_PARENT_KEYS),
+            ).fetchall()
+        ]
+    finally:
+        con.close()
+    records = []
+    for row in rows[:limit]:
+        record = _metadata_dict(row)
+        record["chunk_count"] = int(row["chunk_count"])
+        records.append(record)
+    return {"records": records, "truncated": len(rows) > limit, "parent_keys": parent_keys}
+
+
 # Keys per `IN (...)` query. Older SQLite builds cap bound parameters at 999, and the candidate
 # history this is used for grows without bound, so one query over every key could fail outright.
 INDEXED_STATE_BATCH_SIZE = 500

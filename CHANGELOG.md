@@ -18,6 +18,12 @@ dated section once it has been stress-tested against a large library.
   the same bibliographic context, provenance warnings and verifiable `source_locator` as
   `search_fulltext`. It is enabled by default; global search behavior and the index schema are
   unchanged (#19).
+- New read-only MCP tool `lookup_citation_key(citation_key)`: exact, case-sensitive lookup of an
+  indexed citation key returning path-free bibliographic context, every matching attachment key
+  (ordered by parent then attachment key) and its `chunk_count`, so a client can read chunk 0 with
+  `get_fulltext_chunk` and follow `next_chunk_index`. Unknown keys return `found: false`; a key
+  shared by several parents is reported with `ambiguous: true` instead of being resolved to one.
+  No index schema change.
 - The MCP server instructions now name one privacy-aware feedback route: the repository's new
   bug-report issue template (`.github/ISSUE_TEMPLATE/bug_report.yml`), which asks for version,
   enabled flags, sanitized input shape, expected vs actual behavior, a minimal reproduction and

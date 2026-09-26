@@ -773,6 +773,7 @@ class InstallMcpCliTests(unittest.TestCase):
                     "search_within_fulltext",
                     "get_fulltext_chunk",
                     "get_item_context",
+                    "lookup_citation_key",
                     "list_timeout_candidates",
                     "list_orphan_candidates",
                     "library_status",
