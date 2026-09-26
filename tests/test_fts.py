@@ -1241,6 +1241,43 @@ class IndexedStateByAttachmentTests(unittest.TestCase):
         self.assertEqual(indexed_state_by_attachment(Path("does-not-exist.sqlite"), []), {})
 
 
+class SearchWithinAttachmentTests(unittest.TestCase):
+    def test_constrains_to_one_attachment_among_siblings_and_returns_several_chunks(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            jsonl = root / "index.jsonl"
+            sqlite_db = root / "index.sqlite"
+            _write_jsonl(jsonl)
+            records = [json.loads(line) for line in jsonl.read_text(encoding="utf-8").splitlines()]
+            sibling = dict(records[0], zotero_attachment_key="ATTACH3", title="Appendix",
+                           citation_key="", text="Appendix: consensus estimation details and consensus priors.")
+            records[0]["text"] = "Consensus one. " + "filler words here. " * 5 + "Consensus two again."
+            jsonl.write_text("".join(json.dumps(r) + "\n" for r in [*records, sibling]), encoding="utf-8")
+            build_fts_index(jsonl, sqlite_db, chunk_chars=40, overlap_chars=5)
+
+            within = search_fts(sqlite_db, "consensus", limit=10, attachment_key="ATTACH1")
+            self.assertGreater(len(within), 1)
+            self.assertEqual({r.zotero_attachment_key for r in within}, {"ATTACH1"})
+            self.assertEqual(len({r.chunk_index for r in within}), len(within))
+            self.assertEqual(within, search_fts(sqlite_db, "consensus", limit=10, attachment_key="ATTACH1"))
+            self.assertEqual(len(search_fts(sqlite_db, "consensus", limit=1, attachment_key="ATTACH1")), 1)
+            self.assertEqual(
+                {r.zotero_attachment_key for r in search_fts(sqlite_db, "consensus", attachment_key="ATTACH3")},
+                {"ATTACH3"},
+            )
+            self.assertEqual(search_fts(sqlite_db, "estimation", attachment_key="ATTACH1"), [])
+            self.assertEqual(search_fts(sqlite_db, "psychometric", attachment_key="ATTACH1"), [])
+            with self.assertRaises(KeyError):
+                search_fts(sqlite_db, "consensus", attachment_key="ABSENT1")
+            with self.assertRaises(ValueError):
+                search_fts(sqlite_db, " / ", attachment_key="ATTACH1")
+            # Global search still keeps one best chunk per attachment.
+            self.assertEqual(
+                sorted(r.zotero_attachment_key for r in search_fts(sqlite_db, "consensus", limit=10)),
+                ["ATTACH1", "ATTACH3"],
+            )
+
+
 def _write_jsonl(path: Path) -> None:
     records = [
         {

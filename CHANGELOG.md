@@ -13,6 +13,11 @@ dated section once it has been stress-tested against a large library.
 
 ### Added
 
+- Read-only MCP tool `search_within_fulltext(attachment_key, query, search_mode, limit)` searches
+  one indexed attachment's converted text and metadata, returning up to `limit` ranked chunks with
+  the same bibliographic context, provenance warnings and verifiable `source_locator` as
+  `search_fulltext`. It is enabled by default; global search behavior and the index schema are
+  unchanged (#19).
 - Conversion runs record each completed PDF in `conversion_checkpoint.jsonl` in the run directory
   as it finishes (append-only, fsynced, written only after the Markdown is published atomically;
   a torn final line from a crash is tolerated), including with multiple workers, and print one

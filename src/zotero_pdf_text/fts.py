@@ -270,13 +270,31 @@ def search_fts(
     *,
     limit: int = 10,
     search_mode: SearchMode = "all_terms",
+    attachment_key: str | None = None,
 ) -> list[SearchResult]:
+    """Search the index; with attachment_key, rank that one attachment's chunks instead.
+
+    Global search keeps one best chunk per record. A within-attachment search has only one record,
+    so it returns up to `limit` distinct matching chunks ordered by score, then chunk_index. An
+    attachment key absent from the index raises KeyError, so it is distinguishable from no match.
+    """
     terms = _validate_search_request(query, limit, search_mode)
     match_query = _match_query(terms, search_mode)
     candidate_limit = min(MAX_SEARCH_CANDIDATES, max(limit * SEARCH_CANDIDATE_MULTIPLIER, MIN_SEARCH_CANDIDATES))
+    params: tuple[object, ...] = (match_query, candidate_limit)
+    attachment_filter = ""
+    rank_filter = "WHERE record_rank = 1"
+    if attachment_key is not None:
+        attachment_filter = "AND m.zotero_attachment_key = ?"
+        rank_filter = ""
+        params = (match_query, attachment_key, limit)
     con = connect_readonly(db_path)
     con.row_factory = sqlite3.Row
     try:
+        if attachment_key is not None and con.execute(
+            "SELECT 1 FROM metadata WHERE zotero_attachment_key = ?", (attachment_key,)
+        ).fetchone() is None:
+            raise KeyError(f"No record found for attachment key {attachment_key}")
         # record_rank dedup requires ranking the full matched-row set before LIMIT applies (a
         # window function can't use SQLite's top-N/ORDER BY LIMIT shortcut), so a common query
         # term can force a full scan of matching chunk rows. Acceptable for this tool's
@@ -288,7 +306,7 @@ def search_fts(
         # matched_fields precisely is deferred to a second query scoped to just the rows that
         # survive ranking and LIMIT, so it never runs against the full candidate set.
         rows = con.execute(
-            """
+            f"""
             WITH matches AS (
                 SELECT
                     m.record_id,
@@ -320,7 +338,7 @@ def search_fts(
                 FROM chunks_fts f
                 JOIN chunks c ON c.chunk_id = f.chunk_id
                 JOIN metadata m ON m.record_id = f.record_id
-                WHERE chunks_fts MATCH ?
+                WHERE chunks_fts MATCH ? {attachment_filter}
             ), ranked AS (
                 SELECT *, ROW_NUMBER() OVER (
                     PARTITION BY record_id
@@ -329,11 +347,11 @@ def search_fts(
                 FROM matches
             )
             SELECT * FROM ranked
-            WHERE record_rank = 1
+            {rank_filter}
             ORDER BY score ASC, zotero_attachment_key ASC, chunk_index ASC
             LIMIT ?
             """,
-            (match_query, candidate_limit),
+            params,
         ).fetchall()
         selected_rows = rows[:limit]
         chunk_facts_by_chunk_id = _chunk_facts_for_chunks(
