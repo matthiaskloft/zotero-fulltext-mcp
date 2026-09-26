@@ -1,5 +1,6 @@
 import contextlib
 import csv
+import dataclasses
 import hashlib
 import io
 import json
@@ -232,6 +233,74 @@ class ProvenanceValidationTests(ResumeFixture):
         self.assertEqual(row["source_sha256"], _sha(other))
         self.assertIn("Text of EEE", self.markdown("AAA").read_text(encoding="utf-8"))
 
+    def test_edited_markdown_whose_checkpoint_names_another_source_is_kept_as_a_conflict(self):
+        self.convert(_Extractor(), resume=False)
+        markdown = self.markdown("AAA")
+        edited = markdown.read_text(encoding="utf-8") + "\nhand-edited notes\n"
+        markdown.write_text(edited, encoding="utf-8", newline="\n")
+        other = self.root / "EEE.pdf"
+        other.write_bytes(b"%PDF EEE")
+        relinked = [("AAA", other)] + [(key, self.pdfs[key]) for key in self.keys[1:]]
+        _write_report(self.report, relinked)
+
+        extractor = _Extractor()
+        self.convert(extractor)
+
+        self.assertEqual(extractor.extracted, [])
+        self.assertEqual(markdown.read_text(encoding="utf-8"), edited)
+        row = self.manifest()[0]
+        self.assertEqual(row["status"], "error")
+        self.assertIn("checkpoint conflict", row["error"])
+        self.assertEqual(row["source_sha256"], "")
+        self.assertEqual(row["output_path"], "")
+
+        # --force is the explicit way to replace it.
+        forced = _Extractor()
+        stderr = io.StringIO()
+        with patch("zotero_pdf_text.converter.subprocess.run", side_effect=forced), contextlib.redirect_stderr(stderr):
+            convert_verified(self.config, self.report, output_dir=self.run_dir, resume=True, force=True, workers=1)
+        self.assertIn("Text of EEE", markdown.read_text(encoding="utf-8"))
+        self.assertEqual(self.manifest()[0]["source_sha256"], _sha(other))
+
+    def test_crash_between_metadata_refresh_and_record_keeps_provenance(self):
+        self.convert(_Extractor(), resume=False)
+        original = self.manifest()
+        _write_report(self.report, list(self.pdfs.items()), citation_suffix="2025")
+
+        # The refreshed front matter is published, then the process dies before the new entry
+        # (with the new output hash) is appended.
+        with patch("zotero_pdf_text.checkpoint.ConversionCheckpoint.record", side_effect=KeyboardInterrupt):
+            with self.assertRaises(KeyboardInterrupt):
+                self.convert(_Extractor())
+        self.assertIn('citation_key: "smithAAA2025"', self.markdown("AAA").read_text(encoding="utf-8"))
+
+        extractor = _Extractor()
+        self.convert(extractor)
+
+        self.assertEqual(extractor.extracted, [])
+        rows = self.manifest()
+        self.assertEqual(rows[0]["status"], "converted")
+        self.assertEqual(rows[0]["source_sha256"], original[0]["source_sha256"])
+        entry = read_checkpoint(self.run_dir / CHECKPOINT_FILENAME)[f"markdown/{self.markdown('AAA').name}"]
+        self.assertEqual(entry.output_sha256, _sha(self.markdown("AAA")))
+
+    def test_entries_without_body_hash_still_require_identical_output(self):
+        self.convert(_Extractor(), resume=False)
+        checkpoint_path = self.run_dir / CHECKPOINT_FILENAME
+        # Rewrite the ledger as an older writer would have produced it.
+        lines = []
+        for line in checkpoint_path.read_text(encoding="utf-8").splitlines():
+            data = json.loads(line)
+            data.pop("body_sha256")
+            lines.append(json.dumps(data))
+        checkpoint_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+        extractor = _Extractor()
+        self.convert(extractor)
+        self.assertEqual(extractor.extracted, [])
+        self.assertTrue(all(row["status"] == "converted" for row in self.manifest()))
+        self.assertTrue(all(entry.body_sha256 for entry in read_checkpoint(checkpoint_path).values()))
+
     def test_moved_source_with_identical_bytes_is_reused(self):
         self.convert(_Extractor(), resume=False)
         moved = self.root / "moved"
@@ -321,6 +390,19 @@ class CheckpointFileTests(unittest.TestCase):
             "reuse",
         )
         self.assertEqual(classify_entry(entry, attachment_key="K", source_path="p", output_sha256="z"), "output_changed")
+        self.assertEqual(classify_entry(entry, attachment_key="X", source_path="p", output_sha256="z"), "conflict")
+        with_body = dataclasses.replace(entry, body_sha256="b")
+        self.assertEqual(
+            classify_entry(with_body, attachment_key="K", source_path="p", output_sha256="z", body_sha256="b"), "reuse"
+        )
+        self.assertEqual(
+            classify_entry(with_body, attachment_key="X", source_path="p", output_sha256="z", body_sha256="b"), "foreign"
+        )
+        # An entry from before body hashes existed never matches on the body.
+        self.assertEqual(
+            classify_entry(entry, attachment_key="K", source_path="p", output_sha256="z", body_sha256=""),
+            "output_changed",
+        )
 
 
 if __name__ == "__main__":

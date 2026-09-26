@@ -20,7 +20,7 @@ from typing import Callable
 from .config import ProjectConfig
 from .indexer import load_indexed_keys
 from ._atomic import atomic_write_text
-from .checkpoint import ConversionCheckpoint, classify_entry
+from .checkpoint import ConversionCheckpoint, body_sha256, classify_entry
 from .timeout_candidates import (
     TimeoutCandidate,
     append_master_candidates,
@@ -445,9 +445,9 @@ def _convert_row(
     effective_timeout = _effective_timeout(row, timeout_seconds, source_path)
     try:
         if output_path.exists() and not force and checkpoint is not None:
-            reused, foreign = _resume_from_checkpoint(row, output_path, checkpoint)
-            if reused is not None:
-                return reused, None
+            resumed, foreign = _resume_from_checkpoint(row, output_path, checkpoint)
+            if resumed is not None:
+                return resumed, None
             # A checkpoint entry for this output path that names another attachment or source
             # proves the existing Markdown is not this row's text. Reusing it would publish
             # another document's text under this key, so re-extract it (the old file is kept
@@ -577,9 +577,11 @@ def _resume_from_checkpoint(
 ) -> tuple[ConversionResult | None, bool]:
     """Reuse a checkpointed completion for existing Markdown, or say why it cannot be reused.
 
-    Returns ``(result, False)`` when the entry is validated and reused, ``(None, True)`` when the
-    entry proves the Markdown belongs to another attachment or source, and ``(None, False)`` when
-    there is no usable entry (the caller keeps the provenance-unknown ``skipped_existing`` path).
+    Returns ``(result, False)`` when the entry is validated and reused, or an ``error`` result when
+    the Markdown was edited after being recorded for another attachment or source (a conflict
+    only ``--force`` may resolve); ``(None, True)`` when the entry proves the unmodified Markdown
+    belongs to another attachment or source; and ``(None, False)`` when there is no usable entry
+    (the caller keeps the provenance-unknown ``skipped_existing`` path).
 
     The reused row carries the source hash recorded at extraction time. Today's PDF is only
     hashed to compare against that recorded hash (when the source path differs), never to supply
@@ -590,20 +592,36 @@ def _resume_from_checkpoint(
         return None, False
     row_source = row.get("source_path", "")
     current_source_hash = _source_sha256(Path(row_source)) if entry.source_path != row_source else None
+    body = _existing_markdown_body(output_path)
     verdict = classify_entry(
         entry,
         attachment_key=row.get("zotero_attachment_key", ""),
         source_path=row_source,
         output_sha256=_source_sha256(output_path),
         current_source_sha256=current_source_hash,
+        body_sha256=body_sha256(body),
     )
+    if verdict == "conflict":
+        # Re-extracting would overwrite someone's edits; reusing would publish text that is
+        # neither this row's nor the recorded one. Keep the file and fail the row visibly.
+        return (
+            _result(
+                row,
+                output_path,
+                "error",
+                "checkpoint conflict: existing Markdown was modified after it was recorded and its "
+                "checkpoint names another attachment/source; the file was kept unchanged. Rerun "
+                "with --force to replace it.",
+            ),
+            False,
+        )
     if verdict == "foreign":
         return None, True
     if verdict != "reuse":
         return None, False
     extraction_tool = entry.result.get("extraction_tool") or EXTRACTION_TOOL
     has_math = entry.result.get("has_math", "false") == "true"
-    refreshed = _with_front_matter(row, _existing_markdown_body(output_path), extraction_tool, has_math=has_math)
+    refreshed = _with_front_matter(row, body, extraction_tool, has_math=has_math)
     if output_path.read_bytes() != refreshed.encode("utf-8"):
         # Metadata-only refresh (e.g. an updated citation key); the body, and therefore the
         # extraction-time provenance, is unchanged.
@@ -618,7 +636,12 @@ def _resume_from_checkpoint(
         source_sha256=entry.source_sha256,
     )
     output_sha256 = _source_sha256(output_path)
-    if output_sha256 != entry.output_sha256 or asdict(result) != entry.result:
+    current_body_sha256 = body_sha256(_existing_markdown_body(output_path))
+    if (
+        output_sha256 != entry.output_sha256
+        or current_body_sha256 != entry.body_sha256
+        or asdict(result) != entry.result
+    ):
         _checkpoint_best_effort(
             lambda: checkpoint.record(
                 output_path,
@@ -627,6 +650,7 @@ def _resume_from_checkpoint(
                 source_mtime_ns=entry.source_mtime_ns,
                 source_sha256=entry.source_sha256,
                 output_sha256=output_sha256,
+                body_sha256=current_body_sha256,
             )
         )
     source_modified = (
@@ -655,6 +679,7 @@ def _record_completion(
         source_mtime_ns=source_stat[1] if source_stat else None,
         source_sha256=source_sha256,
         output_sha256=output_sha256,
+        body_sha256=body_sha256(_existing_markdown_body(output_path)),
     )
 
 

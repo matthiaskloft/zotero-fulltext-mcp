@@ -62,7 +62,9 @@ Markdown file are reused without re-extraction and keep the source hash recorded
 at extraction time, so the rebuilt manifest and summary match an uninterrupted
 run. Existing Markdown without a matching entry stays `skipped_existing` with
 unknown provenance; Markdown that the checkpoint shows was extracted for another
-attachment or source is re-extracted. See the data dictionary's *Conversion
+attachment or source is re-extracted, unless it was edited since it was recorded:
+that conflict keeps the file and reports the row as an error until you rerun with
+`--force`. See the data dictionary's *Conversion
 Checkpoint* section for the exact rules.
 
 ```powershell

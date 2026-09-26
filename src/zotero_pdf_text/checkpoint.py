@@ -13,6 +13,7 @@ recorded more than once, the last valid entry wins.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import threading
@@ -24,7 +25,7 @@ from typing import Any, Literal
 CHECKPOINT_FILENAME = "conversion_checkpoint.jsonl"
 CHECKPOINT_VERSION = 1
 
-Verdict = Literal["reuse", "foreign", "output_changed"]
+Verdict = Literal["reuse", "foreign", "output_changed", "conflict"]
 
 
 @dataclass(frozen=True)
@@ -34,7 +35,10 @@ class CheckpointEntry:
     ``output`` is the Markdown path relative to the run directory (POSIX separators), so a run
     directory synced to another machine still matches. ``source_size``/``source_mtime_ns`` and
     ``source_sha256`` describe the source PDF at extraction time and are never refreshed later.
-    ``result`` is the conversion manifest row recorded for this output.
+    ``result`` is the conversion manifest row recorded for this output. ``body_sha256`` hashes
+    the Markdown body without its front matter (see :func:`body_sha256`), so a front-matter-only
+    refresh interrupted before its new entry was recorded still matches; it is "" in entries
+    written before the field existed.
     """
 
     output: str
@@ -46,6 +50,7 @@ class CheckpointEntry:
     output_sha256: str
     recorded_at: str
     result: dict[str, str]
+    body_sha256: str = ""
 
     def to_json(self) -> str:
         return json.dumps({"checkpoint_version": CHECKPOINT_VERSION, **asdict(self)}, ensure_ascii=False)
@@ -62,6 +67,9 @@ class CheckpointEntry:
         result = data.get("result")
         if not isinstance(result, dict) or not all(isinstance(value, str) for value in result.values()):
             return None
+        body = data.get("body_sha256", "")
+        if not isinstance(body, str):
+            return None
         size, mtime = data.get("source_size"), data.get("source_mtime_ns")
         if not all(value is None or (isinstance(value, int) and not isinstance(value, bool)) for value in (size, mtime)):
             return None
@@ -75,7 +83,13 @@ class CheckpointEntry:
             output_sha256=data["output_sha256"],
             recorded_at=data["recorded_at"],
             result=dict(result),
+            body_sha256=body,
         )
+
+
+def body_sha256(body: str) -> str:
+    """Hash a Markdown body (the text after its front matter) as recorded in ``body_sha256``."""
+    return hashlib.sha256(body.encode("utf-8")).hexdigest()
 
 
 def read_checkpoint(path: Path) -> dict[str, CheckpointEntry]:
@@ -102,26 +116,34 @@ def classify_entry(
     source_path: str,
     output_sha256: str,
     current_source_sha256: str | None = None,
+    body_sha256: str | None = None,
 ) -> Verdict:
     """Decide whether ``entry`` may stand in for re-extracting this row's existing Markdown.
 
     - ``foreign``: the entry was recorded for a different attachment or a different source at
-      this output path, so the existing Markdown does not belong to this row.
+      this output path, and the Markdown is still the text recorded for it, so the existing file
+      does not belong to this row and can safely be re-extracted.
+    - ``conflict``: as ``foreign``, but the Markdown was also modified after it was recorded. It
+      is neither this row's text nor the recorded text, so it must be neither reused nor
+      silently replaced.
     - ``output_changed``: the Markdown was modified after it was recorded; the entry no longer
       describes it, so its provenance is unknown.
-    - ``reuse``: same attachment, same source, byte-identical Markdown.
+    - ``reuse``: same attachment, same source, and the Markdown still matches -- byte-identical,
+      or (when both hashes are known) with an identical body, i.e. only the front matter differs.
 
     The source counts as the same when its path matches, or -- when the path differs, e.g. a run
     directory resumed from another machine -- when ``current_source_sha256`` equals the recorded
     extraction-time hash. The current hash is only ever compared, never recorded.
     """
-    if entry.zotero_attachment_key != attachment_key:
-        return "foreign"
-    if entry.source_path != source_path and current_source_sha256 != entry.source_sha256:
-        return "foreign"
-    if entry.output_sha256 != output_sha256:
-        return "output_changed"
-    return "reuse"
+    output_matches = entry.output_sha256 == output_sha256 or (
+        bool(entry.body_sha256) and entry.body_sha256 == body_sha256
+    )
+    same_row = entry.zotero_attachment_key == attachment_key and (
+        entry.source_path == source_path or current_source_sha256 == entry.source_sha256
+    )
+    if not same_row:
+        return "foreign" if output_matches else "conflict"
+    return "reuse" if output_matches else "output_changed"
 
 
 class ConversionCheckpoint:
@@ -161,6 +183,7 @@ class ConversionCheckpoint:
         source_mtime_ns: int | None,
         source_sha256: str,
         output_sha256: str,
+        body_sha256: str = "",
     ) -> CheckpointEntry:
         entry = CheckpointEntry(
             output=self.relative(output_path),
@@ -172,6 +195,7 @@ class ConversionCheckpoint:
             output_sha256=output_sha256,
             recorded_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
             result=dict(result),
+            body_sha256=body_sha256,
         )
         self._append(entry)
         return entry

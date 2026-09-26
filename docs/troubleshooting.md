@@ -175,7 +175,9 @@ Rebuild in this order:
 
 `convert-verified --resume` refreshes YAML/front matter and manifest metadata
 for existing Markdown files. It does not rerun PDF extraction, except for a file its
-`conversion_checkpoint.jsonl` shows was extracted for a different attachment or source PDF.
+`conversion_checkpoint.jsonl` shows was extracted for a different attachment or source PDF and
+has not been edited since. If such a file *was* edited, the row is reported as a `checkpoint
+conflict` error and the file is left alone; rerun with `--force` to replace it.
 
 Use `--force` only when the Markdown body itself should be regenerated:
 

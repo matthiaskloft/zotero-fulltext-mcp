@@ -21,8 +21,10 @@ dated section once it has been stress-tested against a large library.
   re-extracting them, and keeps the source hash recorded at extraction time, so the rebuilt
   manifest and summary match an uninterrupted run. Existing Markdown without a matching entry
   stays `skipped_existing` with unknown provenance, and Markdown the checkpoint shows was extracted
-  for another attachment or source is re-extracted. The manifest schema is unchanged; `summary.md`
-  adds reused-row counts (#29).
+  for another attachment or source is re-extracted -- unless it was also edited since, in which
+  case the file is kept and the row is reported as a `checkpoint conflict` error until rerun with
+  `--force`. A body hash lets a row whose front-matter refresh was interrupted stay reusable. The
+  manifest schema is unchanged; `summary.md` adds reused-row counts (#29).
 
 ## [0.9.0] - 2026-09-26
 

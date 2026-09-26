@@ -54,20 +54,28 @@ fresh line. When an output is recorded more than once, the last entry wins.
   (`null` if they could not be read)
 - `source_sha256`: the source hash recorded at extraction time, never refreshed afterwards
 - `output_sha256`: SHA-256 of the published Markdown file
+- `body_sha256`: SHA-256 of the Markdown body without its YAML front matter. Absent (read as
+  empty) in entries written before this field was added; such entries only match on
+  `output_sha256`.
 - `recorded_at`: UTC timestamp of the entry
 - `result`: the manifest row recorded for this output
 
 On `--resume`, existing Markdown is reused without re-extraction only when its latest entry names
 the same attachment key, the same source (same `source_path`, or -- for a run directory resumed
-where paths differ -- a PDF whose current bytes hash to the recorded `source_sha256`), and a
-byte-identical output (`output_sha256`). The reused manifest row carries the recorded extraction-time
+where paths differ -- a PDF whose current bytes hash to the recorded `source_sha256`), and
+unchanged Markdown: a byte-identical file (`output_sha256`) or an identical body
+(`body_sha256`), so a front-matter refresh interrupted before its new entry was appended stays
+reusable. The reused manifest row carries the recorded extraction-time
 hash; today's PDF is never hashed into it, so a PDF modified since extraction surfaces as
 `source_changed` in `audit-library` rather than being silently re-attested. If the entry names a
-different attachment or source, the existing Markdown is not this row's text and is re-extracted
-(the old file stays in place until the new extraction succeeds). If the Markdown changed after it
-was recorded, or no entry exists, the row stays `skipped_existing` with an empty `source_sha256`.
-Metadata-only front-matter refreshes on a reused row append a new entry with the new
-`output_sha256` and the unchanged source fields.
+different attachment or source and the Markdown is unchanged, the existing Markdown is not this
+row's text and is re-extracted (the old file stays in place until the new extraction succeeds).
+If the entry names a different attachment or source *and* the Markdown was modified after it was
+recorded, the row is a checkpoint conflict: the file is kept unchanged and the row is reported as
+`error` (not re-extracted, not reused); rerun with `--force` to replace it. If the Markdown changed
+after it was recorded for this same row, or no entry exists, the row stays `skipped_existing` with
+an empty `source_sha256`. Metadata-only front-matter refreshes on a reused row append a new entry
+with the new `output_sha256` and the unchanged source fields.
 
 `summary.md` reports how many converted rows were reused from the checkpoint and, of those, how
 many have a source PDF whose size or modification time differs from extraction time.
