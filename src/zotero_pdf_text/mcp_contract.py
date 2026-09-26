@@ -732,7 +732,9 @@ def create_server(
         several parent items, every match is returned (ordered by parent then attachment key) and
         ambiguous is true -- do not assume which paper was meant. To read a match, call
         get_fulltext_chunk with its attachment_key and chunk_index=0 (when chunk_count > 0), then
-        follow next_chunk_index.
+        follow next_chunk_index. parent_keys and ambiguous cover every matching parent even when
+        records is capped; when truncated is true, fetch a parent's remaining attachments with
+        get_item_context(parent_key=...).
         """
         def operation() -> CitationKeyLookupResponse:
             validated = _validate_citation_key(citation_key)
@@ -1456,7 +1458,11 @@ def serialize_citation_key_lookup(citation_key: str, lookup: dict[str, object]) 
         context = serialize_context_record(record)
         chunk_count = int(record.get("chunk_count") or 0) if isinstance(record, dict) else 0
         serialized.append({**context, "chunk_count": chunk_count})
-    parent_keys = sorted({record["parent_key"] for record in serialized})
+    raw_parent_keys = lookup.get("parent_keys")
+    if isinstance(raw_parent_keys, list):
+        parent_keys = sorted({str(key) for key in raw_parent_keys})
+    else:
+        parent_keys = sorted({record["parent_key"] for record in serialized})
     return {
         "citation_key": citation_key,
         "found": bool(serialized),

@@ -5,7 +5,7 @@ from pathlib import Path
 
 from zotero_pdf_text.artifacts import stage_and_publish, write_jsonl_from_existing
 from zotero_pdf_text.fts import build_fts_index, lookup_citation_key
-from zotero_pdf_text.mcp_contract import PublicMcpError, create_server
+from zotero_pdf_text.mcp_contract import MAX_CONTEXT_RECORDS, PublicMcpError, create_server
 
 from test_mcp_server import FakeFastMCP, assert_no_local_path
 
@@ -130,6 +130,21 @@ class LookupCitationKeyToolTests(unittest.TestCase):
         for record in result["records"]:
             self.assertNotIn("source_path", record)
             self.assertNotIn("markdown_path", record)
+
+    def test_parent_past_the_record_cap_still_marks_ambiguous(self):
+        root = self.root / "capped"
+        root.mkdir()
+        records = [_record("PARENTA", f"ATTACHA{i:03d}", "big2024", "Text.") for i in range(50)]
+        records.append(_record("PARENTB", "ATTACHB999", "big2024", "Text."))
+        jsonl = root / "index.jsonl"
+        jsonl.write_text("".join(json.dumps(r) + "\n" for r in records), encoding="utf-8")
+        stage_and_publish(root, write_jsonl_from_existing(jsonl), command="test")
+        server = create_server(root / "index.sqlite", mcp_factory=FakeFastMCP)
+        result = server.tools["lookup_citation_key"](citation_key="big2024")
+        self.assertEqual(len(result["records"]), MAX_CONTEXT_RECORDS)
+        self.assertTrue(result["truncated"])
+        self.assertEqual(result["parent_keys"], ["PARENTA", "PARENTB"])
+        self.assertTrue(result["ambiguous"])
 
     def test_zotero_keys_are_not_citation_keys(self):
         for key in ("PARENTA", "ATTACHA1"):

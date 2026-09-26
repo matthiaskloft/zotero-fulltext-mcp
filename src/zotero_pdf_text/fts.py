@@ -716,6 +716,9 @@ def get_item_context(
     return {"records": [_metadata_dict(row) for row in rows]}
 
 
+MAX_LOOKUP_PARENT_KEYS = 1000
+
+
 def lookup_citation_key(
     db_path: Path,
     citation_key: str,
@@ -731,7 +734,8 @@ def lookup_citation_key(
 
     Rows are ordered by parent key then attachment key, so a citation key shared by several
     parents is returned deterministically and in full (up to ``limit``) rather than resolved to
-    one of them. ``truncated`` reports whether more rows matched than were returned.
+    one of them. ``truncated`` reports whether more rows matched than were returned;
+    ``parent_keys`` lists every distinct matching parent regardless of that cap.
 
     No index on ``metadata.citation_key`` is added: the table holds one row per attachment, so a
     scan is cheap, and adding one would change the published schema for existing indexes.
@@ -755,6 +759,16 @@ def lookup_citation_key(
             """,
             (citation_key, limit + 1),
         ).fetchall()
+        # Ambiguity must not depend on the record cap: a second parent past it would otherwise be
+        # invisible. Distinct parents per key are few, but still bounded.
+        parent_keys = [
+            str(row[0])
+            for row in con.execute(
+                "SELECT DISTINCT zotero_parent_key FROM metadata WHERE citation_key = ? "
+                "ORDER BY zotero_parent_key LIMIT ?",
+                (citation_key, MAX_LOOKUP_PARENT_KEYS),
+            ).fetchall()
+        ]
     finally:
         con.close()
     records = []
@@ -762,7 +776,7 @@ def lookup_citation_key(
         record = _metadata_dict(row)
         record["chunk_count"] = int(row["chunk_count"])
         records.append(record)
-    return {"records": records, "truncated": len(rows) > limit}
+    return {"records": records, "truncated": len(rows) > limit, "parent_keys": parent_keys}
 
 
 # Keys per `IN (...)` query. Older SQLite builds cap bound parameters at 999, and the candidate
