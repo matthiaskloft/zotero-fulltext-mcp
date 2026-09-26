@@ -109,7 +109,7 @@ class McpServerTests(unittest.TestCase):
 
     def test_instructions_offer_privacy_aware_feedback_route_once(self):
         server = create_server(Path("unused.sqlite"), mcp_factory=FakeFastMCP)
-        template_url = "https://github.com/matthiaskloft/zotero_fulltext_mcp/issues/new?template=bug_report.yml"
+        template_url = "https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/new?template=bug_report.yml"
 
         self.assertEqual(server.instructions.count(template_url), 1)
         for phrase in ("never file it yourself", "paper text", "absolute paths", "credentials", "attachment keys"):

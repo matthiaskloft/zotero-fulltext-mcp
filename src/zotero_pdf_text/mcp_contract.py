@@ -117,7 +117,7 @@ MCP_INSTRUCTIONS = (
     "approves that specific operation. Zotero writes belong in approval-gated CLI workflows. "
     "To report a reproducible tool error, stale or misleading result, or disagreement with the CLI "
     "audit, suggest the user file "
-    "https://github.com/matthiaskloft/zotero_fulltext_mcp/issues/new?template=bug_report.yml; never "
+    "https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/new?template=bug_report.yml; never "
     "file it yourself, and help them strip paper text, identifying titles or metadata, absolute "
     "paths, credentials, and attachment keys unless they deliberately choose to share them."
 )

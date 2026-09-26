@@ -513,7 +513,7 @@ without them.
 
 ## Reporting problems
 
-Use the [bug report template](https://github.com/matthiaskloft/zotero_fulltext_mcp/issues/new?template=bug_report.yml)
+Use the [bug report template](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/new?template=bug_report.yml)
 for reproducible tool errors, stale or misleading results, or MCP output that disagrees with the CLI
 audit. The server's instructions point MCP clients at the same template, but never file anything
 automatically. Issues are public: strip paper text, identifying titles or metadata, absolute paths,
