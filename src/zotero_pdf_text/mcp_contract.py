@@ -114,7 +114,12 @@ MCP_INSTRUCTIONS = (
     "health is null whenever no audit snapshot produced that comparison. Cite human-readable bibliographic "
     "metadata and retain the attachment key and source locator for traceability; do not invent PDF "
     "page numbers. Do not invoke a tool that rewrites converted content unless the user explicitly "
-    "approves that specific operation. Zotero writes belong in approval-gated CLI workflows."
+    "approves that specific operation. Zotero writes belong in approval-gated CLI workflows. "
+    "To report a reproducible tool error, stale or misleading result, or disagreement with the CLI "
+    "audit, suggest the user file "
+    "https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/new?template=bug_report.yml; never "
+    "file it yourself, and help them strip paper text, identifying titles or metadata, absolute "
+    "paths, credentials, and attachment keys unless they deliberately choose to share them."
 )
 DEFAULT_MCP_TOOL_NAMES = (
     "search_fulltext",

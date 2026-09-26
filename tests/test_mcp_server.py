@@ -107,6 +107,16 @@ class McpServerTests(unittest.TestCase):
             for tool_name in server.tools:
                 self.assertEqual(server.tool_metadata[tool_name]["annotations"], READ_ONLY_TOOL_ANNOTATIONS)
 
+    def test_instructions_offer_privacy_aware_feedback_route_once(self):
+        server = create_server(Path("unused.sqlite"), mcp_factory=FakeFastMCP)
+        template_url = "https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/new?template=bug_report.yml"
+
+        self.assertEqual(server.instructions.count(template_url), 1)
+        for phrase in ("never file it yourself", "paper text", "absolute paths", "credentials", "attachment keys"):
+            self.assertIn(phrase, server.instructions)
+        for tool_name in server.tools:
+            self.assertNotIn("issues/new", server.tools[tool_name].__doc__ or "")
+
     @unittest.skipUnless(importlib.util.find_spec("mcp"), "requires the optional MCP extra")
     def test_real_fastmcp_exposes_read_only_annotations(self):
         server = create_server(Path("unused.sqlite"))
