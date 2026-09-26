@@ -572,6 +572,50 @@ def write_jsonl_appending_manifest(
     return _write, len(new_rows)
 
 
+# Identity states the validated replacement path accepts. Narrower than the canonical-library
+# eligibility set: a `manual_accepted` identity may publish a new record but never overwrite one.
+REPLACEABLE_IDENTITY_STATUSES = frozenset({"verified", "fulltext_verified"})
+
+
+def replacement_rejection(row: dict[str, str], old: dict[str, object]) -> str | None:
+    """Why a completed conversion may not replace the indexed record ``old``, or None if it may.
+
+    The single definition of a validated replacement: a completed conversion of a verified
+    identity, for the same parent and source path as the record it replaces, carrying the source
+    hash measured around its extraction, whose source PDF still has that hash, and whose Markdown
+    names this attachment. Callers that must keep going past one bad row (for example a batch
+    reconversion) use the reason; ``write_jsonl_replacing_manifest`` raises it.
+    """
+    key = row.get("zotero_attachment_key", "")
+    if row.get("status") != "converted" or not row.get("output_path"):
+        return "conversion did not complete."
+    if row.get("classification") != "mapped_verified" or row.get("identity_status") not in REPLACEABLE_IDENTITY_STATUSES:
+        return "conversion identity is not verified."
+    if not row.get("source_path") or not old.get("source_path") or (
+        row.get("zotero_parent_key") != old.get("zotero_parent_key")
+        or Path(row["source_path"]).resolve() != Path(str(old["source_path"])).resolve()
+    ):
+        return "attachment parent or source path changed."
+    source_hash = row.get("source_sha256", "")
+    if not isinstance(source_hash, str) or len(source_hash) != 64 or any(
+        c not in "0123456789abcdef" for c in source_hash
+    ):
+        return "completed conversion has no valid source hash."
+    try:
+        current_source_hash = _sha256(Path(row["source_path"]))
+    except OSError:
+        return "source PDF cannot be read."
+    if current_source_hash != source_hash:
+        return "source PDF changed since conversion."
+    try:
+        fields = front_matter_fields(Path(row["output_path"]).read_text(encoding="utf-8"))
+    except OSError:
+        return "converted Markdown cannot be read."
+    if fields.get("zotero_attachment_key") != key:
+        return "Markdown front matter does not identify this attachment."
+    return None
+
+
 def write_jsonl_replacing_manifest(
     current_jsonl: Path, manifest_csv: Path
 ) -> tuple[Callable[[Path], None], int, int, int]:
@@ -614,29 +658,9 @@ def write_jsonl_replacing_manifest(
         if row["status"] != "converted":
             skipped += 1
             continue
-        if row.get("classification") != "mapped_verified" or row.get("identity_status") not in {
-            "verified", "fulltext_verified"
-        }:
-            raise ValueError(f"Cannot replace {key}: conversion identity is not verified.")
-        if not row.get("source_path") or not old.get("source_path") or (
-            row.get("zotero_parent_key") != old.get("zotero_parent_key")
-            or Path(row["source_path"]).resolve() != Path(str(old["source_path"])).resolve()
-        ):
-            raise ValueError(f"Cannot replace {key}: attachment parent or source path changed.")
-        source_hash = row.get("source_sha256", "")
-        if not isinstance(source_hash, str) or len(source_hash) != 64 or any(
-            c not in "0123456789abcdef" for c in source_hash
-        ):
-            raise ValueError(f"Cannot replace {key}: completed conversion has no valid source hash.")
-        try:
-            current_source_hash = _sha256(Path(row["source_path"]))
-        except OSError as exc:
-            raise ValueError(f"Cannot replace {key}: source PDF cannot be read.") from exc
-        if current_source_hash != source_hash:
-            raise ValueError(f"Cannot replace {key}: source PDF changed since conversion.")
-        fields = front_matter_fields(Path(row["output_path"]).read_text(encoding="utf-8"))
-        if fields.get("zotero_attachment_key") != key:
-            raise ValueError(f"Cannot replace {key}: Markdown front matter does not identify this attachment.")
+        rejection = replacement_rejection(row, old)
+        if rejection:
+            raise ValueError(f"Cannot replace {key}: {rejection}")
         replacements[cast(str, key)] = _record_from_manifest_row(row)
 
     def _write(jsonl_path: Path) -> None:

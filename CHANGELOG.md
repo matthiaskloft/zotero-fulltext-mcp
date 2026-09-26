@@ -25,6 +25,14 @@ dated section once it has been stress-tested against a large library.
   case the file is kept and the row is reported as a `checkpoint conflict` error until rerun with
   `--force`. A body hash lets a row whose front-matter refresh was interrupted stay reusable. The
   manifest schema is unchanged; `summary.md` adds reused-row counts (#29).
+- `plan-provenance-reconvert` and `apply-provenance-reconvert`: a migration path for indexed
+  records with unknown source provenance. The read-only plan buckets every such record
+  (`eligible`, `missing_pdf`, `identity_uncertain`, `not_in_zotero`, `membership_unchecked`) with
+  a reason and a PDF/byte/page estimate. Apply reconverts selected eligible rows in a dedicated,
+  checkpointed run directory (an interrupted invocation resumes without re-extracting) and
+  publishes only completed, verified, hash-bearing conversions through the validated replacement
+  path; failed or uncertain rows keep their old record. An ordinary `rebuild-index` still does
+  not, and never will, backfill provenance (#31).
 
 ### Changed
 

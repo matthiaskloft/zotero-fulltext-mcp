@@ -496,6 +496,47 @@ Two counts sit outside the status vocabulary and explain it:
   `source_changed` cannot be evaluated at all. Until those records are reconverted, a low
   `source_changed` count means *not measured*, not *not drifted*.
 
+### Provenance Reconversion Plan
+
+`plan-provenance-reconvert` writes `plan.json` (and `plan.csv`, one row per record with `bucket`,
+`attachment_key`, `ordinal`, `reason`, `title`, `source_path`, `source_bytes`, `page_count`) to
+`<output_root>/provenance-reconvert/<plan-id>/`. It describes published records whose
+`source_sha256` is empty; records that already carry a hash are not in it.
+
+Top-level fields of `plan.json`:
+
+- `plan_version`: `1`.
+- `plan_id`, `created_at`: plan identifier (also the run-directory name) and UTC creation time.
+- `mapping_report`, `generation_id`: the snapshot and the published generation the plan was built from.
+- `inventory_available`, `inventory_error`: whether Zotero's database could be read, and why not.
+- `run_dir`: `<output_root>/conversion-runs/provenance-reconvert/<plan-id>`, where
+  `apply-provenance-reconvert` converts.
+- `source_provenance_unknown`: number of rows; equals `library_status.source_provenance_unknown`
+  for the same generation.
+- `counts`: rows per bucket (`eligible`, `missing_pdf`, `identity_uncertain`, `not_in_zotero`,
+  `membership_unchecked`). Buckets are exclusive, so the counts sum to the total.
+- `estimate`: `eligible_rows`, `source_bytes` (sum of eligible PDF sizes), `pages` (sum of known
+  page counts) and `rows_without_page_count`.
+- `advice`: the recommended action per non-empty bucket.
+- `rows`: one object per record, sorted by attachment key, with `attachment_key`, `bucket`,
+  `reason` (empty when eligible), `ordinal` (1-based position among eligible rows, fixed for the
+  plan's life and used as the Markdown number in the run directory; `null` otherwise),
+  `zotero_parent_key`, `title`, `source_path` (the PDF the record was indexed from),
+  `source_exists`, `source_bytes`, `page_count`, `indexed_markdown_path`,
+  `indexed_markdown_sha256` (with the parent key and source path, used to detect a record that
+  changed after planning), `indexed_at`,
+  and `conversion_row` (the mapping fields handed to the converter; eligible rows only).
+
+`apply_log.jsonl` in the plan directory gains one line per `apply-provenance-reconvert`
+invocation: `logged_at`, `plan_id`, `run_dir`, `previous_generation_id`, `generation_id` (null
+when nothing was published), `published`, `selected`, `remaining_eligible`, `counts`, and `rows`
+(`attachment_key`, `outcome`, `reason`, `markdown_path`, `source_sha256`). Outcomes:
+`published`, `conversion_failed`, `rejected`, `already_resolved`, `plan_stale`, `missing_pdf`,
+`not_eligible`, `not_in_plan`. The `selections/` subdirectory keeps each invocation's input
+mapping CSV and, when something was published, the manifest handed to the replacement path. The
+run directory itself is an ordinary conversion run (`manifest.csv`, `conversion_checkpoint.jsonl`,
+`markdown/`); its manifest describes the most recent invocation's selection only.
+
 ## Confidence Fields
 
 - `classification`: mapper decision such as `mapped_verified` or

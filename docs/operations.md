@@ -99,8 +99,9 @@ after extraction succeeds:
 ## Managed Index Generations
 
 The output root has several roles: `mapping-runs/` holds mapping snapshots;
-`conversion-runs/verified/`, `conversion-runs/samples/`, and
-`conversion-runs/unverified-review/` hold conversion runs and their Markdown; and
+`conversion-runs/verified/`, `conversion-runs/samples/`,
+`conversion-runs/unverified-review/`, and `conversion-runs/provenance-reconvert/` hold conversion
+runs and their Markdown; `provenance-reconvert/` holds provenance reconversion plans; and
 `index/generations/` holds published search indexes. A published index can refer to
 Markdown in several conversion runs. To find the folders that actually supply the
 current and previous indexes, run:
@@ -186,6 +187,72 @@ generation database it names.
 `rebuild-index --from-jsonl $data\index\generations\<previous-id>\index.jsonl`). The previous
 generation's files are still on disk — only the two newest generations are retained, so roll
 back before publishing again.
+
+## Provenance Reconversion
+
+Indexed records converted before the pipeline recorded `source_sha256` (or reused through
+`skipped_existing`) carry no hash of the PDF their text came from; `library-status` and
+`audit-library` count them as `source_provenance_unknown`, and `source_changed` can never fire
+for them. **An ordinary `rebuild-index` does not backfill this.** It copies records (or rebuilds
+them from a manifest) without ever hashing a PDF, and it must not: today's PDF is not evidence of
+what an older extraction read, so pairing old text with a new hash would be false assurance.
+The migration path is to extract the text again and record the hash measured around that
+extraction.
+
+1. Take a fresh mapping snapshot with `dry-run`, so identity decisions and paths are current.
+2. Plan. This is read-only -- it reads the published generation, the mapping snapshot and a
+   temporary copy of the Zotero database, and writes only the plan files:
+
+   ```powershell
+   & $python -m zotero_pdf_text plan-provenance-reconvert `
+     --config .\config.json `
+     --mapping-report $data\mapping-runs\<run-id>\mapping_report.jsonl
+   ```
+
+   It writes `$data\provenance-reconvert\<plan-id>\plan.json` and `plan.csv` and prints one
+   count per bucket. Buckets are exclusive and checked in this order:
+
+   | Bucket | Meaning | What to do |
+   | --- | --- | --- |
+   | `membership_unchecked` | Zotero's database could not be read. | Close Zotero or wait for sync, plan again. |
+   | `not_in_zotero` | Zotero no longer lists the attachment. | Nothing to reconvert (`audit-library` reports it `orphaned_index`). |
+   | `identity_uncertain` | Duplicate index records, a relink to a different PDF, no or ambiguous mapping row for the indexed PDF, a mapping identity other than `mapped_verified` + `verified`/`fulltext_verified`, or a parent mismatch. The row's `reason` says which. | Resolve the identity first; never reconverted automatically. |
+   | `missing_pdf` | The PDF the record was indexed from is not on disk. | Restore or relink it, `dry-run`, plan again. |
+   | `eligible` | Verified identity, same PDF as the indexed record, file present. | Apply. |
+
+   The estimate (`eligible_rows`, `source_bytes`, `pages`, `rows_without_page_count`) sizes the
+   reconversion before anything runs. The plan total always equals `source_provenance_unknown`
+   for the same generation.
+3. Apply, in batches if you like:
+
+   ```powershell
+   & $python -m zotero_pdf_text apply-provenance-reconvert `
+     --config .\config.json `
+     --plan $data\provenance-reconvert\<plan-id> `
+     --limit 200
+   ```
+
+   `--keys K1 K2 ...` restricts the selection to named eligible rows. The command takes the
+   pipeline write lock, then re-checks each selected row against the *current* generation: a
+   record that already has a hash is `already_resolved`, one whose Markdown, parent or source
+   path changed since planning is `plan_stale` (plan again), and a vanished PDF is
+   `missing_pdf`. The remaining rows are converted with the ordinary converter into
+   `$data\conversion-runs\provenance-reconvert\<plan-id>\`, with the usual conversion
+   checkpoint, and each Markdown file is numbered by its plan position so every batch shares
+   that directory without collisions. Only rows that completed, carry a hash measured around
+   their extraction, and pass the same validation as `update-index --replace-existing`
+   (verified identity, same parent and PDF path, PDF unchanged since extraction, front matter
+   naming the attachment) are published, together, as one successor generation. A row that
+   failed to convert (`conversion_failed`) or failed validation (`rejected`) keeps its old
+   indexed record verbatim. Each invocation appends its per-row outcomes to the plan's
+   `apply_log.jsonl`.
+4. Repeat step 3 until `remaining_eligible` is 0; failed rows are retried on each invocation. If
+   an invocation is interrupted, nothing is published, and simply running it again reuses the
+   checkpointed extractions instead of repeating them. Afterwards `library-status` no longer
+   counts the published records as provenance-unknown.
+
+Do not delete `conversion-runs\provenance-reconvert\<plan-id>\` after applying: the published
+index now points at the Markdown in it. `output-status` lists it like any other conversion run.
 
 ## Unverified PDF Review
 
@@ -709,7 +776,7 @@ If `converted_text` is a single index shared across more than one machine (e.g. 
 cloud folder), every command that writes under it (`convert-sample`, `convert-verified`,
 `convert-new`, `verify-unverified`, `apply-verification`, `rebuild-index`, `update-index`,
 `reconvert-math`/`reconvert_with_math_ocr`, `retry-timeout`, `ocr-images`, `find-orphan-parents`,
-`orphan-candidate`) takes the same lock file
+`orphan-candidate`, `apply-provenance-reconvert`) takes the same lock file
 (`config.output_root\.pipeline.lock`) before starting and releases it on exit, so two machines
 (or two commands on the same machine) can never rebuild the same index files at once — the
 same corruption class as syncing a live Zotero database. The lock is acquired with an atomic
