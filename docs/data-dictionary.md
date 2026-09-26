@@ -18,7 +18,9 @@ Each converted Markdown file starts with front matter:
 
 `manifest.csv` and `manifest.jsonl` contain one row per requested conversion:
 
-- `status`: `converted`, `skipped_existing`, or `error`
+- `status`: `converted`, `skipped_existing`, or `error`. On a resumed run, a row reused from the
+  run's conversion checkpoint (see below) keeps `converted` and the source hash recorded when it
+  was extracted; `skipped_existing` means existing Markdown with no trustworthy provenance.
 - `extraction_tool`: primary or fallback extractor
 - Zotero keys, citation key, and bibliographic metadata
 - `item_type`: Zotero item type used by verification heuristics.
@@ -35,6 +37,40 @@ Each converted Markdown file starts with front matter:
   record confident provenance for text that may predate it. `audit-library` treats an empty value
   as unverifiable and never as evidence that the source is current.
 - `error`
+
+### Conversion Checkpoint
+
+The manifest is written once, after every selected row has finished. `conversion_checkpoint.jsonl`
+in the same run directory is written as work finishes: one JSON object per line, appended with
+flush + fsync right after a row's Markdown is published atomically, so an entry never certifies a
+partially written file. Only `converted` rows with a known source hash are recorded. A crash can
+leave a torn final line; readers skip it (and any malformed line), and the next append starts on a
+fresh line. When an output is recorded more than once, the last entry wins.
+
+- `checkpoint_version`: `1`
+- `output`: Markdown path relative to the run directory, POSIX separators
+- `zotero_attachment_key`, `source_path`: the row the Markdown was extracted for
+- `source_size`, `source_mtime_ns`: the source PDF's size and modification time at extraction
+  (`null` if they could not be read)
+- `source_sha256`: the source hash recorded at extraction time, never refreshed afterwards
+- `output_sha256`: SHA-256 of the published Markdown file
+- `recorded_at`: UTC timestamp of the entry
+- `result`: the manifest row recorded for this output
+
+On `--resume`, existing Markdown is reused without re-extraction only when its latest entry names
+the same attachment key, the same source (same `source_path`, or -- for a run directory resumed
+where paths differ -- a PDF whose current bytes hash to the recorded `source_sha256`), and a
+byte-identical output (`output_sha256`). The reused manifest row carries the recorded extraction-time
+hash; today's PDF is never hashed into it, so a PDF modified since extraction surfaces as
+`source_changed` in `audit-library` rather than being silently re-attested. If the entry names a
+different attachment or source, the existing Markdown is not this row's text and is re-extracted
+(the old file stays in place until the new extraction succeeds). If the Markdown changed after it
+was recorded, or no entry exists, the row stays `skipped_existing` with an empty `source_sha256`.
+Metadata-only front-matter refreshes on a reused row append a new entry with the new
+`output_sha256` and the unchanged source fields.
+
+`summary.md` reports how many converted rows were reused from the checkpoint and, of those, how
+many have a source PDF whose size or modification time differs from extraction time.
 
 ### Extraction Timeout and Fallback
 

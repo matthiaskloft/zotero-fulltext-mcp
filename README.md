@@ -191,6 +191,14 @@ review of unverified matches, rebuilding vs. updating the index, etc.); see `doc
 unverified matches, orphan PDFs, or duplicate attachments — common early on while a library is
 still being built up — see `docs/library-cleanup.md` for which command to run and in what order.
 
+Conversion commands print one progress line per finished PDF to stderr and record each completed
+PDF in the run directory's `conversion_checkpoint.jsonl` as it finishes. If a long run is
+interrupted, rerun `convert-verified` with `--resume` and `--output-dir <that run directory>` (and
+the same mapping report; for `convert-new`, that is the `new_items_mapping_report.csv` it wrote in
+its mapping run, followed by `update-index --manifest <that run directory>\manifest.csv`):
+completed PDFs are reused with the source hash recorded when they were extracted instead of being
+extracted again. See "Conversion" in `docs/operations.md`.
+
 After reconverting an already indexed PDF, publish the improved text with
 `update-index --manifest <reconversion-run>\manifest.csv --replace-existing --config .\config.json`.
 The replacement requires a completed verified conversion whose source hash still matches the PDF;

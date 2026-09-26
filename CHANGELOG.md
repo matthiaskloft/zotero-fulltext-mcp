@@ -11,6 +11,19 @@ unannounced rather than absent: present, inert unless explicitly configured and 
 validated for general use. Its config shape and output conventions may still change. It moves into a
 dated section once it has been stress-tested against a large library.
 
+### Added
+
+- Conversion runs record each completed PDF in `conversion_checkpoint.jsonl` in the run directory
+  as it finishes (append-only, fsynced, written only after the Markdown is published atomically;
+  a torn final line from a crash is tolerated), including with multiple workers, and print one
+  progress line per finished PDF to stderr. A `--resume` of an interrupted run reuses completed
+  PDFs whose checkpoint entry still matches the attachment, source and Markdown file, without
+  re-extracting them, and keeps the source hash recorded at extraction time, so the rebuilt
+  manifest and summary match an uninterrupted run. Existing Markdown without a matching entry
+  stays `skipped_existing` with unknown provenance, and Markdown the checkpoint shows was extracted
+  for another attachment or source is re-extracted. The manifest schema is unchanged; `summary.md`
+  adds reused-row counts (#29).
+
 ## [0.9.0] - 2026-09-26
 
 Installation reliability: `install-mcp` and `check-setup` catch broken, drifted, or stale

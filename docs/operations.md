@@ -51,7 +51,19 @@ The mapper reads a copied Zotero database and writes reports under
 
 Normal resume mode reuses existing Markdown bodies and refreshes YAML front
 matter plus manifest metadata from the latest mapping report. Use this after
-Zotero metadata changes, including updated citation keys.
+Zotero metadata changes, including updated citation keys, and to continue an
+interrupted run in the same `--output-dir`.
+
+Each finished row is recorded in the run's `conversion_checkpoint.jsonl` as soon
+as its Markdown is published, and a progress line such as
+`[12/340] ABCD1234: converted [pymupdf4llm.to_markdown]` is printed to stderr. On
+resume, rows whose checkpoint entry still matches the attachment, source and
+Markdown file are reused without re-extraction and keep the source hash recorded
+at extraction time, so the rebuilt manifest and summary match an uninterrupted
+run. Existing Markdown without a matching entry stays `skipped_existing` with
+unknown provenance; Markdown that the checkpoint shows was extracted for another
+attachment or source is re-extracted. See the data dictionary's *Conversion
+Checkpoint* section for the exact rules.
 
 ```powershell
 & $python -m zotero_pdf_text convert-verified `
