@@ -13,6 +13,10 @@ dated section once it has been stress-tested against a large library.
 
 ### Added
 
+- README "First use" section: the shortest path from install to cited evidence
+  (`check-setup` → `dry-run` → `convert-new` → `install-mcp`, then `search_fulltext` →
+  `matched_fields` → `get_fulltext_chunk` with `chunk_sha256`), with index-currency and update
+  guidance and links to the detailed docs (#21).
 - Read-only MCP tool `search_within_fulltext(attachment_key, query, search_mode, limit)` searches
   one indexed attachment's converted body text only, returning up to `limit` ranked chunks with
   the same bibliographic context, provenance warnings and verifiable `source_locator` as
