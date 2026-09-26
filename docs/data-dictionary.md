@@ -131,10 +131,9 @@ failed retry leaves the index and the candidate's status untouched (its `occurre
 refreshes, since the nested conversion detects the new timeout the same way any other run would).
 
 Both the skip list and the master candidates file are fail-open: a missing or corrupt file just
-means no entries are skipped/reported, same as the drawing-density scan. One extreme outlier
-(`CTDZ69WI`, Gelman et al. — Bayesian Data Analysis) is already recorded in `timeout_skip_list.json`
-in the field, confirmed by direct testing to run past 13,540s / ~3.75h without finishing even at
-the drawing-density-scaled cap.
+means no entries are skipped/reported, same as the drawing-density scan. In one real library, a
+long, plot-dense statistics textbook was added to `timeout_skip_list.json` after direct testing
+showed it running past 13,540s / ~3.75h without finishing even at the drawing-density-scaled cap.
 
 The MCP server exposes the same workflow: `list_timeout_candidates` (read-only, always available)
 to see pending candidates, and `skip_timeout_extraction`/`retry_timeout_extraction` (opt-in via
