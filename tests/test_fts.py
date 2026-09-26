@@ -1287,6 +1287,35 @@ class ImageDestinationSearchTests(unittest.TestCase):
             self.assertEqual(result.chunk_sha256, chunk_sha256(text))
 
 
+class ImageDestinationChunkBoundaryTests(unittest.TestCase):
+    def test_destination_split_across_chunks_is_not_indexed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            image_path = str(root / "private-images" / "Latent_Growth_Mixtures_fig1.png")
+            text = f"Prose about sampling here. ![Caption]({image_path}) Closing prose."
+            record = {"zotero_parent_key": "P1", "zotero_attachment_key": "A1", "title": "Placeholder", "text": text}
+            jsonl = root / "index.jsonl"
+            jsonl.write_text(json.dumps(record) + "\n", encoding="utf-8")
+            sqlite_db = root / "index.sqlite"
+            # Tiny windows guarantee boundaries and overlaps fall inside the destination.
+            build_fts_index(jsonl, sqlite_db, chunk_chars=17, overlap_chars=5)
+            for token in ("mixtures", "fig1", "png", "private", "images"):
+                self.assertEqual(search_fts(sqlite_db, token, limit=50), [], token)
+            con = sqlite3.connect(sqlite_db)
+            try:
+                indexed = [row[0] for row in con.execute("SELECT text FROM chunks_fts")]
+                stored = [row[0] for row in con.execute("SELECT text FROM chunks ORDER BY chunk_id")]
+            finally:
+                con.close()
+            self.assertTrue(any("Latent" in chunk for chunk in stored))
+            self.assertFalse(any("Latent" in chunk or "png" in chunk for chunk in indexed))
+            prose_hits = search_fts(sqlite_db, "sampling caption closing", limit=50, search_mode="any_terms")
+            self.assertTrue(prose_hits)
+            for result in prose_hits:
+                self.assertNotIn("private", result.snippet)
+                self.assertNotIn("png", result.snippet)
+
+
 def _write_jsonl(path: Path) -> None:
     records = [
         {

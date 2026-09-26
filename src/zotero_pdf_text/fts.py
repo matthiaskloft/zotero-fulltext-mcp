@@ -227,9 +227,11 @@ def build_fts_index(
                     total_chars += int(record.get("char_count") or 0)
                     total_words += int(record.get("word_count") or 0)
                     record_id = _insert_metadata(con, record)
-                    for chunk in _chunk_text(record.get("text", ""), chunk_chars, overlap_chars):
+                    record_text = record.get("text", "")
+                    image_spans = image_markup_spans(record_text) if isinstance(record_text, str) else []
+                    for chunk in _chunk_text(record_text, chunk_chars, overlap_chars):
                         chunks += 1
-                        _insert_chunk(con, record_id, record, chunk)
+                        _insert_chunk(con, record_id, record, chunk, image_spans)
             con.commit()
         finally:
             con.close()
@@ -969,16 +971,35 @@ def _insert_metadata(con: sqlite3.Connection, record: dict[str, object]) -> int:
 
 
 # Generated Markdown image references (``![alt](path)``, with an optional ``"title"`` inside the
-# parentheses) whose destination is a file path. Only the FTS body column drops the destination: a
-# filename echoing the paper title must not read as body-text evidence, and an absolute image path
-# must not surface in a snippet. The alt text stays searchable, and the `chunks` table keeps the
-# original Markdown, so passage retrieval and chunk_sha256 are unchanged.
-_MARKDOWN_IMAGE_DESTINATION_RE = re.compile(r"!\[([^\]]*)\]\([^)]*\)")
+# parentheses). Only the FTS body column drops the markup around the alt text: a filename echoing
+# the paper title must not read as body-text evidence, and an absolute image path must not surface
+# in a snippet. The alt text stays searchable, and the `chunks` table keeps the original Markdown,
+# so passage retrieval and chunk_sha256 are unchanged.
+_MARKDOWN_IMAGE_RE = re.compile(r"!\[([^\]]*)\]\([^)]*\)")
 
 
-def fts_body_text(text: str) -> str:
-    """Return chunk text as indexed for body-text search, without image destinations."""
-    return _MARKDOWN_IMAGE_DESTINATION_RE.sub(lambda match: f" {match.group(1)} ", text)
+def image_markup_spans(text: str) -> list[tuple[int, int]]:
+    """Character spans of image markup (``![`` and ``](path)``) in the whole record text.
+
+    Spans are found before chunking, so a reference split across a chunk boundary or overlap is
+    still blanked in every chunk that holds part of it.
+    """
+    spans: list[tuple[int, int]] = []
+    for match in _MARKDOWN_IMAGE_RE.finditer(text):
+        spans.append((match.start(), match.start(1)))
+        spans.append((match.end(1), match.end()))
+    return spans
+
+
+def fts_body_text(text: str, start: int, spans: list[tuple[int, int]]) -> str:
+    """Return a chunk (``text`` at record offset ``start``) with image markup blanked out."""
+    end = start + len(text)
+    chars = list(text)
+    for span_start, span_end in spans:
+        lo, hi = max(span_start, start), min(span_end, end)
+        if lo < hi:
+            chars[lo - start : hi - start] = " " * (hi - lo)
+    return "".join(chars)
 
 
 def _insert_chunk(
@@ -986,6 +1007,7 @@ def _insert_chunk(
     record_id: int,
     record: dict[str, object],
     chunk: tuple[int, int, int, str],
+    image_spans: list[tuple[int, int]],
 ) -> None:
     chunk_index, start_char, end_char, text = chunk
     cursor = con.execute(
@@ -1005,7 +1027,7 @@ def _insert_chunk(
             chunk_id,
             _string(record.get("title")),
             _string(record.get("creators")),
-            fts_body_text(text),
+            fts_body_text(text, start_char, image_spans),
             _string(record.get("citation_key")),
             record_id,
             chunk_id,
