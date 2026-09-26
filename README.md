@@ -21,7 +21,8 @@ What you need first: Python 3.11+, a Zotero library whose PDFs are **linked** at
 (`zotero-fulltext-mcp[mcp]`, see [Install](#install)). Configuration is read from
 `ZOTERO_PDF_TEXT_CONFIG`, else `config.<hostname>.json`, else `config.json`, or an explicit
 `--config` (see [Configure](#configure)). The MCP server only searches a sidecar index, so
-build it **before** registering the server:
+build it **before** registering the server (`$python` is the interpreter of the environment you
+installed into, as set in [Install](#install)):
 
 ```powershell
 & $python -m zotero_pdf_text check-setup --config .\config.json   # read-only; add --require-mcp before install-mcp
