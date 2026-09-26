@@ -13,6 +13,12 @@ dated section once it has been stress-tested against a large library.
 
 ### Added
 
+- The MCP server instructions now name one privacy-aware feedback route: the repository's new
+  bug-report issue template (`.github/ISSUE_TEMPLATE/bug_report.yml`), which asks for version,
+  enabled flags, sanitized input shape, expected vs actual behavior, a minimal reproduction and
+  audit context. Clients are told never to file issues themselves and to strip paper text,
+  identifying metadata, absolute paths, credentials and attachment keys. Tool descriptions and
+  schemas are unchanged. (#33)
 - Conversion runs record each completed PDF in `conversion_checkpoint.jsonl` in the run directory
   as it finishes (append-only, fsynced, written only after the Markdown is published atomically;
   a torn final line from a crash is tolerated), including with multiple workers, and print one
