@@ -2,7 +2,7 @@ import json
 import subprocess
 import tempfile
 import unittest
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
@@ -38,7 +38,9 @@ def _publish_generation(output_root: Path, records: list[dict]) -> None:
     source.unlink()
 
 
-def _seed_candidate(output_root: Path, source_path: Path, *, attempted_timeout_seconds: int = 600) -> None:
+def _seed_candidate(
+    output_root: Path, source_path: Path, *, attempted_timeout_seconds: int = 600, detected_at: str | None = None
+) -> None:
     candidate = TimeoutCandidate(
         zotero_parent_key="PARENT",
         zotero_attachment_key="ATTACH",
@@ -59,7 +61,7 @@ def _seed_candidate(output_root: Path, source_path: Path, *, attempted_timeout_s
         suggested_next_timeout_seconds=attempted_timeout_seconds * 2,
         fallback_outcome="fallback_used",
         conversion_status="converted",
-        detected_at=datetime.now().isoformat(timespec="seconds"),
+        detected_at=detected_at or datetime.now().isoformat(timespec="seconds"),
     )
     append_master_candidates(output_root / "index" / "timeout_candidates.jsonl", [candidate])
 
@@ -440,10 +442,35 @@ class CurrentIndexStateTests(unittest.TestCase):
         output_root = root / "output"
         pdf = root / "paper.pdf"
         pdf.write_bytes(b"%PDF")
-        _seed_candidate(output_root, pdf)
-        _seed_candidate(output_root, pdf)  # a second timeout: occurrence_count 2
+        # Timestamps are second-resolution; date the timeouts clearly before any publication below.
+        earlier = (datetime.now() - timedelta(hours=1)).isoformat(timespec="seconds")
+        _seed_candidate(output_root, pdf, detected_at=earlier)
+        _seed_candidate(output_root, pdf, detected_at=earlier)  # a second timeout: occurrence_count 2
         _publish_generation(output_root, [_fallback_record(pdf)])
         return output_root, pdf, ProjectConfig(root, root, root, output_root)
+
+    def test_structured_text_published_before_a_later_timeout_stays_pending(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            output_root = root / "output"
+            pdf = root / "paper.pdf"
+            pdf.write_bytes(b"%PDF")
+            # Structured text was already published; a later forced conversion then timed out.
+            published = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat(timespec="seconds")
+            structured = {
+                **_fallback_record(pdf),
+                "extraction_tool": "pymupdf4llm.to_markdown",
+                "indexed_at": published,
+            }
+            _publish_generation(output_root, [structured])
+            _seed_candidate(output_root, pdf)
+
+            listed = _listed(output_root)
+
+            self.assertEqual(listed["status"], "pending")
+            self.assertEqual(listed["resolved_via"], "")
+            self.assertEqual(listed["current_index_state"], "structured_extraction")
+            self.assertEqual(listed["current_extraction_tool"], "pymupdf4llm.to_markdown")
 
     def test_fallback_only_text_stays_pending_with_accurate_current_state(self):
         with tempfile.TemporaryDirectory() as tmp:

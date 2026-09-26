@@ -48,9 +48,9 @@ from .fts import (
     SearchMode,
     SearchResult,
     StaleLocatorError,
-    extraction_tools_by_attachment,
     get_fulltext,
     get_item_context as get_item_context_fn,
+    indexed_state_by_attachment,
     search_fts,
 )
 from .orphan_candidates import list_candidates as list_orphan_candidate_records
@@ -715,9 +715,10 @@ def create_server(
         timeout attempt, not the index today. current_index_state says what the current published
         index holds for the attachment: structured_extraction, fallback_extraction (plain text,
         structure/images lost), not_indexed, or unknown (index unreadable). A pending candidate
-        whose attachment is now indexed with structured text is reported as status "resolved"
-        with resolved_via "current_index" (recorded_status keeps the stored decision), so it needs
-        no retry. Pass a still-pending attachment_key to skip_timeout_extraction or
+        whose attachment has structured text indexed after its last timeout (from the same source
+        PDF, when hashes are known) is reported as status "resolved" with resolved_via
+        "current_index" (recorded_status keeps the stored decision), so it needs no retry.
+        Structured text that predates the timeout stays pending. Pass a still-pending attachment_key to skip_timeout_extraction or
         retry_timeout_extraction. Read-only; never triggers conversion.
         """
         return _public_call(
@@ -1561,21 +1562,21 @@ def _list_timeout_candidates(db_path: Path, *, status: object, limit: object) ->
     # Filter on the *effective* status, so a candidate recovered through another workflow no
     # longer shows up as pending work.
     records = list_candidates(candidates_jsonl, status=None)
-    tools = _current_extraction_tools(db_path, [str(record.get("zotero_attachment_key", "")) for record in records])
-    annotated = [with_current_index_state(record, tools) for record in records]
+    states = _current_index_states(db_path, [str(record.get("zotero_attachment_key", "")) for record in records])
+    annotated = [with_current_index_state(record, states) for record in records]
     if status_filter is not None:
         annotated = [record for record in annotated if record.get("status") == status_filter]
     return {"candidates": [serialize_timeout_candidate(record) for record in annotated[:validated_limit]]}
 
 
-def _current_extraction_tools(db_path: Path, attachment_keys: list[str]) -> dict[str, str] | None:
-    """Read the current generation's extraction tool per key, or None when it cannot be read.
+def _current_index_states(db_path: Path, attachment_keys: list[str]) -> dict[str, dict[str, str]] | None:
+    """Read the current generation's record state per key, or None when it cannot be read.
 
     The candidate history is useful on its own, so an absent, unpublished or unreadable index
     degrades every candidate's current state to "unknown" instead of failing the listing.
     """
     try:
-        return extraction_tools_by_attachment(resolve_reader_db_path(db_path), attachment_keys)
+        return indexed_state_by_attachment(resolve_reader_db_path(db_path), attachment_keys)
     except (ArtifactError, IndexSchemaUnsupportedError, OSError, sqlite3.Error):
         return None
 

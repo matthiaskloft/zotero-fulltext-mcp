@@ -61,6 +61,8 @@ class TimeoutCandidate:
     fallback_outcome: str  # "fallback_used" | "fallback_failed"
     conversion_status: str  # "converted" | "error"
     detected_at: str
+    # SHA-256 of the PDF when the timed-out attempt started; "" in records written before it existed.
+    source_sha256: str = ""
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -155,34 +157,68 @@ def current_index_state(extraction_tool: str | None) -> str:
 
 
 def with_current_index_state(
-    record: dict[str, object], extraction_tools: Mapping[str, str] | None
+    record: dict[str, object], index_states: Mapping[str, Mapping[str, str]] | None
 ) -> dict[str, object]:
     """Return a copy of a master record annotated with the current index state.
 
-    ``extraction_tools`` maps attachment keys to the extraction tool of their record in the
-    current published generation, or is ``None`` when that index could not be read. The stored
-    decision stays available as ``recorded_status``. A *pending* candidate whose attachment is now
-    indexed with structured (non-fallback) text was recovered by some other workflow, so its
-    effective ``status`` is reported as resolved via the current index -- the master file itself is
-    never rewritten here. Skipped/resolved decisions are never changed, and fallback-only text
-    stays pending because the quality decision is still open.
+    ``index_states`` maps attachment keys to their record in the current published generation
+    (``extraction_tool``, ``indexed_at``, ``source_sha256``), or is ``None`` when that index could
+    not be read. The stored decision stays available as ``recorded_status``. A *pending*
+    candidate is reported as resolved via the current index only when recovery is established:
+    the attachment is indexed with structured (non-fallback) text, that record was indexed after
+    the candidate's last timeout, and its source hash does not contradict the one recorded at the
+    timeout. Structured text that predates the timeout (or cannot be dated) stays pending -- it may
+    be stale -- but its state and tool are still reported. The master file is never rewritten here,
+    skipped/resolved decisions are never changed, and fallback-only text stays pending.
     """
     annotated = dict(record)
     recorded_status = str(record.get("status", ""))
     annotated["recorded_status"] = recorded_status
     annotated["resolved_via"] = str(record.get("resolved_via", ""))
-    if extraction_tools is None:
+    if index_states is None:
         annotated["current_index_state"] = CURRENT_STATE_UNKNOWN
         annotated["current_extraction_tool"] = ""
         return annotated
-    tool = extraction_tools.get(str(record.get("zotero_attachment_key", "")))
-    state = current_index_state(tool)
+    indexed = index_states.get(str(record.get("zotero_attachment_key", "")))
+    state = current_index_state(indexed.get("extraction_tool", "") if indexed is not None else None)
     annotated["current_index_state"] = state
-    annotated["current_extraction_tool"] = tool or ""
-    if recorded_status == STATUS_PENDING and state == CURRENT_STATE_STRUCTURED:
+    annotated["current_extraction_tool"] = indexed.get("extraction_tool", "") if indexed is not None else ""
+    if (
+        recorded_status == STATUS_PENDING
+        and state == CURRENT_STATE_STRUCTURED
+        and indexed is not None
+        and _indexed_after_last_timeout(record, indexed)
+        and not _source_hash_contradicts(record, indexed)
+    ):
         annotated["status"] = STATUS_RESOLVED
         annotated["resolved_via"] = RESOLVED_VIA_CURRENT_INDEX
     return annotated
+
+
+def _indexed_after_last_timeout(record: Mapping[str, object], indexed: Mapping[str, str]) -> bool:
+    indexed_at = _parse_timestamp(indexed.get("indexed_at", ""))
+    last_timeout = _parse_timestamp(record.get("last_detected_at") or record.get("detected_at") or "")
+    return indexed_at is not None and last_timeout is not None and indexed_at > last_timeout
+
+
+def _source_hash_contradicts(record: Mapping[str, object], indexed: Mapping[str, str]) -> bool:
+    candidate_hash = str(record.get("source_sha256") or "")
+    indexed_hash = indexed.get("source_sha256", "")
+    return bool(candidate_hash and indexed_hash and candidate_hash != indexed_hash)
+
+
+def _parse_timestamp(value: object) -> datetime | None:
+    """Parse an ISO timestamp into an aware datetime, or None when absent/unparseable.
+
+    Candidate timestamps are written with ``datetime.now()`` (naive local time); index
+    ``indexed_at`` values carry an explicit UTC offset. A naive value is therefore read as local
+    time, which is how it was written, so the two formats compare on one timeline.
+    """
+    try:
+        parsed = datetime.fromisoformat(str(value))
+    except ValueError:
+        return None
+    return parsed.astimezone() if parsed.tzinfo is None else parsed
 
 
 def mark_status(master_jsonl_path: Path, attachment_key: str, *, status: str, extra_fields: dict[str, object]) -> None:

@@ -751,20 +751,20 @@ class TimeoutCandidateMcpTests(unittest.TestCase):
             self.assertNotIn("source_path", candidate)
             assert_no_local_path(self, response, root)
 
-    def test_list_timeout_candidates_resolves_attachment_recovered_in_current_index(self):
+    def test_list_timeout_candidates_keeps_undatable_structured_record_pending(self):
         with tempfile.TemporaryDirectory() as tmp:
             root, sqlite_path, config = _build_index(Path(tmp))
-            # ATTACH1 is indexed with primary-extractor text by the fixture.
+            # ATTACH1 is indexed with primary-extractor text by the fixture, but without an
+            # indexed_at, so it cannot be shown to postdate the timeout.
             _seed_timeout_candidate(
                 config.output_root, root / "private-paper.pdf", attachment_key="ATTACH1", conversion_status="error"
             )
             server = create_server(sqlite_path, mcp_factory=FakeFastMCP)
 
-            self.assertEqual(server.tools["list_timeout_candidates"]()["candidates"], [])
-            candidate = server.tools["list_timeout_candidates"](status="all")["candidates"][0]
-            self.assertEqual(candidate["status"], "resolved")
+            candidate = server.tools["list_timeout_candidates"]()["candidates"][0]
+            self.assertEqual(candidate["status"], "pending")
             self.assertEqual(candidate["recorded_status"], "pending")
-            self.assertEqual(candidate["resolved_via"], "current_index")
+            self.assertEqual(candidate["resolved_via"], "")
             self.assertEqual(candidate["conversion_status"], "error")  # historical attempt, kept
             self.assertEqual(candidate["current_index_state"], "structured_extraction")
             self.assertEqual(candidate["current_extraction_tool"], "pymupdf4llm.to_markdown")

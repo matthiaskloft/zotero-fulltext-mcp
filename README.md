@@ -347,8 +347,8 @@ The safe default server exposes:
   pass a returned `attachment_key` to `skip_timeout_extraction` or `retry_timeout_extraction`.
   Each candidate's recorded fields describe the historical timeout; `current_index_state` and
   `current_extraction_tool` describe what the current index holds, and a pending candidate that
-  another workflow has since indexed with structured text is reported as `resolved`
-  (`resolved_via: "current_index"`).
+  another workflow has since indexed with structured text (after its last timeout) is reported as
+  `resolved` (`resolved_via: "current_index"`).
 - `list_orphan_candidates(status="pending")` — plausible Zotero parents found for orphan PDFs by
   content (title/DOI/author/year), not filename. Read-only; never triggers discovery itself.
   Populated only after running the CLI's `find-orphan-parents` command, which reports only

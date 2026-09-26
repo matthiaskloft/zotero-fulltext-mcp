@@ -108,16 +108,22 @@ generation (read-only) and adds, per candidate:
   `unknown` (no published index, or it could not be read — the listing still succeeds).
 - `current_extraction_tool`: that record's `extraction_tool`, or empty.
 - `recorded_status`: the status stored in the master file.
-- `status`: the effective status. A `pending` candidate whose attachment is now indexed with
-  structured text was recovered through some other conversion/publication workflow, so it is
-  reported as `resolved` with `resolved_via: "current_index"`; the `status` filter uses this
-  effective value, so such a candidate no longer appears as pending work. Fallback-only text stays
-  `pending`. `skipped`/`resolved` decisions are never changed.
+- `status`: the effective status. A `pending` candidate counts as recovered through some other
+  conversion/publication workflow, and is reported as `resolved` with
+  `resolved_via: "current_index"`, only when all of these hold: the attachment is indexed with
+  structured text; that record's `indexed_at` is later than the candidate's `last_detected_at`
+  (candidate timestamps are naive local time, `indexed_at` carries a UTC offset; both are compared
+  as absolute times); and the record's `source_sha256` does not differ from the candidate's
+  `source_sha256` when both are known. Structured text indexed before the last timeout, or without
+  a usable `indexed_at`, stays `pending` because it may be stale, though its `current_index_state`
+  and tool are still reported. The `status` filter uses this effective value. Fallback-only text
+  stays `pending`. `skipped`/`resolved` decisions are never changed.
 - `resolved_via`: `retry` for a candidate resolved by `retry-timeout`, `current_index` for one
   derived as above, otherwise empty.
 
 This derivation never rewrites `timeout_candidates.jsonl`: history, `occurrence_count` and the
-stored status are kept as recorded.
+stored status are kept as recorded. Candidates also record `source_sha256`, the PDF's hash when
+the timed-out attempt started (empty in records written before this field existed).
 
 ### Orphan Candidates
 
