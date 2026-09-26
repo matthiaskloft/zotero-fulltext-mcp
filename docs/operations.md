@@ -100,8 +100,9 @@ after extraction succeeds:
 
 The output root has several roles: `mapping-runs/` holds mapping snapshots;
 `conversion-runs/verified/`, `conversion-runs/samples/`,
-`conversion-runs/unverified-review/`, and `conversion-runs/provenance-reconvert/` hold conversion
-runs and their Markdown; `provenance-reconvert/` holds provenance reconversion plans; and
+`conversion-runs/unverified-review/`, `conversion-runs/provenance-reconvert/` and
+`conversion-runs/index-repair/` hold conversion runs and their Markdown; `provenance-reconvert/`
+and `index-repair/` hold provenance reconversion and index repair plans; and
 `index/generations/` holds published search indexes. A published index can refer to
 Markdown in several conversion runs. To find the folders that actually supply the
 current and previous indexes, run:
@@ -259,6 +260,77 @@ extraction.
 
 Do not delete `conversion-runs\provenance-reconvert\<plan-id>\` after applying: the published
 index now points at the Markdown in it. `output-status` lists it like any other conversion run.
+
+## Index Repair
+
+`audit-library` reports drift; `plan-index-repair` and `apply-index-repair` resolve it one record
+at a time. Rebuilding the index from a single run's manifest is not a repair: it drops every
+record that run did not produce. The repair path instead edits the current generation's records
+in place and carries every other record over verbatim.
+
+1. Take a fresh mapping snapshot with `dry-run`.
+2. Plan. Read-only, with the same inputs and rules as `audit-library`:
+
+   ```powershell
+   & $python -m zotero_pdf_text plan-index-repair `
+     --config .\config.json `
+     --mapping-report $data\mapping-runs\<run-id>\mapping_report.jsonl
+   ```
+
+   Add `--full` to re-hash every source PDF, as `audit-library --full` does. The plan is written
+   to `$data\index-repair\<plan-id>\plan.json` and `plan.csv`; the console shows each group's
+   count and, per reason, a count and at most five example keys. Every indexed attachment with a
+   finding lands in exactly one group:
+
+   | Group | When | Fix |
+   | --- | --- | --- |
+   | `safe` | Only `metadata_changed`: Zotero's title/DOI/citation key differ from the record. The identity is verified, the parent item and linked PDF are unchanged, the Markdown still matches its indexed hash, and Zotero did not blank a value the record has. | Copy Zotero's current title/DOI/citation key onto the record. Text, Markdown path and hash, source hash, extraction tool and `has_math` are kept, so enriched (for example math-OCR) text survives. The Markdown file is not rewritten. |
+   | `reconvert` | `stale_markdown` or `source_changed`, and the record passes the provenance-reconversion eligibility rule (Zotero lists it under the same parent and linked PDF, the PDF is present, exactly one `mapped_verified` + `verified`/`fulltext_verified` mapping row). | Re-extract the PDF into the plan's run directory and replace the record through the validated replacement path, with Zotero's current title/DOI/citation key. Enrichment is not carried over: the old text no longer describes the source. |
+   | `review` | Anything else: `membership_unchecked`, `orphaned_index`, `duplicate_key`, `mapping_ambiguous`, `unverified_indexed`, `missing_source`, `missing_markdown`, `source_unchecked`, a stale or changed record the eligibility rule refuses (for example a `manual_accepted` identity or a relink), a parent change, or a blanked metadata value. The row's `reason` says which. | Never applied automatically. Resolve it (restore the file, verify the identity, re-run `dry-run`) and plan again. |
+
+   Attachments with findings but no index record (for example `unindexed`) are only counted:
+   they are new conversions (`convert-new`), not index repairs.
+3. Apply. Nothing is applied without an explicit selection:
+
+   ```powershell
+   & $python -m zotero_pdf_text apply-index-repair `
+     --config .\config.json `
+     --plan $data\index-repair\<plan-id> `
+     --group safe
+   ```
+
+   `--group` (repeatable: `safe`, `reconvert`) selects whole groups, `--keys K1 K2 ...` selects
+   named safe/reconvert rows (a review key is reported `not_eligible`), and `--limit N` caps the
+   safe/reconvert rows applied in this invocation. The command takes the pipeline write lock,
+   finishes or rolls back any interrupted publication, then re-checks each row: against the
+   current generation (a record changed since planning is `plan_stale`, an already repaired one
+   `already_resolved`), the files on disk (the Markdown of a safe row must still match its hash;
+   a reconvert row's PDF must exist), and a fresh read of Zotero (a different parent, linked
+   PDF, or metadata than planned is `zotero_changed`). If Zotero's database cannot be read,
+   nothing is applied. Reconvert rows are converted with the ordinary, checkpointed converter
+   into `$data\conversion-runs\index-repair\<plan-id>\` and judged by the same validation as
+   `update-index --replace-existing`; Zotero is read again after conversion, before publishing.
+   All accepted repairs are published together as one new generation; everything else is kept
+   exactly as it was. Each invocation appends its per-row outcomes to the plan's `apply_log.jsonl`.
+4. Removals. An `orphaned_index` record (Zotero no longer lists the attachment) is the one
+   review decision the command can carry out, and only per key:
+
+   ```powershell
+   & $python -m zotero_pdf_text apply-index-repair --config .\config.json --plan $data\index-repair\<plan-id> --remove-keys K1 K2
+   ```
+
+   Only rows the plan marks `removable` (orphaned, one index record, Zotero readable when
+   planned) are accepted, and each is dropped only if a fresh read of Zotero still does not list
+   it. Only the index record goes: the Markdown and any PDF stay on disk. Removing missing-PDF,
+   missing-Markdown or uncertain-identity records is not supported.
+
+If an apply is interrupted before the new generation's pointer swap, the previous generation
+stays current and fully usable, and nothing is lost: run the same command again (completed
+reconversions are reused from the run directory's checkpoint). After a successful apply,
+rerunning it reports every row `already_resolved` and publishes nothing, and a new
+`audit-library` run reports the repaired attachments `current`. As with provenance
+reconversion, do not delete `conversion-runs\index-repair\<plan-id>\` after reconverting: the
+index points at the Markdown in it.
 
 ## Unverified PDF Review
 
@@ -782,7 +854,7 @@ If `converted_text` is a single index shared across more than one machine (e.g. 
 cloud folder), every command that writes under it (`convert-sample`, `convert-verified`,
 `convert-new`, `verify-unverified`, `apply-verification`, `rebuild-index`, `update-index`,
 `reconvert-math`/`reconvert_with_math_ocr`, `retry-timeout`, `ocr-images`, `find-orphan-parents`,
-`orphan-candidate`, `apply-provenance-reconvert`) takes the same lock file
+`orphan-candidate`, `apply-provenance-reconvert`, `apply-index-repair`) takes the same lock file
 (`config.output_root\.pipeline.lock`) before starting and releases it on exit, so two machines
 (or two commands on the same machine) can never rebuild the same index files at once — the
 same corruption class as syncing a live Zotero database. The lock is acquired with an atomic

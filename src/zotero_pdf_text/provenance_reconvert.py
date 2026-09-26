@@ -34,6 +34,7 @@ from collections import Counter
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Protocol
 
 from .artifacts import (
     REPLACEABLE_IDENTITY_STATUSES,
@@ -120,6 +121,29 @@ _BUCKET_ADVICE = {
     BUCKET_NOT_IN_ZOTERO: "Zotero no longer lists this attachment; nothing to reconvert (see audit-library orphaned_index).",
     BUCKET_MEMBERSHIP_UNCHECKED: "Zotero's database could not be read; close Zotero or wait for sync, then plan again.",
 }
+
+
+class PlannedRecord(Protocol):
+    """What ``zotero_change`` reads from a plan row (``PlanRow`` or ``index_repair.RepairRow``)."""
+
+    @property
+    def attachment_key(self) -> str: ...
+
+    @property
+    def zotero_parent_key(self) -> str: ...
+
+    @property
+    def source_path(self) -> str: ...
+
+
+class PlanIdentity(Protocol):
+    """What ``claim_run_dir`` reads from a plan (``ProvenancePlan`` or ``index_repair.RepairPlan``)."""
+
+    @property
+    def plan_id(self) -> str: ...
+
+    @property
+    def created_at(self) -> str: ...
 
 
 class ProvenancePlanError(RuntimeError):
@@ -266,12 +290,12 @@ def build_plan(
         indexed_source = _text(indexed, "source_path")
         source_file = Path(indexed_source) if indexed_source else None
         source_exists = source_file.is_file() if source_file else None
-        bucket, reason, mapping = _bucket(
+        bucket, reason, mapping = reconversion_bucket(
             obs,
             indexed,
             mapping_rows.get(obs.attachment_key, []),
             source_exists,
-            current_source=_current_source(inventory.get(obs.attachment_key), config),
+            current_source=current_source_path(inventory.get(obs.attachment_key), config),
         )
         page_count = _optional_int(_text(mapping, "page_count") or _text(indexed, "page_count"))
         conversion_row = None
@@ -313,7 +337,7 @@ def build_plan(
     )
 
 
-def _bucket(
+def reconversion_bucket(
     obs: ItemObservation,
     indexed: dict[str, object],
     candidates: list[dict[str, object]],
@@ -322,6 +346,9 @@ def _bucket(
     current_source: str,
 ) -> tuple[str, str, dict[str, object] | None]:
     """First matching bucket, in order of what must be settled before anything else can be.
+
+    The single definition of "this indexed record may be reconverted and replace itself",
+    shared with ``index_repair``, whose reconvert group must not admit anything this refuses.
 
     ``current_source`` is where Zotero's own record says the PDF is now, resolved from the
     inventory alone -- never the snapshot's or index's path, which only say where it *was*.
@@ -346,7 +373,7 @@ def _bucket(
             "example a stored `storage:` attachment), so nothing confirms it is still the indexed PDF.",
             None,
         )
-    if not _same_path(current_source, indexed_source):
+    if not same_path(current_source, indexed_source):
         return (
             BUCKET_IDENTITY_UNCERTAIN,
             "Zotero now links this attachment to a different PDF than the one the record was "
@@ -355,7 +382,7 @@ def _bucket(
         )
     if not source_exists:
         return BUCKET_MISSING_PDF, "The PDF the record was indexed from is not on disk.", None
-    matches = [row for row in candidates if _same_path(_text(row, "source_path"), indexed_source)]
+    matches = [row for row in candidates if same_path(_text(row, "source_path"), indexed_source)]
     if not matches:
         return (
             BUCKET_IDENTITY_UNCERTAIN,
@@ -494,7 +521,7 @@ def apply_plan(
         raise ValueError("limit must be at least 1")
     plan, plan_dir = load_plan(plan_path)
     run_dir = Path(plan.run_dir)
-    if not _is_within(run_dir, config.output_root) or not _is_within(plan_dir, config.output_root):
+    if not is_within(run_dir, config.output_root) or not is_within(plan_dir, config.output_root):
         raise ProvenancePlanError(
             f"Plan {plan.plan_id} lives outside the configured output_root ({config.output_root}); "
             "the pipeline lock only covers writes inside output_root."
@@ -524,10 +551,10 @@ def apply_plan(
             candidates = [row for row in candidates if row.attachment_key in set(wanted)]
         candidates.sort(key=lambda row: row.ordinal or 0)
 
-        inventory = _read_inventory(config) if candidates else {}
+        inventory = read_inventory(config) if candidates else {}
         selectable: list[PlanRow] = []
         for row in candidates:
-            skip = _revalidate(row, index_rows.get(row.attachment_key, [])) or _zotero_change(
+            skip = _revalidate(row, index_rows.get(row.attachment_key, [])) or zotero_change(
                 row, inventory.get(row.attachment_key), config
             )
             if skip is not None:
@@ -548,10 +575,10 @@ def apply_plan(
             _append_log(plan_dir, report)
             return report
 
-        _claim_run_dir(run_dir, plan, plan_dir, config.output_root)
+        claim_run_dir(run_dir, plan, plan_dir, config.output_root)
         stamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
         selection_csv = plan_dir / "selections" / f"{stamp}_selection.csv"
-        _write_csv(
+        write_csv(
             selection_csv,
             [{**(row.conversion_row or {}), ORDINAL_FIELD: str(row.ordinal)} for row in selected],
             fieldnames=[*CONVERSION_FIELDS, ORDINAL_FIELD],
@@ -559,16 +586,16 @@ def apply_plan(
         convert_planned_rows(
             config, selection_csv, run_dir, ordinal_field=ORDINAL_FIELD, workers=workers, timeout_seconds=timeout_seconds
         )
-        results = _read_manifest(run_dir / "manifest.csv")
+        results = read_conversion_manifest(run_dir / "manifest.csv")
         # Extraction can take hours; Zotero is consulted again so an attachment deleted or
         # relinked meanwhile is not published as the current one.
-        inventory = _read_inventory(config)
+        inventory = read_inventory(config)
 
         accepted: list[dict[str, str]] = []
         for row in selected:
             result = results.get(row.attachment_key)
             old = index_rows[row.attachment_key][0]
-            outcome = _zotero_change(row, inventory.get(row.attachment_key), config) or _judge(
+            outcome = zotero_change(row, inventory.get(row.attachment_key), config) or judge_conversion(
                 row.attachment_key, result, old
             )
             if outcome.outcome == OUTCOME_PUBLISHED and result is not None:
@@ -577,7 +604,7 @@ def apply_plan(
 
         if accepted:
             publish_csv = plan_dir / "selections" / f"{stamp}_publish.csv"
-            _write_csv(publish_csv, accepted, fieldnames=list(accepted[0].keys()))
+            write_csv(publish_csv, accepted, fieldnames=list(accepted[0].keys()))
             writer, added, replaced, _skipped = write_jsonl_replacing_manifest(current_jsonl, publish_csv)
             if added or replaced != len(accepted):
                 raise ProvenancePlanError(
@@ -604,7 +631,7 @@ def _revalidate(row: PlanRow, current: list[dict[str, object]]) -> RowOutcome | 
     if (
         _text(record, "markdown_sha256") != row.indexed_markdown_sha256
         or _text(record, "zotero_parent_key") != row.zotero_parent_key
-        or not _same_path(_text(record, "source_path"), row.source_path)
+        or not same_path(_text(record, "source_path"), row.source_path)
     ):
         return RowOutcome(key, OUTCOME_PLAN_STALE, "The indexed record changed after the plan was made; plan again.")
     if not Path(row.source_path).is_file():
@@ -612,7 +639,7 @@ def _revalidate(row: PlanRow, current: list[dict[str, object]]) -> RowOutcome | 
     return None
 
 
-def _read_inventory(config: ProjectConfig) -> dict[str, AttachmentRecord]:
+def read_inventory(config: ProjectConfig) -> dict[str, AttachmentRecord]:
     """Zotero's attachment inventory from a temporary copy; refuses to proceed without it."""
     try:
         return load_attachment_inventory(config.zotero_sqlite)
@@ -624,26 +651,29 @@ def _read_inventory(config: ProjectConfig) -> dict[str, AttachmentRecord]:
         ) from exc
 
 
-def _current_source(record: AttachmentRecord | None, config: ProjectConfig) -> str:
+def current_source_path(record: AttachmentRecord | None, config: ProjectConfig) -> str:
     return inventory_source_path(record, config.linked_attachments) if record is not None else ""
 
 
-def _zotero_change(row: PlanRow, record: AttachmentRecord | None, config: ProjectConfig) -> RowOutcome | None:
-    """Why Zotero no longer confirms this row's attachment, parent and linked PDF, or None."""
+def zotero_change(row: PlannedRecord, record: AttachmentRecord | None, config: ProjectConfig) -> RowOutcome | None:
+    """Why Zotero no longer confirms this row's attachment, parent and linked PDF, or None.
+
+    Shared with ``index_repair``, whose rows carry the same three fields.
+    """
     key = row.attachment_key
     if record is None:
         return RowOutcome(key, OUTCOME_ZOTERO_CHANGED, "Zotero no longer lists this attachment.")
     if (record.parent_key or "") != row.zotero_parent_key:
         return RowOutcome(key, OUTCOME_ZOTERO_CHANGED, "Zotero now files this attachment under a different parent item.")
-    current = _current_source(record, config)
+    current = current_source_path(record, config)
     if not current:
         return RowOutcome(key, OUTCOME_ZOTERO_CHANGED, "Zotero's current path for this attachment no longer resolves to a linked file.")
-    if not _same_path(current, row.source_path):
+    if not same_path(current, row.source_path):
         return RowOutcome(key, OUTCOME_ZOTERO_CHANGED, "Zotero now links this attachment to a different PDF.")
     return None
 
 
-def _claim_run_dir(run_dir: Path, plan: ProvenancePlan, plan_dir: Path, output_root: Path) -> None:
+def claim_run_dir(run_dir: Path, plan: PlanIdentity, plan_dir: Path, output_root: Path) -> None:
     """Bind ``run_dir`` to this plan, refusing one that another plan (or anything else) uses.
 
     The claim names the plan directory relative to ``output_root``, so a copy of a plan in
@@ -672,7 +702,7 @@ def _claim_run_dir(run_dir: Path, plan: ProvenancePlan, plan_dir: Path, output_r
     claim_path.write_text(json.dumps(claim) + "\n", encoding="utf-8", newline="\n")
 
 
-def _judge(key: str, result: dict[str, str] | None, old: dict[str, object]) -> RowOutcome:
+def judge_conversion(key: str, result: dict[str, str] | None, old: dict[str, object]) -> RowOutcome:
     if result is None:
         return RowOutcome(key, OUTCOME_CONVERSION_FAILED, "The conversion produced no result for this row.")
     status = result.get("status", "")
@@ -700,7 +730,7 @@ def _append_log(plan_dir: Path, report: ApplyReport) -> None:
         handle.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
 
-def _read_manifest(path: Path) -> dict[str, dict[str, str]]:
+def read_conversion_manifest(path: Path) -> dict[str, dict[str, str]]:
     try:
         with path.open("r", encoding="utf-8-sig", newline="") as handle:
             return {row.get("zotero_attachment_key", ""): row for row in csv.DictReader(handle)}
@@ -708,7 +738,7 @@ def _read_manifest(path: Path) -> dict[str, dict[str, str]]:
         raise ProvenancePlanError(f"The conversion wrote no manifest at {path}.") from exc
 
 
-def _write_csv(path: Path, rows: list[dict[str, str]], *, fieldnames: list[str]) -> None:
+def write_csv(path: Path, rows: list[dict[str, str]], *, fieldnames: list[str]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8-sig", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
@@ -741,7 +771,7 @@ def _file_size(path: Path) -> int | None:
         return None
 
 
-def _same_path(left: str, right: str) -> bool:
+def same_path(left: str, right: str) -> bool:
     if not left or not right:
         return False
     try:
@@ -750,7 +780,7 @@ def _same_path(left: str, right: str) -> bool:
         return left == right
 
 
-def _is_within(path: Path, root: Path) -> bool:
+def is_within(path: Path, root: Path) -> bool:
     resolved, resolved_root = path.resolve(), root.resolve()
     return resolved == resolved_root or resolved_root in resolved.parents
 

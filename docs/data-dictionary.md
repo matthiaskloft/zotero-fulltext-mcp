@@ -540,6 +540,66 @@ run directory itself is an ordinary conversion run (`manifest.csv`, `conversion_
 the output root), which claims it for one plan; its manifest describes the most recent
 invocation's selection only.
 
+### Index Repair Plan
+
+`plan-index-repair` writes `plan.json` (and `plan.csv`, one row per attachment with `group`,
+`attachment_key`, `reason_code`, `statuses` (`;`-separated), `removable`, `ordinal`, `reason`,
+`title`, `source_path`) to `<output_root>/index-repair/<plan-id>/`. It holds one row per
+*indexed* attachment that `audit-library` reports with any status other than `current`, computed
+with the audit's own rules, so a row's `statuses` are exactly the audit's for the same inputs.
+
+Top-level fields of `plan.json`:
+
+- `plan_version`: `1`.
+- `plan_id`, `created_at`: plan identifier (`YYYYMMDD_HHMMSS_<8 hex>`, also the run-directory
+  name) and UTC creation time.
+- `mapping_report`, `generation_id`, `full_audit`: the snapshot, the published generation and the
+  audit mode (`--full`) the plan was built from.
+- `inventory_available`, `inventory_error`: whether Zotero's database could be read, and why not.
+  When it could not, every row is `review`/`membership_unchecked`.
+- `run_dir`: `<output_root>/conversion-runs/index-repair/<plan-id>`, where reconvert rows are converted.
+- `counts`: rows per group (`safe`, `reconvert`, `review`). Groups are exclusive.
+- `removable`: number of `orphaned_index` review rows `apply-index-repair --remove-keys` may drop.
+- `diagnostics`: per group, `count` and `by_reason` (`{reason_code: {count, examples}}`), where
+  `examples` lists at most five attachment keys. `plan.csv` and `rows` hold the full list.
+- `estimate`: `reconvert_rows`, `source_bytes`, `pages`, `rows_without_page_count`.
+- `not_indexed`: status counts for attachments with no index record (typically `unindexed`).
+  They are not index repairs (`convert-new` handles new attachments) and have no rows.
+- `advice`: the recommended action per non-empty group.
+- `rows`: one object per attachment, sorted by key, with `attachment_key`, `group`, `statuses`,
+  `reason_code`, `reason`, `action` (`refresh_metadata`, `reconvert`, or empty for review),
+  `removable`, `ordinal` (1-based among reconvert rows; numbers the Markdown in the run directory),
+  `zotero_parent_key`, `title`, `source_path` (the PDF the record was indexed from),
+  `source_bytes`, `page_count`, `indexed_markdown_path`, `indexed_markdown_sha256`,
+  `indexed_source_sha256`, `indexed_metadata` (the record's `title`/`doi`/`citation_key` when
+  planned), `target_metadata` (Zotero's current values; safe rows only) and `conversion_row`
+  (the mapping fields handed to the converter, with Zotero's current non-empty
+  title/DOI/citation key; reconvert rows only).
+
+Reason codes: `safe` rows are `metadata_changed`; `reconvert` rows are `stale_markdown` or
+`source_changed`; `review` rows carry the first applicable of `membership_unchecked`,
+`orphaned_index`, `duplicate_key`, `mapping_ambiguous`, `unverified_indexed`, `missing_source`,
+`missing_markdown`, `source_unchecked`, then `reconvert_blocked` (a stale or changed record that
+`plan-provenance-reconvert`'s eligibility rule refuses -- the reason names its bucket),
+`parent_changed`, `relinked`, `metadata_value_removed` (Zotero's record lost a value the index
+has) or `markdown_unverified`.
+
+A safe refresh overwrites only `title`, `doi` and `citation_key` in the record; every other
+field -- `text`, `markdown_path`, `markdown_sha256`, `source_sha256`, `extraction_tool`,
+`has_math`, `indexed_at`, `creators`, `year` -- is kept, and the Markdown file (including its
+front matter) is not rewritten. A reconvert replacement is an ordinary new record built from the
+conversion, exactly as `update-index --replace-existing` builds it. A removal drops the record only.
+
+`apply_log.jsonl` in the plan directory gains one line per `apply-index-repair` invocation:
+`logged_at`, `plan_id`, `run_dir`, `previous_generation_id`, `generation_id` (null when nothing
+was published), `published`, `selected`, `remaining` (selectable safe/reconvert rows left out by
+`--limit`), `counts`, and `rows` (`attachment_key`, `group`, `outcome`, `reason`). Outcomes:
+`metadata_refreshed`, `published` (reconverted and replaced), `removed`, `conversion_failed`,
+`rejected`, `already_resolved`, `plan_stale`, `missing_pdf`, `zotero_changed`, `not_eligible`,
+`not_in_plan`. `selections/` keeps each invocation's conversion input. The run directory is an
+ordinary conversion run claimed for one plan by `provenance_plan.json`, as for provenance
+reconversion.
+
 ## Confidence Fields
 
 - `classification`: mapper decision such as `mapped_verified` or
