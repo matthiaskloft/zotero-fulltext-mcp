@@ -215,7 +215,7 @@ Search uses `all_terms` by default. Pass `--search-mode any_terms` for a broader
 
 To see where the Markdown used by the published index actually lives, run
 `output-status --config .\config.json`. New runs use `mapping-runs/` for mapping
-snapshots and `conversion-runs/{verified,samples,unverified-review,provenance-reconvert}/` for converted
+snapshots and `conversion-runs/{verified,samples,unverified-review,provenance-reconvert,index-repair}/` for converted
 files. It groups active files by conversion folder and
 also shows the previous index generation's folders. Add `--list-files` for individual
 paths or `--json` for a machine-readable report. This is read-only: older conversion
@@ -272,6 +272,25 @@ attachments, records the hash measured around each extraction, and publishes onl
 conversions through the same validated replacement `update-index --replace-existing` uses; a
 failed or uncertain row keeps its old record. Re-running it continues where it stopped, including
 after an interruption. See "Provenance Reconversion" in `docs/operations.md`.
+
+To resolve other audit findings without rebuilding the index from one run (which would drop
+records converted in other runs), plan and apply selective repairs:
+
+```powershell
+& $python -m zotero_pdf_text plan-index-repair --config .\config.json --mapping-report .\converted_text\mapping-runs\<run-id>\mapping_report.jsonl
+& $python -m zotero_pdf_text apply-index-repair --config .\config.json --plan .\converted_text\index-repair\<plan-id> --group safe
+```
+
+The plan is read-only and sorts every indexed attachment with a finding into `safe` (Zotero's
+title/DOI/citation key changed: refreshed in place, keeping the indexed text, its source hash and
+any enrichment), `reconvert` (stale Markdown or a changed PDF on a verified identity: re-extracted
+and replaced through the validated replacement path; select with `--group reconvert`, optionally
+`--limit`) or `review` (missing PDF or Markdown, orphaned or duplicate records, uncertain
+identity), which is never applied automatically. The only review decision the command carries
+out is dropping the index record of an attachment Zotero no longer lists, and only for keys you
+name with `--remove-keys`. Each apply re-checks every row against the current index and Zotero,
+publishes one new generation, and keeps every other record as it was; rerunning it after success
+changes nothing. See "Index Repair" in `docs/operations.md`.
 
 ## Register the MCP server
 

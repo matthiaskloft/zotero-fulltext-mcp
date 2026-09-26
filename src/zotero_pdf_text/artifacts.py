@@ -682,6 +682,61 @@ def write_jsonl_replacing_manifest(
     return _write, len(additions), len(replacements), skipped
 
 
+def write_jsonl_applying_repairs(
+    current_jsonl: Path,
+    *,
+    replacements: dict[str, TextIndexRecord] | None = None,
+    metadata_updates: dict[str, dict[str, str]] | None = None,
+    removals: set[str] | None = None,
+) -> Callable[[Path], None]:
+    """Writer that applies selected per-key repairs and copies every other record verbatim.
+
+    ``replacements`` swap a whole record (a validated reconversion), ``metadata_updates`` overwrite
+    only the named fields of the existing record -- its text, Markdown path and hash, source hash
+    and extraction tool stay exactly as they were, which is what keeps enriched text -- and
+    ``removals`` drop a record. Each key may appear in one of the three only, and must occur
+    exactly once in ``current_jsonl``; anything else raises while staging, so the currently
+    published generation is never replaced by a partial repair.
+    """
+    replacements = replacements or {}
+    metadata_updates = metadata_updates or {}
+    removals = removals or set()
+    targeted = [*replacements, *metadata_updates, *removals]
+    targeted_keys = set(targeted)
+    if len(targeted) != len(targeted_keys):
+        raise ValueError("A key may be replaced, updated or removed, but only one of these at a time.")
+
+    def _write(jsonl_path: Path) -> None:
+        seen: dict[str, int] = {}
+        with current_jsonl.open("r", encoding="utf-8") as source, jsonl_path.open(
+            "w", encoding="utf-8", newline="\n"
+        ) as target:
+            for line in source:
+                if not line.strip():
+                    continue
+                record = json.loads(line)
+                key = str(record.get("zotero_attachment_key") or "") if isinstance(record, dict) else ""
+                if key in targeted_keys:
+                    seen[key] = seen.get(key, 0) + 1
+                if key in removals:
+                    continue
+                if key in replacements:
+                    target.write(json.dumps(_record_dict(replacements[key]), ensure_ascii=False) + "\n")
+                elif key in metadata_updates:
+                    record.update(metadata_updates[key])
+                    target.write(json.dumps(record, ensure_ascii=False) + "\n")
+                else:
+                    target.write(line.rstrip("\n") + "\n")
+        wrong = sorted(key for key in targeted if seen.get(key, 0) != 1)
+        if wrong:
+            raise ArtifactError(
+                f"Repair targets must each hold exactly one record in the current generation; "
+                f"these do not: {', '.join(wrong[:10])}. Nothing was published."
+            )
+
+    return _write
+
+
 def write_jsonl_upserting_record(
     current_jsonl: Path, attachment_key: str, new_record: TextIndexRecord
 ) -> Callable[[Path], None]:

@@ -73,7 +73,7 @@ from .install_health import (
 )
 from .lock import PipelineLockedError, pipeline_write_lock
 from .output_status import output_status
-from . import provenance_reconvert
+from . import index_repair, provenance_reconvert
 from .mapper import run_dry_run
 from .mcp_contract import (
     BIBTEX_MCP_TOOL_NAME,
@@ -470,6 +470,75 @@ def build_parser() -> argparse.ArgumentParser:
     )
     apply_provenance.add_argument("--timeout-seconds", type=int, default=600, help="Per-PDF extraction timeout in seconds.")
     apply_provenance.add_argument("--json", action="store_true", help="Print the full per-row report as JSON.")
+    plan_repair = subparsers.add_parser(
+        "plan-index-repair",
+        help="Plan selective index repairs from the library audit's findings. Read-only.",
+        description=(
+            "Runs the audit-library rules and sorts every indexed attachment with a finding into "
+            "safe (metadata-only refresh), reconvert (stale Markdown or changed PDF on a verified "
+            "identity), or review (missing files, orphaned or duplicate records, uncertain "
+            "identity; never applied automatically). Writes plan.json and plan.csv with counts and "
+            "capped example keys. Changes no Markdown, index or Zotero data."
+        ),
+    )
+    plan_repair.add_argument(
+        "--config", type=Path, default=resolve_config_path(), help="Path to project config JSON. Default: resolved for this machine."
+    )
+    plan_repair.add_argument(
+        "--mapping-report",
+        type=Path,
+        required=True,
+        help="Existing mapping_report.jsonl, or the run directory containing it. Produce one with 'dry-run'.",
+    )
+    plan_repair.add_argument(
+        "--output-dir",
+        type=Path,
+        default=None,
+        help="Directory for the new plan. Default: <output_root>/index-repair/<plan id>/.",
+    )
+    plan_repair.add_argument("--full", action="store_true", help="Re-hash every source PDF, as audit-library --full does. Slow.")
+    plan_repair.add_argument("--json", action="store_true", help="Print the plan summary as JSON.")
+    apply_repair = subparsers.add_parser(
+        "apply-index-repair",
+        help="Apply selected safe/reconvert rows of an index repair plan as one new index generation.",
+        description=(
+            "Re-validates each selected row against the current generation and Zotero, refreshes "
+            "metadata in place (keeping text, source hash and enrichment), reconverts and replaces "
+            "through the validated replacement path, removes explicitly approved orphaned records, "
+            "and publishes one generation. Every other record is kept verbatim. Nothing is applied "
+            "without --group, --keys or --remove-keys; review rows are never applied."
+        ),
+    )
+    apply_repair.add_argument(
+        "--config", type=Path, default=resolve_config_path(), help="Path to project config JSON. Default: resolved for this machine."
+    )
+    apply_repair.add_argument("--plan", type=Path, required=True, help="plan.json, or the plan directory containing it.")
+    apply_repair.add_argument(
+        "--group",
+        action="append",
+        choices=list(index_repair.APPLICABLE_GROUPS),
+        default=None,
+        help="Apply this group's rows (repeatable). review is never applied.",
+    )
+    apply_repair.add_argument("--keys", nargs="+", default=None, help="Only these attachment keys (safe or reconvert rows).")
+    apply_repair.add_argument(
+        "--remove-keys",
+        nargs="+",
+        default=None,
+        help=(
+            "Drop the index records of these orphaned_index review rows (Zotero no longer lists "
+            "them). Re-checked against Zotero; no Markdown or PDF file is deleted."
+        ),
+    )
+    apply_repair.add_argument("--limit", type=int, default=None, help="Apply at most this many safe/reconvert rows.")
+    apply_repair.add_argument(
+        "--workers",
+        type=int,
+        default=None,
+        help=f"Number of parallel Markdown conversion workers. Default: max(1, CPU cores - 4), currently {default_worker_count()}.",
+    )
+    apply_repair.add_argument("--timeout-seconds", type=int, default=600, help="Per-PDF extraction timeout in seconds.")
+    apply_repair.add_argument("--json", action="store_true", help="Print the full per-row report as JSON.")
     library_status_parser = subparsers.add_parser(
         "library-status",
         help="Summarize library health: what the index holds and whether the library still matches it.",
@@ -813,6 +882,45 @@ def _print_provenance_plan(summary: dict[str, object]) -> None:
     for bucket, advice in cast("dict[str, str]", summary["advice"]).items():
         print(f"- {bucket}: {advice}")
     print("Rebuilding the index does not backfill provenance; only apply-provenance-reconvert does.")
+
+
+def _print_index_repair_plan(summary: dict[str, object]) -> None:
+    print(f"Index repair plan written: {summary['plan_path']}")
+    print(f"Generation: {summary['generation_id']}")
+    if not summary["inventory_available"]:
+        print(f"Zotero inventory unavailable: {summary['inventory_error']}")
+    for group, info in cast("dict[str, dict[str, object]]", summary["diagnostics"]).items():
+        print(f"{group}: {info['count']}")
+        for reason, entry in cast("dict[str, dict[str, object]]", info["by_reason"]).items():
+            examples = cast("list[str]", entry["examples"])
+            more = " ..." if cast(int, entry["count"]) > len(examples) else ""
+            print(f"  {reason:<24} {entry['count']:>6}  e.g. {', '.join(examples)}{more}")
+    if summary["removable"]:
+        print(f"Orphaned records removable with --remove-keys: {summary['removable']}")
+    estimate = cast("dict[str, int]", summary["estimate"])
+    if estimate["reconvert_rows"]:
+        print(
+            f"Reconvert estimate: {estimate['reconvert_rows']} PDFs, {estimate['source_bytes'] / 1_000_000:.1f} MB, "
+            f"{estimate['pages']} pages ({estimate['rows_without_page_count']} without a page count)"
+        )
+    not_indexed = cast("dict[str, int]", summary["not_indexed"])
+    if not_indexed:
+        counts = ", ".join(f"{status} {count}" for status, count in not_indexed.items())
+        print(f"Findings on attachments with no index record (not index repairs; see convert-new): {counts}")
+    for group, advice in cast("dict[str, str]", summary["advice"]).items():
+        print(f"- {group}: {advice}")
+
+
+def _print_index_repair_apply(payload: dict[str, object]) -> None:
+    generation = payload["generation_id"]
+    print(f"Plan {payload['plan_id']}: applied {payload['selected']}, {payload['remaining']} selectable rows remain.")
+    print(f"Published generation: {generation}" if generation else "Nothing published; the index is unchanged.")
+    for outcome, count in sorted(cast("dict[str, int]", payload["counts"]).items()):
+        print(f"  {outcome:<20} {count}")
+    applied = {provenance_reconvert.OUTCOME_PUBLISHED, index_repair.OUTCOME_METADATA_REFRESHED, index_repair.OUTCOME_REMOVED}
+    for row in cast("list[dict[str, str]]", payload["rows"]):
+        if row["outcome"] not in applied:
+            print(f"  {row['attachment_key']}: {row['outcome']} -- {row['reason']}")
 
 
 def _print_provenance_apply(payload: dict[str, object]) -> None:
@@ -1172,6 +1280,57 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(payload, ensure_ascii=False, indent=2))
         else:
             _print_provenance_apply(payload)
+        return 0
+    if args.command == "plan-index-repair":
+        config = load_config(args.config)
+        validate_config(config)
+        if _reject_outside_output_root(config.output_root, args.output_dir, "--output-dir"):
+            return 2
+        try:
+            repair_plan = index_repair.build_plan(config, args.mapping_report, full_audit=args.full)
+            repair_dir = args.output_dir or index_repair.default_plan_dir(config, repair_plan.plan_id)
+            repair_path = index_repair.write_plan(repair_plan, repair_dir)
+        except (LibraryAuditError, ArtifactError, index_repair.IndexRepairError, OSError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        repair_summary = repair_plan.summary()
+        repair_summary["plan_path"] = str(repair_path)
+        if args.json:
+            print(json.dumps(repair_summary, ensure_ascii=False, indent=2))
+        else:
+            _print_index_repair_plan(repair_summary)
+        return 0
+    if args.command == "apply-index-repair":
+        config = load_config(args.config)
+        validate_config(config)
+        try:
+            repair_report = index_repair.apply_plan(
+                config,
+                args.plan,
+                groups=args.group,
+                keys=args.keys,
+                remove_keys=args.remove_keys,
+                limit=args.limit,
+                workers=args.workers,
+                timeout_seconds=args.timeout_seconds,
+            )
+        except (
+            PipelineLockedError,
+            LibraryAuditError,
+            ArtifactError,
+            index_repair.IndexRepairError,
+            provenance_reconvert.ProvenancePlanError,
+            OSError,
+            ValueError,
+            RuntimeError,
+        ) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        repair_payload = repair_report.to_dict()
+        if args.json:
+            print(json.dumps(repair_payload, ensure_ascii=False, indent=2))
+        else:
+            _print_index_repair_apply(repair_payload)
         return 0
     if args.command == "audit-library":
         config = load_config(args.config)
