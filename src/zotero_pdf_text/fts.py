@@ -274,9 +274,12 @@ def search_fts(
 ) -> list[SearchResult]:
     """Search the index; with attachment_key, rank that one attachment's chunks instead.
 
-    Global search keeps one best chunk per record. A within-attachment search has only one record,
-    so it returns up to `limit` distinct matching chunks ordered by score, then chunk_index. An
-    attachment key absent from the index raises KeyError, so it is distinguishable from no match.
+    Global search keeps one best chunk per record. A within-attachment search returns up to `limit`
+    distinct matching chunks ordered by score, then chunk_index, and matches body text only: a
+    title or creator term would otherwise match every chunk of the attachment and return passages
+    that are not evidence. It searches the same single record get_fulltext resolves for the key,
+    so it never mixes records. An attachment key absent from the index raises KeyError, so it is
+    distinguishable from no match.
     """
     terms = _validate_search_request(query, limit, search_mode)
     match_query = _match_query(terms, search_mode)
@@ -284,17 +287,20 @@ def search_fts(
     params: tuple[object, ...] = (match_query, candidate_limit)
     attachment_filter = ""
     rank_filter = "WHERE record_rank = 1"
-    if attachment_key is not None:
-        attachment_filter = "AND m.zotero_attachment_key = ?"
-        rank_filter = ""
-        params = (match_query, attachment_key, limit)
     con = connect_readonly(db_path)
     con.row_factory = sqlite3.Row
     try:
-        if attachment_key is not None and con.execute(
-            "SELECT 1 FROM metadata WHERE zotero_attachment_key = ?", (attachment_key,)
-        ).fetchone() is None:
-            raise KeyError(f"No record found for attachment key {attachment_key}")
+        if attachment_key is not None:
+            # Same lookup as get_fulltext, so hits resolve to the record retrieval will verify.
+            record = con.execute(
+                "SELECT record_id FROM metadata WHERE zotero_attachment_key = ?", (attachment_key,)
+            ).fetchone()
+            if record is None:
+                raise KeyError(f"No record found for attachment key {attachment_key}")
+            match_query = f"text : ({match_query})"
+            attachment_filter = "AND m.record_id = ?"
+            rank_filter = ""
+            params = (match_query, record["record_id"], limit)
         # record_rank dedup requires ranking the full matched-row set before LIMIT applies (a
         # window function can't use SQLite's top-N/ORDER BY LIMIT shortcut), so a common query
         # term can force a full scan of matching chunk rows. Acceptable for this tool's

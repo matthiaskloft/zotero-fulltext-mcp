@@ -646,9 +646,11 @@ def create_server(
         search_mode: SearchModeInput = "all_terms",
         limit: LimitInput = 10,
     ) -> SearchResponse:
-        """Search the converted text and metadata of one indexed attachment only.
+        """Search the converted body text of one indexed attachment only.
 
-        Returns up to limit distinct matching chunks of that attachment, ordered by relevance and
+        Title, creator and citation-key terms are not matched here, so every hit is a body-text
+        passage. Returns up to limit distinct matching chunks of that attachment, ordered by
+        relevance and
         then chunk_index; other attachments, including siblings under the same parent, are never
         searched. search_mode behaves as in search_fulltext. An attachment with no match returns
         no_results; an attachment key absent from the index answers attachment_not_found. Retrieve

@@ -375,7 +375,8 @@ The safe default server exposes:
   requires normalized words in order.
 - `search_within_fulltext(attachment_key, query, search_mode="all_terms", limit=10)` — the same
   search constrained to one indexed attachment (siblings under the same parent item are not
-  searched). Returns up to `limit` matching chunks of that attachment, ordered by relevance then
+  searched). It matches converted body text only, so every hit is a passage rather than a
+  metadata match. Returns up to `limit` matching chunks of that attachment, ordered by relevance then
   chunk index, each with the same metadata, provenance and `source_locator` as `search_fulltext`.
   An attachment without matches returns an empty result; an unindexed key answers
   `attachment_not_found`.

@@ -430,6 +430,9 @@ class McpServerTests(unittest.TestCase):
                 self.assertEqual({hit["source_locator"]["attachment_key"] for hit in response["results"]}, {key})
                 assert_no_local_path(self, response, root)
             self.assertEqual(tool("ATTACH1", "appendix"), {"search_mode": "all_terms", "no_results": True, "results": []})
+            # Creator-only terms match every chunk's metadata, so scoped search ignores them.
+            self.assertTrue(server.tools["search_fulltext"]("disclose secrets")["results"])
+            self.assertTrue(tool("ATTACH1", "disclose secrets")["no_results"])
 
             locator = tool("ATTACH2", "appendix")["results"][0]["source_locator"]
             passage = server.tools["get_fulltext_chunk"](

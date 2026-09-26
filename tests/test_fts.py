@@ -1271,11 +1271,54 @@ class SearchWithinAttachmentTests(unittest.TestCase):
                 search_fts(sqlite_db, "consensus", attachment_key="ABSENT1")
             with self.assertRaises(ValueError):
                 search_fts(sqlite_db, " / ", attachment_key="ATTACH1")
+            # Scoped search matches body text only: a title-only term matches no chunk.
+            self.assertTrue(search_fts(sqlite_db, "theory", limit=10))
+            self.assertEqual(search_fts(sqlite_db, "theory", attachment_key="ATTACH1"), [])
+            self.assertEqual(search_fts(sqlite_db, "smithConsensus2024", attachment_key="ATTACH1"), [])
+            self.assertEqual(
+                {tuple(r.matched_fields) for r in search_fts(sqlite_db, "consensus", attachment_key="ATTACH1")},
+                {("text",)},
+            )
             # Global search still keeps one best chunk per attachment.
             self.assertEqual(
                 sorted(r.zotero_attachment_key for r in search_fts(sqlite_db, "consensus", limit=10)),
                 ["ATTACH1", "ATTACH3"],
             )
+
+
+    def test_duplicate_attachment_key_rows_resolve_to_the_record_retrieval_uses(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            jsonl = root / "index.jsonl"
+            sqlite_db = root / "index.sqlite"
+            _write_jsonl(jsonl)
+            build_fts_index(jsonl, sqlite_db)
+            # Builds refuse duplicate keys; simulate a legacy/foreign index that has one anyway.
+            con = sqlite3.connect(sqlite_db)
+            try:
+                con.execute(
+                    "INSERT INTO metadata SELECT 99, zotero_parent_key, 'ATTACH1', title, creators, year, doi,"
+                    " citation_key, source_path, markdown_path, markdown_sha256, extraction_tool, char_count,"
+                    " word_count, page_count, classification, identity_status, identity_rule, has_math,"
+                    " source_sha256, indexed_at FROM metadata WHERE zotero_attachment_key = 'ATTACH2'"
+                )
+                con.execute("INSERT INTO chunks VALUES (999, 99, 0, 0, 20, 'Consensus impostor.')")
+                con.execute(
+                    "INSERT INTO chunks_fts (rowid, title, creators, text, citation_key, record_id, chunk_id)"
+                    " VALUES (999, '', '', 'Consensus impostor.', '', 99, 999)"
+                )
+                con.commit()
+            finally:
+                con.close()
+
+            within = search_fts(sqlite_db, "consensus", limit=10, attachment_key="ATTACH1")
+            self.assertTrue(within)
+            self.assertEqual({r.markdown_sha256 for r in within}, {"abc"})
+            for hit in within:
+                fulltext = get_fulltext(
+                    sqlite_db, attachment_key="ATTACH1", chunk_index=hit.chunk_index, expected_chunk_sha256=hit.chunk_sha256
+                )
+                self.assertNotIn("impostor", fulltext.text)
 
 
 def _write_jsonl(path: Path) -> None:
