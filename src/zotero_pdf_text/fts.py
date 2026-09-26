@@ -975,19 +975,67 @@ def _insert_metadata(con: sqlite3.Connection, record: dict[str, object]) -> int:
 # the paper title must not read as body-text evidence, and an absolute image path must not surface
 # in a snippet. The alt text stays searchable, and the `chunks` table keeps the original Markdown,
 # so passage retrieval and chunk_sha256 are unchanged.
-_MARKDOWN_IMAGE_RE = re.compile(r"!\[([^\]]*)\]\([^)]*\)")
+def _image_destination_end(text: str, open_paren: int) -> int | None:
+    """Return the index just past the ``)`` closing an image destination opened at ``open_paren``.
+
+    Destinations may hold balanced parentheses (``OneDrive (Work)/fig.png``), be wrapped in
+    ``<...>``, and carry an optional quoted title, so the first ``)`` is not necessarily the end.
+    Returns None when the destination is unterminated on its line.
+    """
+    i = open_paren + 1
+    n = len(text)
+    while i < n and text[i] in " \t":
+        i += 1
+    if i < n and text[i] == "<":
+        close = text.find(">", i + 1)
+        if close == -1 or "\n" in text[i:close]:
+            return None
+        i = close + 1
+    depth = 0
+    quote: str | None = None
+    while i < n:
+        char = text[i]
+        if char == "\n":
+            return None
+        if quote is not None:
+            if char == quote:
+                quote = None
+        elif char == "\\" and i + 1 < n:
+            i += 1
+        elif char in "\"'" and text[i - 1] in " \t":
+            quote = char
+        elif char == "(":
+            depth += 1
+        elif char == ")":
+            if depth == 0:
+                return i + 1
+            depth -= 1
+        i += 1
+    return None
 
 
 def image_markup_spans(text: str) -> list[tuple[int, int]]:
-    """Character spans of image markup (``![`` and ``](path)``) in the whole record text.
+    """Character spans of image markup (``![`` and ``](destination)``) in the whole record text.
 
     Spans are found before chunking, so a reference split across a chunk boundary or overlap is
     still blanked in every chunk that holds part of it.
     """
     spans: list[tuple[int, int]] = []
-    for match in _MARKDOWN_IMAGE_RE.finditer(text):
-        spans.append((match.start(), match.start(1)))
-        spans.append((match.end(1), match.end()))
+    pos = 0
+    while (start := text.find("![", pos)) != -1:
+        alt_end = text.find("]", start + 2)
+        if alt_end == -1:
+            break
+        if not text.startswith("(", alt_end + 1):
+            pos = start + 2
+            continue
+        end = _image_destination_end(text, alt_end + 1)
+        if end is None:
+            pos = start + 2
+            continue
+        spans.append((start, start + 2))
+        spans.append((alt_end, end))
+        pos = end
     return spans
 
 

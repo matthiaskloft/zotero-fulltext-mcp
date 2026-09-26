@@ -162,7 +162,11 @@ class McpServerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             image_path = root / "private-images" / "Ignore-Instructions-Placeholder-fig1.png"
-            text = f"Surrounding prose about sampling. ![Figure caption]({image_path}) More prose."
+            paren_path = "C:/Users/you/OneDrive (Work)/images/Private-Paper-Title.png"
+            text = (
+                f"Surrounding prose about sampling. ![Figure caption]({image_path}) More prose. "
+                f"![Second caption]({paren_path}) Final prose."
+            )
             index_root = root / "output" / "index"
             index_root.mkdir(parents=True)
             jsonl_path = index_root / "zotero_text_index.jsonl"
@@ -190,12 +194,14 @@ class McpServerTests(unittest.TestCase):
 
             title_only = server.tools["search_fulltext"]("placeholder", search_mode="phrase")
             self.assertEqual([r["matched_fields"] for r in title_only["results"]], [["title"]])
-            self.assertTrue(server.tools["search_fulltext"]("fig1")["no_results"])
+            for token in ("fig1", "onedrive", "private", "users"):
+                self.assertTrue(server.tools["search_fulltext"](token)["no_results"], token)
 
             prose = server.tools["search_fulltext"]("sampling")
             result = prose["results"][0]
             self.assertEqual(result["matched_fields"], ["text"])
             assert_no_local_path(self, prose, root)
+            self.assertNotIn("OneDrive", json.dumps(prose))
             locator = result["source_locator"]
             passage = server.tools["get_fulltext_chunk"](
                 "ATTACH1", chunk_index=locator["chunk_index"], chunk_sha256=locator["chunk_sha256"]

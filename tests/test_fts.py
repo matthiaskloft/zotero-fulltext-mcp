@@ -1287,6 +1287,31 @@ class ImageDestinationSearchTests(unittest.TestCase):
             self.assertEqual(result.chunk_sha256, chunk_sha256(text))
 
 
+class ImageDestinationParenthesesTests(unittest.TestCase):
+    def test_destination_with_parentheses_angle_brackets_and_title_is_not_indexed(self):
+        text = (
+            "Prose about sampling. "
+            "![Caption one](C:/Users/you/OneDrive (Work)/images/Private-Paper-Title.png) "
+            "middle prose ![Caption two](<D:/Shared (Team)/Hidden-Figure.png> \"Figure (b)\") "
+            "closing prose."
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            record = {"zotero_parent_key": "P1", "zotero_attachment_key": "A1", "title": "Placeholder", "text": text}
+            jsonl = root / "index.jsonl"
+            jsonl.write_text(json.dumps(record) + "\n", encoding="utf-8")
+            sqlite_db = root / "index.sqlite"
+            for chunk_chars, overlap in ((4000, 0), (19, 6)):
+                build_fts_index(jsonl, sqlite_db, chunk_chars=chunk_chars, overlap_chars=overlap)
+                for token in ("private", "title", "images", "onedrive", "work", "hidden", "team", "png"):
+                    self.assertEqual(search_fts(sqlite_db, token, limit=50), [], (chunk_chars, token))
+                hits = search_fts(sqlite_db, "sampling caption middle closing", limit=50, search_mode="any_terms")
+                self.assertTrue(hits)
+                for result in hits:
+                    self.assertNotIn("Users", result.snippet)
+                    self.assertNotIn("png", result.snippet)
+
+
 class ImageDestinationChunkBoundaryTests(unittest.TestCase):
     def test_destination_split_across_chunks_is_not_indexed(self):
         with tempfile.TemporaryDirectory() as tmp:
