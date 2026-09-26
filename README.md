@@ -388,6 +388,25 @@ The safe default server exposes:
   whether a `max_chars` limit truncated the stored chunk.
 - `get_item_context(parent_key | attachment_key)` — path-free bibliographic, extraction, and
   identity context for the supplied key.
+- `lookup_citation_key(citation_key)` — exact, case-sensitive lookup of an indexed citation key
+  (it never matches Zotero parent or attachment keys, and never synthesizes keys). Returns the
+  same path-free context as `get_item_context` for every matching attachment, plus its
+  `chunk_count`, ordered by parent key then attachment key. An unknown key returns
+  `found: false` with no records; a key shared by several parent items returns all of them with
+  `ambiguous: true` rather than picking one. Lookup-to-read flow:
+
+  ```text
+  lookup_citation_key(citation_key="smith2024")
+    -> {"found": true, "ambiguous": false, "parent_keys": ["ABCD1234"],
+        "records": [{"attachment_key": "EFGH5678", "chunk_count": 7, ...}], ...}
+  get_fulltext_chunk(attachment_key="EFGH5678", chunk_index=0)
+    -> {"text": "...", "next_chunk_index": 1,
+        "source_locator": {"chunk_index": 0, "chunk_sha256": "...", ...}, ...}
+  get_fulltext_chunk(attachment_key="EFGH5678", chunk_index=1)   # follow next_chunk_index
+  ```
+
+  Keep each passage's `source_locator.chunk_sha256` and pass it back when re-reading that chunk
+  to cite it, so a replaced passage answers `stale_locator`.
 - `list_timeout_candidates(status="pending")` — attachments whose primary extractor exceeded its
   scaled timeout budget and fell back to plain-text extraction (or failed outright). Read-only;
   pass a returned `attachment_key` to `skip_timeout_extraction` or `retry_timeout_extraction`.
