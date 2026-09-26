@@ -12,7 +12,9 @@ from zotero_pdf_text.timeout_candidates import (
     find_candidate,
     list_candidates,
     mark_status,
+    current_index_state,
     suggested_next_timeout,
+    with_current_index_state,
 )
 
 
@@ -203,6 +205,50 @@ class SkipListTests(unittest.TestCase):
             add_to_skip_list(skip_list_path, "ATTACH", reason="too slow")
             leftover = list(Path(tmp).glob(".*.tmp-*"))
             self.assertEqual(leftover, [])
+
+
+class CurrentIndexStateTests(unittest.TestCase):
+    def test_fallback_constant_matches_converter(self):
+        from zotero_pdf_text import converter, timeout_candidates
+
+        self.assertEqual(timeout_candidates._FALLBACK_EXTRACTION_TOOL, converter.FALLBACK_EXTRACTION_TOOL)
+
+    def test_classifies_tools_by_base_extractor(self):
+        self.assertEqual(current_index_state(None), "not_indexed")
+        self.assertEqual(current_index_state("pymupdf.get_text"), "fallback_extraction")
+        self.assertEqual(current_index_state("pymupdf4llm.to_markdown"), "structured_extraction")
+        self.assertEqual(current_index_state("pymupdf4llm.to_markdown+glm-ocr"), "structured_extraction")
+        self.assertEqual(current_index_state("marker"), "structured_extraction")
+
+    def test_pending_with_structured_current_text_is_effectively_resolved(self):
+        record = {"zotero_attachment_key": "ATTACH", "status": "pending", "occurrence_count": 3}
+        annotated = with_current_index_state(record, {"ATTACH": "pymupdf4llm.to_markdown"})
+        self.assertEqual(annotated["status"], "resolved")
+        self.assertEqual(annotated["recorded_status"], "pending")
+        self.assertEqual(annotated["resolved_via"], "current_index")
+        self.assertEqual(annotated["occurrence_count"], 3)
+        self.assertEqual(record["status"], "pending")  # input not mutated
+
+    def test_pending_with_fallback_or_missing_text_stays_pending(self):
+        record = {"zotero_attachment_key": "ATTACH", "status": "pending"}
+        fallback = with_current_index_state(record, {"ATTACH": "pymupdf.get_text"})
+        self.assertEqual((fallback["status"], fallback["current_index_state"]), ("pending", "fallback_extraction"))
+        missing = with_current_index_state(record, {})
+        self.assertEqual((missing["status"], missing["current_index_state"]), ("pending", "not_indexed"))
+
+    def test_unreadable_index_reports_unknown_and_keeps_recorded_status(self):
+        record = {"zotero_attachment_key": "ATTACH", "status": "pending"}
+        annotated = with_current_index_state(record, None)
+        self.assertEqual(annotated["status"], "pending")
+        self.assertEqual(annotated["current_index_state"], "unknown")
+        self.assertEqual(annotated["current_extraction_tool"], "")
+
+    def test_skipped_decision_is_never_overridden(self):
+        record = {"zotero_attachment_key": "ATTACH", "status": "skipped"}
+        annotated = with_current_index_state(record, {"ATTACH": "pymupdf4llm.to_markdown"})
+        self.assertEqual(annotated["status"], "skipped")
+        self.assertEqual(annotated["resolved_via"], "")
+        self.assertEqual(annotated["current_index_state"], "structured_extraction")
 
 
 if __name__ == "__main__":

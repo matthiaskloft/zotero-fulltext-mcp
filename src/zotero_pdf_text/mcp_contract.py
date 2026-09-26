@@ -48,12 +48,19 @@ from .fts import (
     SearchMode,
     SearchResult,
     StaleLocatorError,
+    extraction_tools_by_attachment,
     get_fulltext,
     get_item_context as get_item_context_fn,
     search_fts,
 )
 from .orphan_candidates import list_candidates as list_orphan_candidate_records
-from .timeout_candidates import STATUS_PENDING, STATUS_RESOLVED, STATUS_SKIPPED, list_candidates
+from .timeout_candidates import (
+    STATUS_PENDING,
+    STATUS_RESOLVED,
+    STATUS_SKIPPED,
+    list_candidates,
+    with_current_index_state,
+)
 
 if TYPE_CHECKING:
     # Runtime aliases are installed by create_server() for Pydantic's schema generation.
@@ -291,6 +298,10 @@ class TimeoutCandidateRecord(TypedDict):
     fallback_outcome: str
     conversion_status: str
     status: str
+    recorded_status: str
+    resolved_via: str
+    current_index_state: str
+    current_extraction_tool: str
     occurrence_count: int
     first_detected_at: str
     last_detected_at: str
@@ -700,9 +711,14 @@ def create_server(
     ) -> ListTimeoutCandidatesResponse:
         """List attachments whose primary Markdown extraction exceeded its scaled timeout budget.
 
-        Each pending candidate either fell back to plain-text extraction (losing structure/images)
-        or failed outright after its primary extractor timed out. Pass its attachment_key to
-        skip_timeout_extraction or retry_timeout_extraction. Read-only; never triggers conversion.
+        fallback_outcome/conversion_status/attempted_timeout_seconds describe the historical
+        timeout attempt, not the index today. current_index_state says what the current published
+        index holds for the attachment: structured_extraction, fallback_extraction (plain text,
+        structure/images lost), not_indexed, or unknown (index unreadable). A pending candidate
+        whose attachment is now indexed with structured text is reported as status "resolved"
+        with resolved_via "current_index" (recorded_status keeps the stored decision), so it needs
+        no retry. Pass a still-pending attachment_key to skip_timeout_extraction or
+        retry_timeout_extraction. Read-only; never triggers conversion.
         """
         return _public_call(
             lambda: _list_timeout_candidates(db_path, status=status, limit=limit)
@@ -1435,6 +1451,10 @@ def serialize_timeout_candidate(record: object) -> TimeoutCandidateRecord:
         "fallback_outcome": str(record.get("fallback_outcome", "")),
         "conversion_status": str(record.get("conversion_status", "")),
         "status": str(record.get("status", "")),
+        "recorded_status": str(record.get("recorded_status", record.get("status", ""))),
+        "resolved_via": str(record.get("resolved_via", "")),
+        "current_index_state": str(record.get("current_index_state", "unknown")),
+        "current_extraction_tool": str(record.get("current_extraction_tool", "")),
         "occurrence_count": int(record.get("occurrence_count") or 0),
         "first_detected_at": str(record.get("first_detected_at", "")),
         "last_detected_at": str(record.get("last_detected_at", "")),
@@ -1538,8 +1558,26 @@ def _list_timeout_candidates(db_path: Path, *, status: object, limit: object) ->
     validated_limit = _validate_limit(limit)
     status_filter = None if validated_status == "all" else validated_status
     candidates_jsonl = db_path.parent / CANDIDATE_JSONL_FILENAME
-    records = list_candidates(candidates_jsonl, status=status_filter)[:validated_limit]
-    return {"candidates": [serialize_timeout_candidate(record) for record in records]}
+    # Filter on the *effective* status, so a candidate recovered through another workflow no
+    # longer shows up as pending work.
+    records = list_candidates(candidates_jsonl, status=None)
+    tools = _current_extraction_tools(db_path, [str(record.get("zotero_attachment_key", "")) for record in records])
+    annotated = [with_current_index_state(record, tools) for record in records]
+    if status_filter is not None:
+        annotated = [record for record in annotated if record.get("status") == status_filter]
+    return {"candidates": [serialize_timeout_candidate(record) for record in annotated[:validated_limit]]}
+
+
+def _current_extraction_tools(db_path: Path, attachment_keys: list[str]) -> dict[str, str] | None:
+    """Read the current generation's extraction tool per key, or None when it cannot be read.
+
+    The candidate history is useful on its own, so an absent, unpublished or unreadable index
+    degrades every candidate's current state to "unknown" instead of failing the listing.
+    """
+    try:
+        return extraction_tools_by_attachment(resolve_reader_db_path(db_path), attachment_keys)
+    except (ArtifactError, IndexSchemaUnsupportedError, OSError, sqlite3.Error):
+        return None
 
 
 def _list_orphan_candidates(db_path: Path, *, status: object, limit: object) -> ListOrphanCandidatesResponse:

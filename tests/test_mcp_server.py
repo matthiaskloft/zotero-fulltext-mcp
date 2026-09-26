@@ -747,8 +747,39 @@ class TimeoutCandidateMcpTests(unittest.TestCase):
             candidate = response["candidates"][0]
             self.assertEqual(candidate["attachment_key"], "SLOWKEY")
             self.assertEqual(candidate["status"], "pending")
+            self.assertEqual(candidate["current_index_state"], "not_indexed")
             self.assertNotIn("source_path", candidate)
             assert_no_local_path(self, response, root)
+
+    def test_list_timeout_candidates_resolves_attachment_recovered_in_current_index(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, sqlite_path, config = _build_index(Path(tmp))
+            # ATTACH1 is indexed with primary-extractor text by the fixture.
+            _seed_timeout_candidate(
+                config.output_root, root / "private-paper.pdf", attachment_key="ATTACH1", conversion_status="error"
+            )
+            server = create_server(sqlite_path, mcp_factory=FakeFastMCP)
+
+            self.assertEqual(server.tools["list_timeout_candidates"]()["candidates"], [])
+            candidate = server.tools["list_timeout_candidates"](status="all")["candidates"][0]
+            self.assertEqual(candidate["status"], "resolved")
+            self.assertEqual(candidate["recorded_status"], "pending")
+            self.assertEqual(candidate["resolved_via"], "current_index")
+            self.assertEqual(candidate["conversion_status"], "error")  # historical attempt, kept
+            self.assertEqual(candidate["current_index_state"], "structured_extraction")
+            self.assertEqual(candidate["current_extraction_tool"], "pymupdf4llm.to_markdown")
+
+    def test_list_timeout_candidates_reports_unknown_state_when_index_is_unreadable(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, sqlite_path, config = _build_index(Path(tmp))
+            _seed_timeout_candidate(config.output_root, root / "private-paper.pdf", attachment_key="ATTACH1")
+            (sqlite_path.parent / "current.json").write_text("{not json", encoding="utf-8")
+            server = create_server(sqlite_path, mcp_factory=FakeFastMCP)
+
+            candidate = server.tools["list_timeout_candidates"]()["candidates"][0]
+            self.assertEqual(candidate["status"], "pending")
+            self.assertEqual(candidate["current_index_state"], "unknown")
+            self.assertEqual(candidate["current_extraction_tool"], "")
 
     def test_list_timeout_candidates_filters_by_status(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -1023,6 +1054,7 @@ def _seed_timeout_candidate(
     *,
     attachment_key: str = "SLOWKEY",
     status: str = "pending",
+    conversion_status: str = "converted",
 ) -> None:
     from datetime import datetime
 
@@ -1044,8 +1076,8 @@ def _seed_timeout_candidate(
         drawing_density=12.0,
         attempted_timeout_seconds=2400,
         suggested_next_timeout_seconds=4800,
-        fallback_outcome="fallback_used",
-        conversion_status="converted",
+        fallback_outcome="fallback_used" if conversion_status == "converted" else "fallback_failed",
+        conversion_status=conversion_status,
         detected_at=datetime.now().isoformat(timespec="seconds"),
     )
     master_path = output_root / "index" / "timeout_candidates.jsonl"

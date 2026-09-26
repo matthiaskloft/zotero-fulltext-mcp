@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import json
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
@@ -16,6 +17,19 @@ SKIP_LIST_FILENAME = "timeout_skip_list.json"
 STATUS_PENDING = "pending"
 STATUS_SKIPPED = "skipped"
 STATUS_RESOLVED = "resolved"
+
+# What the *current* published index holds for a candidate's attachment, derived at read time.
+# A candidate's own fields (conversion_status, fallback_outcome, ...) describe the historical
+# timeout attempt; these describe the record a search would return today.
+CURRENT_STATE_STRUCTURED = "structured_extraction"
+CURRENT_STATE_FALLBACK = "fallback_extraction"
+CURRENT_STATE_NOT_INDEXED = "not_indexed"
+CURRENT_STATE_UNKNOWN = "unknown"
+RESOLVED_VIA_CURRENT_INDEX = "current_index"
+
+# Mirrors converter.FALLBACK_EXTRACTION_TOOL (asserted equal in tests). Not imported: converter
+# imports this module, and a read-only candidate listing should not pull in the PDF extractors.
+_FALLBACK_EXTRACTION_TOOL = "pymupdf.get_text"
 
 # Anchored to the one confirmed pathological case (ran past 13540s / ~3.75h without finishing):
 # a 2x-uncapped suggestion could reach a full day+ for a similarly dense long book. 21600s (6h,
@@ -124,6 +138,51 @@ def list_candidates(master_jsonl_path: Path, *, status: str | None = STATUS_PEND
     if status is not None:
         values = [record for record in values if record.get("status") == status]
     return sorted(values, key=lambda record: cast(Any, record.get("last_detected_at", "")), reverse=True)
+
+
+def current_index_state(extraction_tool: str | None) -> str:
+    """Classify the current index record's extraction tool for one candidate attachment.
+
+    ``None`` means the attachment has no record in the current generation. Composite labels such
+    as ``pymupdf4llm.to_markdown+glm-ocr`` are classified by their base extractor.
+    """
+    if extraction_tool is None:
+        return CURRENT_STATE_NOT_INDEXED
+    base = extraction_tool.split("+", 1)[0]
+    if not base or base == _FALLBACK_EXTRACTION_TOOL:
+        return CURRENT_STATE_FALLBACK
+    return CURRENT_STATE_STRUCTURED
+
+
+def with_current_index_state(
+    record: dict[str, object], extraction_tools: Mapping[str, str] | None
+) -> dict[str, object]:
+    """Return a copy of a master record annotated with the current index state.
+
+    ``extraction_tools`` maps attachment keys to the extraction tool of their record in the
+    current published generation, or is ``None`` when that index could not be read. The stored
+    decision stays available as ``recorded_status``. A *pending* candidate whose attachment is now
+    indexed with structured (non-fallback) text was recovered by some other workflow, so its
+    effective ``status`` is reported as resolved via the current index -- the master file itself is
+    never rewritten here. Skipped/resolved decisions are never changed, and fallback-only text
+    stays pending because the quality decision is still open.
+    """
+    annotated = dict(record)
+    recorded_status = str(record.get("status", ""))
+    annotated["recorded_status"] = recorded_status
+    annotated["resolved_via"] = str(record.get("resolved_via", ""))
+    if extraction_tools is None:
+        annotated["current_index_state"] = CURRENT_STATE_UNKNOWN
+        annotated["current_extraction_tool"] = ""
+        return annotated
+    tool = extraction_tools.get(str(record.get("zotero_attachment_key", "")))
+    state = current_index_state(tool)
+    annotated["current_index_state"] = state
+    annotated["current_extraction_tool"] = tool or ""
+    if recorded_status == STATUS_PENDING and state == CURRENT_STATE_STRUCTURED:
+        annotated["status"] = STATUS_RESOLVED
+        annotated["resolved_via"] = RESOLVED_VIA_CURRENT_INDEX
+    return annotated
 
 
 def mark_status(master_jsonl_path: Path, attachment_key: str, *, status: str, extra_fields: dict[str, object]) -> None:

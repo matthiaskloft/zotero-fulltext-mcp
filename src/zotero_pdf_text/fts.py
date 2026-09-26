@@ -716,6 +716,24 @@ def get_item_context(
     return {"records": [_metadata_dict(row) for row in rows]}
 
 
+def extraction_tools_by_attachment(db_path: Path, attachment_keys: Iterable[str]) -> dict[str, str]:
+    """Return ``{attachment_key: extraction_tool}`` for the given keys that the index holds."""
+    keys = sorted(set(attachment_keys))
+    if not keys:
+        return {}
+    con = connect_readonly(db_path)
+    try:
+        placeholders = ", ".join("?" for _ in keys)
+        rows = con.execute(
+            "SELECT zotero_attachment_key, extraction_tool FROM metadata "
+            f"WHERE zotero_attachment_key IN ({placeholders}) ORDER BY record_id",
+            keys,
+        ).fetchall()
+    finally:
+        con.close()
+    return {str(key): str(tool) for key, tool in rows}
+
+
 # What `index_statistics` describes, stated in its own payload. The name "coverage" invited the
 # reading these numbers cannot support -- a share of the Zotero library -- so the scope travels
 # with the numbers rather than living only in a docstring no MCP client or JSON consumer reads.

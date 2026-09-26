@@ -252,7 +252,11 @@ reopens a `skipped`/`resolved` entry.
 There is no dedicated CLI command to list pending candidates — read
 `$data\index\timeout_candidates.jsonl` directly (filter for `"status": "pending"`), or use the
 always-on MCP tool `list_timeout_candidates`, or check `timeout_candidates.csv` next to any
-individual run's `manifest.csv` for that run's candidates only.
+individual run's `manifest.csv` for that run's candidates only. The JSONL records the historical
+timeout attempt; the MCP tool also reports what the current index holds (`current_index_state`)
+and treats a pending candidate whose attachment is now indexed with structured text (recovered by
+another conversion and publication) as resolved, so check it before retrying. See the data
+dictionary's "Timeout Candidates" section.
 
 Resolve a pending candidate one of two ways. Permanently skip the primary extractor for it (no
 code change needed):

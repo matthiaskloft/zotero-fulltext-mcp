@@ -10,11 +10,15 @@ from zotero_pdf_text.artifacts import (
     current_generation_jsonl,
     resolve_reader_db_path,
     stage_and_publish,
+    write_jsonl_from_conversion_manifest,
     write_jsonl_from_existing,
 )
 from zotero_pdf_text.config import ProjectConfig
+from zotero_pdf_text.converter import convert_verified
+from zotero_pdf_text.mcp_contract import _list_timeout_candidates
 from zotero_pdf_text.retry_timeout import (
     MAX_RETRY_TIMEOUT_SECONDS,
+    _write_single_row_mapping_report,
     retry_timeout_candidate,
     skip_timeout_candidate,
 )
@@ -396,6 +400,133 @@ class RetryTimeoutCandidateTests(unittest.TestCase):
 
             self.assertTrue(result.ok, result.error)
             self.assertEqual(result.timeout_seconds_used, 3000)
+
+
+def _fallback_record(pdf: Path) -> dict:
+    return {
+        "zotero_parent_key": "PARENT",
+        "zotero_attachment_key": "ATTACH",
+        "title": "Title",
+        "creators": "Jane Smith",
+        "year": "2024",
+        "doi": "10.1000/test",
+        "citation_key": "smithTitle2024",
+        "source_path": str(pdf),
+        "markdown_path": "old.md",
+        "markdown_sha256": "old",
+        "extraction_tool": "pymupdf.get_text",
+        "char_count": 5,
+        "word_count": 1,
+        "page_count": "10",
+        "classification": "mapped_verified",
+        "identity_status": "verified",
+        "identity_rule": "doi_exact",
+        "has_math": False,
+        "text": "Old",
+    }
+
+
+def _listed(output_root: Path) -> dict:
+    db_path = output_root / "index" / "zotero_text_index.sqlite"
+    candidates = _list_timeout_candidates(db_path, status="all", limit=10)["candidates"]
+    assert len(candidates) == 1
+    return dict(candidates[0])
+
+
+class CurrentIndexStateTests(unittest.TestCase):
+    """The listing separates the historical timeout event from what the index holds now."""
+
+    def _setup(self, root: Path) -> tuple[Path, Path, ProjectConfig]:
+        output_root = root / "output"
+        pdf = root / "paper.pdf"
+        pdf.write_bytes(b"%PDF")
+        _seed_candidate(output_root, pdf)
+        _seed_candidate(output_root, pdf)  # a second timeout: occurrence_count 2
+        _publish_generation(output_root, [_fallback_record(pdf)])
+        return output_root, pdf, ProjectConfig(root, root, root, output_root)
+
+    def test_fallback_only_text_stays_pending_with_accurate_current_state(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            output_root, _, _ = self._setup(Path(tmp))
+
+            listed = _listed(output_root)
+
+            self.assertEqual(listed["status"], "pending")
+            self.assertEqual(listed["recorded_status"], "pending")
+            self.assertEqual(listed["resolved_via"], "")
+            self.assertEqual(listed["current_index_state"], "fallback_extraction")
+            self.assertEqual(listed["current_extraction_tool"], "pymupdf.get_text")
+            self.assertEqual(listed["occurrence_count"], 2)
+
+    def test_recovery_through_retry_timeout_reports_resolved_structured_state(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            output_root, _, config = self._setup(Path(tmp))
+
+            with patch("zotero_pdf_text.converter.subprocess.run", side_effect=_write_raw_markdown):
+                result = retry_timeout_candidate("ATTACH", config=config)
+            self.assertTrue(result.ok, result.error)
+
+            listed = _listed(output_root)
+            self.assertEqual(listed["status"], "resolved")
+            self.assertEqual(listed["recorded_status"], "resolved")
+            self.assertEqual(listed["resolved_via"], "retry")
+            self.assertEqual(listed["current_index_state"], "structured_extraction")
+            self.assertEqual(listed["current_extraction_tool"], "pymupdf4llm.to_markdown")
+            # The historical timeout event is kept as it was recorded.
+            self.assertEqual(listed["conversion_status"], "converted")
+            self.assertEqual(listed["fallback_outcome"], "fallback_used")
+            self.assertEqual(listed["occurrence_count"], 2)
+
+    def test_recovery_through_another_conversion_and_publication_resolves_at_read_time(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            output_root, pdf, config = self._setup(root)
+            candidates_jsonl = output_root / "index" / "timeout_candidates.jsonl"
+            history_before = candidates_jsonl.read_text(encoding="utf-8")
+
+            # An ordinary conversion run (not retry-timeout) publishes primary-extractor text.
+            mapping_report = root / "mapping_report.csv"
+            _write_single_row_mapping_report(
+                mapping_report,
+                {
+                    "classification": "mapped_verified",
+                    "source_path": str(pdf),
+                    "safe_folder_id": "zotero_ATTACH",
+                    "zotero_parent_key": "PARENT",
+                    "zotero_attachment_key": "ATTACH",
+                    "item_type": "attachment",
+                    "title": "Title",
+                    "creators": "Jane Smith",
+                    "year": "2024",
+                    "doi": "10.1000/test",
+                    "citation_key": "smithTitle2024",
+                    "page_count": "10",
+                    "identity_status": "verified",
+                    "identity_rule": "doi_exact",
+                },
+            )
+            with patch("zotero_pdf_text.converter.subprocess.run", side_effect=_write_raw_markdown):
+                run_dir = convert_verified(
+                    config, mapping_report, output_dir=root / "run", workers=1, timeout_seconds=600, force=True
+                )
+            stage_and_publish(
+                output_root / "index", write_jsonl_from_conversion_manifest(run_dir / "manifest.csv"), command="test"
+            )
+
+            listed = _listed(output_root)
+            self.assertEqual(listed["status"], "resolved")
+            self.assertEqual(listed["recorded_status"], "pending")
+            self.assertEqual(listed["resolved_via"], "current_index")
+            self.assertEqual(listed["current_index_state"], "structured_extraction")
+            self.assertEqual(listed["current_extraction_tool"], "pymupdf4llm.to_markdown")
+            self.assertEqual(listed["occurrence_count"], 2)
+            db_path = output_root / "index" / "zotero_text_index.sqlite"
+            self.assertEqual(_list_timeout_candidates(db_path, status="pending", limit=10)["candidates"], [])
+            resolved = _list_timeout_candidates(db_path, status="resolved", limit=10)["candidates"]
+            self.assertEqual([c["attachment_key"] for c in resolved], ["ATTACH"])
+            # Read-only: the master history file is not rewritten by the listing.
+            self.assertEqual(candidates_jsonl.read_text(encoding="utf-8"), history_before)
+            self.assertEqual(find_candidate(candidates_jsonl, "ATTACH")["status"], "pending")
 
 
 if __name__ == "__main__":

@@ -11,6 +11,17 @@ unannounced rather than absent: present, inert unless explicitly configured and 
 validated for general use. Its config shape and output conventions may still change. It moves into a
 dated section once it has been stress-tested against a large library.
 
+### Changed
+
+- `list_timeout_candidates` now separates the historical timeout event from the current index
+  state. Each candidate carries `current_index_state` (`structured_extraction`,
+  `fallback_extraction`, `not_indexed`, or `unknown` when the index cannot be read),
+  `current_extraction_tool`, `recorded_status` and `resolved_via`. A pending candidate whose
+  attachment has since been published with structured text through another workflow is reported
+  as `resolved` (`resolved_via: "current_index"`) and drops out of the pending list, so it no
+  longer reads as a current indexing failure. Fallback-only text stays pending. The listing stays
+  read-only: `timeout_candidates.jsonl` history and `occurrence_count` are never rewritten (#36).
+
 ## [0.9.0] - 2026-09-26
 
 Installation reliability: `install-mcp` and `check-setup` catch broken, drifted, or stale
