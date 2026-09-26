@@ -51,6 +51,7 @@ from .fts import (
     get_fulltext,
     get_item_context as get_item_context_fn,
     indexed_state_by_attachment,
+    lookup_citation_key as lookup_citation_key_fn,
     search_fts,
 )
 from .orphan_candidates import list_candidates as list_orphan_candidate_records
@@ -73,6 +74,7 @@ if TYPE_CHECKING:
     ChunkSha256Input = object
     ContentSha256Input = object
     ContextKeyInput = object
+    CitationKeyInput = object
     CitationKeysInput = object
     ConfirmationInput = object
     TimeoutCandidateStatusInput = object
@@ -108,7 +110,9 @@ MCP_INSTRUCTIONS = (
     "source_locator.chunk_index with get_fulltext_chunk before using it to support a claim, passing "
     "that locator's chunk_sha256 so a passage that has since been replaced answers stale_locator "
     "instead of quietly returning different text under the citation you formed, and "
-    "use get_item_context for bibliographic and extraction context. Use library_status to say how "
+    "use get_item_context for bibliographic and extraction context. For a paper known by its citation "
+    "key, lookup_citation_key returns its attachment keys; read chunk 0 with get_fulltext_chunk and "
+    "follow next_chunk_index. Use library_status to say how "
     "current this index is before treating an absent result as an absent paper; its index counts "
     "describe what was indexed and never what share of the library is indexed, and its library "
     "health is null whenever no audit snapshot produced that comparison. Cite human-readable bibliographic "
@@ -120,6 +124,7 @@ DEFAULT_MCP_TOOL_NAMES = (
     "search_fulltext",
     "get_fulltext_chunk",
     "get_item_context",
+    "lookup_citation_key",
     "list_timeout_candidates",
     "list_orphan_candidates",
     "library_status",
@@ -263,6 +268,19 @@ class ContextRecord(TypedDict):
 
 class ContextResponse(TypedDict):
     records: list[ContextRecord]
+
+
+class CitationKeyRecord(ContextRecord):
+    chunk_count: int
+
+
+class CitationKeyLookupResponse(TypedDict):
+    citation_key: str
+    found: bool
+    parent_keys: list[str]
+    ambiguous: bool
+    truncated: bool
+    records: list[CitationKeyRecord]
 
 
 class BibtexResponse(TypedDict):
@@ -585,6 +603,7 @@ def create_server(
                     WithJsonSchema({"anyOf": [{"type": "string", "minLength": 1, "maxLength": MAX_CITATION_KEY_CHARS}, {"type": "null"}]}),
                 ],
                 ContextKeyInput=Annotated[object, WithJsonSchema({"anyOf": [{"type": "string", "maxLength": MAX_CITATION_KEY_CHARS}, {"type": "null"}]})],
+                CitationKeyInput=Annotated[object, WithJsonSchema({"type": "string", "minLength": 1, "maxLength": MAX_CITATION_KEY_CHARS})],
                 CitationKeysInput=Annotated[
                     object,
                     WithJsonSchema({"type": "array", "minItems": 1, "maxItems": MAX_CITATION_KEYS, "items": {"type": "string", "maxLength": MAX_CITATION_KEY_CHARS}}),
@@ -700,6 +719,26 @@ def create_server(
                     attachment_key=validated_attachment_key,
                     limit=MAX_CONTEXT_RECORDS,
                 )
+            )
+
+        return _public_call(operation)
+
+    @mcp.tool(annotations=READ_ONLY_TOOL_ANNOTATIONS)
+    def lookup_citation_key(citation_key: CitationKeyInput) -> CitationKeyLookupResponse:
+        """Return indexed attachments whose citation key equals citation_key exactly.
+
+        Matching is exact and case-sensitive; a citation key is not a Zotero parent or attachment
+        key. An unknown key returns found=false with no records. When one citation key belongs to
+        several parent items, every match is returned (ordered by parent then attachment key) and
+        ambiguous is true -- do not assume which paper was meant. To read a match, call
+        get_fulltext_chunk with its attachment_key and chunk_index=0 (when chunk_count > 0), then
+        follow next_chunk_index.
+        """
+        def operation() -> CitationKeyLookupResponse:
+            validated = _validate_citation_key(citation_key)
+            return serialize_citation_key_lookup(
+                validated,
+                lookup_citation_key_fn(_resolve_request_db(db_path), validated, limit=MAX_CONTEXT_RECORDS),
             )
 
         return _public_call(operation)
@@ -1408,6 +1447,26 @@ def serialize_item_context(context: dict[str, object]) -> ContextResponse:
     return {"records": [serialize_context_record(record) for record in records]}
 
 
+def serialize_citation_key_lookup(citation_key: str, lookup: dict[str, object]) -> CitationKeyLookupResponse:
+    records = lookup.get("records", [])
+    if not isinstance(records, list):
+        raise PublicMcpError("index_unavailable", "The local full-text index returned an invalid response.")
+    serialized: list[CitationKeyRecord] = []
+    for record in records:
+        context = serialize_context_record(record)
+        chunk_count = int(record.get("chunk_count") or 0) if isinstance(record, dict) else 0
+        serialized.append({**context, "chunk_count": chunk_count})
+    parent_keys = sorted({record["parent_key"] for record in serialized})
+    return {
+        "citation_key": citation_key,
+        "found": bool(serialized),
+        "parent_keys": parent_keys,
+        "ambiguous": len(parent_keys) > 1,
+        "truncated": bool(lookup.get("truncated", False)),
+        "records": serialized,
+    }
+
+
 def serialize_context_record(record: object) -> ContextRecord:
     if not isinstance(record, dict):
         raise PublicMcpError("index_unavailable", "The local full-text index returned an invalid response.")
@@ -1852,6 +1911,12 @@ def _validate_reason(value: object) -> str:
     if not isinstance(value, str) or len(value) > MAX_REASON_CHARS:
         raise PublicMcpError("invalid_reason", f"reason must be a string of at most {MAX_REASON_CHARS} characters.")
     return value
+
+
+def _validate_citation_key(value: object) -> str:
+    if not isinstance(value, str) or not value.strip() or len(value) > MAX_CITATION_KEY_CHARS:
+        raise PublicMcpError("invalid_citation_key", "citation_key must be a non-empty bounded string.")
+    return value.strip()
 
 
 def _validate_citation_keys(values: object) -> list[str]:

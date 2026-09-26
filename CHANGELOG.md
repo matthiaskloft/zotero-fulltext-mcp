@@ -13,6 +13,12 @@ dated section once it has been stress-tested against a large library.
 
 ### Added
 
+- New read-only MCP tool `lookup_citation_key(citation_key)`: exact, case-sensitive lookup of an
+  indexed citation key returning path-free bibliographic context, every matching attachment key
+  (ordered by parent then attachment key) and its `chunk_count`, so a client can read chunk 0 with
+  `get_fulltext_chunk` and follow `next_chunk_index`. Unknown keys return `found: false`; a key
+  shared by several parents is reported with `ambiguous: true` instead of being resolved to one.
+  No index schema change.
 - Conversion runs record each completed PDF in `conversion_checkpoint.jsonl` in the run directory
   as it finishes (append-only, fsynced, written only after the Markdown is published atomically;
   a torn final line from a crash is tolerated), including with multiple workers, and print one

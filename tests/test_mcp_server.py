@@ -87,7 +87,7 @@ class McpServerTests(unittest.TestCase):
 
             self.assertEqual(
                 set(server.tools),
-                {"search_fulltext", "get_fulltext_chunk", "get_item_context", "list_timeout_candidates", "list_orphan_candidates", "library_status"},
+                {"search_fulltext", "get_fulltext_chunk", "get_item_context", "lookup_citation_key", "list_timeout_candidates", "list_orphan_candidates", "library_status"},
             )
             self.assertNotIn("ensure_zotero_running", server.tools)
             self.assertNotIn("export_bibtex_entries_by_key", server.tools)
@@ -115,7 +115,7 @@ class McpServerTests(unittest.TestCase):
 
         self.assertEqual(
             {tool.name for tool in tools},
-            {"search_fulltext", "get_fulltext_chunk", "get_item_context", "list_timeout_candidates", "list_orphan_candidates", "library_status"},
+            {"search_fulltext", "get_fulltext_chunk", "get_item_context", "lookup_citation_key", "list_timeout_candidates", "list_orphan_candidates", "library_status"},
         )
         descriptions = {tool.name: tool.description for tool in tools}
         self.assertIn("title, creators, citation key, and converted body text", descriptions["search_fulltext"])
@@ -141,6 +141,7 @@ class McpServerTests(unittest.TestCase):
                     "search_fulltext",
                     "get_fulltext_chunk",
                     "get_item_context",
+                    "lookup_citation_key",
                     "list_timeout_candidates",
                     "list_orphan_candidates",
                     "library_status",
