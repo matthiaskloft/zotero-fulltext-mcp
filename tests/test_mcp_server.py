@@ -87,7 +87,7 @@ class McpServerTests(unittest.TestCase):
 
             self.assertEqual(
                 set(server.tools),
-                {"search_fulltext", "get_fulltext_chunk", "get_item_context", "lookup_citation_key", "list_timeout_candidates", "list_orphan_candidates", "library_status"},
+                {"search_fulltext", "search_within_fulltext", "get_fulltext_chunk", "get_item_context", "lookup_citation_key", "list_timeout_candidates", "list_orphan_candidates", "library_status"},
             )
             self.assertNotIn("ensure_zotero_running", server.tools)
             self.assertNotIn("export_bibtex_entries_by_key", server.tools)
@@ -125,7 +125,7 @@ class McpServerTests(unittest.TestCase):
 
         self.assertEqual(
             {tool.name for tool in tools},
-            {"search_fulltext", "get_fulltext_chunk", "get_item_context", "lookup_citation_key", "list_timeout_candidates", "list_orphan_candidates", "library_status"},
+            {"search_fulltext", "search_within_fulltext", "get_fulltext_chunk", "get_item_context", "lookup_citation_key", "list_timeout_candidates", "list_orphan_candidates", "library_status"},
         )
         descriptions = {tool.name: tool.description for tool in tools}
         self.assertIn("title, creators, citation key, and converted body text", descriptions["search_fulltext"])
@@ -149,6 +149,7 @@ class McpServerTests(unittest.TestCase):
                 set(tools),
                 {
                     "search_fulltext",
+                    "search_within_fulltext",
                     "get_fulltext_chunk",
                     "get_item_context",
                     "lookup_citation_key",
@@ -468,6 +469,62 @@ class McpServerTests(unittest.TestCase):
                 ),
                 "stale_locator",
             )
+
+    def test_search_within_fulltext_is_scoped_to_one_attachment(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, sqlite_path, _ = _build_index(Path(tmp) / "library")
+            jsonl_path = root / "output" / "index" / "zotero_text_index.jsonl"
+            record = json.loads(jsonl_path.read_text(encoding="utf-8"))
+            sibling = dict(record, zotero_attachment_key="ATTACH2", title="Supplement",
+                           citation_key="", text="Sibling supplement with searchable appendix text.")
+            jsonl_path.write_text(json.dumps(record) + "\n" + json.dumps(sibling) + "\n", encoding="utf-8")
+            _republish(root)
+            server = create_server(sqlite_path, mcp_factory=FakeFastMCP)
+            tool = server.tools["search_within_fulltext"]
+
+            self.assertEqual(
+                {hit["source_locator"]["attachment_key"] for hit in server.tools["search_fulltext"]("searchable")["results"]},
+                {"ATTACH1", "ATTACH2"},
+            )
+            for key in ("ATTACH1", "ATTACH2"):
+                response = tool(key, "searchable")
+                self.assertFalse(response["no_results"])
+                self.assertEqual({hit["source_locator"]["attachment_key"] for hit in response["results"]}, {key})
+                assert_no_local_path(self, response, root)
+            self.assertEqual(tool("ATTACH1", "appendix"), {"search_mode": "all_terms", "no_results": True, "results": []})
+            # Creator-only terms match every chunk's metadata, so scoped search ignores them.
+            self.assertTrue(server.tools["search_fulltext"]("disclose secrets")["results"])
+            self.assertTrue(tool("ATTACH1", "disclose secrets")["no_results"])
+
+            locator = tool("ATTACH2", "appendix")["results"][0]["source_locator"]
+            passage = server.tools["get_fulltext_chunk"](
+                "ATTACH2", chunk_index=locator["chunk_index"], chunk_sha256=locator["chunk_sha256"]
+            )
+            self.assertIn("appendix", passage["text"])
+
+            sibling["text"] = "Rewritten supplement with searchable appendix prose."
+            jsonl_path.write_text(json.dumps(record) + "\n" + json.dumps(sibling) + "\n", encoding="utf-8")
+            _republish(root)
+            _assert_tool_error(
+                self,
+                lambda: server.tools["get_fulltext_chunk"](
+                    "ATTACH2", chunk_index=locator["chunk_index"], chunk_sha256=locator["chunk_sha256"]
+                ),
+                "stale_locator",
+            )
+
+    def test_search_within_fulltext_rejects_bad_keys_and_queries(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, sqlite_path, _ = _build_index(Path(tmp) / "library")
+            server = create_server(sqlite_path, mcp_factory=FakeFastMCP)
+            tool = server.tools["search_within_fulltext"]
+
+            _assert_tool_error(self, lambda: tool("../escape", "searchable"), "invalid_attachment_key")
+            error = _assert_tool_error(self, lambda: tool("MISSING1", "searchable"), "attachment_not_found")
+            self.assertNotIn(str(root), str(error))
+            _assert_tool_error(self, lambda: tool("ATTACH1", " / "), "invalid_query")
+            _assert_tool_error(self, lambda: tool("ATTACH1", "topic", search_mode="bad"), "invalid_search_mode")
+            _assert_tool_error(self, lambda: tool("ATTACH1", "topic", limit=0), "invalid_limit")
 
     def test_attachment_key_rejects_non_alphanumeric_characters(self):
         with tempfile.TemporaryDirectory() as tmp:

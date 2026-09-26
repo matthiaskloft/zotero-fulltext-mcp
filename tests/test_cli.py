@@ -770,6 +770,7 @@ class InstallMcpCliTests(unittest.TestCase):
                 server["enabled_tools"],
                 [
                     "search_fulltext",
+                    "search_within_fulltext",
                     "get_fulltext_chunk",
                     "get_item_context",
                     "lookup_citation_key",

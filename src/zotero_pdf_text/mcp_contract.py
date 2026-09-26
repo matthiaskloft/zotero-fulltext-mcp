@@ -127,6 +127,7 @@ MCP_INSTRUCTIONS = (
 )
 DEFAULT_MCP_TOOL_NAMES = (
     "search_fulltext",
+    "search_within_fulltext",
     "get_fulltext_chunk",
     "get_item_context",
     "lookup_citation_key",
@@ -653,6 +654,42 @@ def create_server(
             validated_mode = _validate_search_mode(search_mode)
             results = search_fts(
                 _resolve_request_db(db_path), _validate_query(query), limit=_validate_limit(limit), search_mode=validated_mode
+            )
+            return {
+                "search_mode": validated_mode,
+                "no_results": not results,
+                "results": [serialize_search_result(result) for result in results],
+            }
+
+        return _public_call(operation)
+
+    @mcp.tool(annotations=READ_ONLY_TOOL_ANNOTATIONS)
+    def search_within_fulltext(
+        attachment_key: AttachmentKeyInput,
+        query: QueryInput,
+        search_mode: SearchModeInput = "all_terms",
+        limit: LimitInput = 10,
+    ) -> SearchResponse:
+        """Search the converted body text of one indexed attachment only.
+
+        Title, creator and citation-key terms are not matched here, so every hit is a body-text
+        passage. Returns up to limit distinct matching chunks of that attachment, ordered by
+        relevance and
+        then chunk_index; other attachments, including siblings under the same parent, are never
+        searched. search_mode behaves as in search_fulltext. An attachment with no match returns
+        no_results; an attachment key absent from the index answers attachment_not_found. Retrieve
+        a hit with get_fulltext_chunk using its source_locator.chunk_index and chunk_sha256.
+        """
+
+        def operation() -> SearchResponse:
+            validated_key = _validate_attachment_key(attachment_key)
+            validated_mode = _validate_search_mode(search_mode)
+            results = search_fts(
+                _resolve_request_db(db_path),
+                _validate_query(query),
+                limit=_validate_limit(limit),
+                search_mode=validated_mode,
+                attachment_key=validated_key,
             )
             return {
                 "search_mode": validated_mode,

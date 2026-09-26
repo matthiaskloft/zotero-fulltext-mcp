@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import zotero_pdf_text.fts as fts_module
 from zotero_pdf_text.fts import (
     ChunkNotFoundError,
     DuplicateAttachmentKeyError,
@@ -1239,6 +1240,127 @@ class IndexedStateByAttachmentTests(unittest.TestCase):
 
     def test_no_keys_does_not_open_the_database(self):
         self.assertEqual(indexed_state_by_attachment(Path("does-not-exist.sqlite"), []), {})
+
+
+class SearchWithinAttachmentTests(unittest.TestCase):
+    def test_constrains_to_one_attachment_among_siblings_and_returns_several_chunks(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            jsonl = root / "index.jsonl"
+            sqlite_db = root / "index.sqlite"
+            _write_jsonl(jsonl)
+            records = [json.loads(line) for line in jsonl.read_text(encoding="utf-8").splitlines()]
+            sibling = dict(records[0], zotero_attachment_key="ATTACH3", title="Appendix",
+                           citation_key="", text="Appendix: consensus estimation details and consensus priors.")
+            records[0]["text"] = "Consensus one. " + "filler words here. " * 5 + "Consensus two again."
+            jsonl.write_text("".join(json.dumps(r) + "\n" for r in [*records, sibling]), encoding="utf-8")
+            build_fts_index(jsonl, sqlite_db, chunk_chars=40, overlap_chars=5)
+
+            within = search_fts(sqlite_db, "consensus", limit=10, attachment_key="ATTACH1")
+            self.assertGreater(len(within), 1)
+            self.assertEqual({r.zotero_attachment_key for r in within}, {"ATTACH1"})
+            self.assertEqual(len({r.chunk_index for r in within}), len(within))
+            self.assertEqual(within, search_fts(sqlite_db, "consensus", limit=10, attachment_key="ATTACH1"))
+            self.assertEqual(len(search_fts(sqlite_db, "consensus", limit=1, attachment_key="ATTACH1")), 1)
+            self.assertEqual(
+                {r.zotero_attachment_key for r in search_fts(sqlite_db, "consensus", attachment_key="ATTACH3")},
+                {"ATTACH3"},
+            )
+            self.assertEqual(search_fts(sqlite_db, "estimation", attachment_key="ATTACH1"), [])
+            self.assertEqual(search_fts(sqlite_db, "psychometric", attachment_key="ATTACH1"), [])
+            with self.assertRaises(KeyError):
+                search_fts(sqlite_db, "consensus", attachment_key="ABSENT1")
+            with self.assertRaises(ValueError):
+                search_fts(sqlite_db, " / ", attachment_key="ATTACH1")
+            # Scoped search matches body text only: a title-only term matches no chunk.
+            self.assertTrue(search_fts(sqlite_db, "theory", limit=10))
+            self.assertEqual(search_fts(sqlite_db, "theory", attachment_key="ATTACH1"), [])
+            self.assertEqual(search_fts(sqlite_db, "smithConsensus2024", attachment_key="ATTACH1"), [])
+            self.assertEqual(
+                {tuple(r.matched_fields) for r in search_fts(sqlite_db, "consensus", attachment_key="ATTACH1")},
+                {("text",)},
+            )
+            # Global search still keeps one best chunk per attachment.
+            self.assertEqual(
+                sorted(r.zotero_attachment_key for r in search_fts(sqlite_db, "consensus", limit=10)),
+                ["ATTACH1", "ATTACH3"],
+            )
+
+
+    def test_scoped_scan_is_bounded_by_rowid_among_many_matching_records(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            jsonl = root / "index.jsonl"
+            sqlite_db = root / "index.sqlite"
+            base = {
+                "title": "t", "creators": "c", "markdown_sha256": "x", "classification": "mapped_verified",
+                "identity_status": "verified", "identity_rule": "doi_exact",
+            }
+            with jsonl.open("w", encoding="utf-8", newline="\n") as handle:
+                for i in range(200):
+                    text = f"consensus passage {i}. " * 10 + ("target marker." if i == 123 else "")
+                    handle.write(json.dumps(dict(base, zotero_parent_key=f"P{i}", zotero_attachment_key=f"A{i}", text=text)) + "\n")
+            build_fts_index(jsonl, sqlite_db, chunk_chars=60, overlap_chars=5)
+
+            statements: list[str] = []
+            real_connect = fts_module.connect_readonly
+
+            def traced(path: Path) -> sqlite3.Connection:
+                con = real_connect(path)
+                con.set_trace_callback(statements.append)
+                return con
+
+            with patch.object(fts_module, "connect_readonly", traced):
+                within = search_fts(sqlite_db, "consensus", limit=50, attachment_key="A123")
+            self.assertTrue(within)
+            self.assertEqual({r.zotero_attachment_key for r in within}, {"A123"})
+            self.assertEqual(
+                [r.chunk_index for r in search_fts(sqlite_db, "marker", attachment_key="A123")],
+                [r.chunk_index for r in search_fts(sqlite_db, "marker", limit=5) if r.zotero_attachment_key == "A123"],
+            )
+
+            ranking_sql = next(sql for sql in statements if "WITH matches" in sql)
+            con = sqlite3.connect(sqlite_db)
+            try:
+                plan = " ".join(row[3] for row in con.execute("EXPLAIN QUERY PLAN " + ranking_sql))
+            finally:
+                con.close()
+            # FTS5 encodes a MATCH plus a rowid lower and upper bound as "M...><" in its index string.
+            self.assertRegex(plan, r"VIRTUAL TABLE INDEX \d+:M\d*><")
+
+    def test_duplicate_attachment_key_rows_resolve_to_the_record_retrieval_uses(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            jsonl = root / "index.jsonl"
+            sqlite_db = root / "index.sqlite"
+            _write_jsonl(jsonl)
+            build_fts_index(jsonl, sqlite_db)
+            # Builds refuse duplicate keys; simulate a legacy/foreign index that has one anyway.
+            con = sqlite3.connect(sqlite_db)
+            try:
+                con.execute(
+                    "INSERT INTO metadata SELECT 99, zotero_parent_key, 'ATTACH1', title, creators, year, doi,"
+                    " citation_key, source_path, markdown_path, markdown_sha256, extraction_tool, char_count,"
+                    " word_count, page_count, classification, identity_status, identity_rule, has_math,"
+                    " source_sha256, indexed_at FROM metadata WHERE zotero_attachment_key = 'ATTACH2'"
+                )
+                con.execute("INSERT INTO chunks VALUES (999, 99, 0, 0, 20, 'Consensus impostor.')")
+                con.execute(
+                    "INSERT INTO chunks_fts (rowid, title, creators, text, citation_key, record_id, chunk_id)"
+                    " VALUES (999, '', '', 'Consensus impostor.', '', 99, 999)"
+                )
+                con.commit()
+            finally:
+                con.close()
+
+            within = search_fts(sqlite_db, "consensus", limit=10, attachment_key="ATTACH1")
+            self.assertTrue(within)
+            self.assertEqual({r.markdown_sha256 for r in within}, {"abc"})
+            for hit in within:
+                fulltext = get_fulltext(
+                    sqlite_db, attachment_key="ATTACH1", chunk_index=hit.chunk_index, expected_chunk_sha256=hit.chunk_sha256
+                )
+                self.assertNotIn("impostor", fulltext.text)
 
 
 class ImageDestinationSearchTests(unittest.TestCase):
