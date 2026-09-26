@@ -141,6 +141,34 @@ to see pending candidates, and `skip_timeout_extraction`/`retry_timeout_extracti
 `--enable-retry-timeout`, each gated behind its own literal `confirm` string) to act on one. See
 `README.md`'s "Tool contract" section.
 
+A candidate's recorded fields (`conversion_status`, `fallback_outcome`,
+`attempted_timeout_seconds`, `detected_at`) describe the historical timeout attempt, not what the
+index holds today. `list_timeout_candidates` therefore also reads the current published index
+generation (read-only) and adds, per candidate:
+
+- `current_index_state`: `structured_extraction` (indexed with the primary extractor or another
+  structured extractor such as marker, including `+glm-ocr` enrichment), `fallback_extraction`
+  (indexed with plain-text fallback only), `not_indexed` (no record in the current generation), or
+  `unknown` (no published index, or it could not be read — the listing still succeeds).
+- `current_extraction_tool`: that record's `extraction_tool`, or empty.
+- `recorded_status`: the status stored in the master file.
+- `status`: the effective status. A `pending` candidate counts as recovered through some other
+  conversion/publication workflow, and is reported as `resolved` with
+  `resolved_via: "current_index"`, only when all of these hold: the attachment is indexed with
+  structured text; that record's `indexed_at` is later than the candidate's `last_detected_at`
+  (candidate timestamps are naive local time, `indexed_at` carries a UTC offset; both are compared
+  as absolute times); and the record's `source_sha256` does not differ from the candidate's
+  `source_sha256` when both are known. Structured text indexed before the last timeout, or without
+  a usable `indexed_at`, stays `pending` because it may be stale, though its `current_index_state`
+  and tool are still reported. The `status` filter uses this effective value. Fallback-only text
+  stays `pending`. `skipped`/`resolved` decisions are never changed.
+- `resolved_via`: `retry` for a candidate resolved by `retry-timeout`, `current_index` for one
+  derived as above, otherwise empty.
+
+This derivation never rewrites `timeout_candidates.jsonl`: history, `occurrence_count` and the
+stored status are kept as recorded. Candidates also record `source_sha256`, the PDF's hash when
+the timed-out attempt started (empty in records written before this field existed).
+
 ### Orphan Candidates
 
 `mapper.py`'s own `_metadata_candidates` fallback only matches an `orphan_pdf` row's *filename*

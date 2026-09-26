@@ -1,4 +1,5 @@
 import csv
+import hashlib
 import itertools
 import json
 import subprocess
@@ -530,6 +531,8 @@ class ConverterTests(unittest.TestCase):
             self.assertEqual(len(run_rows), 1)
             self.assertEqual(run_rows[0]["fallback_outcome"], "fallback_failed")
             self.assertEqual(run_rows[0]["conversion_status"], "error")
+            # The source hash at the timed-out attempt is kept, even though no text was produced.
+            self.assertEqual(run_rows[0]["source_sha256"], hashlib.sha256(b"%PDF").hexdigest())
 
     def test_called_process_error_on_primary_does_not_write_timeout_candidate(self):
         with tempfile.TemporaryDirectory() as tmp:

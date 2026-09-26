@@ -716,6 +716,38 @@ def get_item_context(
     return {"records": [_metadata_dict(row) for row in rows]}
 
 
+# Keys per `IN (...)` query. Older SQLite builds cap bound parameters at 999, and the candidate
+# history this is used for grows without bound, so one query over every key could fail outright.
+INDEXED_STATE_BATCH_SIZE = 500
+
+
+def indexed_state_by_attachment(db_path: Path, attachment_keys: Iterable[str]) -> dict[str, dict[str, str]]:
+    """Return ``{attachment_key: {extraction_tool, indexed_at, source_sha256}}`` for held keys."""
+    keys = sorted(set(attachment_keys))
+    states: dict[str, dict[str, str]] = {}
+    if not keys:
+        return states
+    con = connect_readonly(db_path)
+    try:
+        for start in range(0, len(keys), INDEXED_STATE_BATCH_SIZE):
+            batch = keys[start : start + INDEXED_STATE_BATCH_SIZE]
+            placeholders = ", ".join("?" for _ in batch)
+            rows = con.execute(
+                "SELECT zotero_attachment_key, extraction_tool, indexed_at, source_sha256 FROM metadata "
+                f"WHERE zotero_attachment_key IN ({placeholders}) ORDER BY record_id",
+                batch,
+            ).fetchall()
+            for key, tool, indexed_at, source_sha256 in rows:
+                states[str(key)] = {
+                    "extraction_tool": str(tool),
+                    "indexed_at": str(indexed_at or ""),
+                    "source_sha256": str(source_sha256 or ""),
+                }
+    finally:
+        con.close()
+    return states
+
+
 # What `index_statistics` describes, stated in its own payload. The name "coverage" invited the
 # reading these numbers cannot support -- a share of the Zotero library -- so the scope travels
 # with the numbers rather than living only in a docstring no MCP client or JSON consumer reads.

@@ -7,8 +7,8 @@ upgrade before a fix is evaluated.
 
 | Version | Supported |
 |---------|-----------|
-| 0.5.x | Yes |
-| 0.4.x and earlier | No |
+| 0.9.x | Yes |
+| 0.8.x and earlier | No |
 
 ## Reporting a vulnerability
 
