@@ -9,15 +9,18 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from collections import Counter
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import Callable
 
 from .config import ProjectConfig
 from .indexer import load_indexed_keys
 from ._atomic import atomic_write_text
+from .checkpoint import ConversionCheckpoint, body_sha256, classify_entry
 from .timeout_candidates import (
     TimeoutCandidate,
     append_master_candidates,
@@ -243,21 +246,24 @@ def _convert_mapping_rows(
 
     rows = _selected_rows(mapping_report, limit, classifications, skip_attachment_keys=skip_attachment_keys)
     indexed_rows = list(enumerate(rows, start=1))
+    # Loaded before any row runs: entries from an interrupted earlier invocation of this run
+    # directory let completed rows be reused with their extraction-time provenance.
+    checkpoint = ConversionCheckpoint(run_dir)
+    progress = _Progress(len(indexed_rows), checkpoint)
+
+    def convert(item: tuple[int, dict[str, str]]) -> tuple[ConversionResult, TimeoutCandidate | None]:
+        outcome = _convert_row(
+            item[1], markdown_dir, images_root, item[0], timeout_seconds,
+            force=force, skip_keys=skip_keys, checkpoint=checkpoint,
+        )
+        progress.report(outcome[0])
+        return outcome
+
     if workers == 1:
-        row_outcomes = [
-            _convert_row(row, markdown_dir, images_root, index, timeout_seconds, force=force, skip_keys=skip_keys)
-            for index, row in indexed_rows
-        ]
+        row_outcomes = [convert(item) for item in indexed_rows]
     else:
         with ThreadPoolExecutor(max_workers=workers) as executor:
-            row_outcomes = list(
-                executor.map(
-                    lambda item: _convert_row(
-                        item[1], markdown_dir, images_root, item[0], timeout_seconds, force=force, skip_keys=skip_keys
-                    ),
-                    indexed_rows,
-                )
-    )
+            row_outcomes = list(executor.map(convert, indexed_rows))
     retry_workers = min(2, workers - 1)
     retry_indexes = [
         index for index, (result, _) in enumerate(row_outcomes)
@@ -265,12 +271,16 @@ def _convert_mapping_rows(
     ]
     retry_counts: Counter[str] = Counter()
     if retry_indexes:
+        retry_progress = _Progress(len(retry_indexes), checkpoint, label="native crash retry")
+
         def retry(index: int) -> tuple[ConversionResult, TimeoutCandidate | None]:
             row_number, row = indexed_rows[index]
-            return _convert_row(
+            outcome = _convert_row(
                 row, markdown_dir, images_root, row_number, timeout_seconds,
-                force=True, skip_keys=skip_keys, retry=True,
+                force=True, skip_keys=skip_keys, retry=True, checkpoint=checkpoint,
             )
+            retry_progress.report(outcome[0])
+            return outcome
 
         with ThreadPoolExecutor(max_workers=retry_workers) as executor:
             retried = list(executor.map(retry, retry_indexes))
@@ -288,6 +298,13 @@ def _convert_mapping_rows(
                 retry_counts["fallback_only" if initial_result.status == "converted" else "still_failed"] += 1
             if row_outcomes[index][0] is initial_result:
                 initial_result.error += "; native crash retry: " + _retry_diagnostic(retry_result)
+                if initial_result.status == "converted":
+                    # Keep the checkpoint's copy of this row identical to the manifest row, so a
+                    # resumed run reconstructs the same manifest.
+                    kept = initial_result
+                    _checkpoint_best_effort(
+                        lambda: checkpoint.amend_result(Path(kept.output_path), asdict(kept))
+                    )
     results = [result for result, _candidate in row_outcomes]
     candidates = [candidate for _result, candidate in row_outcomes if candidate is not None]
     _write_manifest(run_dir / "manifest.csv", results)
@@ -295,10 +312,65 @@ def _convert_mapping_rows(
     _write_summary(
         run_dir / "summary.md", mapping_report, results, workers, timeout_seconds,
         force, classifications, len(retry_indexes), retry_workers, retry_counts,
+        reused=_count_reused(results, checkpoint),
     )
     write_run_candidates(run_dir, candidates)
     append_master_candidates(output_root / "index" / "timeout_candidates.jsonl", candidates)
     return run_dir
+
+
+class _Progress:
+    """One concise stderr line per finished row, so a long run shows it is advancing."""
+
+    def __init__(self, total: int, checkpoint: ConversionCheckpoint, *, label: str = "") -> None:
+        self.total = total
+        self.checkpoint = checkpoint
+        self.prefix = f"{label} " if label else ""
+        self.done = 0
+        self._lock = threading.Lock()
+
+    def report(self, result: ConversionResult) -> None:
+        status = result.status
+        if result.status == "converted":
+            source_modified = _reuse_state(result, self.checkpoint)
+            if source_modified is not None:
+                status = "reused from checkpoint" + (" (source PDF modified since extraction)" if source_modified else "")
+            status += f" [{result.extraction_tool}]"
+        elif result.status == "skipped_existing":
+            status = "skipped_existing (source provenance unknown)"
+        with self._lock:
+            self.done += 1
+            line = f"{self.prefix}[{self.done}/{self.total}] {result.zotero_attachment_key or '-'}: {status}"
+            print(line, file=sys.stderr, flush=True)
+
+
+def _reuse_state(result: ConversionResult, checkpoint: ConversionCheckpoint) -> bool | None:
+    """None if the row was not reused from the checkpoint, else whether its source was modified."""
+    if not result.output_path:
+        return None
+    return checkpoint.reused.get(checkpoint.relative(Path(result.output_path)))
+
+
+def _count_reused(results: list[ConversionResult], checkpoint: ConversionCheckpoint) -> Counter[str]:
+    counts: Counter[str] = Counter()
+    for result in results:
+        source_modified = _reuse_state(result, checkpoint) if result.status == "converted" else None
+        if source_modified is not None:
+            counts["reused"] += 1
+            counts["source_modified"] += int(source_modified)
+    return counts
+
+
+def _checkpoint_best_effort(write: Callable[[], object]) -> None:
+    """Run a checkpoint write; a failure costs resumability, never the conversion itself.
+
+    The Markdown is already published and the manifest still records the row, so turning a
+    failed ledger append into a row error would discard a good conversion.
+    """
+    try:
+        write()
+    except OSError as exc:
+        print(f"warning: could not update conversion checkpoint: {type(exc).__name__}: {exc}", file=sys.stderr, flush=True)
 
 
 def default_worker_count() -> int:
@@ -361,6 +433,7 @@ def _convert_row(
     force: bool,
     skip_keys: frozenset[str] = frozenset(),
     retry: bool = False,
+    checkpoint: ConversionCheckpoint | None = None,
 ) -> tuple[ConversionResult, TimeoutCandidate | None]:
     source_path = Path(row["source_path"])
     output_path = markdown_dir / f"{index:04d}_{_output_stem(row)}.md"
@@ -372,6 +445,15 @@ def _convert_row(
     effective_timeout = _effective_timeout(row, timeout_seconds, source_path)
     source_sha256_before = ""
     try:
+        if output_path.exists() and not force and checkpoint is not None:
+            resumed, foreign = _resume_from_checkpoint(row, output_path, checkpoint)
+            if resumed is not None:
+                return resumed, None
+            # A checkpoint entry for this output path that names another attachment or source
+            # proves the existing Markdown is not this row's text. Reusing it would publish
+            # another document's text under this key, so re-extract it (the old file is kept
+            # until the new extraction succeeds) instead of treating it as skipped_existing.
+            force = foreign
         if output_path.exists() and not force:
             extraction_tool = _existing_extraction_tool(output_path)
             has_math = _existing_has_math(output_path)
@@ -406,6 +488,7 @@ def _convert_row(
             source_path, raw_output_path, extraction_images_dir, effective_timeout, skip_primary=skip_primary
         )
         source_sha256 = _source_sha256(source_path)
+        source_stat = _stat_or_none(source_path)
         if source_sha256 != source_sha256_before:
             # Return before writing output_path. An error row is retried; a written Markdown
             # file is accepted, so publishing text whose source is unknown is the worse failure.
@@ -458,6 +541,13 @@ def _convert_row(
             error=fallback_note,
             source_sha256=source_sha256,
         )
+        if checkpoint is not None and source_sha256:
+            # Recorded only now, after the Markdown was published atomically, so an entry never
+            # certifies a partially written file.
+            ledger = checkpoint
+            _checkpoint_best_effort(
+                lambda: _record_completion(ledger, output_path, result, source_stat, source_sha256)
+            )
         candidate = (
             _build_timeout_candidate(
                 row, source_path, effective_timeout, "fallback_used", "converted", source_sha256_before
@@ -485,6 +575,125 @@ def _convert_row(
         math_sidecar_path.unlink(missing_ok=True)
         if staged_images_root is not None:
             shutil.rmtree(staged_images_root, ignore_errors=True)
+
+
+def _resume_from_checkpoint(
+    row: dict[str, str], output_path: Path, checkpoint: ConversionCheckpoint
+) -> tuple[ConversionResult | None, bool]:
+    """Reuse a checkpointed completion for existing Markdown, or say why it cannot be reused.
+
+    Returns ``(result, False)`` when the entry is validated and reused, or an ``error`` result when
+    the Markdown was edited after being recorded for another attachment or source (a conflict
+    only ``--force`` may resolve); ``(None, True)`` when the entry proves the unmodified Markdown
+    belongs to another attachment or source; and ``(None, False)`` when there is no usable entry
+    (the caller keeps the provenance-unknown ``skipped_existing`` path).
+
+    The reused row carries the source hash recorded at extraction time. Today's PDF is only
+    hashed to compare against that recorded hash (when the source path differs), never to supply
+    a hash for text that was extracted earlier.
+    """
+    entry = checkpoint.lookup(output_path)
+    if entry is None:
+        return None, False
+    row_source = row.get("source_path", "")
+    current_source_hash = _source_sha256(Path(row_source)) if entry.source_path != row_source else None
+    body = _existing_markdown_body(output_path)
+    verdict = classify_entry(
+        entry,
+        attachment_key=row.get("zotero_attachment_key", ""),
+        source_path=row_source,
+        output_sha256=_source_sha256(output_path),
+        current_source_sha256=current_source_hash,
+        body_sha256=body_sha256(body),
+    )
+    if verdict == "conflict":
+        # Re-extracting would overwrite someone's edits; reusing would publish text that is
+        # neither this row's nor the recorded one. Keep the file and fail the row visibly.
+        return (
+            _result(
+                row,
+                output_path,
+                "error",
+                "checkpoint conflict: existing Markdown was modified after it was recorded and its "
+                "checkpoint names another attachment/source; the file was kept unchanged. Rerun "
+                "with --force to replace it.",
+            ),
+            False,
+        )
+    if verdict == "foreign":
+        return None, True
+    if verdict != "reuse":
+        return None, False
+    extraction_tool = entry.result.get("extraction_tool") or EXTRACTION_TOOL
+    has_math = entry.result.get("has_math", "false") == "true"
+    refreshed = _with_front_matter(row, body, extraction_tool, has_math=has_math)
+    if output_path.read_bytes() != refreshed.encode("utf-8"):
+        # Metadata-only refresh (e.g. an updated citation key); the body, and therefore the
+        # extraction-time provenance, is unchanged.
+        atomic_write_text(output_path, refreshed)
+    result = _result(
+        row,
+        output_path,
+        "converted",
+        error=entry.result.get("error", ""),
+        extraction_tool=extraction_tool,
+        has_math=has_math,
+        source_sha256=entry.source_sha256,
+    )
+    output_sha256 = _source_sha256(output_path)
+    current_body_sha256 = body_sha256(_existing_markdown_body(output_path))
+    if (
+        output_sha256 != entry.output_sha256
+        or current_body_sha256 != entry.body_sha256
+        or asdict(result) != entry.result
+    ):
+        _checkpoint_best_effort(
+            lambda: checkpoint.record(
+                output_path,
+                result=asdict(result),
+                source_size=entry.source_size,
+                source_mtime_ns=entry.source_mtime_ns,
+                source_sha256=entry.source_sha256,
+                output_sha256=output_sha256,
+                body_sha256=current_body_sha256,
+            )
+        )
+    source_modified = (
+        entry.source_path == row_source
+        and entry.source_size is not None
+        and _stat_or_none(Path(row_source)) != (entry.source_size, entry.source_mtime_ns)
+    )
+    checkpoint.mark_reused(output_path, source_modified=source_modified)
+    return result, False
+
+
+def _record_completion(
+    checkpoint: ConversionCheckpoint,
+    output_path: Path,
+    result: ConversionResult,
+    source_stat: tuple[int, int] | None,
+    source_sha256: str,
+) -> None:
+    output_sha256 = _source_sha256(output_path)
+    if not output_sha256:
+        return
+    checkpoint.record(
+        output_path,
+        result=asdict(result),
+        source_size=source_stat[0] if source_stat else None,
+        source_mtime_ns=source_stat[1] if source_stat else None,
+        source_sha256=source_sha256,
+        output_sha256=output_sha256,
+        body_sha256=body_sha256(_existing_markdown_body(output_path)),
+    )
+
+
+def _stat_or_none(path: Path) -> tuple[int, int] | None:
+    try:
+        stat = path.stat()
+    except OSError:
+        return None
+    return stat.st_size, stat.st_mtime_ns
 
 
 def _build_timeout_candidate(
@@ -803,8 +1012,10 @@ def _write_summary(
     retry_attempted: int = 0,
     retry_workers: int = 0,
     retry_counts: Counter[str] | None = None,
+    reused: Counter[str] | None = None,
 ) -> None:
     retry_counts = retry_counts or Counter()
+    reused = reused or Counter()
     converted = sum(1 for result in results if result.status == "converted")
     skipped = sum(1 for result in results if result.status == "skipped_existing")
     errors = sum(1 for result in results if result.status == "error")
@@ -825,7 +1036,9 @@ def _write_summary(
         f"- Mapping report: `{mapping_report}`",
         f"- Requested rows: {len(results)}",
         f"- Converted: {converted}",
-        f"- Skipped existing: {skipped}",
+        f"  - Reused from checkpoint without re-extraction: {reused['reused']}",
+        f"  - Of those, source PDF modified since extraction: {reused['source_modified']}",
+        f"- Skipped existing (source provenance unknown): {skipped}",
         f"- Errors: {errors}",
         f"- Unresolved native crash errors: {unresolved_native}",
         f"- Timeout errors: {timeout_errors}",
@@ -848,5 +1061,6 @@ def _write_summary(
         "- `manifest.csv`: spreadsheet-friendly conversion manifest",
         "- `manifest.jsonl`: line-delimited manifest for tools",
         "- `markdown/`: converted Markdown files with Zotero front matter",
+        "- `conversion_checkpoint.jsonl`: per-row completion ledger used to resume an interrupted run",
     ]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")

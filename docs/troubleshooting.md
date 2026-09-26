@@ -69,7 +69,10 @@ Prefer that plain form over `rebuild-index --manifest <manifest.csv>` when prove
 The manifest path rebuilds every record from the manifest, and a manifest row for an attachment
 that was skipped rather than reconverted (`skipped_existing`) carries no source hash -- so a
 manifest rebuild can *replace* recorded hashes with empty ones. Provenance is re-established for
-an attachment when it is genuinely reconverted.
+an attachment when it is genuinely reconverted. Rows a resumed run reuses from its
+`conversion_checkpoint.jsonl` are the exception: they keep the hash recorded at extraction time
+(status `converted`), so only Markdown that predates the checkpoint, or was edited after it was
+recorded, loses its hash this way.
 
 ## MCP Retrieval Reports `stale_locator`
 
@@ -171,7 +174,10 @@ Rebuild in this order:
 3. `rebuild-index --manifest <that run's manifest.csv>`
 
 `convert-verified --resume` refreshes YAML/front matter and manifest metadata
-for existing Markdown files. It does not rerun PDF extraction.
+for existing Markdown files. It does not rerun PDF extraction, except for a file its
+`conversion_checkpoint.jsonl` shows was extracted for a different attachment or source PDF and
+has not been edited since. If such a file *was* edited, the row is reported as a `checkpoint
+conflict` error and the file is left alone; rerun with `--force` to replace it.
 
 Use `--force` only when the Markdown body itself should be regenerated:
 
