@@ -11,6 +11,12 @@ unannounced rather than absent: present, inert unless explicitly configured and 
 validated for general use. Its config shape and output conventions may still change. It moves into a
 dated section once it has been stress-tested against a large library.
 
+## [0.10.0] - 2026-09-26
+
+Paper retrieval: read a known paper by citation key, search inside one attachment, keep image
+paths out of body-text matches, a first-use guide, and a privacy-aware feedback route. Also ships
+checkpointed conversion runs, selective index repair and provenance reconversion.
+
 ### Added
 
 - README "First use" section: the shortest path from install to cited evidence
@@ -824,7 +830,8 @@ author's own machine.
 
 Initial import of the Zotero full-text conversion pipeline, CLI, and MCP server. Not tagged.
 
-[Unreleased]: https://github.com/matthiaskloft/zotero-fulltext-mcp/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/matthiaskloft/zotero-fulltext-mcp/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.10.0
 [0.9.0]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.9.0
 [0.8.0]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.8.0
 [0.7.0]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.7.0
