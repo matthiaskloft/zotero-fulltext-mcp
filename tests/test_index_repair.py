@@ -65,13 +65,18 @@ def _sha(path: Path) -> str:
 
 
 def _set_zotero_title(config: ProjectConfig, key: str, title: str) -> None:
+    _set_zotero_field(config, key, 1, title)
+
+
+def _set_zotero_field(config: ProjectConfig, key: str, field_id: int, value: str) -> None:
+    """field_id: 1 title, 2 DOI, 3 citation key (see _write_zotero_inventory)."""
     con = sqlite3.connect(config.zotero_sqlite)
     try:
         con.execute(
             "UPDATE itemDataValues SET value = ? WHERE valueID = ("
             "SELECT d.valueID FROM itemData d JOIN items i ON i.itemID = d.itemID "
-            "WHERE i.key = ? AND d.fieldID = 1)",
-            (title, f"P{key}"),
+            "WHERE i.key = ? AND d.fieldID = ?)",
+            (value, f"P{key}", field_id),
         )
         con.commit()
     finally:
@@ -415,6 +420,98 @@ class ApplyTests(RepairFixture):
         plan_path = write_plan(plan, self.root / "elsewhere")
         with self.assertRaises(IndexRepairError):
             apply_plan(self.config, plan_path, groups=[GROUP_SAFE])
+
+
+class SourceAndMetadataGuardTests(RepairFixture):
+    def republish(self, key: str, **fields) -> None:
+        records = self.records()
+        records[key].update(fields)
+        seed = self.root / f"seed-{key}.jsonl"
+        seed.write_text("".join(json.dumps(record) + "\n" for record in records.values()), encoding="utf-8")
+        stage_and_publish(self.index_root, write_jsonl_from_existing(seed), command="test")
+
+    def test_pdf_changed_after_the_snapshot_is_reconverted_not_refreshed(self):
+        # Edited in place after the dry-run: the snapshot hash still matches the index, so the
+        # audit reports only metadata_changed. The plan measures the PDF and routes it to reconvert.
+        self.pdfs[SAFE].write_bytes(b"%PDF edited in place")
+        self.assertEqual(self.statuses()[SAFE], ("metadata_changed",))
+        rows = {row.attachment_key: row for row in build_plan(self.config, self.snapshot, plan_id="p").rows}
+        self.assertEqual((rows[SAFE].group, rows[SAFE].reason_code), (GROUP_RECONVERT, "source_changed"))
+        self.assertIn("measured now", rows[SAFE].reason)
+        self.assertEqual(rows[ENRICHED].group, GROUP_SAFE)
+
+    def test_unknown_source_hash_still_allows_a_metadata_only_refresh(self):
+        self.republish(SAFE, source_sha256="")
+        self.pdfs[SAFE].write_bytes(b"%PDF edited in place")
+        rows = {row.attachment_key: row for row in build_plan(self.config, self.snapshot, plan_id="p").rows}
+        self.assertEqual(rows[SAFE].group, GROUP_SAFE)
+        report = self.apply(self.plan(), keys=[SAFE])
+        self.assertEqual([row.outcome for row in report.rows], [OUTCOME_METADATA_REFRESHED])
+        self.assertEqual(self.records()[SAFE]["source_sha256"], "")
+
+    def test_pdf_changed_after_planning_refuses_the_safe_refresh(self):
+        plan_path = self.plan()
+        original = self.records()
+        self.pdfs[SAFE].write_bytes(b"%PDF edited after planning")
+
+        report = self.apply(plan_path, groups=[GROUP_SAFE])
+
+        outcomes = {row.attachment_key: row.outcome for row in report.rows}
+        self.assertEqual(outcomes, {SAFE: index_repair.OUTCOME_SOURCE_CHANGED, ENRICHED: OUTCOME_METADATA_REFRESHED})
+        self.assertEqual(self.records()[SAFE], original[SAFE])
+
+    def test_pdf_changed_during_reconversion_refuses_the_safe_refresh_at_publication(self):
+        plan_path = self.plan()
+        original = self.records()
+        from zotero_pdf_text.converter import convert_planned_rows
+
+        def convert_then_edit(*args, **kwargs):
+            result = convert_planned_rows(*args, **kwargs)
+            self.pdfs[SAFE].write_bytes(b"%PDF edited during extraction")
+            return result
+
+        with patch("zotero_pdf_text.index_repair.convert_planned_rows", side_effect=convert_then_edit):
+            report = self.apply(plan_path, keys=[SAFE, STALE])
+
+        outcomes = {row.attachment_key: row.outcome for row in report.rows}
+        self.assertEqual(outcomes, {SAFE: index_repair.OUTCOME_SOURCE_CHANGED, STALE: OUTCOME_PUBLISHED})
+        self.assertEqual(self.records()[SAFE], original[SAFE])
+
+    def test_zotero_metadata_changed_during_reconversion_is_not_published(self):
+        plan_path = self.plan()
+        original = self.records()
+        from zotero_pdf_text.converter import convert_planned_rows
+
+        def convert_then_retitle(*args, **kwargs):
+            result = convert_planned_rows(*args, **kwargs)
+            _set_zotero_title(self.config, CHANGED, "Renamed again")
+            return result
+
+        with patch("zotero_pdf_text.index_repair.convert_planned_rows", side_effect=convert_then_retitle):
+            report = self.apply(plan_path, groups=[GROUP_RECONVERT])
+
+        outcomes = {row.attachment_key: row.outcome for row in report.rows}
+        self.assertEqual(outcomes, {STALE: OUTCOME_PUBLISHED, CHANGED: OUTCOME_ZOTERO_CHANGED})
+        self.assertEqual(self.records()[CHANGED], original[CHANGED])
+
+    def test_a_value_cleared_in_zotero_is_neither_revived_nor_dropped_by_reconversion(self):
+        # Cleared in Zotero while the index still has it: a human decision, as for safe rows.
+        _set_zotero_field(self.config, CHANGED, 2, "")
+        # Empty in both Zotero and the index, but present in the older snapshot: stays empty.
+        _set_zotero_field(self.config, STALE, 2, "")
+        self.republish(STALE, doi="")
+
+        rows = {row.attachment_key: row for row in build_plan(self.config, self.snapshot, plan_id="p").rows}
+
+        self.assertEqual((rows[CHANGED].group, rows[CHANGED].reason_code), (GROUP_REVIEW, "metadata_value_removed"))
+        self.assertIn("doi", rows[CHANGED].reason)
+        self.assertEqual(rows[STALE].group, GROUP_RECONVERT)
+        self.assertEqual(rows[STALE].conversion_row["doi"], "")
+
+        report = self.apply(self.plan(), keys=[STALE])
+        self.assertEqual([row.outcome for row in report.rows], [OUTCOME_PUBLISHED])
+        self.assertEqual(self.records()[STALE]["doi"], "")
+        self.assertEqual(self.statuses()[STALE], ("current",))
 
 
 class WriterTests(unittest.TestCase):

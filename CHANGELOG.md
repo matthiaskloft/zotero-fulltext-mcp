@@ -35,7 +35,8 @@ dated section once it has been stress-tested against a large library.
   not, and never will, backfill provenance (#31).
 - `plan-index-repair` and `apply-index-repair`: selective, audit-driven repair of the published
   index. The read-only plan runs the `audit-library` rules and sorts every indexed attachment with
-  a finding into `safe` (metadata-only drift on a verified identity whose Markdown still matches:
+  a finding into `safe` (metadata-only drift on a verified identity whose Markdown and PDF still
+  match -- the PDF is hashed when planning and again when applying:
   refresh title/DOI/citation key in place, keeping text, source hash and enrichment), `reconvert`
   (stale Markdown or a changed PDF on a record the provenance-reconversion eligibility rule
   accepts: re-extract and replace through the validated replacement path) or `review` (missing

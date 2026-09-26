@@ -573,16 +573,19 @@ Top-level fields of `plan.json`:
   `source_bytes`, `page_count`, `indexed_markdown_path`, `indexed_markdown_sha256`,
   `indexed_source_sha256`, `indexed_metadata` (the record's `title`/`doi`/`citation_key` when
   planned), `target_metadata` (Zotero's current values; safe rows only) and `conversion_row`
-  (the mapping fields handed to the converter, with Zotero's current non-empty
-  title/DOI/citation key; reconvert rows only).
+  (the mapping fields handed to the converter, with Zotero's current title/DOI/citation key
+  copied as Zotero holds them, empty values included; reconvert rows only).
 
 Reason codes: `safe` rows are `metadata_changed`; `reconvert` rows are `stale_markdown` or
-`source_changed`; `review` rows carry the first applicable of `membership_unchecked`,
+`source_changed` (also used when the audit saw only `metadata_changed` but the plan, hashing the
+PDF, found it no longer matches the indexed `source_sha256` -- the reason then says "measured
+now"); `review` rows carry the first applicable of `membership_unchecked`,
 `orphaned_index`, `duplicate_key`, `mapping_ambiguous`, `unverified_indexed`, `missing_source`,
 `missing_markdown`, `source_unchecked`, then `reconvert_blocked` (a stale or changed record that
 `plan-provenance-reconvert`'s eligibility rule refuses -- the reason names its bucket),
 `parent_changed`, `relinked`, `metadata_value_removed` (Zotero's record lost a value the index
-has) or `markdown_unverified`.
+has; applies to reconvert candidates too), `source_unreadable` (the PDF could not be hashed) or
+`markdown_unverified`.
 
 A safe refresh overwrites only `title`, `doi` and `citation_key` in the record; every other
 field -- `text`, `markdown_path`, `markdown_sha256`, `source_sha256`, `extraction_tool`,
@@ -595,8 +598,8 @@ conversion, exactly as `update-index --replace-existing` builds it. A removal dr
 was published), `published`, `selected`, `remaining` (selectable safe/reconvert rows left out by
 `--limit`), `counts`, and `rows` (`attachment_key`, `group`, `outcome`, `reason`). Outcomes:
 `metadata_refreshed`, `published` (reconverted and replaced), `removed`, `conversion_failed`,
-`rejected`, `already_resolved`, `plan_stale`, `missing_pdf`, `zotero_changed`, `not_eligible`,
-`not_in_plan`. `selections/` keeps each invocation's conversion input. The run directory is an
+`rejected`, `already_resolved`, `plan_stale`, `missing_pdf`, `source_changed` (a safe row whose
+PDF no longer has the indexed hash), `zotero_changed`, `not_eligible`, `not_in_plan`. `selections/` keeps each invocation's conversion input. The run directory is an
 ordinary conversion run claimed for one plan by `provenance_plan.json`, as for provenance
 reconversion.
 

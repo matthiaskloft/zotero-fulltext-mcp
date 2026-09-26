@@ -121,6 +121,7 @@ ACTION_RECONVERT = "reconvert"
 
 OUTCOME_METADATA_REFRESHED = "metadata_refreshed"
 OUTCOME_REMOVED = "removed"
+OUTCOME_SOURCE_CHANGED = "source_changed"
 
 # Statuses that put an indexed record in `review`, in the order their reason is reported. Each is
 # a question only a person (or a fresh dry-run) can settle: acting on any of them automatically
@@ -148,6 +149,7 @@ _RECONVERT_STATUSES: tuple[str, ...] = (STATUS_STALE_MARKDOWN, STATUS_SOURCE_CHA
 REASON_RECONVERT_BLOCKED = "reconvert_blocked"
 REASON_PARENT_CHANGED = "parent_changed"
 REASON_RELINKED = "relinked"
+REASON_SOURCE_UNREADABLE = "source_unreadable"
 REASON_METADATA_VALUE_REMOVED = "metadata_value_removed"
 REASON_MARKDOWN_UNVERIFIED = "markdown_unverified"
 
@@ -420,23 +422,38 @@ def _plan_row(
             return row(GROUP_REVIEW, status, reason, removable=removable)
 
     triggers = [status for status in _RECONVERT_STATUSES if status in statuses]
+    measured_note = ""
+    indexed_source_hash = _text(indexed, "source_sha256")
+    if not triggers and STATUS_METADATA_CHANGED in statuses and indexed_source_hash and source_file and source_exists:
+        # The audit compared the snapshot's PDF hash, which predates any in-place edit made after
+        # the dry-run. A metadata-only refresh keeps the text and its source hash, so it must be
+        # sure the PDF is still the one that text came from: measure it now.
+        current_hash = _sha256_or_none(source_file)
+        if current_hash is None:
+            return row(GROUP_REVIEW, REASON_SOURCE_UNREADABLE, "The PDF could not be read to confirm it is unchanged.")
+        if current_hash != indexed_source_hash:
+            triggers = [STATUS_SOURCE_CHANGED]
+            measured_note = " (measured now: the PDF changed after the mapping snapshot)"
     if triggers:
         bucket, bucket_reason, mapping = reconversion_bucket(
             obs, indexed, candidates, source_exists, current_source=current_source
         )
         if bucket != BUCKET_ELIGIBLE or mapping is None:
-            return row(GROUP_REVIEW, REASON_RECONVERT_BLOCKED, f"{bucket}: {bucket_reason}")
+            return row(GROUP_REVIEW, REASON_RECONVERT_BLOCKED, f"{bucket}: {bucket_reason}{measured_note}")
+        removed = _removed_values(obs)
+        if removed:
+            return row(GROUP_REVIEW, REASON_METADATA_VALUE_REMOVED, _removed_reason(removed))
         conversion_row = {name: _text(mapping, name) for name in CONVERSION_FIELDS}
         # Reconvert exactly the file the old record was indexed from (the replacement path only
-        # accepts the same source path), carrying Zotero's current citation metadata so a
-        # reconverted record does not reintroduce the metadata drift the audit also reported.
+        # accepts the same source path), carrying Zotero's current citation metadata -- all of
+        # it, as Zotero holds it -- so a reconverted record neither reintroduces the drift the
+        # audit reported nor revives a value from the older snapshot.
         conversion_row["source_path"] = indexed_source
-        if obs.in_zotero:
-            conversion_row.update({key: value for key, value in obs.zotero_metadata.items() if value})
+        conversion_row.update(obs.zotero_metadata)
         return row(
             GROUP_RECONVERT,
             triggers[0],
-            f"{' and '.join(triggers)}: re-extract the PDF and replace the record.",
+            f"{' and '.join(triggers)}{measured_note}: re-extract the PDF and replace the record.",
             action=ACTION_RECONVERT,
             mapping=mapping,
             conversion_row=conversion_row,
@@ -462,14 +479,9 @@ def _plan_row(
                 "Zotero's current path for this attachment is not the PDF the record was indexed "
                 "from; a metadata refresh would describe a different file.",
             )
-        removed = sorted(key for key in METADATA_KEYS if obs.indexed_metadata.get(key) and not target.get(key))
+        removed = _removed_values(obs)
         if removed:
-            return row(
-                GROUP_REVIEW,
-                REASON_METADATA_VALUE_REMOVED,
-                f"Zotero's record no longer has {', '.join(removed)}; confirm the edit in Zotero "
-                "before the index drops a value.",
-            )
+            return row(GROUP_REVIEW, REASON_METADATA_VALUE_REMOVED, _removed_reason(removed))
         if obs.markdown_exists is not True or obs.markdown_sha256_current != obs.indexed_markdown_sha256:
             return row(GROUP_REVIEW, REASON_MARKDOWN_UNVERIFIED, "The indexed Markdown could not be verified against its hash.")
         return row(
@@ -482,6 +494,52 @@ def _plan_row(
 
     # No rule above claimed it. Unreachable for today's statuses; reported rather than dropped.
     return row(GROUP_REVIEW, "unclassified", f"No repair rule covers {', '.join(statuses)}.")
+
+
+def _removed_values(obs: ItemObservation) -> list[str]:
+    """Citation fields the record has and Zotero's current record does not.
+
+    Applied to both applicable groups: neither a refresh nor a reconversion drops a value from
+    the index on the strength of one blank field, and neither revives it from an older snapshot.
+    """
+    if not obs.in_zotero:
+        return []
+    return sorted(key for key in METADATA_KEYS if obs.indexed_metadata.get(key) and not obs.zotero_metadata.get(key))
+
+
+def _removed_reason(removed: list[str]) -> str:
+    return (
+        f"Zotero's record no longer has {', '.join(removed)}; confirm the edit in Zotero before the "
+        "index drops a value."
+    )
+
+
+def _sha256_or_none(path: Path) -> str | None:
+    try:
+        return _sha256(path)
+    except OSError:
+        return None
+
+
+def _source_drift(row: RepairRow) -> RepairOutcome | None:
+    """Refuse a safe row whose PDF no longer has the hash its indexed text was extracted from.
+
+    With no indexed hash there is nothing to compare: the metadata refresh leaves the text's
+    (unknown) provenance exactly as it was, so it is still allowed.
+    """
+    if not row.indexed_source_sha256:
+        return None
+    current = _sha256_or_none(Path(row.source_path))
+    if current is None:
+        return RepairOutcome(row.attachment_key, GROUP_SAFE, OUTCOME_MISSING_PDF, "The PDF can no longer be read.")
+    if current != row.indexed_source_sha256:
+        return RepairOutcome(
+            row.attachment_key,
+            GROUP_SAFE,
+            OUTCOME_SOURCE_CHANGED,
+            "The PDF changed since its text was indexed; plan again so it is reconverted instead.",
+        )
+    return None
 
 
 def write_plan(plan: RepairPlan, plan_dir: Path) -> Path:
@@ -676,6 +734,9 @@ def apply_plan(
         for row in selected:
             key = row.attachment_key
             change = _zotero_recheck(row, inventory, config)
+            if change is None and row.group == GROUP_SAFE:
+                # Measured again at publication: reconversions in this invocation can take hours.
+                change = _source_drift(row)
             if change is not None:
                 outcomes.append(change)
             elif row.group == GROUP_SAFE and row.target_metadata is not None:
@@ -774,7 +835,7 @@ def _revalidate_safe(row: RepairRow, current: list[dict[str, object]]) -> Repair
             return stale("The indexed Markdown changed on disk after the plan was made; plan again.")
     except OSError:
         return stale("The indexed Markdown can no longer be read; plan again.")
-    return None
+    return _source_drift(row)
 
 
 def _revalidate_reconvert(row: RepairRow, current: list[dict[str, object]], run_dir: Path) -> RepairOutcome | None:
@@ -826,10 +887,15 @@ def _zotero_recheck(
     change = zotero_change(row, record, config)
     if change is not None:
         return RepairOutcome(key, row.group, change.outcome, change.reason)
-    if row.group == GROUP_SAFE and record is not None and row.target_metadata is not None:
-        current = {name: str(getattr(record, name, "") or "") for name in row.target_metadata}
-        if current != row.target_metadata:
-            return RepairOutcome(key, GROUP_SAFE, OUTCOME_ZOTERO_CHANGED, "Zotero's metadata changed again after the plan was made; plan again.")
+    # The citation metadata this row will publish -- the safe refresh's target, or what the
+    # reconversion was given -- must still be Zotero's, or the new generation would re-report
+    # `metadata_changed` the moment it is published. Rejected rather than patched: replan.
+    planned = row.target_metadata if row.group == GROUP_SAFE else row.conversion_row
+    if record is not None and planned is not None:
+        expected = {name: planned.get(name, "") for name in METADATA_KEYS}
+        current = {name: str(getattr(record, name, "") or "") for name in METADATA_KEYS}
+        if current != expected:
+            return RepairOutcome(key, row.group, OUTCOME_ZOTERO_CHANGED, "Zotero's metadata changed after the plan was made; plan again.")
     return None
 
 

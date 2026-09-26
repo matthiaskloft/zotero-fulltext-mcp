@@ -284,8 +284,8 @@ in place and carries every other record over verbatim.
 
    | Group | When | Fix |
    | --- | --- | --- |
-   | `safe` | Only `metadata_changed`: Zotero's title/DOI/citation key differ from the record. The identity is verified, the parent item and linked PDF are unchanged, the Markdown still matches its indexed hash, and Zotero did not blank a value the record has. | Copy Zotero's current title/DOI/citation key onto the record. Text, Markdown path and hash, source hash, extraction tool and `has_math` are kept, so enriched (for example math-OCR) text survives. The Markdown file is not rewritten. |
-   | `reconvert` | `stale_markdown` or `source_changed`, and the record passes the provenance-reconversion eligibility rule (Zotero lists it under the same parent and linked PDF, the PDF is present, exactly one `mapped_verified` + `verified`/`fulltext_verified` mapping row). | Re-extract the PDF into the plan's run directory and replace the record through the validated replacement path, with Zotero's current title/DOI/citation key. Enrichment is not carried over: the old text no longer describes the source. |
+   | `safe` | Only `metadata_changed`: Zotero's title/DOI/citation key differ from the record. The identity is verified, the parent item and linked PDF are unchanged, the Markdown still matches its indexed hash, the PDF (hashed by the plan, not taken from the snapshot) still matches the indexed `source_sha256`, and Zotero did not blank a value the record has. A record with no indexed source hash can still be refreshed: its text's provenance stays exactly as unknown as it was. | Copy Zotero's current title/DOI/citation key onto the record. Text, Markdown path and hash, source hash, extraction tool and `has_math` are kept, so enriched (for example math-OCR) text survives. The Markdown file is not rewritten. |
+   | `reconvert` | `stale_markdown` or `source_changed` (including a PDF the plan finds changed although the snapshot's hash did not show it), no citation value was blanked in Zotero, and the record passes the provenance-reconversion eligibility rule (Zotero lists it under the same parent and linked PDF, the PDF is present, exactly one `mapped_verified` + `verified`/`fulltext_verified` mapping row). | Re-extract the PDF into the plan's run directory and replace the record through the validated replacement path, with Zotero's current title/DOI/citation key exactly as Zotero holds them (a value cleared in Zotero is not revived from the snapshot). Enrichment is not carried over: the old text no longer describes the source. |
    | `review` | Anything else: `membership_unchecked`, `orphaned_index`, `duplicate_key`, `mapping_ambiguous`, `unverified_indexed`, `missing_source`, `missing_markdown`, `source_unchecked`, a stale or changed record the eligibility rule refuses (for example a `manual_accepted` identity or a relink), a parent change, or a blanked metadata value. The row's `reason` says which. | Never applied automatically. Resolve it (restore the file, verify the identity, re-run `dry-run`) and plan again. |
 
    Attachments with findings but no index record (for example `unindexed`) are only counted:
@@ -304,12 +304,14 @@ in place and carries every other record over verbatim.
    safe/reconvert rows applied in this invocation. The command takes the pipeline write lock,
    finishes or rolls back any interrupted publication, then re-checks each row: against the
    current generation (a record changed since planning is `plan_stale`, an already repaired one
-   `already_resolved`), the files on disk (the Markdown of a safe row must still match its hash;
-   a reconvert row's PDF must exist), and a fresh read of Zotero (a different parent, linked
-   PDF, or metadata than planned is `zotero_changed`). If Zotero's database cannot be read,
+   `already_resolved`), the files on disk (the Markdown of a safe row must still match its hash
+   and its PDF the indexed source hash, else `source_changed`; a reconvert row's PDF must
+   exist), and a fresh read of Zotero (a different parent, linked PDF, or title/DOI/citation
+   key than the row would publish is `zotero_changed`). If Zotero's database cannot be read,
    nothing is applied. Reconvert rows are converted with the ordinary, checkpointed converter
    into `$data\conversion-runs\index-repair\<plan-id>\` and judged by the same validation as
-   `update-index --replace-existing`; Zotero is read again after conversion, before publishing.
+   `update-index --replace-existing`; after conversion Zotero is read again and every row's PDF
+   and citation metadata re-checked, so nothing stale is published.
    All accepted repairs are published together as one new generation; everything else is kept
    exactly as it was. Each invocation appends its per-row outcomes to the plan's `apply_log.jsonl`.
 4. Removals. An `orphaned_index` record (Zotero no longer lists the attachment) is the one
