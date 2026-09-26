@@ -21,6 +21,7 @@ from zotero_pdf_text.fts import (
     index_statistics,
     get_fulltext,
     get_item_context,
+    indexed_state_by_attachment,
     search_fts,
 )
 
@@ -1215,6 +1216,29 @@ class IndexStatisticsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             sqlite_db = self._build(Path(tmp))
             self.assertEqual(coverage_report(sqlite_db), index_statistics(sqlite_db))
+
+
+class IndexedStateByAttachmentTests(unittest.TestCase):
+    def test_more_keys_than_one_batch_are_queried_in_bounded_batches(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            jsonl_path = root / "index.jsonl"
+            sqlite_path = root / "index.sqlite"
+            _write_jsonl(jsonl_path)
+            build_fts_index(jsonl_path, sqlite_path)
+            # Far more keys than one batch (and than SQLite's historical 999-parameter cap), with
+            # the two indexed keys sorting into different batches.
+            keys = ["ATTACH1", "ATTACH2", *(f"ATTACH1_{i:05d}" for i in range(1500))]
+
+            with patch("zotero_pdf_text.fts.INDEXED_STATE_BATCH_SIZE", 500):
+                states = indexed_state_by_attachment(sqlite_path, keys)
+
+            self.assertEqual(set(states), {"ATTACH1", "ATTACH2"})
+            self.assertEqual(states["ATTACH1"]["extraction_tool"], "pymupdf4llm.to_markdown")
+            self.assertEqual(set(states["ATTACH2"]), {"extraction_tool", "indexed_at", "source_sha256"})
+
+    def test_no_keys_does_not_open_the_database(self):
+        self.assertEqual(indexed_state_by_attachment(Path("does-not-exist.sqlite"), []), {})
 
 
 def _write_jsonl(path: Path) -> None:

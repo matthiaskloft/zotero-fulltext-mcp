@@ -370,6 +370,7 @@ def _convert_row(
     extraction_images_dir = images_dir
     math_sidecar_path = raw_output_path.with_suffix(".math.json")
     effective_timeout = _effective_timeout(row, timeout_seconds, source_path)
+    source_sha256_before = ""
     try:
         if output_path.exists() and not force:
             extraction_tool = _existing_extraction_tool(output_path)
@@ -458,14 +459,18 @@ def _convert_row(
             source_sha256=source_sha256,
         )
         candidate = (
-            _build_timeout_candidate(row, source_path, effective_timeout, "fallback_used", "converted")
+            _build_timeout_candidate(
+                row, source_path, effective_timeout, "fallback_used", "converted", source_sha256_before
+            )
             if primary_timed_out
             else None
         )
         return result, candidate
     except PrimaryExtractorTimeoutError as exc:
         result = _result(row, output_path, "error", str(exc))
-        candidate = _build_timeout_candidate(row, source_path, effective_timeout, "fallback_failed", "error")
+        candidate = _build_timeout_candidate(
+            row, source_path, effective_timeout, "fallback_failed", "error", source_sha256_before
+        )
         return result, candidate
     except subprocess.TimeoutExpired:
         return _result(row, output_path, "error", f"TimeoutExpired: exceeded {effective_timeout} seconds"), None
@@ -488,6 +493,7 @@ def _build_timeout_candidate(
     effective_timeout: int,
     fallback_outcome: str,
     conversion_status: str,
+    source_sha256: str = "",
 ) -> TimeoutCandidate:
     density = _sample_drawing_density(source_path)
     return TimeoutCandidate(
@@ -511,6 +517,7 @@ def _build_timeout_candidate(
         fallback_outcome=fallback_outcome,
         conversion_status=conversion_status,
         detected_at=datetime.now().isoformat(timespec="seconds"),
+        source_sha256=source_sha256,
     )
 
 
