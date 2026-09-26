@@ -215,7 +215,7 @@ Search uses `all_terms` by default. Pass `--search-mode any_terms` for a broader
 
 To see where the Markdown used by the published index actually lives, run
 `output-status --config .\config.json`. New runs use `mapping-runs/` for mapping
-snapshots and `conversion-runs/{verified,samples,unverified-review}/` for converted
+snapshots and `conversion-runs/{verified,samples,unverified-review,provenance-reconvert}/` for converted
 files. It groups active files by conversion folder and
 also shows the previous index generation's folders. Add `--list-files` for individual
 paths or `--json` for a machine-readable report. This is read-only: older conversion
@@ -253,6 +253,25 @@ audit still runs but withholds every membership answer: each attachment is repor
 guessed from the older `dry-run` snapshot. Findings about files on disk are unaffected. The
 report says why the inventory was unavailable, because a database that is merely busy is fixed
 by closing Zotero and re-running and a permission failure is not.
+
+`library-status` also reports `source_provenance_unknown`: indexed records that carry no hash of
+the PDF their text was extracted from, typically because they were converted before the pipeline
+recorded one. Rebuilding the index does **not** fix this -- hashing today's PDF would vouch for
+text extracted from whatever the file was back then. The only repair is to reconvert those
+attachments, which is a two-step, opt-in migration:
+
+```powershell
+& $python -m zotero_pdf_text plan-provenance-reconvert --config .\config.json --mapping-report .\converted_text\mapping-runs\<run-id>\mapping_report.jsonl
+& $python -m zotero_pdf_text apply-provenance-reconvert --config .\config.json --plan .\converted_text\provenance-reconvert\<plan-id> --limit 200
+```
+
+The plan is read-only: it sorts every provenance-unknown record into `eligible`, `missing_pdf`,
+`identity_uncertain`, `not_in_zotero` or `membership_unchecked`, and estimates the work (PDFs,
+bytes, pages). `apply-provenance-reconvert` reconverts only eligible (verified, unchanged-source)
+attachments, records the hash measured around each extraction, and publishes only successful
+conversions through the same validated replacement `update-index --replace-existing` uses; a
+failed or uncertain row keeps its old record. Re-running it continues where it stopped, including
+after an interruption. See "Provenance Reconversion" in `docs/operations.md`.
 
 ## Register the MCP server
 

@@ -62,7 +62,7 @@ def output_status(output_root: Path, *, list_files: bool = False) -> dict[str, o
     return {
         "output_root": str(output_root),
         "mapping_snapshots": str(output_root / "mapping-runs"),
-        "conversion_runs": [str(output_root / "conversion-runs" / name) for name in ("verified", "samples", "unverified-review")],
+        "conversion_runs": [str(output_root / "conversion-runs" / name) for name in ("verified", "samples", "unverified-review", "provenance-reconvert")],
         "legacy_roots": [str(output_root / name) for name in ("runs", "verified", "samples", "unverified_review") if (output_root / name).exists()],
         "index_pointer": str(index_root / "current.json"),
         "current": current,

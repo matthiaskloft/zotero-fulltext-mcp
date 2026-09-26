@@ -649,7 +649,7 @@ def build_observations(
             if path_matches:
                 plausible = path_matches
         if len(plausible) > 1 and attachment:
-            current_path = _inventory_source_path(attachment, config.linked_attachments)
+            current_path = inventory_source_path(attachment, config.linked_attachments)
             current_matches = [row for row in plausible if _text(row, "source_path") == current_path]
             if current_matches:
                 plausible = current_matches
@@ -671,7 +671,7 @@ def build_observations(
         # change outright when the old file is still there, and invents `missing_source` when
         # it is not, while the new PDF sits on disk perfectly intact.
         current_source_path = (
-            _inventory_source_path(attachment, config.linked_attachments)
+            inventory_source_path(attachment, config.linked_attachments)
             if attachment is not None
             else ""
         )
@@ -859,7 +859,7 @@ def _is_pdf_attachment(record: AttachmentRecord) -> bool:
     return name.casefold().endswith(".pdf")
 
 
-def _inventory_source_path(record: AttachmentRecord, linked_root: Path) -> str:
+def inventory_source_path(record: AttachmentRecord, linked_root: Path) -> str:
     """Where Zotero says this attachment's PDF should be, whether or not it is there."""
     paths = resolve_attachment_paths(record.zotero_path or "", linked_root)
     return str(paths[0]) if paths else ""

@@ -196,6 +196,41 @@ def convert_unverified(
     )
 
 
+def convert_planned_rows(
+    config: ProjectConfig,
+    mapping_report: Path,
+    run_dir: Path,
+    *,
+    ordinal_field: str,
+    workers: int | None = None,
+    timeout_seconds: int = 600,
+) -> Path:
+    """Convert every mapped_verified row of ``mapping_report`` into a reusable run directory.
+
+    Each row's output number comes from its ``ordinal_field`` column rather than its position,
+    so successive invocations over different subsets of one plan share a run directory without
+    colliding, and an interrupted invocation resumes from the directory's checkpoint. Existing
+    Markdown is only ever reused through a validated checkpoint entry; without one the row stays
+    ``skipped_existing`` with unknown provenance.
+    """
+    if pymupdf4llm is None:
+        raise RuntimeError("pymupdf4llm is not installed")
+    if not mapping_report.exists():
+        raise FileNotFoundError(mapping_report)
+    return _convert_mapping_rows(
+        mapping_report,
+        run_dir,
+        limit=None,
+        exist_ok=True,
+        workers=workers,
+        timeout_seconds=timeout_seconds,
+        force=False,
+        classifications={"mapped_verified"},
+        output_root=config.output_root,
+        ordinal_field=ordinal_field,
+    )
+
+
 def _convert_verified_rows(
     mapping_report: Path,
     run_dir: Path,
@@ -232,6 +267,7 @@ def _convert_mapping_rows(
     classifications: set[str],
     output_root: Path,
     skip_attachment_keys: frozenset[str] = frozenset(),
+    ordinal_field: str | None = None,
 ) -> Path:
     if workers is None:
         workers = default_worker_count()
@@ -245,7 +281,15 @@ def _convert_mapping_rows(
     skip_keys = _load_persisted_skip_keys(output_root)
 
     rows = _selected_rows(mapping_report, limit, classifications, skip_attachment_keys=skip_attachment_keys)
-    indexed_rows = list(enumerate(rows, start=1))
+    if ordinal_field is None:
+        indexed_rows = list(enumerate(rows, start=1))
+    else:
+        # A caller that converts changing subsets of one stable plan into the same run directory
+        # numbers each row by its plan position, so a row keeps its output path -- and therefore
+        # its checkpoint entry -- whichever subset it is converted in.
+        indexed_rows = [(int(row[ordinal_field]), row) for row in rows]
+        if len({index for index, _row in indexed_rows}) != len(indexed_rows):
+            raise ValueError(f"Duplicate {ordinal_field} values in {mapping_report}")
     # Loaded before any row runs: entries from an interrupted earlier invocation of this run
     # directory let completed rows be reused with their extraction-time provenance.
     checkpoint = ConversionCheckpoint(run_dir)

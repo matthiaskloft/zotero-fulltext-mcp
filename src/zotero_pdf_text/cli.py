@@ -73,6 +73,7 @@ from .install_health import (
 )
 from .lock import PipelineLockedError, pipeline_write_lock
 from .output_status import output_status
+from . import provenance_reconvert
 from .mapper import run_dry_run
 from .mcp_contract import (
     BIBTEX_MCP_TOOL_NAME,
@@ -416,6 +417,59 @@ def build_parser() -> argparse.ArgumentParser:
     audit_library_parser.add_argument(
         "--output", type=Path, default=None, help="Write the full JSON report here instead of listing items on stdout."
     )
+    plan_provenance = subparsers.add_parser(
+        "plan-provenance-reconvert",
+        help="Plan targeted reconversion of indexed records with unknown source provenance. Read-only.",
+        description=(
+            "Buckets every published record without a source_sha256 into eligible, missing_pdf, "
+            "identity_uncertain, not_in_zotero or membership_unchecked, and writes plan.json and "
+            "plan.csv with counts and a size/page estimate. Changes no Markdown, index or Zotero "
+            "data. An ordinary rebuild-index never backfills provenance; only reconversion can."
+        ),
+    )
+    plan_provenance.add_argument(
+        "--config", type=Path, default=resolve_config_path(), help="Path to project config JSON. Default: resolved for this machine."
+    )
+    plan_provenance.add_argument(
+        "--mapping-report",
+        type=Path,
+        required=True,
+        help="Existing mapping_report.jsonl, or the run directory containing it. Produce one with 'dry-run'.",
+    )
+    plan_provenance.add_argument(
+        "--output-dir",
+        type=Path,
+        default=None,
+        help="Directory for the new plan. Default: <output_root>/provenance-reconvert/<timestamp>/.",
+    )
+    plan_provenance.add_argument("--json", action="store_true", help="Print the plan summary as JSON.")
+    apply_provenance = subparsers.add_parser(
+        "apply-provenance-reconvert",
+        help="Reconvert selected eligible rows of a provenance plan and publish validated replacements.",
+        description=(
+            "Reconverts the plan's eligible rows (or --keys / --limit of them) in the plan's "
+            "dedicated run directory, recording the source hash measured around each extraction, "
+            "then publishes only completed, verified, hash-bearing results through the validated "
+            "replacement path. Failed or uncertain rows keep their old indexed record. Re-running "
+            "after an interruption resumes from the run directory's checkpoint."
+        ),
+    )
+    apply_provenance.add_argument(
+        "--config", type=Path, default=resolve_config_path(), help="Path to project config JSON. Default: resolved for this machine."
+    )
+    apply_provenance.add_argument("--plan", type=Path, required=True, help="plan.json, or the plan directory containing it.")
+    apply_provenance.add_argument(
+        "--keys", nargs="+", default=None, help="Only these attachment keys (must be eligible rows of the plan)."
+    )
+    apply_provenance.add_argument("--limit", type=int, default=None, help="Convert at most this many eligible rows.")
+    apply_provenance.add_argument(
+        "--workers",
+        type=int,
+        default=None,
+        help=f"Number of parallel Markdown conversion workers. Default: max(1, CPU cores - 4), currently {default_worker_count()}.",
+    )
+    apply_provenance.add_argument("--timeout-seconds", type=int, default=600, help="Per-PDF extraction timeout in seconds.")
+    apply_provenance.add_argument("--json", action="store_true", help="Print the full per-row report as JSON.")
     library_status_parser = subparsers.add_parser(
         "library-status",
         help="Summarize library health: what the index holds and whether the library still matches it.",
@@ -744,6 +798,34 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _print_provenance_plan(summary: dict[str, object]) -> None:
+    print(f"Provenance reconversion plan written: {summary['plan_path']}")
+    print(f"Records without source provenance: {summary['source_provenance_unknown']}")
+    if not summary["inventory_available"]:
+        print(f"Zotero inventory unavailable: {summary['inventory_error']}")
+    for bucket, count in cast("dict[str, int]", summary["counts"]).items():
+        print(f"  {bucket:<22} {count}")
+    estimate = cast("dict[str, int]", summary["estimate"])
+    print(
+        f"Eligible estimate: {estimate['eligible_rows']} PDFs, {estimate['source_bytes'] / 1_000_000:.1f} MB, "
+        f"{estimate['pages']} pages ({estimate['rows_without_page_count']} without a page count)"
+    )
+    for bucket, advice in cast("dict[str, str]", summary["advice"]).items():
+        print(f"- {bucket}: {advice}")
+    print("Rebuilding the index does not backfill provenance; only apply-provenance-reconvert does.")
+
+
+def _print_provenance_apply(payload: dict[str, object]) -> None:
+    generation = payload["generation_id"]
+    print(f"Plan {payload['plan_id']}: selected {payload['selected']}, {payload['remaining_eligible']} eligible rows remain.")
+    print(f"Published generation: {generation}" if generation else "Nothing published; the index is unchanged.")
+    for outcome, count in sorted(cast("dict[str, int]", payload["counts"]).items()):
+        print(f"  {outcome:<18} {count}")
+    for row in cast("list[dict[str, str]]", payload["rows"]):
+        if row["outcome"] != provenance_reconvert.OUTCOME_PUBLISHED:
+            print(f"  {row['attachment_key']}: {row['outcome']} -- {row['reason']}")
+
+
 def main(argv: list[str] | None = None) -> int:
     _configure_stdio()
     parser = build_parser()
@@ -1047,6 +1129,49 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(library_report, ensure_ascii=False, indent=2))
         else:
             _print_library_status(library_report)
+        return 0
+    if args.command == "plan-provenance-reconvert":
+        config = load_config(args.config)
+        validate_config(config)
+        if _reject_outside_output_root(config.output_root, args.output_dir, "--output-dir"):
+            return 2
+        try:
+            plan = provenance_reconvert.build_plan(config, args.mapping_report)
+            plan_dir = args.output_dir or provenance_reconvert.default_plan_dir(config, plan.plan_id)
+            plan_path = provenance_reconvert.write_plan(plan, plan_dir)
+        except (LibraryAuditError, ArtifactError, provenance_reconvert.ProvenancePlanError, OSError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        summary = {key: value for key, value in plan.to_dict().items() if key != "rows"}
+        summary["plan_path"] = str(plan_path)
+        if args.json:
+            print(json.dumps(summary, ensure_ascii=False, indent=2))
+        else:
+            _print_provenance_plan(summary)
+        return 0
+    if args.command == "apply-provenance-reconvert":
+        config = load_config(args.config)
+        validate_config(config)
+        try:
+            apply_report = provenance_reconvert.apply_plan(
+                config,
+                args.plan,
+                keys=args.keys,
+                limit=args.limit,
+                workers=args.workers,
+                timeout_seconds=args.timeout_seconds,
+            )
+        except PipelineLockedError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        except (LibraryAuditError, ArtifactError, provenance_reconvert.ProvenancePlanError, OSError, ValueError, RuntimeError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        payload = apply_report.to_dict()
+        if args.json:
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+        else:
+            _print_provenance_apply(payload)
         return 0
     if args.command == "audit-library":
         config = load_config(args.config)
