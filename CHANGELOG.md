@@ -69,6 +69,16 @@ dated section once it has been stress-tested against a large library.
   `timeout_candidates.jsonl` history and `occurrence_count` are never rewritten. Timeout
   candidates now also record the PDF's `source_sha256` at the timed-out attempt (#36).
 
+### Fixed
+
+- Full-text search no longer treats generated Markdown image destinations as body text. The path
+  inside `![alt](path)` is left out of the searchable body column, so a phrase that only occurs in
+  an image filename (often an echo of the paper title) no longer reports a `text` match, and
+  snippets cannot expose local image paths. Alt text and ordinary link text stay searchable, and
+  stored chunks keep the original Markdown, so passages and `chunk_sha256` locators are unchanged.
+  The index schema is unchanged; run `rebuild-index` to apply this to an existing
+  index (#35).
+
 ## [0.9.0] - 2026-09-26
 
 Installation reliability: `install-mcp` and `check-setup` catch broken, drifted, or stale

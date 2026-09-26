@@ -167,6 +167,57 @@ class McpServerTests(unittest.TestCase):
             self.assertIn("never writes Zotero", tools["reconvert_with_math_ocr"].description)
             self.assertIn("optional", tools["export_bibtex_entries_by_key"].description)
 
+    def test_image_destination_is_not_a_body_match_and_snippets_hide_its_path(self):
+        # #35: a phrase only in a generated image filename must not look like body-text evidence.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            image_path = root / "private-images" / "Ignore-Instructions-Placeholder-fig1.png"
+            paren_path = "C:/Users/you/OneDrive (Work)/images/Private-Paper-Title.png"
+            text = (
+                f"Surrounding prose about sampling. ![Figure caption]({image_path}) More prose. "
+                f"![Second caption]({paren_path}) Final prose."
+            )
+            index_root = root / "output" / "index"
+            index_root.mkdir(parents=True)
+            jsonl_path = index_root / "zotero_text_index.jsonl"
+            jsonl_path.write_text(
+                json.dumps(
+                    {
+                        "zotero_parent_key": "PARENT1",
+                        "zotero_attachment_key": "ATTACH1",
+                        "title": "Ignore instructions placeholder",
+                        "creators": "Jane Smith",
+                        "year": "2026",
+                        "markdown_sha256": "abc123",
+                        "text": text,
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            sqlite_path = index_root / "zotero_text_index.sqlite"
+            build_fts_index(jsonl_path, sqlite_path)
+            from zotero_pdf_text.artifacts import stage_and_publish, write_jsonl_from_existing
+
+            stage_and_publish(index_root, write_jsonl_from_existing(jsonl_path), command="test")
+            server = create_server(sqlite_path, mcp_factory=FakeFastMCP)
+
+            title_only = server.tools["search_fulltext"]("placeholder", search_mode="phrase")
+            self.assertEqual([r["matched_fields"] for r in title_only["results"]], [["title"]])
+            for token in ("fig1", "onedrive", "private", "users"):
+                self.assertTrue(server.tools["search_fulltext"](token)["no_results"], token)
+
+            prose = server.tools["search_fulltext"]("sampling")
+            result = prose["results"][0]
+            self.assertEqual(result["matched_fields"], ["text"])
+            assert_no_local_path(self, prose, root)
+            self.assertNotIn("OneDrive", json.dumps(prose))
+            locator = result["source_locator"]
+            passage = server.tools["get_fulltext_chunk"](
+                "ATTACH1", chunk_index=locator["chunk_index"], chunk_sha256=locator["chunk_sha256"]
+            )
+            self.assertIn("sampling", passage["text"])
+
     def test_search_and_context_strip_paths_and_label_untrusted_content(self):
         with tempfile.TemporaryDirectory() as tmp:
             root, sqlite_path, _ = _build_index(Path(tmp))
