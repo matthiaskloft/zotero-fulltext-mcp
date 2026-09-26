@@ -389,6 +389,7 @@ def _chunk_facts_for_chunks(
             m.title,
             m.creators,
             c.text AS stored_text,
+            f.text AS indexed_text,
             m.citation_key
         FROM chunks_fts f
         JOIN chunks c ON c.chunk_id = f.chunk_id
@@ -406,7 +407,9 @@ def _chunk_facts_for_chunks(
                 for field, original_field in (
                     ("title", "title"),
                     ("creators", "creators"),
-                    ("text", "stored_text"),
+                    # The FTS body column can differ from the stored chunk (image destinations
+                    # are not indexed), so compare the highlight against what was indexed.
+                    ("text", "indexed_text"),
                     ("citation_key", "citation_key"),
                 )
                 if row_dict[f"{field}_highlighted"] != row_dict[original_field]
@@ -965,6 +968,19 @@ def _insert_metadata(con: sqlite3.Connection, record: dict[str, object]) -> int:
     return int(cast(int, cursor.lastrowid))
 
 
+# Generated Markdown image references (``![alt](path)``, with an optional ``"title"`` inside the
+# parentheses) whose destination is a file path. Only the FTS body column drops the destination: a
+# filename echoing the paper title must not read as body-text evidence, and an absolute image path
+# must not surface in a snippet. The alt text stays searchable, and the `chunks` table keeps the
+# original Markdown, so passage retrieval and chunk_sha256 are unchanged.
+_MARKDOWN_IMAGE_DESTINATION_RE = re.compile(r"!\[([^\]]*)\]\([^)]*\)")
+
+
+def fts_body_text(text: str) -> str:
+    """Return chunk text as indexed for body-text search, without image destinations."""
+    return _MARKDOWN_IMAGE_DESTINATION_RE.sub(lambda match: f" {match.group(1)} ", text)
+
+
 def _insert_chunk(
     con: sqlite3.Connection,
     record_id: int,
@@ -989,7 +1005,7 @@ def _insert_chunk(
             chunk_id,
             _string(record.get("title")),
             _string(record.get("creators")),
-            text,
+            fts_body_text(text),
             _string(record.get("citation_key")),
             record_id,
             chunk_id,

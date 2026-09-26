@@ -1241,6 +1241,52 @@ class IndexedStateByAttachmentTests(unittest.TestCase):
         self.assertEqual(indexed_state_by_attachment(Path("does-not-exist.sqlite"), []), {})
 
 
+class ImageDestinationSearchTests(unittest.TestCase):
+    """Generated image destinations are not body text (#35)."""
+
+    def _build(self, root: Path) -> tuple[Path, str, str]:
+        image_path = str(root / "private-images" / "Latent-Growth-Mixtures-fig1.png")
+        text = (
+            f"Intro prose about sampling. ![Figure one caption]({image_path}) "
+            "Ordinary [visible link](https://example.org) text follows."
+        )
+        record = {
+            "zotero_parent_key": "PARENT1",
+            "zotero_attachment_key": "ATTACH1",
+            "title": "Placeholder title",
+            "creators": "Jane Smith",
+            "year": "2024",
+            "markdown_sha256": "abc",
+            "text": text,
+        }
+        jsonl = root / "index.jsonl"
+        jsonl.write_text(json.dumps(record) + "\n", encoding="utf-8")
+        sqlite_db = root / "index.sqlite"
+        build_fts_index(jsonl, sqlite_db, chunk_chars=4000, overlap_chars=0)
+        return sqlite_db, text, image_path
+
+    def test_phrase_only_in_image_filename_does_not_match_body(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sqlite_db, _, _ = self._build(Path(tmp))
+            self.assertEqual(search_fts(sqlite_db, '"latent growth mixtures"', limit=5), [])
+            self.assertEqual(search_fts(sqlite_db, "png", limit=5), [])
+
+    def test_prose_alt_and_link_text_still_match_and_chunk_verifies(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sqlite_db, text, image_path = self._build(Path(tmp))
+            for query in ("sampling", "caption", "visible link"):
+                results = search_fts(sqlite_db, query, limit=5)
+                self.assertEqual(len(results), 1, query)
+                self.assertEqual(results[0].matched_fields, ["text"], query)
+                self.assertNotIn(image_path, results[0].snippet)
+                self.assertNotIn("private-images", results[0].snippet)
+            result = search_fts(sqlite_db, "sampling", limit=5)[0]
+            # The stored chunk keeps the original Markdown, so the locator hash still verifies.
+            fulltext = get_fulltext(sqlite_db, attachment_key="ATTACH1", max_chars=10_000)
+            self.assertEqual(fulltext.text, text)
+            self.assertEqual(result.chunk_sha256, chunk_sha256(text))
+
+
 def _write_jsonl(path: Path) -> None:
     records = [
         {
