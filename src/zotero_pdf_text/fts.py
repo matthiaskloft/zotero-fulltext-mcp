@@ -297,10 +297,17 @@ def search_fts(
             ).fetchone()
             if record is None:
                 raise KeyError(f"No record found for attachment key {attachment_key}")
+            # chunks_fts.record_id is UNINDEXED, so filtering on it alone would still visit every
+            # library-wide match. build_fts_index inserts one record's chunks consecutively with
+            # rowid = chunk_id, so a rowid range bounds the FTS scan to this attachment; the
+            # record_id filter keeps the result correct even if that range were ever not tight.
+            bounds = con.execute(
+                "SELECT MIN(chunk_id), MAX(chunk_id) FROM chunks WHERE record_id = ?", (record["record_id"],)
+            ).fetchone()
             match_query = f"text : ({match_query})"
-            attachment_filter = "AND m.record_id = ?"
+            attachment_filter = "AND f.rowid BETWEEN ? AND ? AND m.record_id = ?"
             rank_filter = ""
-            params = (match_query, record["record_id"], limit)
+            params = (match_query, bounds[0], bounds[1], record["record_id"], limit)
         # record_rank dedup requires ranking the full matched-row set before LIMIT applies (a
         # window function can't use SQLite's top-N/ORDER BY LIMIT shortcut), so a common query
         # term can force a full scan of matching chunk rows. Acceptable for this tool's

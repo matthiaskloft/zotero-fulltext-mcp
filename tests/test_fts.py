@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import zotero_pdf_text.fts as fts_module
 from zotero_pdf_text.fts import (
     ChunkNotFoundError,
     DuplicateAttachmentKeyError,
@@ -1285,6 +1286,47 @@ class SearchWithinAttachmentTests(unittest.TestCase):
                 ["ATTACH1", "ATTACH3"],
             )
 
+
+    def test_scoped_scan_is_bounded_by_rowid_among_many_matching_records(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            jsonl = root / "index.jsonl"
+            sqlite_db = root / "index.sqlite"
+            base = {
+                "title": "t", "creators": "c", "markdown_sha256": "x", "classification": "mapped_verified",
+                "identity_status": "verified", "identity_rule": "doi_exact",
+            }
+            with jsonl.open("w", encoding="utf-8", newline="\n") as handle:
+                for i in range(200):
+                    text = f"consensus passage {i}. " * 10 + ("target marker." if i == 123 else "")
+                    handle.write(json.dumps(dict(base, zotero_parent_key=f"P{i}", zotero_attachment_key=f"A{i}", text=text)) + "\n")
+            build_fts_index(jsonl, sqlite_db, chunk_chars=60, overlap_chars=5)
+
+            statements: list[str] = []
+            real_connect = fts_module.connect_readonly
+
+            def traced(path: Path) -> sqlite3.Connection:
+                con = real_connect(path)
+                con.set_trace_callback(statements.append)
+                return con
+
+            with patch.object(fts_module, "connect_readonly", traced):
+                within = search_fts(sqlite_db, "consensus", limit=50, attachment_key="A123")
+            self.assertTrue(within)
+            self.assertEqual({r.zotero_attachment_key for r in within}, {"A123"})
+            self.assertEqual(
+                [r.chunk_index for r in search_fts(sqlite_db, "marker", attachment_key="A123")],
+                [r.chunk_index for r in search_fts(sqlite_db, "marker", limit=5) if r.zotero_attachment_key == "A123"],
+            )
+
+            ranking_sql = next(sql for sql in statements if "WITH matches" in sql)
+            con = sqlite3.connect(sqlite_db)
+            try:
+                plan = " ".join(row[3] for row in con.execute("EXPLAIN QUERY PLAN " + ranking_sql))
+            finally:
+                con.close()
+            # FTS5 encodes a MATCH plus a rowid lower and upper bound as "M...><" in its index string.
+            self.assertRegex(plan, r"VIRTUAL TABLE INDEX \d+:M\d*><")
 
     def test_duplicate_attachment_key_rows_resolve_to_the_record_retrieval_uses(self):
         with tempfile.TemporaryDirectory() as tmp:
