@@ -13,7 +13,7 @@ body:
     id: version
     attributes:
       label: Package version
-      description: Output of `pip show zotero-fulltext-mcp` (or the installed git tag or commit).
+      description: Only the `Version:` value from `pip show zotero-fulltext-mcp` (or the installed git tag or commit). Do not paste the full output; its `Location:` line is a local path.
     validations:
       required: true
   - type: input
