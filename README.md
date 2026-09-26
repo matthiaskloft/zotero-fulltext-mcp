@@ -21,15 +21,24 @@ What you need first: Python 3.11+, a Zotero library whose PDFs are **linked** at
 (`zotero-fulltext-mcp[mcp]`, see [Install](#install)). Configuration is read from
 `ZOTERO_PDF_TEXT_CONFIG`, else `config.<hostname>.json`, else `config.json`, or an explicit
 `--config` (see [Configure](#configure)). The MCP server only searches a sidecar index, so
-build it **before** registering the server (`$python` is the interpreter of the environment you
-installed into, as set in [Install](#install)):
+build it **before** registering the server. Replace both placeholders below with your own
+interpreter (from [Install](#install)) and your actual config file:
 
 ```powershell
-& $python -m zotero_pdf_text check-setup --config .\config.json   # read-only; add --require-mcp before install-mcp
-& $python -m zotero_pdf_text dry-run --config .\config.json       # map items to PDFs, no conversion
-& $python -m zotero_pdf_text convert-new --config .\config.json   # convert + publish the index
-& $python -m zotero_pdf_text install-mcp --config .\config.json   # prints (or --apply runs) the registration
+$python = "C:\Users\you\.venvs\zotero_fulltext_mcp\Scripts\python.exe"
+$config = "C:\path\to\config.json"
+& $python -m zotero_pdf_text check-setup --config $config   # read-only config/path check
+& $python -m zotero_pdf_text dry-run --config $config       # map items to PDFs, no conversion
+& $python -m zotero_pdf_text convert-new --config $config   # convert + publish the index
+& $python -m zotero_pdf_text check-setup --require-mcp --config $config   # also needs the mcp extra + a published index
+& $python -m zotero_pdf_text install-mcp --config $config   # prints the registration
 ```
+
+On macOS/Linux use `python=~/.venvs/zotero_fulltext_mcp/bin/python` and
+`"$python" -m zotero_pdf_text <command> --config "$config"`. `install-mcp` only prints: run the
+printed Claude Code command (or rerun it with `--apply`), or paste the printed Codex block into
+your `config.toml`, then restart the MCP client (see
+[Register the MCP server](#register-the-mcp-server)).
 
 One evidence flow in an MCP client:
 
@@ -50,7 +59,7 @@ get_fulltext_chunk(attachment_key="EFGH5678", chunk_index=<source_locator.chunk_
   `search_within_fulltext(attachment_key, query)` to find more passages in one paper.
 - Search runs on the local index and works with Zotero closed, but the index can lag behind
   your library. Call `library_status()` before treating a missing result as a missing paper.
-- After linking new PDFs in Zotero, rerun `convert-new --config .\config.json` to index them.
+- After linking new PDFs in Zotero, rerun `convert-new --config $config` to index them.
 
 Details: [Tool contract](#tool-contract), [docs/operations.md](docs/operations.md) (commands,
 index generations, MCP safety boundary), [docs/architecture.md](docs/architecture.md) and
