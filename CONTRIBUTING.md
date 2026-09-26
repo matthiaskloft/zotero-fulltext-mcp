@@ -1,7 +1,11 @@
 # Contributing
 
-Thanks for helping improve `zotero-fulltext-mcp`. Bug reports, installation feedback, focused
-documentation fixes, and small, well-tested pull requests are welcome.
+Thanks for helping improve `zotero-fulltext-mcp`. Bug reports, installation feedback, feature
+requests and documentation suggestions are welcome as issues.
+
+Implementation is done by the maintainer. Pull requests are limited to invited collaborators, so
+please describe the problem or proposal in an issue rather than sending code. A good issue --
+what you ran, what you expected, what happened -- is the most useful contribution.
 
 ## Before opening an issue
 
@@ -26,7 +30,7 @@ Alternatively, create a virtual environment outside the checkout and install
 Work on a topic branch and keep changes narrowly scoped. Source lives in `src/zotero_pdf_text`,
 tests in `tests`, and user-facing behavior is documented in `README.md` and `docs`.
 
-## Pull-request expectations
+## Pull-request expectations (collaborators)
 
 - Add or update tests for behavior changes.
 - Run the focused tests first, then the full suite.
@@ -34,4 +38,4 @@ tests in `tests`, and user-facing behavior is documented in `README.md` and `doc
 - Preserve read-only Zotero database access and the default read-only MCP surface.
 - Do not commit real configs, PDFs, converted Markdown, Zotero databases, indexes, or credentials.
 
-By contributing, you agree that your contribution is licensed under the repository's MIT License.
+By contributing code, you agree that your contribution is licensed under the repository's MIT License.
