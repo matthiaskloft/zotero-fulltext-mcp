@@ -530,6 +530,14 @@ without them.
   constrained to the tested v1 API (`>=1.28,<2`) until a separate v2 migration. `uv.lock` pins
   exact resolved versions for reproducible installs — see "Reproducible install with `uv`" above.
 
+## Reporting problems
+
+Use the [bug report template](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/new?template=bug_report.yml)
+for reproducible tool errors, stale or misleading results, or MCP output that disagrees with the CLI
+audit. The server's instructions point MCP clients at the same template, but never file anything
+automatically. Issues are public: strip paper text, identifying titles or metadata, absolute paths,
+credentials and attachment keys unless you deliberately choose to share them.
+
 ## Contributing hygiene
 
 This repository must never contain anyone's real identity, machine, or credentials. After cloning,

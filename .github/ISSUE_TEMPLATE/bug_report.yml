@@ -1,0 +1,66 @@
+name: Bug report
+description: Report a reproducible tool error, a stale or misleading result, or MCP output that disagrees with the CLI audit.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Privacy first.** Issues here are public. Before submitting, remove paper text, titles or
+        other metadata that identify a private library, absolute paths, credentials, and attachment
+        keys, unless you deliberately choose to share them. Placeholders such as `C:\Users\you\...`
+        or `ABCD1234` are fine. Nothing is filed automatically; you decide what goes into this report.
+  - type: input
+    id: version
+    attributes:
+      label: Package version
+      description: Only the `Version:` value from `pip show zotero-fulltext-mcp` (or the installed git tag or commit). Do not paste the full output; its `Location:` line is a local path.
+    validations:
+      required: true
+  - type: input
+    id: flags
+    attributes:
+      label: Enabled MCP flags
+      description: Optional server flags you started with (for example `--enable-bibtex`, `--enable-reconvert`), or "none".
+    validations:
+      required: true
+  - type: input
+    id: tool
+    attributes:
+      label: Tool or CLI command
+      placeholder: search_fulltext
+    validations:
+      required: true
+  - type: textarea
+    id: input-shape
+    attributes:
+      label: Sanitized input shape
+      description: Arguments with private values replaced by placeholders.
+      render: json
+      placeholder: '{"query": "<two terms>", "search_mode": "all_terms", "limit": 10}'
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Error message or the relevant fields of the response, sanitized.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal reproduction
+      description: Steps or a synthetic example that reproduces the problem without your library, if possible.
+  - type: textarea
+    id: audit
+    attributes:
+      label: Audit context
+      description: For library status or index issues, the relevant CLI audit summary counts and the index generation reported by `library_status`.
+  - type: input
+    id: platform
+    attributes:
+      label: OS and Python version
