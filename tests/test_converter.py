@@ -1286,6 +1286,111 @@ class CanonicalLibraryTests(unittest.TestCase):
             self.assertIn(f'zotero_attachment_key: "{key}"', text)
 
 
+    def test_a_key_shared_by_an_eligible_and_an_ineligible_row_refuses_both(self):
+        report = self._report(
+            {"zotero_attachment_key": "ATTKEY01"},
+            {"zotero_attachment_key": "ATTKEY01", "identity_status": "unknown"},
+        )
+        with patch("zotero_pdf_text.converter.subprocess.run", side_effect=_write_raw_markdown) as run:
+            run_dir = convert_verified(self.config, report, workers=1)
+
+        run.assert_not_called()
+        self.assertEqual([row["status"] for row in self._manifest(run_dir)], ["error", "error"])
+        self.assertFalse(self.library.exists())
+
+    def _library_paper_with_old_images(self) -> tuple[Path, Path]:
+        images = self.library / "images" / "ATTKEY01"
+        images.mkdir(parents=True)
+        (images / "old.png").write_bytes(b"old")
+        markdown = self.library / "markdown" / "ATTKEY01.md"
+        markdown.parent.mkdir(parents=True)
+        markdown.write_text("Old body", encoding="utf-8")
+        return markdown, images
+
+    def test_an_interrupt_between_the_swaps_puts_the_previous_images_back(self):
+        from zotero_pdf_text._atomic import replace_with_retry as real_replace
+
+        markdown, images = self._library_paper_with_old_images()
+        calls = []
+
+        def replace(src, dst, **kwargs):
+            calls.append(dst)
+            if len(calls) == 2:  # after the old images were moved aside, before the Markdown
+                raise KeyboardInterrupt
+            return real_replace(src, dst, **kwargs)
+
+        with (
+            patch("zotero_pdf_text.converter.subprocess.run", side_effect=_write_raw_markdown),
+            patch("zotero_pdf_text.converter.replace_with_retry", side_effect=replace),
+            self.assertRaises(KeyboardInterrupt),
+        ):
+            convert_verified(self.config, self._report({"zotero_attachment_key": "ATTKEY01"}), force=True, workers=1)
+
+        self.assertEqual(markdown.read_text(encoding="utf-8"), "Old body")
+        self.assertEqual([path.name for path in images.iterdir()], ["old.png"])
+        self.assertEqual([path.name for path in images.parent.iterdir()], ["ATTKEY01"])
+
+    def _staging(self, *, staged_markdown: bool, backup: bool = False, marker: bool = False) -> Path:
+        staging = self.library / "images" / ".conversion-crashed"
+        staging.mkdir(parents=True)
+        if staged_markdown:
+            (staging / "ATTKEY01.md").write_text("New body", encoding="utf-8")
+        if backup:
+            (staging / "previous-images").mkdir()
+            (staging / "previous-images" / "old.png").write_bytes(b"old")
+        if marker:
+            (staging / "no-previous-images").touch()
+        return staging
+
+    def _convert_another_paper(self) -> None:
+        with patch("zotero_pdf_text.converter.subprocess.run", side_effect=_write_raw_markdown):
+            convert_verified(self.config, self._report({"zotero_attachment_key": "ATTKEY02"}), workers=1)
+
+    def test_a_hard_exit_before_publishing_is_undone_by_the_next_run(self):
+        images = self.library / "images" / "ATTKEY01"
+        staging = self._staging(staged_markdown=True, backup=True)
+        images.mkdir()
+        (images / "new.png").write_bytes(b"new")
+
+        self._convert_another_paper()
+
+        self.assertEqual([path.name for path in images.iterdir()], ["old.png"])
+        self.assertFalse(staging.exists())
+
+    def test_a_hard_exit_for_a_paper_without_previous_images_removes_the_new_ones(self):
+        images = self.library / "images" / "ATTKEY01"
+        staging = self._staging(staged_markdown=True, marker=True)
+        images.mkdir()
+        (images / "new.png").write_bytes(b"new")
+
+        self._convert_another_paper()
+
+        self.assertFalse(images.exists())
+        self.assertFalse(staging.exists())
+
+    def test_a_hard_exit_before_moving_anything_keeps_the_original_images(self):
+        images = self.library / "images" / "ATTKEY01"
+        staging = self._staging(staged_markdown=True)
+        images.mkdir()
+        (images / "old.png").write_bytes(b"old")
+
+        self._convert_another_paper()
+
+        self.assertEqual([path.name for path in images.iterdir()], ["old.png"])
+        self.assertFalse(staging.exists())
+
+    def test_a_hard_exit_after_publishing_only_drops_the_obsolete_backup(self):
+        images = self.library / "images" / "ATTKEY01"
+        staging = self._staging(staged_markdown=False, backup=True)
+        images.mkdir()
+        (images / "new.png").write_bytes(b"new")
+
+        self._convert_another_paper()
+
+        self.assertEqual([path.name for path in images.iterdir()], ["new.png"])
+        self.assertFalse(staging.exists())
+
+
 class CheckpointPathTests(unittest.TestCase):
     def test_an_output_on_another_drive_is_recorded_by_its_absolute_path(self):
         from zotero_pdf_text.checkpoint import ConversionCheckpoint

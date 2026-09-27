@@ -35,11 +35,12 @@ dated section once it has been stress-tested against a large library.
   exactly that file and the source PDF is unchanged; otherwise it is re-extracted, keeping the old
   file until the new one is complete. So rerunning `convert-verified` over an indexed library does
   not rewrite the files the index reads. Two rows of one mapping report with the same attachment
-  key are both refused, since they would write the same file. A failed row leaves no images in the
-  library, and a replacement whose previous images cannot be moved back keeps them in its staging
-  folder instead of deleting them.
-- `retry-timeout` checks that a managed index generation exists before converting, since a
-  successful retry now replaces the library file in place.
+  key are both refused, whether or not both are verified. A failed row leaves no images in the
+  library. A replacement interrupted between its steps puts the previous images back; after a hard
+  exit, the next conversion run finishes or undoes it, and previous images that cannot be moved
+  back are kept in the staging folder rather than deleted.
+- `retry-timeout` replaces the library file in place, so it checks that a managed index generation
+  exists before converting and puts the previous Markdown and images back if publishing fails.
 - Passage fetches (`get_fulltext_chunk`, chunk counts) use a new index on
   `chunks(record_id, chunk_index)` instead of scanning every chunk: about 1.6 ms instead of 435 ms
   per passage on the reference library. Existing indexes keep working unchanged but only get the

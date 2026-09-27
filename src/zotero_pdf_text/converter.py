@@ -54,6 +54,10 @@ DRAWING_DENSITY_DIVISOR = 10.0
 MAX_DRAWING_TIMEOUT_MULTIPLIER = 5.0
 
 SKIP_LIST_FILENAME = "timeout_skip_list.json"
+# Inside a `.conversion-*` staging directory: the previous images moved aside during a staged
+# replacement, and the marker saying there were none.
+SWAP_BACKUP_DIRNAME = "previous-images"
+SWAP_NO_PREVIOUS_IMAGES = "no-previous-images"
 NATIVE_CRASH_EXIT_STATUS = 0xC000070A
 
 
@@ -313,6 +317,8 @@ def _convert_mapping_rows(
     for target in targets.values():
         if target is not None:
             target[0].parent.mkdir(parents=True, exist_ok=True)
+    for staged_images_root in {target[1] for target in targets.values() if target is not None}:
+        _recover_interrupted_swaps(staged_images_root)
     indexed = _indexed_library_records(output_root, targets) if library is not None else {}
 
     def convert(item: tuple[int, dict[str, str]]) -> tuple[ConversionResult, TimeoutCandidate | None]:
@@ -516,20 +522,21 @@ def _output_targets(
 
     Canonical rows never reuse unrecorded Markdown: the library file is shared by every run, so
     without an entry in this run's checkpoint nothing says which extraction wrote it, and it is
-    re-extracted instead (the old file stays until the new one is complete). A canonical row whose
-    attachment key another selected row shares maps to None: both would write one file.
+    re-extracted instead (the old file stays until the new one is complete). With ``library``, a
+    row whose attachment key another selected row shares maps to None, whether or not either row
+    is eligible: one of them would take the library file and the pair would then collide in the
+    index.
     """
     canonical_keys = {number: _canonical_key(row, library) for number, row in indexed_rows}
-    key_counts = Counter(key for key in canonical_keys.values() if key)
+    key_counts = Counter(row.get("zotero_attachment_key", "") for _number, row in indexed_rows)
     targets: dict[int, tuple[Path, Path, bool] | None] = {}
     for number, row in indexed_rows:
         key = canonical_keys[number]
-        if library is not None and key:
-            targets[number] = (
-                None
-                if key_counts[key] > 1
-                else (canonical_markdown_path(library, key), canonical_image_dir(library, key).parent, False)
-            )
+        raw_key = row.get("zotero_attachment_key", "")
+        if library is not None and raw_key and key_counts[raw_key] > 1:
+            targets[number] = None
+        elif library is not None and key:
+            targets[number] = (canonical_markdown_path(library, key), canonical_image_dir(library, key).parent, False)
         else:
             targets[number] = (markdown_dir / f"{number:04d}_{_output_stem(row)}.md", images_root, True)
     return targets
@@ -571,7 +578,7 @@ def _convert_row(
     # primary-extractor Markdown that references them.
     owns_images = False
     keep_images = False
-    preserve_staging = False
+    published = False
     try:
         if output_path.exists() and not force and checkpoint is not None:
             resumed, foreign = _resume_from_checkpoint(row, output_path, checkpoint)
@@ -653,23 +660,24 @@ def _convert_row(
             staged_markdown.write_text(
                 _with_front_matter(row, markdown, extraction_tool, has_math=has_math), encoding="utf-8", newline="\n"
             )
-            backup_images = staged_images_root / "previous-images"
-            if images_dir.exists():
-                replace_with_retry(images_dir, backup_images)
+            backup_images = staged_images_root / SWAP_BACKUP_DIRNAME
+            if not images_dir.exists():
+                # Tells recovery after a hard exit that images_dir held nothing of the old
+                # Markdown's, so whatever it holds then belongs to this attempt.
+                (staged_images_root / SWAP_NO_PREVIOUS_IMAGES).touch()
             try:
+                if images_dir.exists():
+                    replace_with_retry(images_dir, backup_images)
                 if extraction_tool == PRIMARY_EXTRACTION_TOOL and extraction_images_dir.exists():
                     replace_with_retry(extraction_images_dir, images_dir)
                 replace_with_retry(staged_markdown, output_path)
-            except Exception as exc:
+                published = True
+            except BaseException as exc:
+                # BaseException: an interrupt between the moves must put the old images back
+                # too, not only an error.
                 try:
-                    if images_dir.exists():
-                        shutil.rmtree(images_dir)
-                    if backup_images.exists():
-                        replace_with_retry(backup_images, images_dir)
+                    _undo_image_swap(staged_images_root, images_dir)
                 except OSError:
-                    # The previous Markdown is still in place; its images must not be deleted
-                    # with the staging directory just because they could not be moved back.
-                    preserve_staging = True
                     raise RuntimeError(
                         f"{type(exc).__name__}: {exc}; the previous images could not be restored "
                         f"and were kept at {backup_images}"
@@ -719,7 +727,9 @@ def _convert_row(
     finally:
         raw_output_path.unlink(missing_ok=True)
         math_sidecar_path.unlink(missing_ok=True)
-        if staged_images_root is not None and not preserve_staging:
+        # A staging directory still holding the previous images is kept unless the new Markdown
+        # was published: they are the only copy the old Markdown can still reference.
+        if staged_images_root is not None and (published or not (staged_images_root / SWAP_BACKUP_DIRNAME).exists()):
             shutil.rmtree(staged_images_root, ignore_errors=True)
         if owns_images and not keep_images:
             shutil.rmtree(images_dir, ignore_errors=True)
@@ -813,6 +823,50 @@ def _resume_from_checkpoint(
     )
     checkpoint.mark_reused(output_path, source_modified=source_modified)
     return result, False
+
+
+def _undo_image_swap(staging: Path, images_dir: Path) -> None:
+    """Return ``images_dir`` to its state before a staged replacement began.
+
+    Decided from what is on disk, so it is correct wherever the swap stopped: moved-aside previous
+    images go back in place of anything this attempt moved there; with none moved aside, the
+    directory is this attempt's only if it held nothing before (the marker says so), and is
+    otherwise still the untouched original.
+    """
+    backup = staging / SWAP_BACKUP_DIRNAME
+    if backup.exists():
+        if images_dir.exists():
+            shutil.rmtree(images_dir)
+        replace_with_retry(backup, images_dir)
+    elif (staging / SWAP_NO_PREVIOUS_IMAGES).exists() and images_dir.exists():
+        shutil.rmtree(images_dir)
+
+
+def _recover_interrupted_swaps(images_root: Path) -> None:
+    """Finish what a hard exit left of staged replacements under ``images_root``.
+
+    A staging directory that still holds its staged Markdown never published it, so the old
+    Markdown is current and gets its images back. One without staged Markdown either published
+    (the moved-aside images are obsolete) or stopped before touching ``images_root``; either way
+    only the staging directory itself is left to remove. Best effort: a staging directory that
+    cannot be recovered is kept and reported, never deleted.
+    """
+    for staging in sorted(images_root.glob(".conversion-*")):
+        if not staging.is_dir():
+            continue
+        try:
+            staged_markdown = [path for path in staging.glob("*.md") if path.is_file()]
+            if len(staged_markdown) == 1:
+                _undo_image_swap(staging, images_root / staged_markdown[0].stem)
+            elif staged_markdown:
+                raise OSError("more than one staged Markdown file")
+            shutil.rmtree(staging)
+        except OSError as exc:
+            print(
+                f"warning: could not recover interrupted replacement in {staging}: {type(exc).__name__}: {exc}",
+                file=sys.stderr,
+                flush=True,
+            )
 
 
 def _indexed_library_records(
