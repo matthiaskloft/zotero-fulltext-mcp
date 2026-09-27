@@ -46,6 +46,20 @@ Risk levels used below:
 | 10 | Package 3 steps 1, 2, 3, 5, 6: canonical layout, migration, reconciliation | hardening plan | **high** | OPTIONAL / GATED | The destructive half: `library/markdown` and `library/images` as canonical locations, publication through the artifact layer, `migrate-library-layout` dry-run and apply, and reconciliation-plan upserts replacing key-only incrementality. This is the package the plan calls its highest-risk item, and the gate is unchanged — start only if rank 8's audit shows the timestamped-run layout is an actual practical pain point. Take a manual filesystem backup of `output_root` before `--apply`, independent of the dry-run report. |
 | 11 | Package 5 steps 3, 5, 6: fixture tests, upgrade guide, performance baselines | hardening plan | none | PARTLY READY | Step 6 (index build time and size, audit time in fast/full modes, p95 search latency, bounded passage latency) is unblocked. Step 3's fixture tests are unblocked except its migration case, which follows rank 10. Step 5, the upgrade guide, is migration end to end, so it follows rank 10 and only exists if it ships. |
 
+## Search and retrieval track
+
+A second track, separate from the hardening and release packages above, improves what search can find: first lexical search, then optional semantic discovery. It uses the same risk levels. Steps are ordered so that measurement comes before any change of defaults, and so that a library is reconverted and rebuilt **once** for the conversion, chunking, section and stemming changes, not once per issue.
+
+| Step | Issues | Risk | Depends on | Why here |
+|------|--------|------|------------|----------|
+| S1 | [#78](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/78) evaluation harness | none | — | Every later step changes ranking or chunking; without recall/MRR numbers on a real question set those changes are judged by anecdote. The query set stays local and uncommitted. |
+| S2 | [#77](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/77) A + B: field-scoped and year filters | none | — | Read path only, no schema change or rebuild. Fixes the most visible gap (author search matching reference lists) immediately. Supersedes #23. |
+| S3 | [#76](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/76) metadata fields, [#82](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/82) extraction-quality score | contained | S1 | Schema bump and rebuild through the artifact layer; no reconversion. Abstracts and tags are the input semantic discovery needs, and the quality score explains results that are missing because extraction failed. |
+| S4 | [#79](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/79) page offsets → [#80](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/80) structure-based chunks → [#81](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/81) section roles, with #77 C/D/E (stemming, prefix, proximity) | contained | S1, S3 | The one reconversion and schema bump for the track. It rewrites derived Markdown and the index, never source PDFs or Zotero. Existing locators answer `stale_locator` after re-chunking, as designed. Measured against S1 before defaults change. |
+| S5 | #77 F + H: abstract/tag columns, section filter and reference-entry search | contained | S3, S4 | Needs the fields from #76 and the section roles from #81. |
+| S6 | [#1](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/1) semantic paper discovery | contained | S1, S3 (S4 for passages) | Opt-in, provider-neutral, local-first. Built as its own artifact so publishing the full-text index never depends on an embedding service. Whether hybrid ranking or passage embeddings are worth adding is decided by S1 numbers. |
+| S7 | [#83](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/83) in-library citation graph | contained | S3, S4 | Future. Filed early so #81's reference-entry format keeps what it needs. |
+
 ## Rationale for this ordering
 
 - **Do the work that cannot damage a library before the work that can.** Ranks 5-9 read, verify and
@@ -66,7 +80,8 @@ Risk levels used below:
 
 ## Next action
 
-Ranks 1-9 are done. What remains is one gated decision and one piece of unblocked work.
+Ranks 1-9 are done. What remains is one gated decision and one piece of unblocked work. The search and
+retrieval track above runs independently of both; its first two steps (S1, S2) are zero-risk and unblocked.
 
 **Rank 10 is a decision before it is a task.** Its gate is unchanged: start only if the
 timestamped-run layout is an actual practical pain point. The evidence for that decision is
