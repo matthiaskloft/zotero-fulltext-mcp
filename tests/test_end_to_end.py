@@ -2,41 +2,37 @@
 
 Every other test module exercises one layer against hand-built index rows. These run the chain a
 user runs: a synthetic Zotero database and a real PDF go through `convert-new`, which maps,
-converts, stages and publishes a generation, and a real `zotero-fulltext-mcp` process started with
-the arguments `install-mcp` registers serves it over stdio. Everything lives in a temporary
+converts, stages and publishes a generation, and a real server process started with the arguments
+and tool list `install-mcp` prints for Codex serves it over stdio. Everything lives in a temporary
 directory; no real Zotero path is read.
 """
 
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import importlib.util
 import io
 import json
+import logging
 import os
 import sqlite3
 import sys
 import tempfile
+import time
+import tomllib
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from dataclasses import dataclass
 from pathlib import Path
 from unittest.mock import patch
 
+import pymupdf
+
 from zotero_pdf_text import artifacts
 from zotero_pdf_text.cli import main
 
 HAS_MCP = importlib.util.find_spec("mcp") is not None
-DEFAULT_TOOLS = {
-    "search_fulltext",
-    "search_within_fulltext",
-    "get_fulltext_chunk",
-    "get_item_context",
-    "lookup_citation_key",
-    "list_timeout_candidates",
-    "list_orphan_candidates",
-    "library_status",
-}
 
 
 @dataclass(frozen=True)
@@ -76,8 +72,6 @@ class Library:
         self.papers: list[Paper] = []
 
     def add(self, paper: Paper) -> None:
-        import pymupdf
-
         doc = pymupdf.open()
         doc.new_page().insert_text((72, 72), f"{paper.title}\ndoi:{paper.doi}\n{paper.body}")
         doc.save(self.linked / f"{paper.attachment_key}.pdf")
@@ -88,7 +82,9 @@ class Library:
     def _write_zotero_db(self) -> None:
         db = self.root / "zotero.sqlite"
         db.unlink(missing_ok=True)
-        with sqlite3.connect(db) as con:
+        # closing() because a connection's own context manager commits but does not close, and
+        # the next add() must be able to delete the file on Windows.
+        with contextlib.closing(sqlite3.connect(db)) as con, con:
             con.executescript(
                 """
                 CREATE TABLE items (itemID INTEGER PRIMARY KEY, key TEXT, itemTypeID INTEGER);
@@ -120,12 +116,20 @@ class Library:
                     "INSERT INTO itemAttachments VALUES (?, ?, 2, 'application/pdf', ?)",
                     (attachment_id, parent_id, str(self.linked / f"{paper.attachment_key}.pdf")),
                 )
-        con.close()
 
     def cli(self, *args: str) -> tuple[int, str]:
+        # The mapper points the root logger at a run.log inside the output folder and never
+        # closes it. Under pytest that is a no-op; elsewhere it locks the temp dir on Windows.
+        root_logger = logging.getLogger()
+        handlers_before = list(root_logger.handlers)
         out, err = io.StringIO(), io.StringIO()
-        with redirect_stdout(out), redirect_stderr(err):
-            code = main([args[0], "--config", str(self.config_path), *args[1:]])
+        try:
+            with redirect_stdout(out), redirect_stderr(err):
+                code = main([args[0], "--config", str(self.config_path), *args[1:]])
+        finally:
+            for handler in [h for h in root_logger.handlers if h not in handlers_before]:
+                root_logger.removeHandler(handler)
+                handler.close()
         return code, out.getvalue() + err.getvalue()
 
     def convert_new(self) -> None:
@@ -137,12 +141,20 @@ class Library:
         pointer = artifacts.read_current_pointer(self.index_root)
         return None if pointer is None else pointer["current_generation"]
 
-    def latest_mapping_run(self) -> Path:
-        return max((self.output_root / "mapping-runs").iterdir())
+    def only_mapping_run(self) -> Path:
+        (run,) = (self.output_root / "mapping-runs").iterdir()
+        return run
 
-    def server_args(self, *extra: str) -> list[str]:
-        """The server arguments `install-mcp` registers by default."""
-        return ["--db", str(self.index_root / "zotero_text_index.sqlite"), "--config", str(self.config_path), *extra]
+    def registration(self, *flags: str) -> tuple[list[str], set[str]]:
+        """The server arguments and enabled tools from the Codex block `install-mcp` prints."""
+        # install-mcp reads Codex's config.toml for its drift report; never the developer's own.
+        with tempfile.TemporaryDirectory() as codex_home, patch.dict(os.environ, {"CODEX_HOME": codex_home}):
+            code, output = self.cli("install-mcp", *flags)
+        if code != 0:
+            raise AssertionError(output)
+        block = output[output.index("[mcp_servers.") :].split("\n\n")[0]
+        (entry,) = tomllib.loads(block)["mcp_servers"].values()
+        return entry["args"], set(entry["enabled_tools"])
 
 
 def _call_server(server_args: list[str], calls: list[tuple[str, dict]]) -> tuple[set[str], list]:
@@ -172,72 +184,57 @@ def _search(term: str) -> tuple[str, dict]:
     return "search_fulltext", {"query": term}
 
 
+def _fetch(hit: dict) -> tuple[str, dict]:
+    locator = hit["source_locator"]
+    return "get_fulltext_chunk", {
+        "attachment_key": hit["attachment_key"],
+        "chunk_index": locator["chunk_index"],
+        "chunk_sha256": locator["chunk_sha256"],
+    }
+
+
 def _keys(result) -> list[str]:
     return [hit["attachment_key"] for hit in result.structuredContent["results"]]
 
 
 @unittest.skipUnless(HAS_MCP, "requires the optional MCP extra")
 class ConvertIndexServeTests(unittest.TestCase):
-    def test_converted_paper_is_searchable_and_readable_through_the_default_server(self):
+    def test_converted_paper_is_searchable_and_readable_through_the_registered_server(self):
         with tempfile.TemporaryDirectory() as tmp:
             library = Library(Path(tmp))
             library.add(FIRST)
             library.convert_new()
 
+            server_args, enabled_tools = library.registration()
             tools, (search, lookup) = _call_server(
-                library.server_args(),
+                server_args,
                 [_search("zebrafinch"), ("lookup_citation_key", {"citation_key": FIRST.citation_key})],
             )
-            self.assertEqual(tools, DEFAULT_TOOLS)
+            self.assertEqual(tools, enabled_tools)
             self.assertEqual(_keys(search), [FIRST.attachment_key])
             self.assertEqual(search.structuredContent["results"][0]["title"], FIRST.title)
             self.assertFalse(lookup.isError)
             self.assertIn(FIRST.attachment_key, json.dumps(lookup.structuredContent))
 
-            locator = search.structuredContent["results"][0]["source_locator"]
-            _, (passage,) = _call_server(
-                library.server_args(),
-                [
-                    (
-                        "get_fulltext_chunk",
-                        {
-                            "attachment_key": FIRST.attachment_key,
-                            "chunk_index": locator["chunk_index"],
-                            "chunk_sha256": locator["chunk_sha256"],
-                        },
-                    )
-                ],
-            )
+            _, (passage,) = _call_server(server_args, [_fetch(search.structuredContent["results"][0])])
             self.assertFalse(passage.isError)
             self.assertIn("zebrafinch", passage.structuredContent["text"])
 
-    def test_an_incremental_run_adds_the_new_paper_and_keeps_old_locators_valid(self):
+    def test_incremental_conversion_and_reindex_keep_old_locators_valid(self):
         with tempfile.TemporaryDirectory() as tmp:
             library = Library(Path(tmp))
             library.add(FIRST)
             library.convert_new()
-            _, (before,) = _call_server(library.server_args(), [_search("zebrafinch")])
+            server_args, _ = library.registration()
+            _, (before,) = _call_server(server_args, [_search("zebrafinch")])
+            fetch_old_passage = _fetch(before.structuredContent["results"][0])
             first_generation = library.current_generation()
 
             library.add(SECOND)
             library.convert_new()
             self.assertNotEqual(library.current_generation(), first_generation)
-
-            locator = before.structuredContent["results"][0]["source_locator"]
             _, (old, new, passage) = _call_server(
-                library.server_args(),
-                [
-                    _search("zebrafinch"),
-                    _search("quokka"),
-                    (
-                        "get_fulltext_chunk",
-                        {
-                            "attachment_key": FIRST.attachment_key,
-                            "chunk_index": locator["chunk_index"],
-                            "chunk_sha256": locator["chunk_sha256"],
-                        },
-                    ),
-                ],
+                server_args, [_search("zebrafinch"), _search("quokka"), fetch_old_passage]
             )
             self.assertEqual(_keys(old), [FIRST.attachment_key])
             self.assertEqual(_keys(new), [SECOND.attachment_key])
@@ -247,25 +244,37 @@ class ConvertIndexServeTests(unittest.TestCase):
             self.assertEqual(code, 0)
             self.assertIn("Index is up to date", output)
 
+            # A full reindex of the same text publishes a new generation with the same chunks.
+            before_rebuild = library.current_generation()
+            code, output = library.cli("rebuild-index")
+            self.assertEqual(code, 0, output)
+            self.assertNotEqual(library.current_generation(), before_rebuild)
+            _, (new, passage) = _call_server(server_args, [_search("quokka"), fetch_old_passage])
+            self.assertEqual(_keys(new), [SECOND.attachment_key])
+            self.assertFalse(passage.isError)
+
     def test_db_only_and_bibtex_startup_serve_the_published_index(self):
         with tempfile.TemporaryDirectory() as tmp:
             library = Library(Path(tmp))
             library.add(FIRST)
             library.convert_new()
             db = str(library.index_root / "zotero_text_index.sqlite")
+            _, default_tools = library.registration()
 
             tools, (search,) = _call_server(["--db", db], [_search("zebrafinch")])
-            self.assertEqual(tools, DEFAULT_TOOLS)
+            self.assertEqual(tools, default_tools)
             self.assertEqual(_keys(search), [FIRST.attachment_key])
 
-            tools, (search,) = _call_server(library.server_args("--enable-bibtex"), [_search("zebrafinch")])
-            self.assertEqual(tools, DEFAULT_TOOLS | {"export_bibtex_entries_by_key"})
+            server_args, enabled_tools = library.registration("--enable-bibtex")
+            self.assertEqual(enabled_tools, default_tools | {"export_bibtex_entries_by_key"})
+            tools, (search,) = _call_server(server_args, [_search("zebrafinch")])
+            self.assertEqual(tools, enabled_tools)
             self.assertEqual(_keys(search), [FIRST.attachment_key])
 
 
 @unittest.skipUnless(HAS_MCP, "requires the optional MCP extra")
 class InterruptedPublicationTests(unittest.TestCase):
-    def test_a_crash_before_the_pointer_swap_keeps_serving_and_the_next_run_converges(self):
+    def test_a_crash_before_the_pointer_swap_keeps_serving_and_the_next_run_recovers(self):
         with tempfile.TemporaryDirectory() as tmp:
             library = Library(Path(tmp))
             library.add(FIRST)
@@ -286,17 +295,25 @@ class InterruptedPublicationTests(unittest.TestCase):
 
             # The staged generation and the journal are left behind, but readers still see the
             # previous generation.
-            self.assertTrue((library.index_root / artifacts.JOURNAL_FILENAME).exists())
+            journal = json.loads((library.index_root / artifacts.JOURNAL_FILENAME).read_text(encoding="utf-8"))
+            interrupted_generation = journal["generation_id"]
             self.assertEqual(library.current_generation(), first_generation)
-            _, (old, new) = _call_server(library.server_args(), [_search("zebrafinch"), _search("quokka")])
+            server_args, _ = library.registration()
+            _, (old, new) = _call_server(server_args, [_search("zebrafinch"), _search("quokka")])
             self.assertEqual(_keys(old), [FIRST.attachment_key])
             self.assertEqual(_keys(new), [])
 
             library.convert_new()
 
+            # Recovery published the interrupted generation before this run published its own, so
+            # it is now the previous generation; without recovery that would be first_generation.
+            # convert-new still converts the second paper again, because it decides what is new
+            # from the generation that was current before recovery ran.
             self.assertFalse((library.index_root / artifacts.JOURNAL_FILENAME).exists())
-            self.assertNotEqual(library.current_generation(), first_generation)
-            _, (old, new) = _call_server(library.server_args(), [_search("zebrafinch"), _search("quokka")])
+            pointer = artifacts.read_current_pointer(library.index_root)
+            self.assertEqual(pointer["previous_generation"], interrupted_generation)
+            self.assertNotIn(pointer["current_generation"], {first_generation, interrupted_generation})
+            _, (old, new) = _call_server(server_args, [_search("zebrafinch"), _search("quokka")])
             self.assertEqual(_keys(old), [FIRST.attachment_key])
             self.assertEqual(_keys(new), [SECOND.attachment_key])
 
@@ -308,7 +325,7 @@ class AuditAndStatusTests(unittest.TestCase):
             library.add(FIRST)
             library.add(SECOND)
             library.convert_new()
-            snapshot = str(library.latest_mapping_run())
+            snapshot = str(library.only_mapping_run())
 
             code, output = library.cli("audit-library", "--mapping-report", snapshot, "--full", "--json")
             self.assertEqual(code, 0, output)
@@ -330,12 +347,13 @@ class AuditAndStatusTests(unittest.TestCase):
             library.add(FIRST)
             library.convert_new()
             library.add(SECOND)
+            # Mapping-run folders are named to the second and must not already exist.
+            time.sleep(1.1)
             code, output = library.cli("dry-run")
             self.assertEqual(code, 0, output)
+            snapshot = output.split("Dry-run complete: ", 1)[1].splitlines()[0]
 
-            code, output = library.cli(
-                "audit-library", "--mapping-report", str(library.latest_mapping_run()), "--json"
-            )
+            code, output = library.cli("audit-library", "--mapping-report", snapshot, "--json")
             self.assertEqual(code, 0, output)
             statuses = {item["attachment_key"]: item["statuses"] for item in json.loads(output)["items"]}
             self.assertIn("unindexed", statuses[SECOND.attachment_key])

@@ -17,8 +17,9 @@ dated section once it has been stress-tested against a large library.
   search and passage latency against a published index.
 - End-to-end fixture tests (`tests/test_end_to_end.py`): a synthetic Zotero library and real PDFs
   go through `convert-new`, and a real `zotero-fulltext-mcp` process serves the result over stdio
-  with the default, DB-only and BibTeX startup arguments. They also cover an incremental run, a
-  publication interrupted before the pointer swap, and `audit-library`/`library-status` output.
+  with the arguments `install-mcp` registers, and with DB-only and BibTeX startup. They also cover an
+  incremental run, `rebuild-index`, recovery from a publication interrupted before the pointer swap,
+  and `audit-library`/`library-status` output.
 
 ### Changed
 

@@ -87,8 +87,11 @@ package and step numbers are kept as-is because merged branches and commits refe
 an index, and searches on very common terms that still take seconds.
 
 **Package 5, step 3: end-to-end fixture tests.** Done, except the migration case, which waits on
-Package 3: `tests/test_end_to_end.py` runs `convert-new` on synthetic PDFs and queries a real
-server process, including interruption recovery and audit/status output.
+Package 3. `tests/test_end_to_end.py` runs `convert-new` and `rebuild-index` on synthetic PDFs and
+queries a real server process started as `install-mcp` registers it. It covers recovery from a
+publication interrupted before the pointer swap, and audit/status output. One finding: after such
+a crash, `convert-new` converts the interrupted run's new items again, because it picks new items
+before recovery runs. The result is correct; only the conversion time is spent twice.
 
 **Package 3 (steps 1, 2, 3, 5, 6): canonical library layout and migration.** Risk **high**. Gated,
 possibly never. This would move converted Markdown and images out of timestamped run folders into
