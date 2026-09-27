@@ -101,8 +101,9 @@ off from its Markdown, and the whole library is being reconverted. A reconversio
 layout directly, so `migrate-library-layout` (step 5) and its rename-heavy copy are not needed and
 are not planned. Still open:
 
-- Provenance reconversion, index repair and unverified reviews write into run folders, so a record
-  they replace points there again. Publishing their validated output into `library/` is the next
+- Provenance reconversion, index repair, `retry-timeout` and unverified reviews write into run
+  folders, so a record they replace points there again. They must not change the file the current
+  index reads before their own publication succeeds. Publishing their validated output into `library/` is the next
   step.
 - Steps 3 and 6 were covered by earlier work (source hashes in the index, the repair plan).
 

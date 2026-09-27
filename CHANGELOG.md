@@ -30,7 +30,9 @@ dated section once it has been stress-tested against a large library.
   `library/markdown/<attachment-key>.md` and its images to `library/images/<attachment-key>/`, one
   fixed location per paper, and the index records that path. The timestamped run folder keeps the
   manifest, checkpoint and summary only, so it can be deleted without breaking the index. Samples,
-  unverified reviews, provenance reconversion and index repair still write into their run folders.
+  unverified reviews, `retry-timeout`, provenance reconversion and index repair still write into
+  their run folders: they replace records that are already indexed, and must not change the file
+  the current index reads before their own publication succeeds.
   A library file this run did not record is reused unchanged only when the published index holds
   exactly that file and the source PDF is unchanged; otherwise it is re-extracted, keeping the old
   file until the new one is complete. So rerunning `convert-verified` over an indexed library does
@@ -39,8 +41,7 @@ dated section once it has been stress-tested against a large library.
   library. A replacement interrupted between its steps puts the previous images back; after a hard
   exit, the next conversion run finishes or undoes it, and previous images that cannot be moved
   back are kept in the staging folder rather than deleted.
-- `retry-timeout` replaces the library file in place, so it checks that a managed index generation
-  exists before converting and puts the previous Markdown and images back if publishing fails.
+- `retry-timeout` checks that a managed index generation exists before converting, not after.
 - Passage fetches (`get_fulltext_chunk`, chunk counts) use a new index on
   `chunks(record_id, chunk_index)` instead of scanning every chunk: about 1.6 ms instead of 435 ms
   per passage on the reference library. Existing indexes keep working unchanged but only get the

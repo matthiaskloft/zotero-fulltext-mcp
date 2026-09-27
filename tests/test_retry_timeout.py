@@ -414,7 +414,7 @@ class RetryTimeoutCandidateTests(unittest.TestCase):
 
 
 class LibraryRetryTests(unittest.TestCase):
-    """A verified candidate with a real attachment key retries into its library file."""
+    """A verified candidate with a real attachment key never touches its library file."""
 
     def setUp(self):
         self.root = Path(tempfile.mkdtemp())
@@ -430,32 +430,36 @@ class LibraryRetryTests(unittest.TestCase):
         self.markdown.write_text("---\n---\n\nFallback body\n", encoding="utf-8", newline="\n")
         self.images.mkdir(parents=True)
         (self.images / "old.png").write_bytes(b"old")
+        self.before = self.markdown.read_bytes()
         record = {**_fallback_record(self.pdf), "zotero_attachment_key": "ATTKEY01", "markdown_path": str(self.markdown)}
         _publish_generation(self.output_root, [record])
 
-    def test_a_successful_retry_replaces_the_library_file_the_index_reads(self):
+    def _library_untouched(self) -> None:
+        self.assertEqual(self.markdown.read_bytes(), self.before)
+        self.assertEqual([path.name for path in self.images.iterdir()], ["old.png"])
+
+    def test_a_successful_retry_publishes_its_run_folder_copy(self):
         with patch("zotero_pdf_text.converter.subprocess.run", side_effect=_write_raw_markdown):
             result = retry_timeout_candidate("ATTKEY01", config=self.config)
 
         self.assertTrue(result.ok, result.error)
-        self.assertEqual(result.markdown_path, str(self.markdown))
-        self.assertIn("Body text", self.markdown.read_text(encoding="utf-8"))
+        self.assertTrue(Path(result.markdown_path).is_relative_to(self.output_root / "retry_timeout"))
         records = [json.loads(line) for line in current_generation_jsonl(self.output_root / "index").read_text(encoding="utf-8").splitlines() if line]
-        self.assertEqual([record["markdown_path"] for record in records], [str(self.markdown)])
+        self.assertEqual([record["markdown_path"] for record in records], [result.markdown_path])
+        self._library_untouched()
 
-    def test_a_failed_publication_puts_the_previous_library_file_back(self):
-        before = self.markdown.read_bytes()
-        with (
-            patch("zotero_pdf_text.converter.subprocess.run", side_effect=_write_raw_markdown),
-            patch("zotero_pdf_text.retry_timeout.stage_and_publish", side_effect=OSError("disk full")),
-        ):
-            result = retry_timeout_candidate("ATTKEY01", config=self.config)
+    def test_a_failure_after_conversion_leaves_the_library_file_the_index_reads(self):
+        for target in ("zotero_pdf_text.retry_timeout._record_from_manifest_row", "zotero_pdf_text.retry_timeout.stage_and_publish"):
+            with self.subTest(target=target):
+                with (
+                    patch("zotero_pdf_text.converter.subprocess.run", side_effect=_write_raw_markdown),
+                    patch(target, side_effect=OSError("disk full")),
+                ):
+                    result = retry_timeout_candidate("ATTKEY01", config=self.config)
 
-        self.assertFalse(result.ok)
-        self.assertIn("disk full", result.error)
-        self.assertEqual(self.markdown.read_bytes(), before)
-        self.assertEqual([path.name for path in self.images.iterdir()], ["old.png"])
-        self.assertEqual(find_candidate(self.output_root / "index" / "timeout_candidates.jsonl", "ATTKEY01")["status"], "pending")
+                self.assertFalse(result.ok)
+                self.assertIn("disk full", result.error)
+                self._library_untouched()
 
 
 def _fallback_record(pdf: Path) -> dict:

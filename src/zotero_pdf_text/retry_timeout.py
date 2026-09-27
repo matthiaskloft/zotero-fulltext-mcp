@@ -2,13 +2,11 @@ from __future__ import annotations
 
 import csv
 import re
-import shutil
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any, cast
 
-from ._atomic import replace_with_retry
 from .artifacts import (
     current_generation_jsonl,
     stage_and_publish,
@@ -17,7 +15,6 @@ from .artifacts import (
 from .config import ProjectConfig
 from .converter import convert_verified
 from .indexer import _record_from_manifest_row
-from .library import canonical_image_dir, canonical_markdown_path
 from .lock import PipelineLockedError, pipeline_write_lock
 from .timeout_candidates import (
     STATUS_PENDING,
@@ -125,12 +122,12 @@ def retry_timeout_candidate(
 ) -> RetryTimeoutResult:
     """Reconvert one recorded timeout candidate with a longer budget.
 
-    Uses a fresh run directory for the manifest. A canonical-eligible attachment's Markdown is
-    written to its library file, replacing the previous one only once the new extraction is
-    complete; any other attachment's Markdown goes to the fresh run directory. The result is
-    promoted by publishing a successor managed index generation, and the check that such a
-    generation can be published runs before anything is converted. A failed retry leaves the
-    published index and the candidate's status untouched; the candidate's own
+    Always converts into a fresh run directory, never into the canonical library: the Markdown the
+    current index reads is not touched, so a retry that fails at any point -- conversion, manifest,
+    publication, or a hard exit -- leaves the index and the files it reads in step. Only a
+    successful result gets promoted, by publishing a successor managed index generation whose
+    record points at the run directory. A failed retry leaves the published index and the
+    candidate's status untouched; the candidate's own
     occurrence_count/last_detected_at are refreshed automatically by the nested
     convert_verified() call if it times out again.
     """
@@ -202,7 +199,6 @@ def retry_timeout_candidate(
                     previous_status=previous_status,
                     timeout_seconds_used=next_timeout,
                 )
-            saved = _save_library_copy(config, attachment_key, run_dir)
             convert_verified(
                 config,
                 mapping_report,
@@ -210,6 +206,7 @@ def retry_timeout_candidate(
                 workers=1,
                 timeout_seconds=next_timeout,
                 force=True,
+                canonical=False,
             )
 
             manifest_path = run_dir / "manifest.csv"
@@ -221,18 +218,11 @@ def retry_timeout_candidate(
 
             manifest_row = manifest_rows[0]
             new_record = _record_from_manifest_row(manifest_row)
-            try:
-                stage_and_publish(
-                    index_root,
-                    write_jsonl_upserting_record(current_jsonl, attachment_key, new_record),
-                    command="retry-timeout",
-                )
-            except BaseException:
-                # The conversion already replaced the library file; the index still describes
-                # the previous one, so put it back rather than leave the two disagreeing.
-                if saved is not None:
-                    _restore_library_copy(*saved)
-                raise
+            stage_and_publish(
+                index_root,
+                write_jsonl_upserting_record(current_jsonl, attachment_key, new_record),
+                command="retry-timeout",
+            )
             mark_status(
                 candidates_jsonl,
                 attachment_key,
@@ -262,42 +252,6 @@ def retry_timeout_candidate(
         error="",
         resolved_at=now,
     )
-
-
-def _save_library_copy(config: ProjectConfig, attachment_key: str, run_dir: Path) -> tuple[Path, Path, Path | None] | None:
-    """Copy the attachment's library Markdown and images into ``run_dir`` before a retry.
-
-    Returns what ``_restore_library_copy`` needs: the library Markdown path, its image directory,
-    and the saved copy (None when there was no library Markdown to save). Returns None for a key
-    that has no library path.
-    """
-    try:
-        markdown = canonical_markdown_path(config, attachment_key)
-    except ValueError:
-        return None
-    images = canonical_image_dir(config, attachment_key)
-    if not markdown.exists():
-        return markdown, images, None
-    saved = run_dir / "previous-library"
-    saved.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(markdown, saved / markdown.name)
-    if images.exists():
-        shutil.copytree(images, saved / "images")
-    return markdown, images, saved
-
-
-def _restore_library_copy(markdown: Path, images: Path, saved: Path | None) -> None:
-    """Put back the library Markdown and images saved by ``_save_library_copy``."""
-    if saved is None:
-        markdown.unlink(missing_ok=True)
-        shutil.rmtree(images, ignore_errors=True)
-        return
-    staged = markdown.with_name(f".{markdown.name}.restore")
-    shutil.copy2(saved / markdown.name, staged)
-    replace_with_retry(staged, markdown)
-    shutil.rmtree(images, ignore_errors=True)
-    if (saved / "images").exists():
-        shutil.copytree(saved / "images", images)
 
 
 def _write_single_row_mapping_report(path: Path, row: dict[str, str]) -> None:

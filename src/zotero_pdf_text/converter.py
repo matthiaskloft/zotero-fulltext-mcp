@@ -139,7 +139,14 @@ def convert_verified(
     workers: int | None = None,
     timeout_seconds: int = 600,
     force: bool = False,
+    canonical: bool = True,
 ) -> Path:
+    """Convert the mapping report's verified rows; see ``_convert_mapping_rows``.
+
+    ``canonical=False`` keeps every row's output in the run directory, for a caller that replaces
+    an indexed record and must not touch the library file the current index reads before its own
+    publication succeeds.
+    """
     if pymupdf4llm is None:
         raise RuntimeError("pymupdf4llm is not installed")
     if limit is not None and limit < 1:
@@ -159,7 +166,7 @@ def convert_verified(
         force=force,
         classifications={"mapped_verified"},
         output_root=config.output_root,
-        library=config,
+        library=config if canonical else None,
     )
 
 
