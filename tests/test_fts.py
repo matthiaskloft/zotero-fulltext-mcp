@@ -529,6 +529,29 @@ class FtsTests(unittest.TestCase):
             self.assertLess(_RecordingConnection.captured_limit, summary.chunks)
             self.assertLessEqual(len(result.text), 500)
 
+    def test_chunk_lookups_use_an_index_instead_of_scanning(self):
+        # Performance regression guard: without an index on chunks(record_id, ...), every passage
+        # fetch and chunk count scanned the whole chunks table (see docs/performance-baselines.md).
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            jsonl = root / "index.jsonl"
+            sqlite_db = root / "index.sqlite"
+            _write_jsonl(jsonl)
+            build_fts_index(jsonl, sqlite_db)
+
+            con = sqlite3.connect(sqlite_db)
+            try:
+                queries = [
+                    "SELECT text FROM chunks WHERE record_id = 1 AND chunk_index = 0",
+                    "SELECT COUNT(*) FROM chunks WHERE record_id = 1",
+                ]
+                for sql in queries:
+                    plan = " ".join(row[3] for row in con.execute(f"EXPLAIN QUERY PLAN {sql}"))
+                    with self.subTest(sql=sql):
+                        self.assertIn("chunks_record_chunk_idx", plan)
+            finally:
+                con.close()
+
     def test_get_fulltext_covers_max_chars_for_non_default_chunk_sizing(self):
         # Regression test: the chunk-covering query used to compute a single LIMIT from the
         # DEFAULT_CHUNK_CHARS/DEFAULT_OVERLAP_CHARS estimate. An index built with a smaller
