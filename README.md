@@ -420,7 +420,8 @@ Expected status: `Connected`.
 
 The safe default server exposes:
 
-- `search_fulltext(query, search_mode="all_terms")` — ranked search over converted body text and
+- `search_fulltext(query, limit=10, search_mode="all_terms")` — ranked search (one hit per paper,
+  at most 20) over converted body text and
   indexed title/creator/citation-key metadata, with bounded snippets and `matched_fields` showing
   which indexed fields actually matched. `any_terms` is the broader fallback and `phrase`
   requires normalized words in order.
@@ -431,7 +432,7 @@ The safe default server exposes:
   chunk index, each with the same metadata, provenance and `source_locator` as `search_fulltext`.
   An attachment without matches returns an empty result; an unindexed key answers
   `attachment_not_found`.
-- `get_fulltext_chunk(attachment_key, chunk_index, chunk_sha256, content_sha256)` — a bounded
+- `get_fulltext_chunk(attachment_key, max_chars=12000, chunk_index, chunk_sha256, content_sha256)` — a bounded
   converted-text passage. Pass the `source_locator.chunk_index` from a search hit to inspect its
   evidence, along with that locator's `chunk_sha256` to verify the passage is still the one the hit
   contained; omitting the index reads from the beginning of the converted document, and omitting
@@ -465,14 +466,14 @@ The safe default server exposes:
 
   Keep each passage's `source_locator.chunk_sha256` and pass it back when re-reading that chunk
   to cite it, so a replaced passage answers `stale_locator`.
-- `list_timeout_candidates(status="pending")` — attachments whose primary extractor exceeded its
+- `list_timeout_candidates(status="pending", limit=10)` — attachments whose primary extractor exceeded its
   scaled timeout budget and fell back to plain-text extraction (or failed outright). Read-only;
   pass a returned `attachment_key` to `skip_timeout_extraction` or `retry_timeout_extraction`.
   Each candidate's recorded fields describe the historical timeout; `current_index_state` and
   `current_extraction_tool` describe what the current index holds, and a pending candidate that
   another workflow has since indexed with structured text (after its last timeout) is reported as
   `resolved` (`resolved_via: "current_index"`).
-- `list_orphan_candidates(status="pending")` — plausible Zotero parents found for orphan PDFs by
+- `list_orphan_candidates(status="pending", limit=10)` — plausible Zotero parents found for orphan PDFs by
   content (title/DOI/author/year), not filename. Read-only; never triggers discovery itself.
   Populated only after running the CLI's `find-orphan-parents` command, which reports only
   high-confidence (`classify_identity`-verified) pairings. To act on a candidate, confirm it

@@ -61,8 +61,10 @@ as primary library records.
 
 - Zotero MCP: live metadata, collections, tags, child attachments, notes, and
   Zotero URIs. Zotero must be running.
-- Full-text MCP: the default surface is bounded, read-only search, passage retrieval, and item
-  context over converted Markdown. It never launches Zotero or exposes local paths; returned
+- Full-text MCP: the default surface is bounded, read-only search (`search_fulltext`, and
+  `search_within_fulltext` for one attachment), passage retrieval (`get_fulltext_chunk`), item
+  context (`get_item_context`, `lookup_citation_key`) and index status (`library_status`) over
+  converted Markdown. It never launches Zotero or exposes local paths; returned
   library material is labelled untrusted. Search results identify the fields that matched, and
   search/passage locators bind attachment/chunk/character identity to the converted Markdown
   SHA-256 and to a per-chunk SHA-256 derived at read time. Those hashes are not only descriptive:
@@ -78,17 +80,15 @@ as primary library records.
   startup with an explicit valid config governing the selected database and with the Marker
   dependency installed. It requires an exact confirmation literal, overwrites one attachment's
   derived Markdown, image assets, and index record, and is rate-limited, but it never modifies
-  Zotero.
+  Zotero. The optional timeout tools (`skip_timeout_extraction`, `retry_timeout_extraction`,
+  enabled with `--enable-retry-timeout`) follow the same pattern: startup opt-in, a confirmation
+  literal, and no Zotero writes. Retrying is also rate-limited; skipping only records a persisted
+  skip-list entry.
 - Full-text CLI: maintenance and operational commands, including Zotero process startup and
   unguarded `reconvert-math`, remain explicit local workflows.
 - Better BibTeX CLI/MCP bridge: the CLI returns or appends full `.bib` entries by citation key.
   The MCP export bridge is disabled by default and, when explicitly enabled, can only call the
   configured credential-free loopback endpoint on Zotero's local port.
-
-MCP tool annotations describe this split to compatible clients: index reads and the loopback
-BibTeX bridge are read-only, non-destructive, closed-world operations; math reconversion is a
-non-idempotent destructive update to derived content. These annotations are presentation/risk
-hints, while startup-time capability registration is the enforcement boundary.
 - Ingestion queue: dry-run dedupe for LLM literature-search imports.
 - Zotero write CLI: approval-gated write plans that generate local Zotero
   JavaScript for creating items, linking local PDFs, updating exact-key metadata,
@@ -97,6 +97,11 @@ hints, while startup-time capability registration is the enforcement boundary.
 - ZotMoov: optional Zotero-side file-management layer. It can move/rename PDFs
   found or stored by Zotero into the linked attachment folder; this project only
   records whether ZotMoov is expected and refreshes derived indexes afterward.
+
+MCP tool annotations describe this split to compatible clients: index reads and the loopback
+BibTeX bridge are read-only, non-destructive, closed-world operations; math reconversion is a
+non-idempotent destructive update to derived content. These annotations are presentation/risk
+hints, while startup-time capability registration is the enforcement boundary.
 
 ## Confidence Model
 
