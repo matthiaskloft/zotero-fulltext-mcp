@@ -1,120 +1,141 @@
 # Development Roadmap
 
-This roadmap merges the two active plan documents into one ordered sequence. It does not rename
-or renumber the packages/phases inside those documents (their names are referenced by merged PR
-branches and commit history — `codex/mcp-safe-read-surface`, `codex/package-4-retrieval-
-foundation`, etc.) — it only orders them and states why each sits where it does.
+This file answers two questions: **what should be worked on next, and why in that order?** It
+links to the detailed plans and GitHub issues rather than repeating them. If you are new to the
+project, read "How the project fits together" first. It explains the terms the rest of the file
+uses.
 
-Source plans:
-- [`plan-mcp-server-hardening.md`](plan-mcp-server-hardening.md) — internal safety/robustness
-  work (MCP capability scoping, transactional artifacts, canonical library, retrieval).
-- [`plan-public-release-readiness.md`](plan-public-release-readiness.md) — external
-  installability work (CI, crash-safe indexing, preflight checks, releases).
+## How the project fits together
 
-## Ordering principle
+The project turns a researcher's Zotero PDFs into searchable text and serves that text to an LLM
+client over MCP (Model Context Protocol). Data flows in one direction:
 
-Ranks are ordered by **risk to a researcher's existing data**, lowest first, then by whether an
-item unblocks a decision about a riskier one.
+```
+Zotero library (read-only)  →  PDFs  →  converted Markdown  →  search index  →  MCP server  →  LLM client
+     zotero_db.py               converter / _extract_*.py       fts.py, artifacts.py   mcp_server.py, mcp_contract.py
+```
 
-The remaining work is ordered by *step* rather than by whole package. Packages 3, 4B and 5 each mix
-steps that only read and report with steps that rewrite file locations across a whole library.
-Ranking each package as a single unit forced the read-only steps to inherit the migration steps'
-risk gate, which is why they sat blocked despite having nothing risky about them. Step numbers below
-refer to the step lists in the source plans and are unchanged — nothing here is renamed or
-renumbered.
+- **Zotero and the source PDFs are never modified** by the default workflow. Everything the project
+  writes is a *derived* artifact in the output folder: the "sidecar".
+- **Conversion** (`convert-new`, `reconvert-*`) turns PDFs into Markdown. It is slow: minutes to
+  hours for a whole library.
+- **Indexing** (`rebuild-index`, `update-index`) builds a SQLite FTS5 full-text index from the
+  Markdown plus a read-only snapshot of Zotero metadata. It is fast compared with conversion. Each
+  build is a new immutable **generation**; a small `current.json` pointer is switched atomically to
+  the new one, so a failed build leaves the previous index working (`artifacts.py`).
+- **Search** is lexical: FTS5 with BM25 ranking over each record's title, creators, citation key and
+  body text, which is split into ~6000-character **chunks**.
+- **Locators.** Each search hit carries a `source_locator` with a `chunk_sha256`. When a client reads
+  the chunk back with that hash and the text has since changed, it gets `stale_locator` instead of
+  different text under an old citation. Re-chunking the library therefore invalidates every locator
+  issued before it. That is by design, but it is why the plan below re-chunks only once.
 
-Risk levels used below:
+`AGENTS.md` has the full architecture, conventions and safety rules. `docs/architecture.md` and
+`docs/data-dictionary.md` describe the modules and the stored fields.
 
-- **none** — reads and reports only; cannot modify converted output, the index, or source PDFs.
-- **contained** — writes only through the shipped transactional artifact layer (staged generation
-  plus atomic pointer), so a failure rolls back to the prior generation.
-- **high** — rewrites file locations and image references across the whole converted library.
+## How work is ordered
 
-## Order
+Work is ordered by **risk to a researcher's existing data**, lowest first. Among items with the same
+risk, the one that produces evidence for a later decision goes first.
 
-| Rank | Package | Source | Risk | Status | Why here |
-|------|---------|--------|------|--------|----------|
-| 1 | Package 1: Safe MCP Read Surface | hardening plan | none | DONE | Shipped as PR #4. Prerequisite for exposing this server to any client at all. |
-| 2 | Package 4A: Retrieval Foundation | hardening plan | none | DONE | Shipped as PR #5. Prerequisite for Package 4B; makes search predictable and bounded. |
-| 3 | **Public Release Readiness (Phases 1-4)** | release-readiness plan | contained | DONE | Shipped as PR #7 and tagged v0.2.0. CI matrix (Windows/macOS/Linux), `uv.lock`, crash-safe index publication, `check-setup`, tagged releases. |
-| 4 | Package 2: Transactional Derived Artifacts (reduced scope) | hardening plan | contained | DONE | Implemented 2026-07-17: immutable index generations + atomic `current.json` pointer + publish journal, managed `rebuild-index`/`update-index` command family, exclusive-create lock hardening, duplicate-key rejection, schema detection, output-root containment. |
-| 5 | Package 4B step 1 (remainder): locator staleness | hardening plan | none | DONE | Package 4A already ships a locator keyed on `content_sha256` — stronger than the plan's `generation_id`, since a content hash survives regeneration. What is missing is verification: `get_fulltext_chunk` never checks the caller's hash against what is stored, so a locator taken before a reconvert silently returns text from a different document version. Adding the `stale_locator` response closes a correctness gap in a citation path that already ships, touches read code only, and depends on nothing unbuilt. |
-| 6 | Package 5 step 4: adversarial and containment tests | hardening plan | none | DONE | Tampered `current.json` generation identifiers, path escapes on MCP reads and maintenance writes, lock-ownership races, untrusted instruction text in titles and snippets. `resolve_generation_dir` already validates and contains; this proves it against hostile input. Covers shipped code, so nothing gates it. |
-| 7 | Package 5 step 2: schema-compatibility tests | hardening plan | none | DONE | An index written by an older version must migrate through a documented command or fail with a precise recovery instruction, never a raw SQLite error. Covers Package 2, which shipped at rank 4. |
-| 8 | Package 3 steps 4 + 7: `audit-library` and `library_status` (JSONL only; FTS comparison not included) | hardening plan | none | DONE | The read-only half of Package 3. Compares represented attachments, source availability, canonical files, JSONL and FTS metadata, reporting `current`, `unindexed`, `stale_markdown`, `source_changed`, `metadata_changed`, `missing_source`, `missing_markdown`, `orphaned_index` and `duplicate_key` with per-item evidence. It moves no files. It is also the honest precondition for rank 10: the plan says to start migration only once the timestamped-run layout is an actual pain point, and this is the command that answers whether it is, instead of guessing. Requires a new `library.py` (none exists today) and the `is_canonical_eligible` predicate from step 3, used here in report-only form. |
-| 9 | Package 4B step 2: SQL aggregates and truthful status | hardening plan | none | DONE | Shipped as PRs #8, #9 and #10. `coverage_report` became `index-stats`, computing its aggregates in SQL instead of `SELECT *`-and-count-in-Python, reporting the generation it read, and stating in its own payload that index row counts are not library coverage. `library_status` reached a CLI command and a read-only MCP tool; the MCP response keeps indexed-snapshot statistics and source-library health as two fields that are never merged, with the comparison withheld or marked partial rather than guessed. `coverage-report` remains as a deprecated alias. |
-| 10 | Package 3 steps 1, 2, 3, 5, 6: canonical layout, migration, reconciliation | hardening plan | **high** | OPTIONAL / GATED | The destructive half: `library/markdown` and `library/images` as canonical locations, publication through the artifact layer, `migrate-library-layout` dry-run and apply, and reconciliation-plan upserts replacing key-only incrementality. This is the package the plan calls its highest-risk item, and the gate is unchanged — start only if rank 8's audit shows the timestamped-run layout is an actual practical pain point. Take a manual filesystem backup of `output_root` before `--apply`, independent of the dry-run report. |
-| 11 | Package 5 steps 3, 5, 6: fixture tests, upgrade guide, performance baselines | hardening plan | none | PARTLY READY | Step 6 (index build time and size, audit time in fast/full modes, p95 search latency, bounded passage latency) is unblocked. Step 3's fixture tests are unblocked except its migration case, which follows rank 10. Step 5, the upgrade guide, is migration end to end, so it follows rank 10 and only exists if it ships. |
+| Risk | Meaning |
+|------|---------|
+| **none** | Reads and reports only. Cannot change converted Markdown, the index, or source PDFs. |
+| **contained** | Writes only through the staged-generation and atomic-pointer layer, so a failure leaves the previous generation in place. May require a reconversion or rebuild. |
+| **high** | Moves or rewrites files across the whole converted library. |
 
-## Rationale for this ordering
+## Current state
 
-- **Do the work that cannot damage a library before the work that can.** Ranks 5-9 read, verify and
-  report; none of them can modify converted output, the index or a source PDF. Rank 10 rewrites file
-  locations across the whole library. Ordering by that distinction rather than by package number is
-  the substance of this revision.
-- **An audit is not a migration, and should not have waited behind one.** Package 3's steps 4 and 7
-  were blocked only because they shared a package with steps 1-3, 5 and 6. Splitting them out is what
-  lets the go/no-go on the risky half be made from evidence rather than from intuition about whether
-  the layout hurts yet.
-- **Ship what unblocks other humans before what hardens internal operation further.** Packages 1 and
-  4A made the server *safe* and *predictable* to expose. Release readiness made it *installable and
-  diagnosable* by someone who isn't the author. That principle is unchanged; it is why rank 10 still
-  sits near the end rather than being pulled forward now that its read-only half has a slot.
-- **Package 3's gate is preserved, not weakened.** Reordering does not pre-approve rank 10. It still
-  needs its own go/no-go once a concrete need shows up, per the hardening plan's Revision Notes — the
-  difference is that rank 8 now supplies the evidence for that decision.
+Version 0.10.0 (2026-09-26). The server is installable on Windows, macOS and Linux, read-only by
+default, and has crash-safe index publication, library auditing, and tools to search the library,
+search within one paper, look up a citation key, and read chunks with verified locators. The
+completed work is listed under "History" at the end.
 
-## Next action
+There are two tracks of remaining work. They don't depend on each other.
 
-Ranks 1-9 are done. What remains is one gated decision and one piece of unblocked work.
+## Track 1: Search and retrieval (active)
 
-**Rank 10 is a decision before it is a task.** Its gate is unchanged: start only if the
-timestamped-run layout is an actual practical pain point. The evidence for that decision is
-rank 8's audit; rank 9 made it quicker to read. Run `library-status --full --mapping-report
-<run>` against a real library for the health counts, and `audit-library` when you need to see
-which attachments are behind a count. Two cautions carry over from rank 8, both still live:
+The goal is to make search find more of the right papers. Lexical search improves first; optional
+semantic discovery follows. Two rules shape the order:
 
-- A low `source_changed` count is weak evidence while `source_provenance_unknown` is high.
-  Provenance is established per attachment only when it is genuinely reconverted, so check that
-  number before reading a quiet audit as a healthy library.
-- The counts overlap and do not sum to the attachment total, and when Zotero's database cannot
-  be read the membership statuses are withheld rather than computed. `inventory_available` says
-  which kind of answer you are looking at.
+1. **Measure before changing defaults.** Step S1 builds the yardstick. Any later step that changes
+   ranking or chunking is checked against it before its behavior becomes the default.
+2. **Reconvert and re-chunk once.** Page offsets, new chunking, section tags, stemming and new FTS
+   columns all need a new index schema, and some need reconversion. They ship together in S4, so a
+   library is reconverted once and locators are invalidated once.
 
-Rank 11 does not wait on that decision, except for its migration parts. Unblocked now, and
-zero-risk:
+| Step | What it does | Issues | Risk | Needs | Why here |
+|------|--------------|--------|------|-------|----------|
+| **S1** | Scores search quality (recall@k, MRR) on a personal question set that is never committed | [#78](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/78) | none | — | Every later step is judged by it. |
+| **S2** | Adds `author`, `title`, `citation_key` and year-range filters to `search_fulltext` | [#77](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/77) A + B | none | — | Query code only, with no schema change or rebuild. Fixes the most visible gap: an author search today also matches every reference list that cites that author. |
+| **S3** | Stores the Zotero fields the index drops (abstract, tags, venue, item type, creator roles, …), and scores each paper's extraction quality | [#76](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/76), [#82](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/82) | contained | — | Needs a rebuild but no reconversion. The abstracts and tags are what S4's new columns and S6 build on. The quality score explains papers that are missing because extraction failed. |
+| **S4** | Records page offsets during conversion, splits chunks at headings and paragraphs with page ranges, and tags each chunk's section (front matter, body, references, appendix). In the same schema bump it adds stemming, prefix and proximity search, and abstract/tag columns. | [#79](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/79) → [#80](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/80) → [#81](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/81), #77 C, D, E, F | contained | S1, S3 | The single reconversion and schema bump for this track. Rewrites derived Markdown and the index, never PDFs or Zotero. Existing locators answer `stale_locator` afterwards. |
+| **S5** | Adds a section filter to search, and search over reference-list entries ("which of my papers cite X?") | #77 H, #81 | none | S4 | Query code on top of S4's section tags. |
+| **S6** | Optional semantic paper discovery with a local embedding model, as a separate opt-in index and MCP tool | [#1](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/1) | contained | S1, S3 (S4 for passage embeddings) | Built as its own artifact, so publishing the full-text index never depends on an embedding service running. S1's numbers decide whether hybrid ranking or passage embeddings are worth adding. The phased plan is in a comment on #1. |
+| **S7** | Citation graph within the library, built from reference entries | [#83](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/83) | contained | S3, S4 | Future. It is filed now so that S4's reference-entry format keeps what it needs. |
 
-- **Step 6:** performance baselines — index build time and size, audit time in fast and full
-  modes, p95 search latency, and bounded passage latency. The plan treats these as release
-  guardrails rather than hard requirements.
-- **Most of step 3:** end-to-end fixture tests for default MCP registration, explicit DB-only
-  startup, optional BibTeX startup, a complete staged conversion/reindex cycle, interruption
-  recovery, and audit/status output. Only its migration case depends on rank 10.
+**Start here:** S1 and S2 are unblocked, zero-risk, and independent of each other.
 
-**Step 5**, the upgrade guide, is migration end to end — dry-run, apply, verify, prune — and
-exists only if rank 10 ships.
+## Track 2: Hardening leftovers
 
-### Note on rank 8's scope
+These are the remaining steps of [`plan-mcp-server-hardening.md`](plan-mcp-server-hardening.md). Its
+package and step numbers are kept as-is because merged branches and commits refer to them.
 
-Rank 8 pulled part of **Package 3 step 3** forward: index records now carry `source_sha256` and
-`indexed_at`. This was not optional scope creep. Without recorded source provenance,
-`source_changed` was not computable at all, and an audit that silently cannot detect a whole
-category of drift is not the evidence rank 10's gate is supposed to rest on. The rest of step 3
-(canonical publication, migration, reconciliation upserts) is untouched and still gated.
+**Package 5, step 6: performance baselines.** Risk none, unblocked. Measure index build time and
+size, audit time in fast and full modes, p95 search latency, and passage latency on a
+representative library. They are release guardrails rather than hard limits, and S4 will want them
+as a before/after comparison.
 
-Two limits on the evidence rank 8 currently produces, both worth knowing before reading its
-output as a verdict on rank 10:
+**Package 5, step 3: end-to-end fixture tests.** Risk none, mostly unblocked. They cover default MCP
+registration, DB-only and BibTeX startup, a full staged conversion and reindex cycle, interruption
+recovery, and audit/status output. Only the migration case waits on Package 3.
 
-- `source_changed` fires only for records that carry a source hash. Records converted before
-  this change carry none and are counted under `source_provenance_unknown` rather than reported
-  as unchanged. Provenance is established per attachment when it is genuinely reconverted, and
-  `rebuild-index --manifest` can clear it again for attachments the manifest lists as
-  `skipped_existing`. Until that coverage is high, a low `source_changed` count is weak evidence
-  and should not by itself settle rank 10.
-- `audit-library` consumes an existing `dry-run` snapshot. The `--refresh-mapping` convenience
-  mode from step 4 was deliberately left out, because it writes a run artifact and would have
-  cost rank 8 the read-only property that is the entire reason it was split out of Package 3
-  ahead of the gated half.
+**Package 3 (steps 1, 2, 3, 5, 6): canonical library layout and migration.** Risk **high**. Gated,
+possibly never. This would move converted Markdown and images out of timestamped run folders into
+`library/markdown` and `library/images`, and add `migrate-library-layout`. Start only if the
+timestamped layout causes real problems. The evidence for that decision comes from
+`library-status --full --mapping-report <run>` and `audit-library` against a real library. Read
+them with two cautions:
 
-Image OCR (`ocr-images`) sits outside this roadmap — it is feature-complete in `[Unreleased]` but its
-release is deferred by decision, not blocked by anything here.
+- A low `source_changed` count means little while `source_provenance_unknown` is high. Source hashes
+  exist only for attachments converted or reconverted since they were introduced.
+  `plan-provenance-reconvert` can close that gap.
+- The status counts overlap and don't sum to the attachment total. When Zotero's database can't be
+  read, membership statuses are withheld, and `inventory_available` says so.
+
+If Package 3 goes ahead, back up the output folder by hand before `--apply`. **Package 5 step 5**,
+the upgrade guide, exists only if Package 3 ships.
+
+## Other open work, not scheduled
+
+- [#34](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/34): an opt-in review-and-apply
+  workflow for Zotero item writes from MCP. It is a separate entry point because the default server
+  stays read-only.
+- [#2](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/2) and
+  [#3](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/3): a sidecar library of the
+  reader's own comments linked to source passages. #3 tracks it together with #1.
+- **Image OCR** (`ocr-images`) is packaged but left out of the release notes by decision. It stays
+  out until it has been stress-tested on a large library (see `CHANGELOG.md`).
+
+Out of scope for this project: live Zotero browsing of collections, tags and notes. That belongs to
+the companion Zotero MCP server (see `AGENTS.md`).
+
+## History
+
+These are the completed items, in the order they shipped. The source plans are
+[`plan-mcp-server-hardening.md`](plan-mcp-server-hardening.md),
+[`plan-public-release-readiness.md`](plan-public-release-readiness.md) and
+[`plan-mcp-instruction-and-contract-robustness.md`](plan-mcp-instruction-and-contract-robustness.md).
+
+| Item | What it delivered |
+|------|-------------------|
+| Hardening Package 1: safe MCP read surface | The default server exposes only read operations; returned content is labeled untrusted (PR #4). |
+| Hardening Package 4A: retrieval foundation | Bounded, predictable search and content-hash locators (PR #5). |
+| Release readiness, phases 1–4 | CI on three OSes, `uv.lock`, crash-safe index publication, `check-setup`, tagged releases (PR #7, v0.2.0). |
+| Contract robustness, phases 1–3 | Opt-in mutation tools, evidence/discovery distinction, `matched_fields`, typed schemas and native MCP errors (PRs #8, #10, #11). |
+| Hardening Package 2 (reduced scope): transactional artifacts | Immutable index generations, the atomic `current.json` pointer, the publish journal, `rebuild-index`/`update-index`. |
+| Package 4B step 1: locator staleness | `get_fulltext_chunk` checks `chunk_sha256` and returns `stale_locator`. |
+| Package 5 steps 2 and 4: schema-compatibility and adversarial tests | Old indexes migrate or fail with a recovery instruction; hostile generation IDs, path escapes and injected instructions are tested. |
+| Package 3 steps 4 and 7 (read-only half): `audit-library`, `library_status` | Per-attachment drift report and a status tool. This also added `source_sha256` and `indexed_at` to index records, because `source_changed` can't be computed without them. |
+| Package 4B step 2: SQL aggregates and truthful status | `index-stats` (formerly `coverage-report`) and `library_status`, which never conflates indexed counts with library coverage (PRs #8–#10). |
+| Issue-driven work through v0.10.0 | Checkpointed conversion, selective index repair, provenance reconversion, `search_within_fulltext`, `lookup_citation_key`, a first-use guide and more. See `CHANGELOG.md`. |

@@ -11,7 +11,8 @@ and exposes it through an MCP server (`zotero-fulltext-mcp`) plus a CLI (`zotero
 - Source package: `src/zotero_pdf_text`.
 - Tests: `tests`.
 - Docs: `docs` (architecture, data dictionary, ingestion, operations, troubleshooting,
-  debug-bridge setup).
+  library cleanup, debug-bridge setup, planned figure extraction).
+- What to work on next and why: `ROADMAP.md`.
 - User-facing install/setup instructions: `README.md`.
 
 **This repository never contains anyone's actual Zotero data.** A researcher's converted
