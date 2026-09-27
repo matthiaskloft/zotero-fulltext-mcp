@@ -39,6 +39,8 @@ QUERIES = [
 
 def _percentiles(samples_ms: list[float]) -> dict[str, float]:
     ordered = sorted(samples_ms)
+    if len(ordered) < 2:
+        raise SystemExit(f"Need at least 2 timed calls for percentiles, got {len(ordered)}.")
     q = statistics.quantiles(ordered, n=100, method="inclusive")
     return {
         "n": len(ordered),
@@ -74,7 +76,6 @@ def run(db: Path, repeats: int, limit: int) -> dict[str, object]:
         passage_ms.append(elapsed)
 
     return {
-        "db_bytes": db.stat().st_size,
         "search_limit": limit,
         "first_search_ms": round(cold_ms, 2),
         "search": _percentiles(search_ms),
