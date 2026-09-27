@@ -93,12 +93,21 @@ publication interrupted before the pointer swap, and audit/status output. One fi
 a crash, `convert-new` converts the interrupted run's new items again, because it picks new items
 before recovery runs. The result is correct; only the conversion time is spent twice.
 
-**Package 3 (steps 1, 2, 3, 5, 6): canonical library layout and migration.** Risk **high**. Gated,
-possibly never. This would move converted Markdown and images out of timestamped run folders into
-`library/markdown` and `library/images`, and add `migrate-library-layout`. Start only if the
-timestamped layout causes real problems. The evidence for that decision comes from
-`library-status --full --mapping-report <run>` and `audit-library` against a real library. Read
-them with two cautions:
+**Package 3, steps 1 and 2: canonical library layout.** Done in reduced form, without migration.
+`convert-verified` and `convert-new` write straight to `library/markdown/<key>.md` and
+`library/images/<key>/`, and the index records those paths. The trigger was real: on the
+reference library a hand-made folder rename inside a synced output folder cut every indexed paper
+off from its Markdown, and the whole library is being reconverted. A reconversion fills the new
+layout directly, so `migrate-library-layout` (step 5) and its rename-heavy copy are not needed and
+are not planned. Still open:
+
+- Provenance reconversion, index repair and unverified reviews write into run folders, so a record
+  they replace points there again. Publishing their validated output into `library/` is the next
+  step.
+- Steps 3 and 6 were covered by earlier work (source hashes in the index, the repair plan).
+
+The evidence behind this came from `library-status --full --mapping-report <run>` and
+`audit-library` against a real library. Read them with two cautions:
 
 - A low `source_changed` count means little while `source_provenance_unknown` is high. Source hashes
   exist only for attachments converted or reconverted since they were introduced.
@@ -106,8 +115,8 @@ them with two cautions:
 - The status counts overlap and don't sum to the attachment total. When Zotero's database can't be
   read, membership statuses are withheld, and `inventory_available` says so.
 
-If Package 3 goes ahead, back up the output folder by hand before `--apply`. **Package 5 step 5**,
-the upgrade guide, exists only if Package 3 ships.
+**Package 5 step 5**, the upgrade guide, was tied to the migration and is dropped with it. An
+upgrade to the library layout is a reconversion followed by `rebuild-index --manifest`.
 
 ## Other open work, not scheduled
 

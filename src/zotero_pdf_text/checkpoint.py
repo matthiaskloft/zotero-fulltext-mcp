@@ -168,7 +168,9 @@ class ConversionCheckpoint:
             self.reused[self.relative(output_path)] = source_modified
 
     def relative(self, output_path: Path) -> str:
-        return output_path.relative_to(self.run_dir).as_posix()
+        # os.path.relpath, not Path.relative_to: canonical library Markdown lives outside the run
+        # directory (as ``../../../library/markdown/<key>.md``), and still moves with the tree.
+        return Path(os.path.relpath(output_path, self.run_dir)).as_posix()
 
     def lookup(self, output_path: Path) -> CheckpointEntry | None:
         with self._lock:

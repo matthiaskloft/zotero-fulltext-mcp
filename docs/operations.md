@@ -98,7 +98,10 @@ after extraction succeeds:
 
 ## Managed Index Generations
 
-The output root has several roles: `mapping-runs/` holds mapping snapshots;
+The output root has several roles: `library/markdown/<attachment-key>.md` and
+`library/images/<attachment-key>/` hold the one current copy of each paper converted by
+`convert-verified` or `convert-new`, so the index reads those papers from a path that never
+changes; `mapping-runs/` holds mapping snapshots;
 `conversion-runs/verified/`, `conversion-runs/samples/`,
 `conversion-runs/unverified-review/`, `conversion-runs/provenance-reconvert/` and
 `conversion-runs/index-repair/` hold conversion runs and their Markdown; `provenance-reconvert/`

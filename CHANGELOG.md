@@ -23,6 +23,14 @@ dated section once it has been stress-tested against a large library.
 
 ### Changed
 
+- `convert-verified` and `convert-new` write each verified paper's Markdown to
+  `library/markdown/<attachment-key>.md` and its images to `library/images/<attachment-key>/`, one
+  fixed location per paper, and the index records that path. The timestamped run folder keeps the
+  manifest, checkpoint and summary only, so it can be deleted without breaking the index. Samples,
+  unverified reviews, provenance reconversion and index repair still write into their run folders.
+  A library file left by an earlier run is re-extracted rather than reused, unless this run's
+  checkpoint recorded it (`--resume`). Two rows of one mapping report with the same attachment key
+  are both refused, since they would write the same file.
 - Passage fetches (`get_fulltext_chunk`, chunk counts) use a new index on
   `chunks(record_id, chunk_index)` instead of scanning every chunk: about 1.6 ms instead of 435 ms
   per passage on the reference library. Existing indexes keep working unchanged but only get the

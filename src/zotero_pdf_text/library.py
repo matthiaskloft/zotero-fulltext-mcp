@@ -7,9 +7,9 @@ published index generation's JSONL metadata (what search can currently return) -
 where they disagree.
 
 A fourth view, the canonical layout, is recorded per item as `canonical_markdown_exists` but is
-deliberately not classified: nothing writes to `library/` yet, so every canonical file is absent
-and a status derived from that would fire on the entire library while meaning nothing. It is
-evidence held ready for the migration half of Package 3, not a finding.
+deliberately not classified: only `convert-verified` and `convert-new` write to `library/`, so an
+attachment last converted by another command, or before the layout existed, legitimately has no
+library file, and a status derived from that would read as drift.
 
 The index is read through its generation JSONL only; this module never opens the SQLite index, so
 a divergence between the two within one generation is out of scope here.
@@ -18,9 +18,8 @@ Nothing here moves, renames, or rewrites anything. Every function reads. The mig
 Package 3 (`migrate-library-layout`) is gated separately and is deliberately not implemented here;
 this audit is the evidence that decides whether it is worth doing at all.
 
-The canonical path helpers are defined here in *report-only* form: they say where a converted file
-would live under the canonical layout so the audit can report whether it does, and they are the
-single definition converters and migration must reuse if the canonical layout is ever adopted.
+The canonical path helpers are the single definition of where a converted file lives under the
+canonical layout: the converter writes there, and the audit reports whether a file does.
 Deriving an image directory from a Markdown filename anywhere else is what these helpers exist to
 prevent.
 """

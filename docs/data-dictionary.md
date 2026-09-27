@@ -430,8 +430,9 @@ a database that will not settle is resolved by closing Zotero and re-running, a 
 schema failure is not, and the flag alone cannot tell those apart.
 
 The canonical layout is recorded per item as evidence (`canonical_markdown_exists`) but is not
-classified, because nothing writes to `library/` yet and a status derived from it would fire on
-every attachment while meaning nothing. The audit reads the generation JSONL only and never
+classified: only `convert-verified` and `convert-new` write to `library/`, so an attachment last
+converted by another command, or before the layout existed, legitimately has no library file, and
+a status derived from that would read as drift. The audit reads the generation JSONL only and never
 opens the SQLite index, so a JSONL/FTS divergence within one generation is out of its scope.
 
 **Statuses are a set, not a bucket.** An attachment can hold several at once (a PDF that moved

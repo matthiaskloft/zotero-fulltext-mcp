@@ -318,6 +318,14 @@ class AuditAndStatusTests(unittest.TestCase):
             report = json.loads(output)
             statuses = {item["attachment_key"]: item["statuses"] for item in report["items"]}
             self.assertEqual(statuses, {FIRST.attachment_key: ["current"], SECOND.attachment_key: ["current"]})
+            # The index reads each paper from the canonical library, not from a run folder.
+            markdown = {item["attachment_key"]: item["evidence"]["indexed_markdown_path"] for item in report["items"]}
+            library_markdown = library.output_root / "library" / "markdown"
+            self.assertEqual(
+                markdown,
+                {key: str(library_markdown / f"{key}.md") for key in (FIRST.attachment_key, SECOND.attachment_key)},
+            )
+            self.assertTrue(all(item["evidence"]["canonical_markdown_exists"] for item in report["items"]))
 
             code, output = library.cli("library-status", "--mapping-report", snapshot, "--json")
             self.assertEqual(code, 0, output)

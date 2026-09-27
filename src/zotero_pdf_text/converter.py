@@ -19,6 +19,7 @@ from typing import Callable
 
 from .config import ProjectConfig
 from .indexer import load_indexed_keys
+from .library import canonical_image_dir, canonical_markdown_path, is_canonical_eligible, validate_attachment_key
 from ._atomic import atomic_write_text
 from .checkpoint import ConversionCheckpoint, body_sha256, classify_entry
 from .timeout_candidates import (
@@ -143,7 +144,7 @@ def convert_verified(
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     run_dir = output_dir or config.output_root / "conversion-runs" / "verified" / timestamp
-    return _convert_verified_rows(
+    return _convert_mapping_rows(
         mapping_report,
         run_dir,
         limit=limit,
@@ -151,7 +152,9 @@ def convert_verified(
         workers=workers,
         timeout_seconds=timeout_seconds,
         force=force,
+        classifications={"mapped_verified"},
         output_root=config.output_root,
+        library=config,
     )
 
 
@@ -268,7 +271,16 @@ def _convert_mapping_rows(
     output_root: Path,
     skip_attachment_keys: frozenset[str] = frozenset(),
     ordinal_field: str | None = None,
+    library: ProjectConfig | None = None,
 ) -> Path:
+    """Convert the selected rows of ``mapping_report``, recording the run in ``run_dir``.
+
+    With ``library``, every canonical-eligible row writes its Markdown and images straight to the
+    canonical library (``library/markdown/<key>.md``, ``library/images/<key>/``) and the run
+    directory keeps only the manifest, checkpoint and summary. Nothing is copied or moved there
+    later, so a whole-library conversion writes each file once. Rows that are not eligible, and
+    every row without ``library``, keep their numbered output inside ``run_dir``.
+    """
     if workers is None:
         workers = default_worker_count()
     if workers < 1:
@@ -294,12 +306,32 @@ def _convert_mapping_rows(
     # directory let completed rows be reused with their extraction-time provenance.
     checkpoint = ConversionCheckpoint(run_dir)
     progress = _Progress(len(indexed_rows), checkpoint)
+    targets = _output_targets(indexed_rows, markdown_dir, images_root, library)
+    for target in targets.values():
+        if target is not None:
+            target[0].parent.mkdir(parents=True, exist_ok=True)
 
     def convert(item: tuple[int, dict[str, str]]) -> tuple[ConversionResult, TimeoutCandidate | None]:
-        outcome = _convert_row(
-            item[1], markdown_dir, images_root, item[0], timeout_seconds,
-            force=force, skip_keys=skip_keys, checkpoint=checkpoint,
-        )
+        row_number, row = item
+        target = targets[row_number]
+        if target is None:
+            outcome: tuple[ConversionResult, TimeoutCandidate | None] = (
+                _result(
+                    row,
+                    Path(),
+                    "error",
+                    "Another row in this mapping report has the same attachment key; both would "
+                    "write the same library file, so neither was converted. Resolve the duplicate "
+                    "mapping and re-run.",
+                ),
+                None,
+            )
+        else:
+            outcome = _convert_row(
+                row, target[0], target[1], timeout_seconds,
+                force=force, skip_keys=skip_keys, checkpoint=checkpoint,
+                reuse_unrecorded=target[2],
+            )
         progress.report(outcome[0])
         return outcome
 
@@ -319,8 +351,10 @@ def _convert_mapping_rows(
 
         def retry(index: int) -> tuple[ConversionResult, TimeoutCandidate | None]:
             row_number, row = indexed_rows[index]
+            target = targets[row_number]
+            assert target is not None  # a duplicate-key row errors without a native crash
             outcome = _convert_row(
-                row, markdown_dir, images_root, row_number, timeout_seconds,
+                row, target[0], target[1], timeout_seconds,
                 force=True, skip_keys=skip_keys, retry=True, checkpoint=checkpoint,
             )
             retry_progress.report(outcome[0])
@@ -467,20 +501,59 @@ def _selected_rows(
     return rows
 
 
-def _convert_row(
-    row: dict[str, str],
+def _output_targets(
+    indexed_rows: list[tuple[int, dict[str, str]]],
     markdown_dir: Path,
     images_root: Path,
-    index: int,
+    library: ProjectConfig | None,
+) -> dict[int, tuple[Path, Path, bool] | None]:
+    """Per row number: its Markdown path, its images root, and whether unrecorded Markdown already
+    at that path may be reused as ``skipped_existing``.
+
+    Canonical rows never reuse unrecorded Markdown: the library file is shared by every run, so
+    without an entry in this run's checkpoint nothing says which extraction wrote it, and it is
+    re-extracted instead (the old file stays until the new one is complete). A canonical row whose
+    attachment key another selected row shares maps to None: both would write one file.
+    """
+    canonical_keys = {number: _canonical_key(row, library) for number, row in indexed_rows}
+    key_counts = Counter(key for key in canonical_keys.values() if key)
+    targets: dict[int, tuple[Path, Path, bool] | None] = {}
+    for number, row in indexed_rows:
+        key = canonical_keys[number]
+        if library is not None and key:
+            targets[number] = (
+                None
+                if key_counts[key] > 1
+                else (canonical_markdown_path(library, key), canonical_image_dir(library, key).parent, False)
+            )
+        else:
+            targets[number] = (markdown_dir / f"{number:04d}_{_output_stem(row)}.md", images_root, True)
+    return targets
+
+
+def _canonical_key(row: dict[str, str], library: ProjectConfig | None) -> str:
+    """The row's attachment key if it publishes to the canonical library, else ""."""
+    if library is None or not is_canonical_eligible(row):
+        return ""
+    try:
+        return validate_attachment_key(row.get("zotero_attachment_key", ""))
+    except ValueError:
+        return ""
+
+
+def _convert_row(
+    row: dict[str, str],
+    output_path: Path,
+    images_root: Path,
     timeout_seconds: int,
     *,
     force: bool,
     skip_keys: frozenset[str] = frozenset(),
     retry: bool = False,
     checkpoint: ConversionCheckpoint | None = None,
+    reuse_unrecorded: bool = True,
 ) -> tuple[ConversionResult, TimeoutCandidate | None]:
     source_path = Path(row["source_path"])
-    output_path = markdown_dir / f"{index:04d}_{_output_stem(row)}.md"
     raw_output_path = output_path.with_name(f"{output_path.stem}.raw.tmp")
     images_dir = images_root / output_path.stem
     staged_images_root: Path | None = None
@@ -498,6 +571,8 @@ def _convert_row(
             # another document's text under this key, so re-extract it (the old file is kept
             # until the new extraction succeeds) instead of treating it as skipped_existing.
             force = foreign
+        if output_path.exists() and not force and not reuse_unrecorded:
+            force = True
         if output_path.exists() and not force:
             extraction_tool = _existing_extraction_tool(output_path)
             has_math = _existing_has_math(output_path)
@@ -1060,6 +1135,7 @@ def _write_summary(
 ) -> None:
     retry_counts = retry_counts or Counter()
     reused = reused or Counter()
+    markdown_folders = sorted({str(Path(result.output_path).parent) for result in results if result.output_path})
     converted = sum(1 for result in results if result.status == "converted")
     skipped = sum(1 for result in results if result.status == "skipped_existing")
     errors = sum(1 for result in results if result.status == "error")
@@ -1098,13 +1174,13 @@ def _write_summary(
         f"- Per-PDF timeout seconds: {timeout_seconds}",
         f"- Force reconversion: {force}",
         f"- Source classifications: {', '.join(sorted(classifications))}",
-        f"- Markdown folder: `{path.parent / 'markdown'}`",
+        *[f"- Markdown folder: `{folder}`" for folder in markdown_folders],
         "",
         "## Outputs",
         "",
         "- `manifest.csv`: spreadsheet-friendly conversion manifest",
         "- `manifest.jsonl`: line-delimited manifest for tools",
-        "- `markdown/`: converted Markdown files with Zotero front matter",
+        "- `markdown/`: converted Markdown files with Zotero front matter, for rows not written to the canonical library",
         "- `conversion_checkpoint.jsonl`: per-row completion ledger used to resume an interrupted run",
     ]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
