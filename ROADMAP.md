@@ -86,9 +86,9 @@ package and step numbers are kept as-is because merged branches and commits refe
 `benchmarks/latency.py`. They exposed a full-table scan on every passage fetch, now fixed with
 an index, and searches on very common terms that still take seconds.
 
-**Package 5, step 3: end-to-end fixture tests.** Risk none, mostly unblocked. They cover default MCP
-registration, DB-only and BibTeX startup, a full staged conversion and reindex cycle, interruption
-recovery, and audit/status output. Only the migration case waits on Package 3.
+**Package 5, step 3: end-to-end fixture tests.** Done, except the migration case, which waits on
+Package 3: `tests/test_end_to_end.py` runs `convert-new` on synthetic PDFs and queries a real
+server process, including interruption recovery and audit/status output.
 
 **Package 3 (steps 1, 2, 3, 5, 6): canonical library layout and migration.** Risk **high**. Gated,
 possibly never. This would move converted Markdown and images out of timestamped run folders into
