@@ -122,10 +122,12 @@ def retry_timeout_candidate(
 ) -> RetryTimeoutResult:
     """Reconvert one recorded timeout candidate with a longer budget.
 
-    Always uses a fresh --output-dir, so the originally converted Markdown file (and the run
-    directory/manifest that produced it) is never overwritten in place -- only a successful
-    result gets promoted, by publishing a successor managed index generation. A failed retry
-    leaves the published index and the candidate's status untouched; the candidate's own
+    Uses a fresh run directory for the manifest. A canonical-eligible attachment's Markdown is
+    written to its library file, replacing the previous one only once the new extraction is
+    complete; any other attachment's Markdown goes to the fresh run directory. The result is
+    promoted by publishing a successor managed index generation, and the check that such a
+    generation can be published runs before anything is converted. A failed retry leaves the
+    published index and the candidate's status untouched; the candidate's own
     occurrence_count/last_detected_at are refreshed automatically by the nested
     convert_verified() call if it times out again.
     """
@@ -185,6 +187,18 @@ def retry_timeout_candidate(
             mapping_report = config.output_root / "retry_timeout" / f"{timestamp}_{attachment_key}_mapping_report.csv"
             _write_single_row_mapping_report(mapping_report, row)
             run_dir = config.output_root / "retry_timeout" / f"{timestamp}_{attachment_key}"
+            index_root = config.output_root / "index"
+            current_jsonl = current_generation_jsonl(index_root)
+            if current_jsonl is None:
+                return _error_result(
+                    "retry",
+                    attachment_key,
+                    "A successful retry publishes a managed index generation, but no managed "
+                    "generation exists yet. Run 'zotero-pdf-text rebuild-index' once to migrate "
+                    "the legacy index, then retry.",
+                    previous_status=previous_status,
+                    timeout_seconds_used=next_timeout,
+                )
             convert_verified(
                 config,
                 mapping_report,
@@ -203,18 +217,6 @@ def retry_timeout_candidate(
 
             manifest_row = manifest_rows[0]
             new_record = _record_from_manifest_row(manifest_row)
-            index_root = config.output_root / "index"
-            current_jsonl = current_generation_jsonl(index_root)
-            if current_jsonl is None:
-                return _error_result(
-                    "retry",
-                    attachment_key,
-                    "A successful retry publishes a managed index generation, but no managed "
-                    "generation exists yet. Run 'zotero-pdf-text rebuild-index' once to migrate "
-                    "the legacy index, then retry.",
-                    previous_status=previous_status,
-                    timeout_seconds_used=next_timeout,
-                )
             stage_and_publish(
                 index_root,
                 write_jsonl_upserting_record(current_jsonl, attachment_key, new_record),

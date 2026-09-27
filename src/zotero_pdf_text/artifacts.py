@@ -525,6 +525,38 @@ def write_jsonl_from_conversion_manifest(manifest_csv: Path) -> Callable[[Path],
     return _write
 
 
+def write_jsonl_from_manifest_keeping_current(
+    manifest_csv: Path, current_jsonl: Path
+) -> tuple[Callable[[Path], None], int]:
+    """Writer for a whole-index rebuild from a manifest that keeps what the manifest lacks.
+
+    Every attachment the manifest converted gets a new record, as with
+    ``write_jsonl_from_conversion_manifest``; every current-generation record whose attachment the
+    manifest did not convert (a failed row, a record added by another workflow) is copied verbatim
+    instead of being dropped. Returns the writer and the number of records kept that way.
+    """
+    if not manifest_csv.exists():
+        raise FileNotFoundError(manifest_csv)
+    rows = _converted_rows(manifest_csv)
+    converted_keys = {row.get("zotero_attachment_key", "") for row in rows}
+    kept = len(_jsonl_attachment_keys(current_jsonl) - converted_keys)
+
+    def _write(jsonl_path: Path) -> None:
+        with jsonl_path.open("w", encoding="utf-8", newline="\n") as handle:
+            for row in rows:
+                record = _record_from_manifest_row(row)
+                handle.write(json.dumps(_record_dict(record), ensure_ascii=False) + "\n")
+            with current_jsonl.open("r", encoding="utf-8") as source:
+                for line in source:
+                    if not line.strip():
+                        continue
+                    record = json.loads(line)
+                    if isinstance(record, dict) and record.get("zotero_attachment_key") not in converted_keys:
+                        handle.write(line.rstrip("\n") + "\n")
+
+    return _write, kept
+
+
 def write_jsonl_from_existing(jsonl_source: Path) -> Callable[[Path], None]:
     """Return a stage_generation writer that copies an existing JSONL sidecar.
 

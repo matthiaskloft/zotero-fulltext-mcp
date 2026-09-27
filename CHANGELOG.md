@@ -13,6 +13,9 @@ dated section once it has been stress-tested against a large library.
 
 ### Added
 
+- `rebuild-index --manifest <manifest> --keep-current` keeps the current record of every paper the
+  manifest did not convert (for example one that failed), so a whole-library reconversion does not
+  drop those papers from search. The output reports how many were kept as `kept_from_current`.
 - Performance baselines (`docs/performance-baselines.md`) and `benchmarks/latency.py` to re-measure
   search and passage latency against a published index.
 - End-to-end fixture tests (`tests/test_end_to_end.py`): a synthetic Zotero library and real PDFs
@@ -28,9 +31,15 @@ dated section once it has been stress-tested against a large library.
   fixed location per paper, and the index records that path. The timestamped run folder keeps the
   manifest, checkpoint and summary only, so it can be deleted without breaking the index. Samples,
   unverified reviews, provenance reconversion and index repair still write into their run folders.
-  A library file left by an earlier run is re-extracted rather than reused, unless this run's
-  checkpoint recorded it (`--resume`). Two rows of one mapping report with the same attachment key
-  are both refused, since they would write the same file.
+  A library file this run did not record is reused unchanged only when the published index holds
+  exactly that file and the source PDF is unchanged; otherwise it is re-extracted, keeping the old
+  file until the new one is complete. So rerunning `convert-verified` over an indexed library does
+  not rewrite the files the index reads. Two rows of one mapping report with the same attachment
+  key are both refused, since they would write the same file. A failed row leaves no images in the
+  library, and a replacement whose previous images cannot be moved back keeps them in its staging
+  folder instead of deleting them.
+- `retry-timeout` checks that a managed index generation exists before converting, since a
+  successful retry now replaces the library file in place.
 - Passage fetches (`get_fulltext_chunk`, chunk counts) use a new index on
   `chunks(record_id, chunk_index)` instead of scanning every chunk: about 1.6 ms instead of 435 ms
   per passage on the reference library. Existing indexes keep working unchanged but only get the

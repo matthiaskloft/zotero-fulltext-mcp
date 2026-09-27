@@ -1137,3 +1137,161 @@ class CanonicalLibraryTests(unittest.TestCase):
             convert_sample(self.config, self._report({"zotero_attachment_key": "ATTKEY01"}), limit=1)
 
         self.assertFalse(self.library.exists())
+
+    def _publish(self, run_dir: Path) -> None:
+        from zotero_pdf_text.artifacts import stage_and_publish, write_jsonl_from_conversion_manifest
+
+        index_root = self.config.output_root / "index"
+        stage_and_publish(index_root, write_jsonl_from_conversion_manifest(run_dir / "manifest.csv"), command="test")
+
+    def test_a_later_run_reuses_library_markdown_the_index_already_holds(self):
+        report = self._report({"zotero_attachment_key": "ATTKEY01"})
+        with patch("zotero_pdf_text.converter.subprocess.run", side_effect=_write_raw_markdown):
+            first = convert_verified(self.config, report, workers=1)
+        self._publish(first)
+        markdown = self.library / "markdown" / "ATTKEY01.md"
+        indexed_bytes = markdown.read_bytes()
+
+        with patch("zotero_pdf_text.converter.subprocess.run") as run:
+            second = convert_verified(self.config, report, output_dir=first.parent / "second", workers=1)
+
+        run.assert_not_called()
+        row = self._manifest(second)[0]
+        self.assertEqual((row["status"], row["source_sha256"]), ("converted", hashlib.sha256(b"%PDF").hexdigest()))
+        self.assertEqual(markdown.read_bytes(), indexed_bytes)
+        self.assertIn("Reused from checkpoint without re-extraction: 1", (second / "summary.md").read_text(encoding="utf-8"))
+
+    def test_a_later_run_reextracts_when_the_source_pdf_changed_since_indexing(self):
+        report = self._report({"zotero_attachment_key": "ATTKEY01"})
+        with patch("zotero_pdf_text.converter.subprocess.run", side_effect=_write_raw_markdown):
+            first = convert_verified(self.config, report, workers=1)
+        self._publish(first)
+        self.pdf.write_bytes(b"%PDF revised")
+
+        with patch("zotero_pdf_text.converter.subprocess.run", side_effect=_write_raw_markdown) as run:
+            second = convert_verified(self.config, report, output_dir=first.parent / "second", workers=1)
+
+        run.assert_called()
+        self.assertEqual(self._manifest(second)[0]["source_sha256"], hashlib.sha256(b"%PDF revised").hexdigest())
+
+    def test_a_failed_row_leaves_no_images_in_the_library(self):
+        def primary_writes_images_then_everything_times_out(args, **kwargs):
+            if "--image-dir" in args:
+                image_dir = Path(args[args.index("--image-dir") + 1])
+                image_dir.mkdir(parents=True)
+                (image_dir / "partial.png").write_bytes(b"png")
+            raise subprocess.TimeoutExpired(cmd=args, timeout=kwargs.get("timeout"))
+
+        with patch("zotero_pdf_text.converter.subprocess.run", side_effect=primary_writes_images_then_everything_times_out):
+            run_dir = convert_verified(self.config, self._report({"zotero_attachment_key": "ATTKEY01"}), workers=1)
+
+        self.assertEqual(self._manifest(run_dir)[0]["status"], "error")
+        self.assertFalse((self.library / "images" / "ATTKEY01").exists())
+
+    def test_fallback_text_leaves_no_partial_primary_images(self):
+        def primary_writes_images_then_times_out(args, **kwargs):
+            if "--image-dir" in args:
+                image_dir = Path(args[args.index("--image-dir") + 1])
+                image_dir.mkdir(parents=True)
+                (image_dir / "partial.png").write_bytes(b"png")
+                raise subprocess.TimeoutExpired(cmd=args, timeout=kwargs.get("timeout"))
+            Path(args[4]).write_text("Fallback text", encoding="utf-8")
+
+        with patch("zotero_pdf_text.converter.subprocess.run", side_effect=primary_writes_images_then_times_out):
+            run_dir = convert_verified(self.config, self._report({"zotero_attachment_key": "ATTKEY01"}), workers=1)
+
+        self.assertEqual(self._manifest(run_dir)[0]["extraction_tool"], "pymupdf.get_text")
+        self.assertFalse((self.library / "images" / "ATTKEY01").exists())
+
+    def test_forced_reconversion_swaps_library_images_and_leaves_no_staging(self):
+        images = self.library / "images" / "ATTKEY01"
+        images.mkdir(parents=True)
+        (images / "old.png").write_bytes(b"old")
+        markdown = self.library / "markdown" / "ATTKEY01.md"
+        markdown.parent.mkdir(parents=True)
+        markdown.write_text("---\n---\n\nOld body", encoding="utf-8")
+
+        def extract(args, **kwargs):
+            image_dir = Path(args[args.index("--image-dir") + 1])
+            image_dir.mkdir(parents=True)
+            (image_dir / "new.png").write_bytes(b"new")
+            Path(args[4]).write_text(f"![fig]({(image_dir / 'new.png').as_posix()})", encoding="utf-8")
+
+        with patch("zotero_pdf_text.converter.subprocess.run", side_effect=extract):
+            convert_verified(self.config, self._report({"zotero_attachment_key": "ATTKEY01"}), force=True, workers=1)
+
+        self.assertEqual(sorted(path.name for path in images.iterdir()), ["new.png"])
+        self.assertEqual([path.name for path in images.parent.iterdir()], ["ATTKEY01"])
+        self.assertIn((images / "new.png").as_posix(), markdown.read_text(encoding="utf-8"))
+
+    def test_failed_image_restore_keeps_the_previous_images(self):
+        from zotero_pdf_text._atomic import replace_with_retry as real_replace
+
+        images = self.library / "images" / "ATTKEY01"
+        images.mkdir(parents=True)
+        (images / "old.png").write_bytes(b"old")
+        markdown = self.library / "markdown" / "ATTKEY01.md"
+        markdown.parent.mkdir(parents=True)
+        markdown.write_text("Old body", encoding="utf-8")
+        calls = []
+
+        def replace(src, dst, **kwargs):
+            calls.append(dst)
+            # Moving the old images aside succeeds; publishing the Markdown and moving the
+            # images back both fail, as when a sync client holds the files.
+            if len(calls) == 1:
+                return real_replace(src, dst, **kwargs)
+            raise PermissionError("held by sync client")
+
+        with (
+            patch("zotero_pdf_text.converter.subprocess.run", side_effect=_write_raw_markdown),
+            patch("zotero_pdf_text.converter.replace_with_retry", side_effect=replace),
+        ):
+            run_dir = convert_verified(self.config, self._report({"zotero_attachment_key": "ATTKEY01"}), force=True, workers=1)
+
+        row = self._manifest(run_dir)[0]
+        self.assertEqual(row["status"], "error")
+        self.assertIn("previous images could not be restored", row["error"])
+        self.assertEqual(markdown.read_text(encoding="utf-8"), "Old body")
+        kept = list(self.library.glob("images/.conversion-*/previous-images/old.png"))
+        self.assertEqual([path.read_bytes() for path in kept], [b"old"])
+
+    def test_native_crash_retry_publishes_primary_text_to_the_library(self):
+        calls = []
+
+        def extract(args, **kwargs):
+            calls.append(args[args.index("--tool") + 1])
+            if len(calls) == 1:
+                raise subprocess.CalledProcessError(0xC000070A, args, stderr="")
+            Path(args[4]).write_text("Fallback" if len(calls) == 2 else "Primary", encoding="utf-8")
+
+        with patch("zotero_pdf_text.converter.subprocess.run", side_effect=extract):
+            run_dir = convert_verified(self.config, self._report({"zotero_attachment_key": "ATTKEY01"}), workers=2)
+
+        row = self._manifest(run_dir)[0]
+        self.assertEqual((row["status"], row["extraction_tool"]), ("converted", "pymupdf4llm.to_markdown"))
+        self.assertIn("Primary", (self.library / "markdown" / "ATTKEY01.md").read_text(encoding="utf-8"))
+        self.assertEqual([path.name for path in (self.library / "images").iterdir()], [])
+
+    def test_several_workers_write_each_paper_to_its_own_library_file(self):
+        keys = [f"ATTKEY0{n}" for n in range(1, 6)]
+        report = self._report(*({"zotero_attachment_key": key} for key in keys))
+        with patch("zotero_pdf_text.converter.subprocess.run", side_effect=_write_raw_markdown):
+            run_dir = convert_verified(self.config, report, workers=3)
+
+        self.assertEqual({row["status"] for row in self._manifest(run_dir)}, {"converted"})
+        self.assertEqual(sorted(path.stem for path in (self.library / "markdown").glob("*.md")), keys)
+        for key in keys:
+            text = (self.library / "markdown" / f"{key}.md").read_text(encoding="utf-8")
+            self.assertIn(f'zotero_attachment_key: "{key}"', text)
+
+
+class CheckpointPathTests(unittest.TestCase):
+    def test_an_output_on_another_drive_is_recorded_by_its_absolute_path(self):
+        from zotero_pdf_text.checkpoint import ConversionCheckpoint
+
+        with tempfile.TemporaryDirectory() as tmp:
+            checkpoint = ConversionCheckpoint(Path(tmp))
+            output = Path(tmp) / "elsewhere.md"
+            with patch("zotero_pdf_text.checkpoint.os.path.relpath", side_effect=ValueError("different drive")):
+                self.assertEqual(checkpoint.relative(output), output.resolve().as_posix())

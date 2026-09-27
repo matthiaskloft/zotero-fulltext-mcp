@@ -330,6 +330,7 @@ class RetryTimeoutCandidateTests(unittest.TestCase):
             pdf = root / "paper.pdf"
             pdf.write_bytes(b"%PDF")
             _seed_candidate(output_root, pdf)
+            _publish_generation(output_root, [])
             config = ProjectConfig(root, root, root, output_root)
 
             with patch("zotero_pdf_text.retry_timeout.convert_verified", side_effect=RuntimeError("boom")):
@@ -360,7 +361,7 @@ class RetryTimeoutCandidateTests(unittest.TestCase):
             self.assertFalse(result.ok)
             self.assertIn("at most one", result.error)
 
-    def test_unmigrated_legacy_layout_returns_error_after_conversion(self):
+    def test_unmigrated_legacy_layout_returns_error_before_converting(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             output_root = root / "output"
@@ -369,9 +370,12 @@ class RetryTimeoutCandidateTests(unittest.TestCase):
             _seed_candidate(output_root, pdf)
             config = ProjectConfig(root, root, root, output_root)
 
-            with patch("zotero_pdf_text.converter.subprocess.run", side_effect=_write_raw_markdown):
+            with patch("zotero_pdf_text.converter.subprocess.run", side_effect=_write_raw_markdown) as run:
                 result = retry_timeout_candidate("ATTACH", config=config)
 
+            # Checked before converting: a retry writes a library file in place, which must not
+            # happen when nothing can publish the matching index record.
+            run.assert_not_called()
             self.assertFalse(result.ok)
             self.assertIn("rebuild-index", result.error)
             candidate = find_candidate(output_root / "index" / "timeout_candidates.jsonl", "ATTACH")

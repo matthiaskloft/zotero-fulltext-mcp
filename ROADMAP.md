@@ -116,7 +116,8 @@ The evidence behind this came from `library-status --full --mapping-report <run>
   read, membership statuses are withheld, and `inventory_available` says so.
 
 **Package 5 step 5**, the upgrade guide, was tied to the migration and is dropped with it. An
-upgrade to the library layout is a reconversion followed by `rebuild-index --manifest`.
+upgrade to the library layout is a reconversion followed by
+`rebuild-index --manifest <run>/manifest.csv --keep-current`.
 
 ## Other open work, not scheduled
 

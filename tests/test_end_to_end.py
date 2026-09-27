@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import csv
 import importlib.util
 import io
 import json
@@ -29,6 +30,7 @@ import pymupdf
 
 from zotero_pdf_text import artifacts
 from zotero_pdf_text.cli import main
+from zotero_pdf_text.indexer import load_indexed_keys
 
 HAS_MCP = importlib.util.find_spec("mcp") is not None
 
@@ -353,3 +355,41 @@ class AuditAndStatusTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class WholeLibraryRebuildTests(unittest.TestCase):
+    def test_keep_current_keeps_papers_a_reconversion_did_not_convert(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            library = Library(Path(tmp))
+            library.add(FIRST)
+            library.add(SECOND)
+            library.convert_new()
+            (run,) = (library.output_root / "conversion-runs" / "verified").iterdir()
+            # A whole-library reconversion in which SECOND failed: its manifest converts FIRST only.
+            partial = Path(tmp) / "manifest.csv"
+            with (run / "manifest.csv").open(encoding="utf-8-sig", newline="") as handle:
+                reader = csv.DictReader(handle)
+                rows = [row for row in reader if row["zotero_attachment_key"] == FIRST.attachment_key]
+                fields = list(reader.fieldnames or [])
+            with partial.open("w", encoding="utf-8", newline="") as handle:
+                writer = csv.DictWriter(handle, fieldnames=fields)
+                writer.writeheader()
+                writer.writerows(rows)
+
+            def indexed_keys() -> set[str]:
+                return load_indexed_keys(artifacts.current_generation_jsonl(library.index_root))
+
+            code, output = library.cli("rebuild-index", "--manifest", str(partial), "--keep-current")
+            self.assertEqual(code, 0, output)
+            self.assertIn('"kept_from_current": 1', output)
+            self.assertEqual(indexed_keys(), {FIRST.attachment_key, SECOND.attachment_key})
+
+            code, output = library.cli("rebuild-index", "--manifest", str(partial))
+            self.assertEqual(code, 0, output)
+            self.assertEqual(indexed_keys(), {FIRST.attachment_key})
+
+    def test_keep_current_needs_a_manifest(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            code, output = Library(Path(tmp)).cli("rebuild-index", "--keep-current")
+            self.assertEqual(code, 2)
+            self.assertIn("--keep-current requires --manifest", output)
