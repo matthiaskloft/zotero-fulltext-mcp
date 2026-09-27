@@ -135,7 +135,7 @@ class Library:
         return run
 
     def registration(self, *flags: str) -> tuple[list[str], set[str]]:
-        """The server arguments and enabled tools from the Codex block `install-mcp` prints."""
+        """The server command line and enabled tools from the Codex block `install-mcp` prints."""
         # install-mcp reads Codex's config.toml for its drift report; never the developer's own.
         with tempfile.TemporaryDirectory() as codex_home, patch.dict(os.environ, {"CODEX_HOME": codex_home}):
             code, output = self.cli("install-mcp", *flags)
@@ -143,19 +143,15 @@ class Library:
             raise AssertionError(output)
         block = output[output.index("[mcp_servers.") :].split("\n\n")[0]
         (entry,) = tomllib.loads(block)["mcp_servers"].values()
-        return entry["args"], set(entry["enabled_tools"])
+        return [entry["command"], *entry["args"]], set(entry["enabled_tools"])
 
 
-def _call_server(server_args: list[str], calls: list[tuple[str, dict]]) -> tuple[set[str], list]:
+def _call_server(command_line: list[str], calls: list[tuple[str, dict]]) -> tuple[set[str], list]:
     """Start a real server process over stdio, list its tools, and make the calls in order."""
     from mcp import ClientSession, StdioServerParameters
     from mcp.client.stdio import stdio_client
 
-    src = str(Path(__file__).resolve().parents[1] / "src")
-    env = {**os.environ, "PYTHONPATH": src + os.pathsep + os.environ.get("PYTHONPATH", "")}
-    params = StdioServerParameters(
-        command=sys.executable, args=["-m", "zotero_pdf_text.mcp_server", *server_args], env=env
-    )
+    params = StdioServerParameters(command=command_line[0], args=command_line[1:], env=dict(os.environ))
 
     async def run():
         with open(os.devnull, "w", encoding="utf-8") as errlog:
@@ -194,9 +190,9 @@ class ConvertIndexServeTests(unittest.TestCase):
             library.add(FIRST)
             library.convert_new()
 
-            server_args, enabled_tools = library.registration()
+            server_command, enabled_tools = library.registration()
             tools, (search, lookup) = _call_server(
-                server_args,
+                server_command,
                 [_search("zebrafinch"), ("lookup_citation_key", {"citation_key": FIRST.citation_key})],
             )
             self.assertEqual(tools, enabled_tools)
@@ -205,7 +201,7 @@ class ConvertIndexServeTests(unittest.TestCase):
             self.assertFalse(lookup.isError)
             self.assertIn(FIRST.attachment_key, json.dumps(lookup.structuredContent))
 
-            _, (passage,) = _call_server(server_args, [_fetch(search.structuredContent["results"][0])])
+            _, (passage,) = _call_server(server_command, [_fetch(search.structuredContent["results"][0])])
             self.assertFalse(passage.isError)
             self.assertIn("zebrafinch", passage.structuredContent["text"])
 
@@ -214,8 +210,8 @@ class ConvertIndexServeTests(unittest.TestCase):
             library = Library(Path(tmp))
             library.add(FIRST)
             library.convert_new()
-            server_args, _ = library.registration()
-            _, (before,) = _call_server(server_args, [_search("zebrafinch")])
+            server_command, _ = library.registration()
+            _, (before,) = _call_server(server_command, [_search("zebrafinch")])
             fetch_old_passage = _fetch(before.structuredContent["results"][0])
             first_generation = library.current_generation()
 
@@ -223,7 +219,7 @@ class ConvertIndexServeTests(unittest.TestCase):
             library.convert_new()
             self.assertNotEqual(library.current_generation(), first_generation)
             _, (old, new, passage) = _call_server(
-                server_args, [_search("zebrafinch"), _search("quokka"), fetch_old_passage]
+                server_command, [_search("zebrafinch"), _search("quokka"), fetch_old_passage]
             )
             self.assertEqual(_keys(old), [FIRST.attachment_key])
             self.assertEqual(_keys(new), [SECOND.attachment_key])
@@ -238,7 +234,7 @@ class ConvertIndexServeTests(unittest.TestCase):
             code, output = library.cli("rebuild-index")
             self.assertEqual(code, 0, output)
             self.assertNotEqual(library.current_generation(), before_rebuild)
-            _, (new, passage) = _call_server(server_args, [_search("quokka"), fetch_old_passage])
+            _, (new, passage) = _call_server(server_command, [_search("quokka"), fetch_old_passage])
             self.assertEqual(_keys(new), [SECOND.attachment_key])
             self.assertFalse(passage.isError)
 
@@ -250,13 +246,14 @@ class ConvertIndexServeTests(unittest.TestCase):
             db = str(library.index_root / "zotero_text_index.sqlite")
             _, default_tools = library.registration()
 
-            tools, (search,) = _call_server(["--db", db], [_search("zebrafinch")])
+            db_only = [sys.executable, "-m", "zotero_pdf_text.mcp_server", "--db", db]
+            tools, (search,) = _call_server(db_only, [_search("zebrafinch")])
             self.assertEqual(tools, default_tools)
             self.assertEqual(_keys(search), [FIRST.attachment_key])
 
-            server_args, enabled_tools = library.registration("--enable-bibtex")
+            server_command, enabled_tools = library.registration("--enable-bibtex")
             self.assertEqual(enabled_tools, default_tools | {"export_bibtex_entries_by_key"})
-            tools, (search,) = _call_server(server_args, [_search("zebrafinch")])
+            tools, (search,) = _call_server(server_command, [_search("zebrafinch")])
             self.assertEqual(tools, enabled_tools)
             self.assertEqual(_keys(search), [FIRST.attachment_key])
 
@@ -287,8 +284,8 @@ class InterruptedPublicationTests(unittest.TestCase):
             journal = json.loads((library.index_root / artifacts.JOURNAL_FILENAME).read_text(encoding="utf-8"))
             interrupted_generation = journal["generation_id"]
             self.assertEqual(library.current_generation(), first_generation)
-            server_args, _ = library.registration()
-            _, (old, new) = _call_server(server_args, [_search("zebrafinch"), _search("quokka")])
+            server_command, _ = library.registration()
+            _, (old, new) = _call_server(server_command, [_search("zebrafinch"), _search("quokka")])
             self.assertEqual(_keys(old), [FIRST.attachment_key])
             self.assertEqual(_keys(new), [])
 
@@ -302,7 +299,7 @@ class InterruptedPublicationTests(unittest.TestCase):
             pointer = artifacts.read_current_pointer(library.index_root)
             self.assertEqual(pointer["previous_generation"], interrupted_generation)
             self.assertNotIn(pointer["current_generation"], {first_generation, interrupted_generation})
-            _, (old, new) = _call_server(server_args, [_search("zebrafinch"), _search("quokka")])
+            _, (old, new) = _call_server(server_command, [_search("zebrafinch"), _search("quokka")])
             self.assertEqual(_keys(old), [FIRST.attachment_key])
             self.assertEqual(_keys(new), [SECOND.attachment_key])
 

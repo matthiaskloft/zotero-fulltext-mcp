@@ -1,3 +1,4 @@
+import logging
 import tempfile
 import unittest
 from pathlib import Path
@@ -160,9 +161,12 @@ class DryRunTests(unittest.TestCase):
             library = Library(Path(tmp))
             library.add(FIRST)
             config = load_config(library.config_path)
+            root = logging.getLogger()
+            root_state = (list(root.handlers), root.level)
 
             first, second = run_dry_run(config), run_dry_run(config)
 
+            self.assertEqual((list(root.handlers), root.level), root_state)
             self.assertNotEqual(first, second)
             for run_dir in (first, second):
                 log = (run_dir / "run.log").read_text(encoding="utf-8")

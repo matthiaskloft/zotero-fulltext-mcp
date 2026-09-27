@@ -21,6 +21,10 @@ try:
 except Exception:  # pragma: no cover - exercised only if dependency is missing
     fuzz = None  # type: ignore[assignment]
 
+# INFO so run.log gets the run's progress lines whatever the root logger's level is.
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
 
 @dataclass
 class SourceFile:
@@ -73,19 +77,19 @@ def run_dry_run(config: ProjectConfig) -> Path:
     run_dir = config.output_root / "mapping-runs" / timestamp
     run_dir.mkdir(parents=True, exist_ok=False)
     with _run_log(run_dir / "run.log"):
-        logging.info("Starting dry-run mapper")
-        logging.info("Linked attachments: %s", config.linked_attachments)
+        logger.info("Starting dry-run mapper")
+        logger.info("Linked attachments: %s", config.linked_attachments)
 
         db_snapshot = snapshot_database(config.zotero_sqlite, run_dir)
         records = load_attachment_records(db_snapshot)
         pdf_sources = _list_sources(config.linked_attachments, ".pdf")
         pdf_sources = _add_absolute_record_sources(pdf_sources, records, ".pdf")
         epub_sources = _list_sources(config.linked_attachments, ".epub")
-        logging.info("Found %s PDFs and %s EPUBs", len(pdf_sources), len(epub_sources))
+        logger.info("Found %s PDFs and %s EPUBs", len(pdf_sources), len(epub_sources))
 
         rows = build_mapping_rows(config, records, pdf_sources, epub_sources)
         _write_reports(run_dir, rows, config, records)
-        logging.info("Finished dry-run mapper")
+        logger.info("Finished dry-run mapper")
     return run_dir
 
 
@@ -164,7 +168,7 @@ def _add_absolute_record_sources(
                 continue
             source = _source_file(path, suffix)
             if source is None:
-                logging.warning("Skipping unreadable Zotero linked file: %s", path)
+                logger.warning("Skipping unreadable Zotero linked file: %s", path)
                 continue
             combined.append(source)
             seen.add(norm)
@@ -184,7 +188,7 @@ def _source_file(path: Path, suffix: str) -> SourceFile | None:
             sha256=_sha256(path),
         )
     except OSError as exc:
-        logging.warning("Unable to read source file %s: %s", path, exc)
+        logger.warning("Unable to read source file %s: %s", path, exc)
         return None
 
 
@@ -539,22 +543,19 @@ def _write_summary(path: Path, rows: list[MappingRow], config: ProjectConfig, re
 
 @contextlib.contextmanager
 def _run_log(path: Path) -> Iterator[None]:
-    """Log to this run's run.log for the duration of the run only.
+    """Write this module's log records to the run's run.log for the duration of the run only.
 
     `logging.basicConfig` used to do this, which left the file open for the rest of the process
     (Windows then cannot delete the run folder) and, being a no-op once the root logger has a
-    handler, sent a second run's log lines to the first run's file.
+    handler, sent a second run's log lines to the first run's file. The handler goes on the
+    module logger, so neither the root logger's handlers nor its level are touched. Callers run
+    one dry-run at a time; runs overlapping in one process would each log to both files.
     """
-    root = logging.getLogger()
     handler = logging.FileHandler(path, mode="w", encoding="utf-8")
     handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
-    previous_level = root.level
-    root.addHandler(handler)
-    if root.getEffectiveLevel() > logging.INFO:
-        root.setLevel(logging.INFO)
+    logger.addHandler(handler)
     try:
         yield
     finally:
-        root.removeHandler(handler)
-        root.setLevel(previous_level)
+        logger.removeHandler(handler)
         handler.close()
