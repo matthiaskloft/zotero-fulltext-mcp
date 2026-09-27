@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import contextlib
 import csv
 import hashlib
 import json
 import logging
 import os
+from collections.abc import Iterator
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
@@ -65,23 +67,25 @@ class MappingRow:
 
 
 def run_dry_run(config: ProjectConfig) -> Path:
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    # Microseconds, because two runs in the same second (convert-new right after a dry-run)
+    # would otherwise collide on exist_ok=False.
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     run_dir = config.output_root / "mapping-runs" / timestamp
     run_dir.mkdir(parents=True, exist_ok=False)
-    _configure_logging(run_dir / "run.log")
-    logging.info("Starting dry-run mapper")
-    logging.info("Linked attachments: %s", config.linked_attachments)
+    with _run_log(run_dir / "run.log"):
+        logging.info("Starting dry-run mapper")
+        logging.info("Linked attachments: %s", config.linked_attachments)
 
-    db_snapshot = snapshot_database(config.zotero_sqlite, run_dir)
-    records = load_attachment_records(db_snapshot)
-    pdf_sources = _list_sources(config.linked_attachments, ".pdf")
-    pdf_sources = _add_absolute_record_sources(pdf_sources, records, ".pdf")
-    epub_sources = _list_sources(config.linked_attachments, ".epub")
-    logging.info("Found %s PDFs and %s EPUBs", len(pdf_sources), len(epub_sources))
+        db_snapshot = snapshot_database(config.zotero_sqlite, run_dir)
+        records = load_attachment_records(db_snapshot)
+        pdf_sources = _list_sources(config.linked_attachments, ".pdf")
+        pdf_sources = _add_absolute_record_sources(pdf_sources, records, ".pdf")
+        epub_sources = _list_sources(config.linked_attachments, ".epub")
+        logging.info("Found %s PDFs and %s EPUBs", len(pdf_sources), len(epub_sources))
 
-    rows = build_mapping_rows(config, records, pdf_sources, epub_sources)
-    _write_reports(run_dir, rows, config, records)
-    logging.info("Finished dry-run mapper")
+        rows = build_mapping_rows(config, records, pdf_sources, epub_sources)
+        _write_reports(run_dir, rows, config, records)
+        logging.info("Finished dry-run mapper")
     return run_dir
 
 
@@ -533,10 +537,24 @@ def _write_summary(path: Path, rows: list[MappingRow], config: ProjectConfig, re
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def _configure_logging(path: Path) -> None:
-    logging.basicConfig(
-        filename=path,
-        filemode="w",
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(message)s",
-    )
+@contextlib.contextmanager
+def _run_log(path: Path) -> Iterator[None]:
+    """Log to this run's run.log for the duration of the run only.
+
+    `logging.basicConfig` used to do this, which left the file open for the rest of the process
+    (Windows then cannot delete the run folder) and, being a no-op once the root logger has a
+    handler, sent a second run's log lines to the first run's file.
+    """
+    root = logging.getLogger()
+    handler = logging.FileHandler(path, mode="w", encoding="utf-8")
+    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
+    previous_level = root.level
+    root.addHandler(handler)
+    if root.getEffectiveLevel() > logging.INFO:
+        root.setLevel(logging.INFO)
+    try:
+        yield
+    finally:
+        root.removeHandler(handler)
+        root.setLevel(previous_level)
+        handler.close()

@@ -14,12 +14,10 @@ import contextlib
 import importlib.util
 import io
 import json
-import logging
 import os
 import sqlite3
 import sys
 import tempfile
-import time
 import tomllib
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
@@ -118,18 +116,9 @@ class Library:
                 )
 
     def cli(self, *args: str) -> tuple[int, str]:
-        # The mapper points the root logger at a run.log inside the output folder and never
-        # closes it. Under pytest that is a no-op; elsewhere it locks the temp dir on Windows.
-        root_logger = logging.getLogger()
-        handlers_before = list(root_logger.handlers)
         out, err = io.StringIO(), io.StringIO()
-        try:
-            with redirect_stdout(out), redirect_stderr(err):
-                code = main([args[0], "--config", str(self.config_path), *args[1:]])
-        finally:
-            for handler in [h for h in root_logger.handlers if h not in handlers_before]:
-                root_logger.removeHandler(handler)
-                handler.close()
+        with redirect_stdout(out), redirect_stderr(err):
+            code = main([args[0], "--config", str(self.config_path), *args[1:]])
         return code, out.getvalue() + err.getvalue()
 
     def convert_new(self) -> None:
@@ -347,8 +336,6 @@ class AuditAndStatusTests(unittest.TestCase):
             library.add(FIRST)
             library.convert_new()
             library.add(SECOND)
-            # Mapping-run folders are named to the second and must not already exist.
-            time.sleep(1.1)
             code, output = library.cli("dry-run")
             self.assertEqual(code, 0, output)
             snapshot = output.split("Dry-run complete: ", 1)[1].splitlines()[0]

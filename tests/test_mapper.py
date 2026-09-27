@@ -147,3 +147,26 @@ class MapperTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DryRunTests(unittest.TestCase):
+    def test_back_to_back_runs_get_their_own_folder_and_log_and_release_it(self):
+        from test_end_to_end import FIRST, Library
+
+        from zotero_pdf_text.config import load_config
+        from zotero_pdf_text.mapper import run_dry_run
+
+        with tempfile.TemporaryDirectory() as tmp:
+            library = Library(Path(tmp))
+            library.add(FIRST)
+            config = load_config(library.config_path)
+
+            first, second = run_dry_run(config), run_dry_run(config)
+
+            self.assertNotEqual(first, second)
+            for run_dir in (first, second):
+                log = (run_dir / "run.log").read_text(encoding="utf-8")
+                self.assertEqual(log.count("Starting dry-run mapper"), 1)
+                self.assertIn("Finished dry-run mapper", log)
+                # Deleting the log fails on Windows while a handler still holds it open.
+                (run_dir / "run.log").unlink()
