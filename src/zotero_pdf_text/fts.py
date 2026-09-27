@@ -1008,6 +1008,7 @@ def _create_schema(con: sqlite3.Connection) -> None:
             text TEXT NOT NULL,
             FOREIGN KEY(record_id) REFERENCES metadata(record_id)
         );
+        CREATE INDEX chunks_record_chunk_idx ON chunks(record_id, chunk_index);
         CREATE VIRTUAL TABLE chunks_fts USING fts5(
             title,
             creators,

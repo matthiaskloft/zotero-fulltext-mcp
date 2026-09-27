@@ -11,6 +11,18 @@ unannounced rather than absent: present, inert unless explicitly configured and 
 validated for general use. Its config shape and output conventions may still change. It moves into a
 dated section once it has been stress-tested against a large library.
 
+### Added
+
+- Performance baselines (`docs/performance-baselines.md`) and `benchmarks/latency.py` to re-measure
+  search and passage latency against a published index.
+
+### Changed
+
+- Passage fetches (`get_fulltext_chunk`, chunk counts) use a new index on
+  `chunks(record_id, chunk_index)` instead of scanning every chunk: about 1.6 ms instead of 435 ms
+  per passage on the reference library. Existing indexes keep working unchanged but only get the
+  speed-up after `zotero-pdf-text rebuild-index`.
+
 ## [0.10.0] - 2026-09-26
 
 Paper retrieval: read a known paper by citation key, search inside one attachment, keep image

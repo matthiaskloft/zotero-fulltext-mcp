@@ -81,10 +81,10 @@ semantic discovery follows. Two rules shape the order:
 These are the remaining steps of [`plan-mcp-server-hardening.md`](plan-mcp-server-hardening.md). Its
 package and step numbers are kept as-is because merged branches and commits refer to them.
 
-**Package 5, step 6: performance baselines.** Risk none, unblocked. Measure index build time and
-size, audit time in fast and full modes, p95 search latency, and passage latency on a
-representative library. They are release guardrails rather than hard limits, and S4 will want them
-as a before/after comparison.
+**Package 5, step 6: performance baselines.** Done: recorded in
+[`docs/performance-baselines.md`](docs/performance-baselines.md), re-runnable with
+`benchmarks/latency.py`. They exposed a full-table scan on every passage fetch, now fixed with
+an index, and searches on very common terms that still take seconds.
 
 **Package 5, step 3: end-to-end fixture tests.** Risk none, mostly unblocked. They cover default MCP
 registration, DB-only and BibTeX startup, a full staged conversion and reindex cycle, interruption
