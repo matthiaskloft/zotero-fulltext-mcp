@@ -15,6 +15,11 @@ dated section once it has been stress-tested against a large library.
 
 - Performance baselines (`docs/performance-baselines.md`) and `benchmarks/latency.py` to re-measure
   search and passage latency against a published index.
+- End-to-end fixture tests (`tests/test_end_to_end.py`): a synthetic Zotero library and real PDFs
+  go through `convert-new`, and a real `zotero-fulltext-mcp` process serves the result over stdio
+  with the arguments `install-mcp` registers, and with DB-only and BibTeX startup. They also cover an
+  incremental run, `rebuild-index`, recovery from a publication interrupted before the pointer swap,
+  and `audit-library`/`library-status` output.
 
 ### Changed
 
@@ -22,6 +27,15 @@ dated section once it has been stress-tested against a large library.
   `chunks(record_id, chunk_index)` instead of scanning every chunk: about 1.6 ms instead of 435 ms
   per passage on the reference library. Existing indexes keep working unchanged but only get the
   speed-up after `zotero-pdf-text rebuild-index`.
+- Mapping-run folders (`mapping-runs/<id>`) now end in microseconds, e.g. `20260927_174828_123456`.
+
+### Fixed
+
+- Two dry-runs in the same second (for example `dry-run` followed quickly by `convert-new`) no
+  longer fail because the run folder already exists.
+- The dry-run's `run.log` is closed when the run ends. Before, it stayed open for the rest of the
+  process, so on Windows the run folder could not be deleted. A second dry-run in the same process
+  also wrote its log lines into the first run's file, leaving its own `run.log` empty.
 
 ## [0.10.0] - 2026-09-26
 
