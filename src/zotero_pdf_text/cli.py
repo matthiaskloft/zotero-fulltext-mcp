@@ -40,6 +40,7 @@ from .artifacts import (
     write_jsonl_replacing_manifest,
     write_jsonl_from_conversion_manifest,
     write_jsonl_from_existing,
+    write_jsonl_from_manifest_keeping_current,
 )
 from .config import load_config, resolve_config_path, validate_config
 from .converter import convert_sample, convert_verified, default_worker_count
@@ -308,6 +309,14 @@ def build_parser() -> argparse.ArgumentParser:
             "Existing JSONL sidecar to snapshot into the first managed generation. Default when "
             "neither source is given: the current generation's JSONL (pure re-chunk rebuild), else "
             "the legacy <output_root>/index/zotero_text_index.jsonl (migration)."
+        ),
+    )
+    rebuild_index.add_argument(
+        "--keep-current",
+        action="store_true",
+        help=(
+            "With --manifest: keep the current generation's record for every attachment the manifest "
+            "did not convert (for example a row that failed), instead of dropping it."
         ),
     )
     rebuild_index.add_argument("--chunk-chars", type=int, default=None, help="Maximum characters per searchable chunk.")
@@ -1050,9 +1059,16 @@ def main(argv: list[str] | None = None) -> int:
         except (FileNotFoundError, KeyError, TypeError, ValueError, OSError) as exc:
             print(f"Could not resolve an output root: {exc}", file=sys.stderr)
             return 2
+        if args.keep_current and args.manifest is None:
+            print("--keep-current requires --manifest.", file=sys.stderr)
+            return 2
+        kept: int | None = None
         try:
             with pipeline_write_lock(output_root, command="rebuild-index"):
-                if args.manifest is not None:
+                current_for_keep = current_generation_jsonl(index_root) if args.keep_current else None
+                if current_for_keep is not None:
+                    writer, kept = write_jsonl_from_manifest_keeping_current(args.manifest, current_for_keep)
+                elif args.manifest is not None:
                     writer = write_jsonl_from_conversion_manifest(args.manifest)
                 else:
                     source = args.from_jsonl or _default_rebuild_source(index_root)
@@ -1080,6 +1096,8 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         result = info.summary.to_dict()
         result["generation_id"] = info.generation_id
+        if kept is not None:
+            result["kept_from_current"] = kept
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0
     if args.command == "update-index":

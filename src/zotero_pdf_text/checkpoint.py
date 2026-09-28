@@ -168,7 +168,14 @@ class ConversionCheckpoint:
             self.reused[self.relative(output_path)] = source_modified
 
     def relative(self, output_path: Path) -> str:
-        return output_path.relative_to(self.run_dir).as_posix()
+        # os.path.relpath, not Path.relative_to: canonical library Markdown lives outside the run
+        # directory (as ``../../../library/markdown/<key>.md``), and still moves with the tree.
+        # Resolved first, so a drive alias for one of the two paths cannot put them on different
+        # drives; a path genuinely on another drive has no relative form and is kept absolute.
+        try:
+            return Path(os.path.relpath(output_path.resolve(), self.run_dir.resolve())).as_posix()
+        except ValueError:
+            return output_path.resolve().as_posix()
 
     def lookup(self, output_path: Path) -> CheckpointEntry | None:
         with self._lock:

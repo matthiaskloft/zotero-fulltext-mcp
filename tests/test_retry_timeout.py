@@ -39,11 +39,16 @@ def _publish_generation(output_root: Path, records: list[dict]) -> None:
 
 
 def _seed_candidate(
-    output_root: Path, source_path: Path, *, attempted_timeout_seconds: int = 600, detected_at: str | None = None
+    output_root: Path,
+    source_path: Path,
+    *,
+    attempted_timeout_seconds: int = 600,
+    detected_at: str | None = None,
+    attachment_key: str = "ATTACH",
 ) -> None:
     candidate = TimeoutCandidate(
         zotero_parent_key="PARENT",
-        zotero_attachment_key="ATTACH",
+        zotero_attachment_key=attachment_key,
         item_type="attachment",
         title="Title",
         creators="Jane Smith",
@@ -55,7 +60,7 @@ def _seed_candidate(
         classification="mapped_verified",
         identity_status="verified",
         identity_rule="doi_exact",
-        safe_folder_id="zotero_ATTACH",
+        safe_folder_id=f"zotero_{attachment_key}",
         drawing_density=1.0,
         attempted_timeout_seconds=attempted_timeout_seconds,
         suggested_next_timeout_seconds=attempted_timeout_seconds * 2,
@@ -330,6 +335,7 @@ class RetryTimeoutCandidateTests(unittest.TestCase):
             pdf = root / "paper.pdf"
             pdf.write_bytes(b"%PDF")
             _seed_candidate(output_root, pdf)
+            _publish_generation(output_root, [])
             config = ProjectConfig(root, root, root, output_root)
 
             with patch("zotero_pdf_text.retry_timeout.convert_verified", side_effect=RuntimeError("boom")):
@@ -360,7 +366,7 @@ class RetryTimeoutCandidateTests(unittest.TestCase):
             self.assertFalse(result.ok)
             self.assertIn("at most one", result.error)
 
-    def test_unmigrated_legacy_layout_returns_error_after_conversion(self):
+    def test_unmigrated_legacy_layout_returns_error_before_converting(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             output_root = root / "output"
@@ -369,9 +375,12 @@ class RetryTimeoutCandidateTests(unittest.TestCase):
             _seed_candidate(output_root, pdf)
             config = ProjectConfig(root, root, root, output_root)
 
-            with patch("zotero_pdf_text.converter.subprocess.run", side_effect=_write_raw_markdown):
+            with patch("zotero_pdf_text.converter.subprocess.run", side_effect=_write_raw_markdown) as run:
                 result = retry_timeout_candidate("ATTACH", config=config)
 
+            # Checked before converting: a retry writes a library file in place, which must not
+            # happen when nothing can publish the matching index record.
+            run.assert_not_called()
             self.assertFalse(result.ok)
             self.assertIn("rebuild-index", result.error)
             candidate = find_candidate(output_root / "index" / "timeout_candidates.jsonl", "ATTACH")
@@ -402,6 +411,55 @@ class RetryTimeoutCandidateTests(unittest.TestCase):
 
             self.assertTrue(result.ok, result.error)
             self.assertEqual(result.timeout_seconds_used, 3000)
+
+
+class LibraryRetryTests(unittest.TestCase):
+    """A verified candidate with a real attachment key never touches its library file."""
+
+    def setUp(self):
+        self.root = Path(tempfile.mkdtemp())
+        self.addCleanup(__import__("shutil").rmtree, self.root, True)
+        self.output_root = self.root / "output"
+        self.pdf = self.root / "paper.pdf"
+        self.pdf.write_bytes(b"%PDF")
+        _seed_candidate(self.output_root, self.pdf, attachment_key="ATTKEY01")
+        self.config = ProjectConfig(self.root, self.root, self.root, self.output_root)
+        self.markdown = self.output_root / "library" / "markdown" / "ATTKEY01.md"
+        self.images = self.output_root / "library" / "images" / "ATTKEY01"
+        self.markdown.parent.mkdir(parents=True)
+        self.markdown.write_text("---\n---\n\nFallback body\n", encoding="utf-8", newline="\n")
+        self.images.mkdir(parents=True)
+        (self.images / "old.png").write_bytes(b"old")
+        self.before = self.markdown.read_bytes()
+        record = {**_fallback_record(self.pdf), "zotero_attachment_key": "ATTKEY01", "markdown_path": str(self.markdown)}
+        _publish_generation(self.output_root, [record])
+
+    def _library_untouched(self) -> None:
+        self.assertEqual(self.markdown.read_bytes(), self.before)
+        self.assertEqual([path.name for path in self.images.iterdir()], ["old.png"])
+
+    def test_a_successful_retry_publishes_its_run_folder_copy(self):
+        with patch("zotero_pdf_text.converter.subprocess.run", side_effect=_write_raw_markdown):
+            result = retry_timeout_candidate("ATTKEY01", config=self.config)
+
+        self.assertTrue(result.ok, result.error)
+        self.assertTrue(Path(result.markdown_path).is_relative_to(self.output_root / "retry_timeout"))
+        records = [json.loads(line) for line in current_generation_jsonl(self.output_root / "index").read_text(encoding="utf-8").splitlines() if line]
+        self.assertEqual([record["markdown_path"] for record in records], [result.markdown_path])
+        self._library_untouched()
+
+    def test_a_failure_after_conversion_leaves_the_library_file_the_index_reads(self):
+        for target in ("zotero_pdf_text.retry_timeout._record_from_manifest_row", "zotero_pdf_text.retry_timeout.stage_and_publish"):
+            with self.subTest(target=target):
+                with (
+                    patch("zotero_pdf_text.converter.subprocess.run", side_effect=_write_raw_markdown),
+                    patch(target, side_effect=OSError("disk full")),
+                ):
+                    result = retry_timeout_candidate("ATTKEY01", config=self.config)
+
+                self.assertFalse(result.ok)
+                self.assertIn("disk full", result.error)
+                self._library_untouched()
 
 
 def _fallback_record(pdf: Path) -> dict:

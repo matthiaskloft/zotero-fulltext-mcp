@@ -19,7 +19,9 @@ from typing import Callable
 
 from .config import ProjectConfig
 from .indexer import load_indexed_keys
-from ._atomic import atomic_write_text
+from .library import canonical_image_dir, canonical_markdown_path, is_canonical_eligible, validate_attachment_key
+from ._atomic import atomic_write_text, replace_with_retry
+from .artifacts import ArtifactError, current_generation_jsonl
 from .checkpoint import ConversionCheckpoint, body_sha256, classify_entry
 from .timeout_candidates import (
     TimeoutCandidate,
@@ -52,6 +54,10 @@ DRAWING_DENSITY_DIVISOR = 10.0
 MAX_DRAWING_TIMEOUT_MULTIPLIER = 5.0
 
 SKIP_LIST_FILENAME = "timeout_skip_list.json"
+# Inside a `.conversion-*` staging directory: the previous images moved aside during a staged
+# replacement, and the marker saying there were none.
+SWAP_BACKUP_DIRNAME = "previous-images"
+SWAP_NO_PREVIOUS_IMAGES = "no-previous-images"
 NATIVE_CRASH_EXIT_STATUS = 0xC000070A
 
 
@@ -133,7 +139,14 @@ def convert_verified(
     workers: int | None = None,
     timeout_seconds: int = 600,
     force: bool = False,
+    canonical: bool = True,
 ) -> Path:
+    """Convert the mapping report's verified rows; see ``_convert_mapping_rows``.
+
+    ``canonical=False`` keeps every row's output in the run directory, for a caller that replaces
+    an indexed record and must not touch the library file the current index reads before its own
+    publication succeeds.
+    """
     if pymupdf4llm is None:
         raise RuntimeError("pymupdf4llm is not installed")
     if limit is not None and limit < 1:
@@ -143,7 +156,7 @@ def convert_verified(
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     run_dir = output_dir or config.output_root / "conversion-runs" / "verified" / timestamp
-    return _convert_verified_rows(
+    return _convert_mapping_rows(
         mapping_report,
         run_dir,
         limit=limit,
@@ -151,7 +164,9 @@ def convert_verified(
         workers=workers,
         timeout_seconds=timeout_seconds,
         force=force,
+        classifications={"mapped_verified"},
         output_root=config.output_root,
+        library=config if canonical else None,
     )
 
 
@@ -268,7 +283,16 @@ def _convert_mapping_rows(
     output_root: Path,
     skip_attachment_keys: frozenset[str] = frozenset(),
     ordinal_field: str | None = None,
+    library: ProjectConfig | None = None,
 ) -> Path:
+    """Convert the selected rows of ``mapping_report``, recording the run in ``run_dir``.
+
+    With ``library``, every canonical-eligible row writes its Markdown and images straight to the
+    canonical library (``library/markdown/<key>.md``, ``library/images/<key>/``) and the run
+    directory keeps only the manifest, checkpoint and summary. Nothing is copied or moved there
+    later, so a whole-library conversion writes each file once. Rows that are not eligible, and
+    every row without ``library``, keep their numbered output inside ``run_dir``.
+    """
     if workers is None:
         workers = default_worker_count()
     if workers < 1:
@@ -276,7 +300,11 @@ def _convert_mapping_rows(
     if timeout_seconds < 1:
         raise ValueError("timeout_seconds must be at least 1")
     markdown_dir = run_dir / "markdown"
-    markdown_dir.mkdir(parents=True, exist_ok=exist_ok)
+    # The run directory itself, not its markdown/ folder: a run writing to the library leaves no
+    # markdown/ behind, and reusing its directory without --resume would overwrite its manifest.
+    if not exist_ok and run_dir.is_dir() and any(run_dir.iterdir()):
+        raise FileExistsError(f"{run_dir} already holds a conversion run; pass --resume to continue it.")
+    run_dir.mkdir(parents=True, exist_ok=True)
     images_root = run_dir / "images"
     skip_keys = _load_persisted_skip_keys(output_root)
 
@@ -294,12 +322,35 @@ def _convert_mapping_rows(
     # directory let completed rows be reused with their extraction-time provenance.
     checkpoint = ConversionCheckpoint(run_dir)
     progress = _Progress(len(indexed_rows), checkpoint)
+    targets = _output_targets(indexed_rows, markdown_dir, images_root, library)
+    for target in targets.values():
+        if target is not None:
+            target[0].parent.mkdir(parents=True, exist_ok=True)
+    for staged_images_root in {target[1] for target in targets.values() if target is not None}:
+        _recover_interrupted_swaps(staged_images_root)
+    indexed = _indexed_library_records(output_root, targets) if library is not None else {}
 
     def convert(item: tuple[int, dict[str, str]]) -> tuple[ConversionResult, TimeoutCandidate | None]:
-        outcome = _convert_row(
-            item[1], markdown_dir, images_root, item[0], timeout_seconds,
-            force=force, skip_keys=skip_keys, checkpoint=checkpoint,
-        )
+        row_number, row = item
+        target = targets[row_number]
+        if target is None:
+            outcome: tuple[ConversionResult, TimeoutCandidate | None] = (
+                _result(
+                    row,
+                    Path(),
+                    "error",
+                    "Another row in this mapping report has the same attachment key; both would "
+                    "write the same library file, so neither was converted. Resolve the duplicate "
+                    "mapping and re-run.",
+                ),
+                None,
+            )
+        else:
+            outcome = _convert_row(
+                row, target[0], target[1], timeout_seconds,
+                force=force, skip_keys=skip_keys, checkpoint=checkpoint,
+                reuse_unrecorded=target[2], indexed_record=indexed.get(row.get("zotero_attachment_key", "")),
+            )
         progress.report(outcome[0])
         return outcome
 
@@ -319,8 +370,10 @@ def _convert_mapping_rows(
 
         def retry(index: int) -> tuple[ConversionResult, TimeoutCandidate | None]:
             row_number, row = indexed_rows[index]
+            target = targets[row_number]
+            assert target is not None  # a duplicate-key row errors without a native crash
             outcome = _convert_row(
-                row, markdown_dir, images_root, row_number, timeout_seconds,
+                row, target[0], target[1], timeout_seconds,
                 force=True, skip_keys=skip_keys, retry=True, checkpoint=checkpoint,
             )
             retry_progress.report(outcome[0])
@@ -467,20 +520,61 @@ def _selected_rows(
     return rows
 
 
-def _convert_row(
-    row: dict[str, str],
+def _output_targets(
+    indexed_rows: list[tuple[int, dict[str, str]]],
     markdown_dir: Path,
     images_root: Path,
-    index: int,
+    library: ProjectConfig | None,
+) -> dict[int, tuple[Path, Path, bool] | None]:
+    """Per row number: its Markdown path, its images root, and whether unrecorded Markdown already
+    at that path may be reused as ``skipped_existing``.
+
+    Canonical rows never reuse unrecorded Markdown: the library file is shared by every run, so
+    without an entry in this run's checkpoint nothing says which extraction wrote it, and it is
+    re-extracted instead (the old file stays until the new one is complete). With ``library``, a
+    row whose attachment key another selected row shares maps to None, whether or not either row
+    is eligible: one of them would take the library file and the pair would then collide in the
+    index.
+    """
+    canonical_keys = {number: _canonical_key(row, library) for number, row in indexed_rows}
+    key_counts = Counter(row.get("zotero_attachment_key", "") for _number, row in indexed_rows)
+    targets: dict[int, tuple[Path, Path, bool] | None] = {}
+    for number, row in indexed_rows:
+        key = canonical_keys[number]
+        raw_key = row.get("zotero_attachment_key", "")
+        if library is not None and raw_key and key_counts[raw_key] > 1:
+            targets[number] = None
+        elif library is not None and key:
+            targets[number] = (canonical_markdown_path(library, key), canonical_image_dir(library, key).parent, False)
+        else:
+            targets[number] = (markdown_dir / f"{number:04d}_{_output_stem(row)}.md", images_root, True)
+    return targets
+
+
+def _canonical_key(row: dict[str, str], library: ProjectConfig | None) -> str:
+    """The row's attachment key if it publishes to the canonical library, else ""."""
+    if library is None or not is_canonical_eligible(row):
+        return ""
+    try:
+        return validate_attachment_key(row.get("zotero_attachment_key", ""))
+    except ValueError:
+        return ""
+
+
+def _convert_row(
+    row: dict[str, str],
+    output_path: Path,
+    images_root: Path,
     timeout_seconds: int,
     *,
     force: bool,
     skip_keys: frozenset[str] = frozenset(),
     retry: bool = False,
     checkpoint: ConversionCheckpoint | None = None,
+    reuse_unrecorded: bool = True,
+    indexed_record: dict[str, object] | None = None,
 ) -> tuple[ConversionResult, TimeoutCandidate | None]:
     source_path = Path(row["source_path"])
-    output_path = markdown_dir / f"{index:04d}_{_output_stem(row)}.md"
     raw_output_path = output_path.with_name(f"{output_path.stem}.raw.tmp")
     images_dir = images_root / output_path.stem
     staged_images_root: Path | None = None
@@ -488,6 +582,12 @@ def _convert_row(
     math_sidecar_path = raw_output_path.with_suffix(".math.json")
     effective_timeout = _effective_timeout(row, timeout_seconds, source_path)
     source_sha256_before = ""
+    # Set once this row has cleared a fresh images_dir for its own extraction: from then on the
+    # directory holds only this attempt's images, and they are removed unless the row publishes
+    # primary-extractor Markdown that references them.
+    owns_images = False
+    keep_images = False
+    published = False
     try:
         if output_path.exists() and not force and checkpoint is not None:
             resumed, foreign = _resume_from_checkpoint(row, output_path, checkpoint)
@@ -498,6 +598,11 @@ def _convert_row(
             # another document's text under this key, so re-extract it (the old file is kept
             # until the new extraction succeeds) instead of treating it as skipped_existing.
             force = foreign
+        if output_path.exists() and not force and not reuse_unrecorded:
+            reused = _reuse_indexed(row, output_path, indexed_record, checkpoint)
+            if reused is not None:
+                return reused, None
+            force = True
         if output_path.exists() and not force:
             extraction_tool = _existing_extraction_tool(output_path)
             has_math = _existing_has_math(output_path)
@@ -517,8 +622,11 @@ def _convert_row(
             images_root.mkdir(parents=True, exist_ok=True)
             staged_images_root = Path(tempfile.mkdtemp(prefix=".conversion-", dir=images_root))
             extraction_images_dir = staged_images_root / output_path.stem
-        elif force:
+        else:
+            # No Markdown exists at output_path, so nothing references images_dir; anything in
+            # it is left over from an interrupted attempt and must not mix with this one.
             shutil.rmtree(images_dir, ignore_errors=True)
+            owns_images = True
         skip_primary = row.get("zotero_attachment_key") in skip_keys
         # Hash before and after extraction, not only after. The extractor reads the PDF at
         # `source_path` over a long window; if the file is replaced while it runs, hashing only
@@ -561,21 +669,32 @@ def _convert_row(
             staged_markdown.write_text(
                 _with_front_matter(row, markdown, extraction_tool, has_math=has_math), encoding="utf-8", newline="\n"
             )
-            backup_images = staged_images_root / "previous-images"
-            if images_dir.exists():
-                images_dir.rename(backup_images)
+            backup_images = staged_images_root / SWAP_BACKUP_DIRNAME
+            if not images_dir.exists():
+                # Tells recovery after a hard exit that images_dir held nothing of the old
+                # Markdown's, so whatever it holds then belongs to this attempt.
+                (staged_images_root / SWAP_NO_PREVIOUS_IMAGES).touch()
             try:
-                if extraction_tool == PRIMARY_EXTRACTION_TOOL and extraction_images_dir.exists():
-                    extraction_images_dir.rename(images_dir)
-                os.replace(staged_markdown, output_path)
-            except Exception:
                 if images_dir.exists():
-                    shutil.rmtree(images_dir)
-                if backup_images.exists():
-                    backup_images.rename(images_dir)
+                    replace_with_retry(images_dir, backup_images)
+                if extraction_tool == PRIMARY_EXTRACTION_TOOL and extraction_images_dir.exists():
+                    replace_with_retry(extraction_images_dir, images_dir)
+                replace_with_retry(staged_markdown, output_path)
+                published = True
+            except BaseException as exc:
+                # BaseException: an interrupt between the moves must put the old images back
+                # too, not only an error.
+                try:
+                    _undo_image_swap(staged_images_root, images_dir)
+                except OSError:
+                    raise RuntimeError(
+                        f"{type(exc).__name__}: {exc}; the previous images could not be restored "
+                        f"and were kept at {backup_images}"
+                    ) from exc
                 raise
         else:
             atomic_write_text(output_path, _with_front_matter(row, markdown, extraction_tool, has_math=has_math))
+        keep_images = extraction_tool == PRIMARY_EXTRACTION_TOOL
         result = _result(
             row,
             output_path,
@@ -617,8 +736,12 @@ def _convert_row(
     finally:
         raw_output_path.unlink(missing_ok=True)
         math_sidecar_path.unlink(missing_ok=True)
-        if staged_images_root is not None:
+        # A staging directory still holding the previous images is kept unless the new Markdown
+        # was published: they are the only copy the old Markdown can still reference.
+        if staged_images_root is not None and (published or not (staged_images_root / SWAP_BACKUP_DIRNAME).exists()):
             shutil.rmtree(staged_images_root, ignore_errors=True)
+        if owns_images and not keep_images:
+            shutil.rmtree(images_dir, ignore_errors=True)
 
 
 def _resume_from_checkpoint(
@@ -709,6 +832,122 @@ def _resume_from_checkpoint(
     )
     checkpoint.mark_reused(output_path, source_modified=source_modified)
     return result, False
+
+
+def _undo_image_swap(staging: Path, images_dir: Path) -> None:
+    """Return ``images_dir`` to its state before a staged replacement began.
+
+    Decided from what is on disk, so it is correct wherever the swap stopped: moved-aside previous
+    images go back in place of anything this attempt moved there; with none moved aside, the
+    directory is this attempt's only if it held nothing before (the marker says so), and is
+    otherwise still the untouched original.
+    """
+    backup = staging / SWAP_BACKUP_DIRNAME
+    if backup.exists():
+        if images_dir.exists():
+            shutil.rmtree(images_dir)
+        replace_with_retry(backup, images_dir)
+    elif (staging / SWAP_NO_PREVIOUS_IMAGES).exists() and images_dir.exists():
+        shutil.rmtree(images_dir)
+
+
+def _recover_interrupted_swaps(images_root: Path) -> None:
+    """Finish what a hard exit left of staged replacements under ``images_root``.
+
+    A staging directory that still holds its staged Markdown never published it, so the old
+    Markdown is current and gets its images back. One without staged Markdown either published
+    (the moved-aside images are obsolete) or stopped before touching ``images_root``; either way
+    only the staging directory itself is left to remove. Best effort: a staging directory that
+    cannot be recovered is kept and reported, never deleted.
+    """
+    for staging in sorted(images_root.glob(".conversion-*")):
+        if not staging.is_dir():
+            continue
+        try:
+            staged_markdown = [path for path in staging.glob("*.md") if path.is_file()]
+            if len(staged_markdown) == 1:
+                _undo_image_swap(staging, images_root / staged_markdown[0].stem)
+            elif staged_markdown:
+                raise OSError("more than one staged Markdown file")
+            shutil.rmtree(staging)
+        except OSError as exc:
+            print(
+                f"warning: could not recover interrupted replacement in {staging}: {type(exc).__name__}: {exc}",
+                file=sys.stderr,
+                flush=True,
+            )
+
+
+def _indexed_library_records(
+    output_root: Path, targets: dict[int, tuple[Path, Path, bool] | None]
+) -> dict[str, dict[str, object]]:
+    """Current-generation records of the attachments whose library Markdown already exists.
+
+    Read only when some canonical target is already on disk, since the JSONL carries every
+    record's full text. An unreadable index means nothing can be reused, never a failed run.
+    """
+    existing = {
+        target[0].stem for target in targets.values() if target is not None and not target[2] and target[0].exists()
+    }
+    if not existing:
+        return {}
+    records: dict[str, dict[str, object]] = {}
+    try:
+        jsonl = current_generation_jsonl(output_root / "index")
+        if jsonl is None:
+            return {}
+        with jsonl.open("r", encoding="utf-8") as handle:
+            for line in handle:
+                if not line.strip():
+                    continue
+                record = json.loads(line)
+                key = record.get("zotero_attachment_key") if isinstance(record, dict) else None
+                if isinstance(key, str) and key in existing:
+                    records[key] = record
+    except (OSError, ValueError, ArtifactError):
+        return {}
+    return records
+
+
+def _reuse_indexed(
+    row: dict[str, str],
+    output_path: Path,
+    record: dict[str, object] | None,
+    checkpoint: ConversionCheckpoint | None,
+) -> ConversionResult | None:
+    """Reuse library Markdown the published index already holds, or None to re-extract it.
+
+    Reused only when the current generation's record for this attachment names this very file,
+    the file is byte-identical to what was indexed, and the source PDF still has the hash the
+    record was extracted from. The file is left untouched (its front matter is not refreshed),
+    so the index and the library stay in step and the previous generation still describes it.
+    """
+    if record is None:
+        return None
+    source_sha256 = str(record.get("source_sha256") or "")
+    indexed_path = os.path.normcase(os.path.abspath(str(record.get("markdown_path") or "")))
+    if (
+        not source_sha256
+        or indexed_path != os.path.normcase(os.path.abspath(output_path))
+        or str(record.get("source_path") or "") != row.get("source_path", "")
+        or _source_sha256(output_path) != record.get("markdown_sha256")
+        or _source_sha256(Path(row["source_path"])) != source_sha256
+    ):
+        return None
+    result = _result(
+        row,
+        output_path,
+        "converted",
+        extraction_tool=str(record.get("extraction_tool") or EXTRACTION_TOOL),
+        has_math=bool(record.get("has_math")),
+        source_sha256=source_sha256,
+    )
+    if checkpoint is not None:
+        source_stat = _stat_or_none(Path(row["source_path"]))
+        ledger = checkpoint
+        _checkpoint_best_effort(lambda: _record_completion(ledger, output_path, result, source_stat, source_sha256))
+        checkpoint.mark_reused(output_path, source_modified=False)
+    return result
 
 
 def _record_completion(
@@ -1060,6 +1299,7 @@ def _write_summary(
 ) -> None:
     retry_counts = retry_counts or Counter()
     reused = reused or Counter()
+    markdown_folders = sorted({str(Path(result.output_path).parent) for result in results if result.output_path})
     converted = sum(1 for result in results if result.status == "converted")
     skipped = sum(1 for result in results if result.status == "skipped_existing")
     errors = sum(1 for result in results if result.status == "error")
@@ -1098,13 +1338,13 @@ def _write_summary(
         f"- Per-PDF timeout seconds: {timeout_seconds}",
         f"- Force reconversion: {force}",
         f"- Source classifications: {', '.join(sorted(classifications))}",
-        f"- Markdown folder: `{path.parent / 'markdown'}`",
+        *[f"- Markdown folder: `{folder}`" for folder in markdown_folders],
         "",
         "## Outputs",
         "",
         "- `manifest.csv`: spreadsheet-friendly conversion manifest",
         "- `manifest.jsonl`: line-delimited manifest for tools",
-        "- `markdown/`: converted Markdown files with Zotero front matter",
+        "- `markdown/`: converted Markdown files with Zotero front matter, for rows not written to the canonical library",
         "- `conversion_checkpoint.jsonl`: per-row completion ledger used to resume an interrupted run",
     ]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")

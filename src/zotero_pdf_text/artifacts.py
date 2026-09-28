@@ -525,6 +525,67 @@ def write_jsonl_from_conversion_manifest(manifest_csv: Path) -> Callable[[Path],
     return _write
 
 
+# Extraction quality, lowest first. Any other non-empty label is an explicit reconversion (math OCR
+# with marker, an image-OCR enrichment) and outranks both; an empty label ranks lowest.
+_EXTRACTION_RANK = {"": -1, "pymupdf.get_text": 0, "pymupdf4llm.to_markdown": 1}
+
+
+def _extraction_rank(tool: object) -> int:
+    return _EXTRACTION_RANK.get(str(tool or ""), 2)
+
+
+def write_jsonl_from_manifest_keeping_current(
+    manifest_csv: Path, current_jsonl: Path
+) -> tuple[Callable[[Path], None], int]:
+    """Writer for a whole-index rebuild from a manifest that keeps what the manifest lacks.
+
+    Every attachment the manifest converted gets a new record, as with
+    ``write_jsonl_from_conversion_manifest``, with one exception: a manifest row never replaces a
+    current record extracted from the same source PDF (same non-empty source hash) by a better
+    extractor, such as a retried primary extraction over a fallback, or a math-OCR reconversion
+    over either. Every current-generation record the manifest does not replace (a failed row, a
+    record added by another workflow, a better extraction) is copied verbatim instead of being
+    dropped. Returns the writer and the number of records kept that way.
+    """
+    if not manifest_csv.exists():
+        raise FileNotFoundError(manifest_csv)
+    current: dict[str, tuple[int, str]] = {}
+    with current_jsonl.open("r", encoding="utf-8") as source:
+        for line in source:
+            if line.strip():
+                record = json.loads(line)
+                if isinstance(record, dict) and record.get("zotero_attachment_key"):
+                    current[str(record["zotero_attachment_key"])] = (
+                        _extraction_rank(record.get("extraction_tool")),
+                        str(record.get("source_sha256") or ""),
+                    )
+
+    def keeps_current(row: dict[str, str]) -> bool:
+        rank, source_sha256 = current.get(row.get("zotero_attachment_key", ""), (-1, ""))
+        return bool(source_sha256) and source_sha256 == row.get("source_sha256") and rank > _extraction_rank(
+            row.get("extraction_tool")
+        )
+
+    rows = [row for row in _converted_rows(manifest_csv) if not keeps_current(row)]
+    converted_keys = {row.get("zotero_attachment_key", "") for row in rows}
+    kept = len(set(current) - converted_keys)
+
+    def _write(jsonl_path: Path) -> None:
+        with jsonl_path.open("w", encoding="utf-8", newline="\n") as handle:
+            for row in rows:
+                record = _record_from_manifest_row(row)
+                handle.write(json.dumps(_record_dict(record), ensure_ascii=False) + "\n")
+            with current_jsonl.open("r", encoding="utf-8") as source:
+                for line in source:
+                    if not line.strip():
+                        continue
+                    record = json.loads(line)
+                    if isinstance(record, dict) and record.get("zotero_attachment_key") not in converted_keys:
+                        handle.write(line.rstrip("\n") + "\n")
+
+    return _write, kept
+
+
 def write_jsonl_from_existing(jsonl_source: Path) -> Callable[[Path], None]:
     """Return a stage_generation writer that copies an existing JSONL sidecar.
 

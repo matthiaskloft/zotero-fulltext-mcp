@@ -49,6 +49,20 @@ The mapper reads a copied Zotero database and writes reports under
 
 ## Conversion
 
+`convert-verified` (and `convert-new`) write each verified paper to the canonical library:
+Markdown to `library\markdown\<attachment-key>.md`, images to
+`library\images\<attachment-key>\`. The run folder under `conversion-runs\verified\` holds the
+manifest, checkpoint and summary. A row whose identity is not verified, and every row of
+`convert-sample` and `verify-unverified`, still writes into its run folder.
+
+A library file is shared by every run, so a new run treats one it did not record itself with
+care. It is reused unchanged when the published index already holds exactly that file and the
+source PDF still has the hash it was extracted from; otherwise it is re-extracted, and the old
+file stays until the new one is complete. Rerunning `convert-verified` over an already indexed
+library therefore re-extracts only papers whose PDF or Markdown changed. Two rows of one
+mapping report with the same attachment key are both refused, because they would write the same
+file. A row that fails leaves no images behind in the library.
+
 Normal resume mode reuses existing Markdown bodies and refreshes YAML front
 matter plus manifest metadata from the latest mapping report. Use this after
 Zotero metadata changes, including updated citation keys, and to continue an
@@ -60,8 +74,8 @@ as its Markdown is published, and a progress line such as
 resume, rows whose checkpoint entry still matches the attachment, source and
 Markdown file are reused without re-extraction and keep the source hash recorded
 at extraction time, so the rebuilt manifest and summary match an uninterrupted
-run. Existing Markdown without a matching entry stays `skipped_existing` with
-unknown provenance; Markdown that the checkpoint shows was extracted for another
+run. In a run folder, existing Markdown without a matching entry stays
+`skipped_existing` with unknown provenance (library files follow the rule above); Markdown that the checkpoint shows was extracted for another
 attachment or source is re-extracted, unless it was edited since it was recorded:
 that conflict keeps the file and reports the row as an error until you rerun with
 `--force`. See the data dictionary's *Conversion
@@ -98,10 +112,14 @@ after extraction succeeds:
 
 ## Managed Index Generations
 
-The output root has several roles: `mapping-runs/` holds mapping snapshots;
+The output root has several roles: `library/markdown/<attachment-key>.md` and
+`library/images/<attachment-key>/` hold the one current copy of each paper converted by
+`convert-verified` or `convert-new`, so the index reads those papers from a path that never
+changes; `mapping-runs/` holds mapping snapshots;
 `conversion-runs/verified/`, `conversion-runs/samples/`,
 `conversion-runs/unverified-review/`, `conversion-runs/provenance-reconvert/` and
-`conversion-runs/index-repair/` hold conversion runs and their Markdown; `provenance-reconvert/`
+`conversion-runs/index-repair/` hold conversion runs (with their Markdown, except for papers
+written to `library/`); `provenance-reconvert/`
 and `index-repair/` hold provenance reconversion and index repair plans; and
 `index/generations/` holds published search indexes. A published index can refer to
 Markdown in several conversion runs. To find the folders that actually supply the
@@ -135,6 +153,19 @@ JSONL — the default picks the current generation's JSONL when one exists, else
 
 ```powershell
 & $python -m zotero_pdf_text rebuild-index --config .\config.json
+```
+
+A manifest-only rebuild contains exactly the rows that manifest converted: every paper that
+failed in it, and every record another workflow added, drops out of search. After reconverting a
+whole library, add `--keep-current` so those papers keep their current record (and stay
+searchable) until a later run converts them. It also keeps a current record over a manifest row
+for the same PDF (same source hash) that was extracted less well: a `retry-timeout` primary
+extraction over a fallback, or a `reconvert-math` result over either. The output reports how many
+records were kept as `kept_from_current`:
+
+```powershell
+& $python -m zotero_pdf_text rebuild-index --config .\config.json `
+  --manifest $data\conversion-runs\verified\<run-id>\manifest.csv --keep-current
 ```
 
 For every subsequent manifest (new items, promoted `apply-verification` rows, etc.), use

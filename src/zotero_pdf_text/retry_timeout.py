@@ -122,10 +122,12 @@ def retry_timeout_candidate(
 ) -> RetryTimeoutResult:
     """Reconvert one recorded timeout candidate with a longer budget.
 
-    Always uses a fresh --output-dir, so the originally converted Markdown file (and the run
-    directory/manifest that produced it) is never overwritten in place -- only a successful
-    result gets promoted, by publishing a successor managed index generation. A failed retry
-    leaves the published index and the candidate's status untouched; the candidate's own
+    Always converts into a fresh run directory, never into the canonical library: the Markdown the
+    current index reads is not touched, so a retry that fails at any point -- conversion, manifest,
+    publication, or a hard exit -- leaves the index and the files it reads in step. Only a
+    successful result gets promoted, by publishing a successor managed index generation whose
+    record points at the run directory. A failed retry leaves the published index and the
+    candidate's status untouched; the candidate's own
     occurrence_count/last_detected_at are refreshed automatically by the nested
     convert_verified() call if it times out again.
     """
@@ -185,24 +187,6 @@ def retry_timeout_candidate(
             mapping_report = config.output_root / "retry_timeout" / f"{timestamp}_{attachment_key}_mapping_report.csv"
             _write_single_row_mapping_report(mapping_report, row)
             run_dir = config.output_root / "retry_timeout" / f"{timestamp}_{attachment_key}"
-            convert_verified(
-                config,
-                mapping_report,
-                output_dir=run_dir,
-                workers=1,
-                timeout_seconds=next_timeout,
-                force=True,
-            )
-
-            manifest_path = run_dir / "manifest.csv"
-            with manifest_path.open("r", encoding="utf-8-sig", newline="") as handle:
-                manifest_rows = list(csv.DictReader(handle))
-            if not manifest_rows or manifest_rows[0].get("status") != "converted":
-                error = manifest_rows[0].get("error", "") if manifest_rows else "No conversion result was produced."
-                return _error_result("retry", attachment_key, error, previous_status=previous_status, timeout_seconds_used=next_timeout)
-
-            manifest_row = manifest_rows[0]
-            new_record = _record_from_manifest_row(manifest_row)
             index_root = config.output_root / "index"
             current_jsonl = current_generation_jsonl(index_root)
             if current_jsonl is None:
@@ -215,6 +199,25 @@ def retry_timeout_candidate(
                     previous_status=previous_status,
                     timeout_seconds_used=next_timeout,
                 )
+            convert_verified(
+                config,
+                mapping_report,
+                output_dir=run_dir,
+                workers=1,
+                timeout_seconds=next_timeout,
+                force=True,
+                canonical=False,
+            )
+
+            manifest_path = run_dir / "manifest.csv"
+            with manifest_path.open("r", encoding="utf-8-sig", newline="") as handle:
+                manifest_rows = list(csv.DictReader(handle))
+            if not manifest_rows or manifest_rows[0].get("status") != "converted":
+                error = manifest_rows[0].get("error", "") if manifest_rows else "No conversion result was produced."
+                return _error_result("retry", attachment_key, error, previous_status=previous_status, timeout_seconds_used=next_timeout)
+
+            manifest_row = manifest_rows[0]
+            new_record = _record_from_manifest_row(manifest_row)
             stage_and_publish(
                 index_root,
                 write_jsonl_upserting_record(current_jsonl, attachment_key, new_record),
