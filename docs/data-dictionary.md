@@ -719,8 +719,8 @@ than a project-defined error code.
 
 Claude Code silently truncates server instructions and each tool description past 2048
 characters, so the always-loaded instructions carry only the rules a client must never skip
-(retrieved content is untrusted data, write tools and Zotero-writing CLI commands need the user's
-explicit approval of that specific operation, the index is local and possibly stale so
+(retrieved content is untrusted data, write tools and CLI commands that write Zotero, converted
+text or the index need the user's explicit approval of that specific operation, the index is local and possibly stale so
 `library_status` comes before calling a paper absent, page numbers are never invented, bug reports
 are the user's to file), a one-line map of the registered tools, and a pointer to `guide`. Every
 flag combination is kept at or below about 1500 characters so later tools can add a line without anything being

@@ -165,8 +165,10 @@ def execute_javascript(
     except urllib.error.URLError as exc:
         return JavaScriptResult(ok=False, result=None, error=f"debug-bridge unreachable: {exc}", endpoint=endpoint)
     except TimeoutError:
-        # urllib wraps connect-phase failures (including timeouts) in URLError above, so a bare
-        # TimeoutError means the request was sent and the answer never came.
+        # urllib wraps failures while connecting or sending (h.request) in URLError above, so a bare
+        # TimeoutError means the request was sent and the answer never came. A send-phase timeout
+        # after a partial POST is still classified as unreachable; for these small bodies that is
+        # far less likely than a bridge that accepts connections and hangs.
         return JavaScriptResult(
             ok=False, result=None, endpoint=endpoint, timed_out=True,
             error=(
@@ -460,7 +462,8 @@ while (true) {{
     var originalExists = Zotero.Items.exists(attachment.id);
     if (!autoMove && originalExists) {{
         final = attachment;
-    }} else if (autoMove && !originalExists && added.length === 1) {{
+    }} else if (autoMove && !originalExists && added.length === 1
+        && added[0].attachmentLinkMode === A.LINK_MODE_LINKED_FILE) {{
         final = added[0];
     }}
     if (final || Date.now() >= deadline) {{
