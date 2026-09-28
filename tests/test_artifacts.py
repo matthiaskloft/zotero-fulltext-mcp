@@ -577,3 +577,48 @@ class StagingWriterTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class KeepCurrentRebuildTests(unittest.TestCase):
+    """rebuild-index --keep-current never trades a better extraction of the same PDF for a worse one."""
+
+    def _rebuild(self, current_tool: str, current_hash: str, row_tool: str, row_hash: str) -> tuple[str, int]:
+        from zotero_pdf_text.artifacts import write_jsonl_from_manifest_keeping_current
+
+        root = Path(tempfile.mkdtemp())
+        self.addCleanup(__import__("shutil").rmtree, root, True)
+        current = root / "current.jsonl"
+        current.write_text(
+            json.dumps({"zotero_attachment_key": "ATTKEY01", "extraction_tool": current_tool, "source_sha256": current_hash, "text": "Current"})
+            + "\n",
+            encoding="utf-8",
+        )
+        markdown = root / "ATTKEY01.md"
+        markdown.write_text("---\n---\n\nManifest\n", encoding="utf-8")
+        manifest = root / "manifest.csv"
+        with manifest.open("w", encoding="utf-8", newline="") as handle:
+            writer = csv.DictWriter(handle, fieldnames=["status", "zotero_attachment_key", "output_path", "extraction_tool", "source_sha256"])
+            writer.writeheader()
+            writer.writerow(
+                {"status": "converted", "zotero_attachment_key": "ATTKEY01", "output_path": str(markdown), "extraction_tool": row_tool, "source_sha256": row_hash}
+            )
+        write, kept = write_jsonl_from_manifest_keeping_current(manifest, current)
+        target = root / "out.jsonl"
+        write(target)
+        (record,) = [json.loads(line) for line in target.read_text(encoding="utf-8").splitlines()]
+        return record["text"].strip().splitlines()[-1], kept
+
+    def test_a_fallback_row_does_not_replace_a_primary_record_of_the_same_pdf(self):
+        self.assertEqual(self._rebuild("pymupdf4llm.to_markdown", "a" * 64, "pymupdf.get_text", "a" * 64), ("Current", 1))
+
+    def test_a_primary_row_does_not_replace_a_math_ocr_record_of_the_same_pdf(self):
+        self.assertEqual(self._rebuild("marker", "a" * 64, "pymupdf4llm.to_markdown", "a" * 64), ("Current", 1))
+
+    def test_a_primary_row_replaces_a_fallback_record(self):
+        self.assertEqual(self._rebuild("pymupdf.get_text", "a" * 64, "pymupdf4llm.to_markdown", "a" * 64), ("Manifest", 0))
+
+    def test_a_changed_pdf_is_replaced_whatever_the_extractor(self):
+        self.assertEqual(self._rebuild("marker", "a" * 64, "pymupdf.get_text", "b" * 64), ("Manifest", 0))
+
+    def test_a_record_without_a_source_hash_is_replaced(self):
+        self.assertEqual(self._rebuild("marker", "", "pymupdf.get_text", ""), ("Manifest", 0))

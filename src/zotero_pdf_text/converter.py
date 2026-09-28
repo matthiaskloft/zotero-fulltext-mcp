@@ -300,8 +300,10 @@ def _convert_mapping_rows(
     if timeout_seconds < 1:
         raise ValueError("timeout_seconds must be at least 1")
     markdown_dir = run_dir / "markdown"
-    if markdown_dir.exists() and not exist_ok:
-        raise FileExistsError(markdown_dir)
+    # The run directory itself, not its markdown/ folder: a run writing to the library leaves no
+    # markdown/ behind, and reusing its directory without --resume would overwrite its manifest.
+    if not exist_ok and run_dir.is_dir() and any(run_dir.iterdir()):
+        raise FileExistsError(f"{run_dir} already holds a conversion run; pass --resume to continue it.")
     run_dir.mkdir(parents=True, exist_ok=True)
     images_root = run_dir / "images"
     skip_keys = _load_persisted_skip_keys(output_root)

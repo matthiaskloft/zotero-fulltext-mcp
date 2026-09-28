@@ -1286,6 +1286,23 @@ class CanonicalLibraryTests(unittest.TestCase):
             self.assertIn(f'zotero_attachment_key: "{key}"', text)
 
 
+    def test_a_second_run_into_the_same_folder_needs_resume(self):
+        run_dir = self.config.output_root / "conversion-runs" / "verified" / "run"
+        with patch("zotero_pdf_text.converter.subprocess.run", side_effect=_write_raw_markdown):
+            convert_verified(self.config, self._report({"zotero_attachment_key": "ATTKEY01"}), output_dir=run_dir, workers=1)
+            with self.assertRaises(FileExistsError):
+                convert_verified(self.config, self._report({"zotero_attachment_key": "ATTKEY02"}), output_dir=run_dir, workers=1)
+
+        self.assertEqual([row["zotero_attachment_key"] for row in self._manifest(run_dir)], ["ATTKEY01"])
+
+    def test_an_empty_output_folder_is_not_an_existing_run(self):
+        run_dir = self.config.output_root / "conversion-runs" / "verified" / "run"
+        run_dir.mkdir(parents=True)
+        with patch("zotero_pdf_text.converter.subprocess.run", side_effect=_write_raw_markdown):
+            convert_verified(self.config, self._report({"zotero_attachment_key": "ATTKEY01"}), output_dir=run_dir, workers=1)
+
+        self.assertEqual(self._manifest(run_dir)[0]["status"], "converted")
+
     def test_a_key_shared_by_an_eligible_and_an_ineligible_row_refuses_both(self):
         report = self._report(
             {"zotero_attachment_key": "ATTKEY01"},

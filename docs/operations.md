@@ -158,8 +158,10 @@ JSONL — the default picks the current generation's JSONL when one exists, else
 A manifest-only rebuild contains exactly the rows that manifest converted: every paper that
 failed in it, and every record another workflow added, drops out of search. After reconverting a
 whole library, add `--keep-current` so those papers keep their current record (and stay
-searchable) until a later run converts them; the output reports how many were kept as
-`kept_from_current`:
+searchable) until a later run converts them. It also keeps a current record over a manifest row
+for the same PDF (same source hash) that was extracted less well: a `retry-timeout` primary
+extraction over a fallback, or a `reconvert-math` result over either. The output reports how many
+records were kept as `kept_from_current`:
 
 ```powershell
 & $python -m zotero_pdf_text rebuild-index --config .\config.json `

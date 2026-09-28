@@ -15,7 +15,9 @@ dated section once it has been stress-tested against a large library.
 
 - `rebuild-index --manifest <manifest> --keep-current` keeps the current record of every paper the
   manifest did not convert (for example one that failed), so a whole-library reconversion does not
-  drop those papers from search. The output reports how many were kept as `kept_from_current`.
+  drop those papers from search. It also keeps a current record over a manifest row for the same
+  PDF that was extracted less well (fallback text over a retried primary extraction, or either
+  over a math-OCR reconversion). The output reports how many were kept as `kept_from_current`.
 - Performance baselines (`docs/performance-baselines.md`) and `benchmarks/latency.py` to re-measure
   search and passage latency against a published index.
 - End-to-end fixture tests (`tests/test_end_to_end.py`): a synthetic Zotero library and real PDFs
@@ -42,6 +44,8 @@ dated section once it has been stress-tested against a large library.
   exit, the next conversion run finishes or undoes it, and previous images that cannot be moved
   back are kept in the staging folder rather than deleted.
 - `retry-timeout` checks that a managed index generation exists before converting, not after.
+- Converting into a run folder that already holds a run now fails unless `--resume` (or
+  `--force`) is given; before, it was only detected when the run had left a `markdown/` folder.
 - Passage fetches (`get_fulltext_chunk`, chunk counts) use a new index on
   `chunks(record_id, chunk_index)` instead of scanning every chunk: about 1.6 ms instead of 435 ms
   per passage on the reference library. Existing indexes keep working unchanged but only get the
