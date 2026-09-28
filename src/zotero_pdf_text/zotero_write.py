@@ -68,6 +68,7 @@ class WriteApplyResult:
     instructions: str
     records: int
     write_records: int
+    auto_run_timed_out: bool = False  # script sent but outcome unknown: check Zotero, never rerun blindly
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -264,6 +265,7 @@ def apply_write_plan(
     out_script.write_text(script, encoding="utf-8", newline="\n")
 
     auto_run_available = False
+    auto_run_timed_out = False
     instructions = (
         f"Open Zotero, then run the generated script via "
         f"Tools -> Developer -> Run JavaScript. Keep 'Run as async function' enabled. "
@@ -277,6 +279,14 @@ def apply_write_plan(
             instructions = (
                 f"Script executed automatically via debug-bridge. "
                 f"Result: {js_result.result}"
+            )
+        elif js_result.timed_out:
+            # The script was sent and may have run: rerunning it could create duplicates.
+            auto_run_timed_out = True
+            instructions = (
+                f"debug-bridge auto-run did not finish ({js_result.error}). The outcome is unknown: "
+                f"check Zotero for the planned items and attachments; do not rerun the script "
+                f"({out_script}) or this apply."
             )
         else:
             instructions = (
@@ -294,6 +304,7 @@ def apply_write_plan(
         instructions=instructions,
         records=len(records),
         write_records=len(write_records),
+        auto_run_timed_out=auto_run_timed_out,
     )
 
 

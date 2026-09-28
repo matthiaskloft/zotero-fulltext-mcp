@@ -11,7 +11,7 @@ and exposes it through an MCP server (`zotero-fulltext-mcp`) plus a CLI (`zotero
 - Source package: `src/zotero_pdf_text`.
 - Tests: `tests`.
 - Docs: `docs` (architecture, data dictionary, ingestion, operations, troubleshooting,
-  library cleanup, debug-bridge setup, planned figure extraction).
+  library cleanup, debug-bridge setup, live Zotero test, planned figure extraction).
 - What to work on next and why: `ROADMAP.md`.
 - User-facing install/setup instructions: `README.md`.
 
@@ -95,9 +95,12 @@ after changing `pyproject.toml` dependencies; commit the updated lockfile in the
    tells users to install a pinned tag rather than `HEAD`, so that pin is part of the release
    artifact — leaving it stale points every new installer at the previous version.
 4. Run `uv lock` if dependencies changed since the last release; commit the updated `uv.lock`.
-5. Once merged to `master` and CI is green, tag the release and push the tag:
+5. Run the live Zotero test against the test profile (`pytest -m live_zotero`, see
+   `docs/live-zotero-test.md`). If the Zotero bridge code in `bibtex.py` changed since the last
+   release, run it with `ZOTERO_LIVE_RECORD=1` and commit the re-recorded, reviewed fixtures.
+6. Once merged to `master` and CI is green, tag the release and push the tag:
    `git tag vX.Y.Z && git push origin vX.Y.Z`.
-6. Anyone not actively developing this project should install a pinned tag rather than `HEAD` —
+7. Anyone not actively developing this project should install a pinned tag rather than `HEAD` —
    see README's install section for the exact command.
 
 ## Implementation Guidelines

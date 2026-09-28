@@ -1,0 +1,24 @@
+{
+  "_provenance": "reconstructed from parsed output of a live run (Zotero 9.0.6, 2026-09-28; the raw debug-bridge payload was not captured); replace with a raw capture from the live test's recorder (ZOTERO_LIVE_RECORD=1, see docs/live-zotero-test.md). Keys are placeholders, the title is withheld.",
+  "doi": "10.48550/arXiv.1810.04805",
+  "payload": {
+    "key": "AAAA1111",
+    "keys": ["AAAA1111"],
+    "title": "<title withheld>",
+    "itemType": "preprint"
+  },
+  "expected": {
+    "ok": true,
+    "item_type": "preprint",
+    "item_key": "AAAA1111",
+    "item_keys": ["AAAA1111"],
+    "outcome": ""
+  },
+  "expected_cli": {
+    "status": "imported",
+    "item_type": "preprint",
+    "key": "AAAA1111",
+    "key_source": "created_item",
+    "keys": ["AAAA1111"]
+  }
+}

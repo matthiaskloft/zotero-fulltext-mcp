@@ -359,7 +359,41 @@ class ZoteroWriteTests(unittest.TestCase):
             self.assertTrue(result.ok)
             self.assertFalse(result.auto_run_available)
             self.assertIn("Connection refused", result.instructions)
+            self.assertFalse(result.auto_run_timed_out)
             self.assertTrue((root / "out.js").exists())
+
+    def test_apply_write_plan_timeout_is_unknown_and_never_advises_a_manual_rerun(self):
+        # The script was sent and may have run; running it again by hand could duplicate items.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            plan = root / "write_plan.jsonl"
+            pdf = root / "paper.pdf"
+            pdf.write_bytes(b"%PDF")
+            write_plan(
+                plan,
+                [
+                    WritePlanRecord(
+                        "create_item_with_linked_pdf",
+                        "approved",
+                        "medium",
+                        candidate=_candidate(title="New Paper", doi="10.1000/test", pdf_path=str(pdf)),
+                        dedupe={"action": "add_candidate"},
+                    )
+                ],
+            )
+            timed_out = JavaScriptResult(
+                ok=False, result=None, error="debug-bridge did not answer within 30 s", endpoint="http://x",
+                timed_out=True,
+            )
+            with patch("zotero_pdf_text.zotero_write.execute_javascript", return_value=timed_out):
+                result = apply_write_plan(plan, root / "out.js", approve=True, auto_run=True)
+
+            self.assertFalse(result.auto_run_available)
+            self.assertTrue(result.auto_run_timed_out)
+            self.assertIn("outcome is unknown", result.instructions)
+            self.assertIn("do not rerun", result.instructions)
+            self.assertNotIn("manually", result.instructions)
+            self.assertNotIn("Run JavaScript", result.instructions)
 
     def test_apply_write_plan_skips_bbt_when_auto_run_false(self):
         with tempfile.TemporaryDirectory() as tmp:

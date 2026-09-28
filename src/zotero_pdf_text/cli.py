@@ -667,7 +667,9 @@ def build_parser() -> argparse.ArgumentParser:
         "find-pdf",
         help=(
             "Trigger Zotero's own 'Find Available PDF' search for an item that has no PDF "
-            "attachment yet (requires the debug-bridge plugin)."
+            "attachment yet (requires the debug-bridge plugin). Reports the final attachment key "
+            "after a ZotMoov auto-move and outcome attached/not_found/unsettled/unknown; only "
+            "'attached' yields a usable attachment_key."
         ),
     )
     find_pdf.add_argument("--key", required=True, help="Zotero item key (8-character alphanumeric).")
@@ -1494,16 +1496,23 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(import_result.to_dict(), ensure_ascii=False, indent=2), file=sys.stderr)
             return 1
 
-        # Poll Zotero connector REST API for the newly created item (connector returns 201 with no body).
-        # The connector API reads live in-process data, avoiding SQLite WAL lag.
-        new_key: str | None = None
-        for _ in range(5):
-            time.sleep(1)
-            new_key = find_item_key_via_connector(
-                doi, title_hint=import_result.title, connector_endpoint=args.connector_endpoint
-            )
-            if new_key:
-                break
+        # The debug-bridge path reports the created item's key. The connector fallback returns 201
+        # with no body, so poll the connector REST API (live in-process data, no SQLite WAL lag) for
+        # an item whose DOI matches -- weaker evidence than the created item itself, hence key_source.
+        # A translator that created several items leaves the key ambiguous: report them all instead.
+        new_key: str | None = import_result.item_key or None
+        key_source: str | None = "created_item" if new_key else None
+        if len(import_result.item_keys) > 1:
+            key_source = "ambiguous"
+        elif not new_key:
+            for _ in range(5):
+                time.sleep(1)
+                new_key = find_item_key_via_connector(
+                    doi, title_hint=import_result.title, connector_endpoint=args.connector_endpoint
+                )
+                if new_key:
+                    key_source = "connector_lookup"
+                    break
 
         print(json.dumps({
             "status": "imported",
@@ -1511,6 +1520,8 @@ def main(argv: list[str] | None = None) -> int:
             "title": import_result.title,
             "item_type": import_result.item_type,
             "key": new_key,
+            "key_source": key_source,
+            "keys": import_result.item_keys,
         }, ensure_ascii=False, indent=2))
         return 0
     if args.command == "check-pdf":

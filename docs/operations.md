@@ -912,3 +912,7 @@ once you're sure the other machine isn't running it.
 ```powershell
 & $python -m unittest discover -s tests
 ```
+
+The Zotero bridge tests run the generated `find-pdf` script in Node and are skipped when `node`
+is not on `PATH`. The opt-in live test against a separate Zotero profile is described in
+[live-zotero-test.md](live-zotero-test.md).

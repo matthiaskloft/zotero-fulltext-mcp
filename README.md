@@ -478,6 +478,13 @@ The safe default server exposes:
   Populated only after running the CLI's `find-orphan-parents` command, which reports only
   high-confidence (`classify_identity`-verified) pairings. To act on a candidate, confirm it
   yourself and run the CLI's `link-pdf` then `orphan-candidate` commands.
+- `guide(topic="overview")` -- instant, read-only usage guidance. Topics: `overview`, `search`,
+  `citing`, `status`, `writes`, `reporting`. The server's always-loaded instructions stay short
+  (Claude Code truncates them past 2048 characters) and point here for detail. `guide("writes")`
+  lists every write path in `operations` -- the MCP write tools, including ones not enabled on
+  this server and the `install-mcp` flag that enables them, and the CLI commands for adding a
+  paper by DOI or attaching a PDF -- each with what it writes and how to run it. Text is
+  generated from the startup flags, so it never names a tool the server did not register.
 - `library_status()` -- how current the index is, as two answers that are never merged.
   `index` counts rows in the published generation: what was indexed, never what share of
   your library is indexed. `library` is the audit's comparison against Zotero and the files
@@ -579,6 +586,22 @@ own bridge token. `link-pdf` additionally uses the **ZotMoov** plugin to relocat
 into your managed `linked_attachments` folder. Both are optional; core search/conversion works
 without them.
 
+Run them with the Python of the environment the server is installed in
+(`<venv python> -m zotero_pdf_text <command>`, or the `zotero-pdf-text` console script next to
+it); `uv run` works only from a checkout with `uv` on `PATH`. A typical add-by-DOI flow is
+`import-doi --doi <DOI>` (prints the new item's `key`, its `item_type` name and `key_source`;
+`key_source: "ambiguous"` with `key: null` when the translator created several items, all listed
+in `keys`), then `check-pdf --key <key>`, then `find-pdf --key <key>`. `find-pdf` reports
+`outcome`: `attached` (with the attachment key as it stands after any ZotMoov auto-move -- the
+only outcome whose `attachment_key` is usable), `not_found` (Zotero's resolvers found nothing;
+download an open-access copy and use `link-pdf --key <key> --file <pdf>`), `unsettled` (a file
+was added but its final key was not observed in time), or `unknown` (the bridge timed out). A
+debug-bridge timeout never means "failed": `import-doi` does not fall back to the connector and
+`zotero-write apply` reports `auto_run_timed_out`, because Zotero may already have made the
+change. After `unsettled`, `unknown` or a timeout, check Zotero; do not rerun. MCP clients
+discover these commands through `guide("writes")` and propose the exact command for you to
+approve; the server itself never writes to Zotero.
+
 ## Cross-platform notes
 
 - Zotero executable auto-detection (`--zotero-exe` default) and process-name checks
@@ -620,6 +643,14 @@ cheap local check is worth the second it costs.
 Documentation examples should use obviously fake placeholders (`C:\Users\you\...`, `jsmith`,
 `someone@example.com`). The guard allows a short list of such names and rejects anything else, so
 add new placeholders to `PLACEHOLDER_NAMES` rather than choosing realistic-looking ones.
+
+### Testing the Zotero bridge
+
+The write commands (`import-doi`, `find-pdf`, `link-pdf`) run JavaScript inside Zotero. The
+normal suite runs the generated `find-pdf` script in Node against a fake Zotero seeded from
+recorded responses, so it needs `node` on `PATH`. Those tests are skipped without it. An
+opt-in live test (`pytest -m live_zotero`) runs the real CLI against a separate Zotero profile
+and can re-record the fixtures. See [docs/live-zotero-test.md](docs/live-zotero-test.md).
 
 ## Repository history
 

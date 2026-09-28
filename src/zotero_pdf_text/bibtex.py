@@ -6,7 +6,7 @@ import uuid
 import urllib.error
 import urllib.parse
 import urllib.request
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, TypedDict, cast
 
@@ -24,6 +24,9 @@ class JavaScriptResult:
     result: object
     error: str
     endpoint: str
+    # The request reached debug-bridge but no answer arrived in time: the script may have run
+    # (or may still be running) in Zotero, so its outcome is unknown rather than failed.
+    timed_out: bool = False
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -126,6 +129,7 @@ def execute_javascript(
     *,
     endpoint: str = DEFAULT_DEBUG_BRIDGE_ENDPOINT,
     token: str = "",
+    timeout: float = 30,
 ) -> JavaScriptResult:
     """Execute JavaScript inside Zotero via the debug-bridge plugin.
 
@@ -133,7 +137,8 @@ def execute_javascript(
     at extensions.zotero.debug-bridge.token in Zotero's Config Editor.
     Token can also be provided via the ZOTERO_DEBUG_BRIDGE_TOKEN environment variable.
 
-    Returns JavaScriptResult with ok=False when the plugin is not installed or token is wrong.
+    Returns JavaScriptResult with ok=False when the plugin is not installed or token is wrong,
+    and additionally timed_out=True when no answer arrived within ``timeout`` seconds.
     """
     import os
     resolved_token = token or os.environ.get(_DEBUG_BRIDGE_TOKEN_ENV, "")
@@ -147,7 +152,7 @@ def execute_javascript(
         method="POST",
     )
     try:
-        with urllib.request.urlopen(request, timeout=30) as response:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
             body = response.read().decode("utf-8")
         try:
             result = json.loads(body)
@@ -159,6 +164,16 @@ def execute_javascript(
         return JavaScriptResult(ok=False, result=None, error=f"HTTP {exc.code}: {error_body}", endpoint=endpoint)
     except urllib.error.URLError as exc:
         return JavaScriptResult(ok=False, result=None, error=f"debug-bridge unreachable: {exc}", endpoint=endpoint)
+    except TimeoutError:
+        # urllib wraps connect-phase failures (including timeouts) in URLError above, so a bare
+        # TimeoutError means the request was sent and the answer never came.
+        return JavaScriptResult(
+            ok=False, result=None, endpoint=endpoint, timed_out=True,
+            error=(
+                f"debug-bridge did not answer within {timeout:g} s; the script may still be running "
+                "in Zotero, so its outcome is unknown -- check Zotero before rerunning."
+            ),
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -174,6 +189,9 @@ class ConnectorImportResult:
     title: str
     error: str
     connector_endpoint: str
+    item_key: str = ""  # key of the created item, when the import path reports it (debug-bridge only)
+    item_keys: list[str] = field(default_factory=list)  # every item the debug-bridge translator created
+    outcome: str = ""  # "unknown" when a debug-bridge timeout left the import's result undetermined
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -226,7 +244,11 @@ def import_doi_via_connector(
     2. CrossRef/DataCite + /connector/saveItems: fetches external metadata and posts directly.
        Works without any plugins; metadata quality depends on CrossRef/DataCite.
 
-    Returns ConnectorImportResult; caller must poll to find the new item key.
+    Returns ConnectorImportResult. Strategy 1 reports the created items' keys in item_keys and,
+    when exactly one item was created, in item_key; strategy 2 leaves both empty, so the caller
+    must poll to find the new item key. Strategy 2 runs only when debug-bridge is unavailable: a
+    debug-bridge timeout returns outcome="unknown" instead, because the translator may still have
+    created the item and a second import would duplicate it.
     """
     # Strategy 1: debug-bridge (Zotero's own translator lookup)
     # NOTE: return plain JS values, not JSON.stringify(...) -- debug-bridge already
@@ -245,21 +267,38 @@ translate.setTranslator(translators);
 var items = await translate.translate({{ libraryID: Zotero.Libraries.userLibraryID }});
 if (items && items.length > 0) {{
     var item = items[0];
-    return {{ key: item.key, title: item.getField('title'), itemType: item.itemTypeID }};
+    return {{
+        key: item.key,
+        keys: items.map(function (i) {{ return i.key; }}),
+        title: item.getField('title'),
+        itemType: Zotero.ItemTypes.getName(item.itemTypeID)
+    }};
 }}
 return {{ error: 'no items created' }};
 """
     bridge_result = execute_javascript(
         js, endpoint=debug_bridge_endpoint, token=debug_bridge_token
     )
+    if bridge_result.timed_out:
+        return ConnectorImportResult(
+            ok=False, doi=doi, item_type="", title="",
+            error=(
+                f"{bridge_result.error} The import may still have created the item: check Zotero for "
+                "this DOI before importing again; do not rerun import-doi blindly."
+            ),
+            connector_endpoint=debug_bridge_endpoint, outcome="unknown",
+        )
     if bridge_result.ok:
         payload = bridge_result.result
         if isinstance(payload, dict) and "key" in payload:
+            keys = [str(k) for k in payload.get("keys") or [payload.get("key")] if k]
             return ConnectorImportResult(
                 ok=True, doi=doi,
                 item_type=str(payload.get("itemType", "")),
                 title=str(payload.get("title", "")),
                 error="", connector_endpoint=debug_bridge_endpoint,
+                item_key=keys[0] if len(keys) == 1 else "",
+                item_keys=keys,
             )
         if isinstance(payload, dict) and "error" in payload:
             return ConnectorImportResult(
@@ -316,14 +355,30 @@ return {{ error: 'no items created' }};
     )
 
 
+# Zotero.Attachments.LINK_MODE_* values (chrome/content/zotero/xpcom/attachments.js).
+_LINK_MODE_NAMES = {0: "imported_file", 1: "imported_url", 2: "linked_file", 3: "linked_url", 4: "embedded_image"}
+# find-pdf's debug-bridge HTTP timeout: addAvailableFile's resolver lookups and download plus the
+# wait for a ZotMoov auto-move must fit inside it.
+FIND_PDF_TIMEOUT_SECONDS = 90
+# The auto-move wait ends extensions.zotmoov.auto_process_delay plus this margin after the file was
+# attached, and never later than FIND_PDF_SETTLE_CAP_SECONDS after the script started.
+FIND_PDF_SETTLE_MARGIN_SECONDS = 5
+FIND_PDF_SETTLE_CAP_SECONDS = 75
+
+
 @dataclass
 class FindPdfResult:
     ok: bool
     key: str
     found: bool
-    attachment_key: str
+    attachment_key: str  # final attachment key; empty unless outcome == "attached"
     error: str
     endpoint: str
+    outcome: str = ""  # "attached", "not_found", "unsettled", "unknown" (bridge timeout), or "error"
+    moved: bool = False  # ZotMoov replaced the downloaded attachment with a linked file
+    link_mode: str = ""
+    attachments: list[dict[str, str]] = field(default_factory=list)  # new file attachments last observed
+    message: str = ""
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -337,43 +392,166 @@ def find_available_pdf_for_item(
 ) -> FindPdfResult:
     """Trigger Zotero's own "Find Available PDF" search for an existing library item.
 
-    Runs Zotero.Attachments.addAvailablePDF via debug-bridge -- the same lookup Zotero's
-    own "Find Available PDF" context-menu action uses (OA repositories, publisher pages,
-    etc.). Requires the debug-bridge plugin; use this as a fallback when check-pdf finds
-    no local PDF attachment, before resorting to a manual attach.
+    Runs Zotero.Attachments.addAvailableFile (addAvailablePDF on older Zotero) via
+    debug-bridge -- the same lookup Zotero's own "Find Available PDF" context-menu action
+    uses (OA repositories, publisher pages, etc.). Requires the debug-bridge plugin; use this
+    as a fallback when check-pdf finds no local PDF attachment, before resorting to link-pdf.
+
+    With ZotMoov's auto-move active, the downloaded attachment is replaced a few seconds later
+    (extensions.zotmoov.auto_process_delay) by a linked-file attachment under a new key. When
+    ZotMoov's own conditions predict that move, this waits for the replacement (without
+    triggering a move itself) and reports only a key it observed as current; otherwise the
+    outcome is "unsettled". A debug-bridge timeout gives outcome "unknown".
     """
     js = f"""
+var scriptStart = Date.now();
 var item = await Zotero.Items.getByLibraryAndKeyAsync(Zotero.Libraries.userLibraryID, {json.dumps(key)});
 if (!item) {{
     return {{ error: 'item not found' }};
 }}
-if (!Zotero.Attachments || typeof Zotero.Attachments.addAvailablePDF !== 'function') {{
-    return {{ error: 'Zotero.Attachments.addAvailablePDF is not available' }};
+var A = Zotero.Attachments;
+var addFile = A && (A.addAvailableFile || A.addAvailablePDF);
+if (typeof addFile !== 'function') {{
+    return {{ error: 'Zotero.Attachments.addAvailableFile is not available' }};
 }}
-var attachment = await Zotero.Attachments.addAvailablePDF(item);
-if (attachment) {{
-    return {{ found: true, attachmentKey: attachment.key }};
+var fileChildren = async function () {{
+    var children = await Zotero.Items.getAsync(item.getAttachments());
+    return children.filter(function (a) {{ return a.isFileAttachment(); }});
+}};
+var before = (await fileChildren()).map(function (a) {{ return a.id; }});
+var attachment = await addFile.call(A, item);
+if (!attachment) {{
+    return {{ found: false }};
 }}
-return {{ found: false }};
+var attachedAt = Date.now();
+// Mirrors ZotMoov's auto-move (src/01-zotmoov-notify-callback.js, move() in src/02-zotmoov.js):
+// it skips linked files, an empty dst_dir, and extensions outside a non-empty allowed_fileext.
+var P = function (name) {{ return Zotero.Prefs.get('extensions.zotmoov.' + name, true); }};
+var filePath = attachment.getFilePath();
+var allowedExt = [];
+try {{
+    allowedExt = JSON.parse(P('allowed_fileext') || '[]');
+}} catch (e) {{
+    allowedExt = [];
+}}
+var extAllowed = !Array.isArray(allowedExt) || !allowedExt.length
+    || (!!filePath && allowedExt.map(function (x) {{ return String(x).toLowerCase(); }})
+        .indexOf(Zotero.File.getExtension(filePath).toLowerCase()) !== -1);
+var autoMove = !!Zotero.ZotMoov
+    && !!P('enable_automove')
+    && P('file_behavior') === 'move'
+    && !!P('dst_dir')
+    && !!filePath
+    && extAllowed
+    && (attachment.attachmentLinkMode === A.LINK_MODE_IMPORTED_FILE
+        || attachment.attachmentLinkMode === A.LINK_MODE_IMPORTED_URL);
+var moveDelay = Number(P('auto_process_delay'));
+if (!(moveDelay >= 0)) {{
+    moveDelay = 5000;
+}}
+var deadline = Math.min(
+    attachedAt + moveDelay + {FIND_PDF_SETTLE_MARGIN_SECONDS * 1000},
+    scriptStart + {FIND_PDF_SETTLE_CAP_SECONDS * 1000}
+);
+var added = [];
+var final = null;
+while (true) {{
+    added = (await fileChildren()).filter(function (a) {{ return before.indexOf(a.id) === -1; }});
+    var originalExists = Zotero.Items.exists(attachment.id);
+    if (!autoMove && originalExists) {{
+        final = attachment;
+    }} else if (autoMove && !originalExists && added.length === 1) {{
+        final = added[0];
+    }}
+    if (final || Date.now() >= deadline) {{
+        break;
+    }}
+    await Zotero.Promise.delay(500);
+}}
+return {{
+    found: true,
+    settled: !!final,
+    originalKey: attachment.key,
+    attachmentKey: final ? final.key : '',
+    linkMode: final ? final.attachmentLinkMode : null,
+    attachments: added.map(function (a) {{
+        return {{ key: a.key, linkMode: a.attachmentLinkMode, contentType: a.attachmentContentType }};
+    }})
+}};
 """
-    result = execute_javascript(js, endpoint=debug_bridge_endpoint, token=debug_bridge_token)
+    result = execute_javascript(
+        js, endpoint=debug_bridge_endpoint, token=debug_bridge_token, timeout=FIND_PDF_TIMEOUT_SECONDS
+    )
+    if result.timed_out:
+        return FindPdfResult(
+            ok=False, key=key, found=False, attachment_key="", error=result.error,
+            endpoint=debug_bridge_endpoint, outcome="unknown",
+            message=(
+                "Zotero may have attached a file after all. Do not rerun find-pdf, which could attach "
+                f"a second copy; check the item in Zotero (or run check-pdf --key {key}) first."
+            ),
+        )
     if not result.ok:
         return FindPdfResult(
             ok=False, key=key, found=False, attachment_key="", error=result.error,
-            endpoint=debug_bridge_endpoint,
+            endpoint=debug_bridge_endpoint, outcome="error",
         )
     payload = result.result
     if isinstance(payload, dict) and payload.get("error"):
         return FindPdfResult(
             ok=False, key=key, found=False, attachment_key="", error=str(payload["error"]),
-            endpoint=debug_bridge_endpoint,
+            endpoint=debug_bridge_endpoint, outcome="error",
         )
-    if isinstance(payload, dict) and payload.get("found"):
+    if not (isinstance(payload, dict) and payload.get("found")):
         return FindPdfResult(
-            ok=True, key=key, found=True, attachment_key=str(payload.get("attachmentKey", "")),
-            error="", endpoint=debug_bridge_endpoint,
+            ok=True, key=key, found=False, attachment_key="", error="", endpoint=debug_bridge_endpoint,
+            outcome="not_found",
+            message=(
+                "Zotero's PDF resolvers (the same lookup as 'Find Available PDF') found no PDF for "
+                "this item. If an open-access copy exists (e.g. the publisher's open-access page or "
+                f"arXiv), download it and attach it with: link-pdf --key {key} --file <path-to-pdf>"
+            ),
         )
-    return FindPdfResult(ok=True, key=key, found=False, attachment_key="", error="", endpoint=debug_bridge_endpoint)
+    attachments = [
+        {
+            "key": str(entry.get("key", "")),
+            "link_mode": _link_mode_name(entry.get("linkMode")),
+            "content_type": str(entry.get("contentType") or ""),
+        }
+        for entry in payload.get("attachments") or []
+        if isinstance(entry, dict)
+    ]
+    original_key = str(payload.get("originalKey", ""))
+    final_key = str(payload.get("attachmentKey") or "")
+    if payload.get("settled") and final_key:
+        moved = final_key != original_key
+        return FindPdfResult(
+            ok=True, key=key, found=True, attachment_key=final_key, error="", endpoint=debug_bridge_endpoint,
+            outcome="attached", moved=moved, link_mode=_link_mode_name(payload.get("linkMode")),
+            attachments=attachments,
+            message=(
+                f"ZotMoov replaced the downloaded attachment {original_key} with a linked file; "
+                f"{final_key} is the current attachment key."
+                if moved else ""
+            ),
+        )
+    return FindPdfResult(
+        ok=True, key=key, found=True, attachment_key="", error="", endpoint=debug_bridge_endpoint,
+        outcome="unsettled", attachments=attachments,
+        message=(
+            f"Zotero attached a file (initial attachment {original_key}), but the item's attachments "
+            "had not settled by the end of the wait -- ZotMoov's auto-move may still be "
+            "running, so 'attachments' is only the last observed state and its keys may be stale. "
+            "Do not rerun find-pdf, which could attach a second copy; check the item in Zotero "
+            f"(or run check-pdf --key {key}) after a moment."
+        ),
+    )
+
+
+def _link_mode_name(value: object) -> str:
+    if isinstance(value, int) and not isinstance(value, bool):
+        return _LINK_MODE_NAMES.get(value, str(value))
+    return ""
 
 
 @dataclass

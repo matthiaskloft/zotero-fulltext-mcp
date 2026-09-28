@@ -1,0 +1,32 @@
+{
+  "_provenance": "reconstructed from parsed output of a live run (Zotero 9.0.6 with ZotMoov auto-move, 2026-09-28; 8 s elapsed; the raw debug-bridge payload was not captured); replace with a raw capture from the live test's recorder (ZOTERO_LIVE_RECORD=1, see docs/live-zotero-test.md). Keys are placeholders (AAAA1111 parent, BBBB2222 downloaded attachment, CCCC3333 linked replacement), paths withheld.",
+  "item_key": "AAAA1111",
+  "payload": {
+    "found": true,
+    "settled": true,
+    "originalKey": "BBBB2222",
+    "attachmentKey": "CCCC3333",
+    "linkMode": 2,
+    "attachments": [
+      {"key": "CCCC3333", "linkMode": 2, "contentType": "application/pdf"}
+    ]
+  },
+  "expected": {
+    "ok": true,
+    "found": true,
+    "outcome": "attached",
+    "moved": true,
+    "attachment_key": "CCCC3333",
+    "link_mode": "linked_file",
+    "attachments": [
+      {"key": "CCCC3333", "link_mode": "linked_file", "content_type": "application/pdf"}
+    ]
+  },
+  "check_pdf_after": {
+    "parent_key": "AAAA1111",
+    "found": true,
+    "attachments": [
+      {"key": "CCCC3333", "path": "attachments:<relative>", "content_type": "application/pdf"}
+    ]
+  }
+}
