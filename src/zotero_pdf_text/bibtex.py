@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
+import tempfile
 import uuid
 import urllib.error
 import urllib.parse
@@ -9,6 +11,8 @@ import urllib.request
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, TypedDict, cast
+
+from .pdf_fetch import DEFAULT_MAX_BYTES, PdfFetchError, check_url, fetch_pdf, sha256_file
 
 
 DEFAULT_BBT_ENDPOINT = "http://127.0.0.1:23119/better-bibtex/json-rpc"
@@ -367,64 +371,20 @@ FIND_PDF_TIMEOUT_SECONDS = 90
 FIND_PDF_SETTLE_MARGIN_SECONDS = 5
 FIND_PDF_SETTLE_CAP_SECONDS = 75
 
-
-@dataclass
-class FindPdfResult:
-    ok: bool
-    key: str
-    found: bool
-    attachment_key: str  # final attachment key; empty unless outcome == "attached"
-    error: str
-    endpoint: str
-    outcome: str = ""  # "attached", "not_found", "unsettled", "unknown" (bridge timeout), or "error"
-    moved: bool = False  # ZotMoov replaced the downloaded attachment with a linked file
-    link_mode: str = ""
-    attachments: list[dict[str, str]] = field(default_factory=list)  # new file attachments last observed
-    message: str = ""
-
-    def to_dict(self) -> dict[str, object]:
-        return asdict(self)
-
-
-def find_available_pdf_for_item(
-    key: str,
-    *,
-    debug_bridge_endpoint: str = DEFAULT_DEBUG_BRIDGE_ENDPOINT,
-    debug_bridge_token: str = "",
-) -> FindPdfResult:
-    """Trigger Zotero's own "Find Available PDF" search for an existing library item.
-
-    Runs Zotero.Attachments.addAvailableFile (addAvailablePDF on older Zotero) via
-    debug-bridge -- the same lookup Zotero's own "Find Available PDF" context-menu action
-    uses (OA repositories, publisher pages, etc.). Requires the debug-bridge plugin; use this
-    as a fallback when check-pdf finds no local PDF attachment, before resorting to link-pdf.
-
-    With ZotMoov's auto-move active, the downloaded attachment is replaced a few seconds later
-    (extensions.zotmoov.auto_process_delay) by a linked-file attachment under a new key. When
-    ZotMoov's own conditions predict that move, this waits for the replacement (without
-    triggering a move itself) and reports only a key it observed as current; otherwise the
-    outcome is "unsettled". A debug-bridge timeout gives outcome "unknown".
-    """
-    js = f"""
-var scriptStart = Date.now();
-var item = await Zotero.Items.getByLibraryAndKeyAsync(Zotero.Libraries.userLibraryID, {json.dumps(key)});
-if (!item) {{
-    return {{ error: 'item not found' }};
-}}
-var A = Zotero.Attachments;
-var addFile = A && (A.addAvailableFile || A.addAvailablePDF);
-if (typeof addFile !== 'function') {{
-    return {{ error: 'Zotero.Attachments.addAvailableFile is not available' }};
-}}
-var fileChildren = async function () {{
+# Shared by find-pdf and link-pdf --url. Needs `item` (the parent) in scope.
+_FILE_CHILDREN_JS = """
+var fileChildren = async function () {
     var children = await Zotero.Items.getAsync(item.getAttachments());
-    return children.filter(function (a) {{ return a.isFileAttachment(); }});
-}};
-var before = (await fileChildren()).map(function (a) {{ return a.id; }});
-var attachment = await addFile.call(A, item);
-if (!attachment) {{
-    return {{ found: false }};
-}}
+    return children.filter(function (a) { return a.isFileAttachment(); });
+};
+"""
+
+# Shared settle logic, run right after a new file attachment was added to `item`. Needs
+# `scriptStart`, `A` (Zotero.Attachments), `fileChildren`, `before` (file-child ids before the add)
+# and `attachment` (the new attachment) in scope. It never triggers a ZotMoov move itself; when
+# ZotMoov's own conditions predict an auto-move it waits for the replacement, and it reports only a
+# key it observed as current. `_parse_settled` reads the returned object.
+_SETTLE_JS = f"""
 var attachedAt = Date.now();
 // Mirrors ZotMoov's auto-move (src/01-zotmoov-notify-callback.js, move() in src/02-zotmoov.js):
 // it skips linked files, an empty dst_dir, and extensions outside a non-empty allowed_fileext.
@@ -477,10 +437,105 @@ return {{
     originalKey: attachment.key,
     attachmentKey: final ? final.key : '',
     linkMode: final ? final.attachmentLinkMode : null,
+    path: final ? (final.getFilePath() || '') : '',
     attachments: added.map(function (a) {{
         return {{ key: a.key, linkMode: a.attachmentLinkMode, contentType: a.attachmentContentType }};
     }})
 }};
+"""
+
+
+@dataclass
+class _Settled:
+    settled: bool
+    original_key: str
+    final_key: str  # empty unless settled
+    moved: bool
+    link_mode: str
+    path: str
+    attachments: list[dict[str, str]]
+
+
+def _parse_settled(payload: dict[str, Any]) -> _Settled:
+    """Read the object `_SETTLE_JS` returns."""
+    attachments = [
+        {
+            "key": str(entry.get("key", "")),
+            "link_mode": _link_mode_name(entry.get("linkMode")),
+            "content_type": str(entry.get("contentType") or ""),
+        }
+        for entry in payload.get("attachments") or []
+        if isinstance(entry, dict)
+    ]
+    original_key = str(payload.get("originalKey", ""))
+    final_key = str(payload.get("attachmentKey") or "")
+    settled = bool(payload.get("settled")) and bool(final_key)
+    return _Settled(
+        settled=settled,
+        original_key=original_key,
+        final_key=final_key if settled else "",
+        moved=settled and final_key != original_key,
+        link_mode=_link_mode_name(payload.get("linkMode")) if settled else "",
+        path=str(payload.get("path") or "") if settled else "",
+        attachments=attachments,
+    )
+
+
+@dataclass
+class FindPdfResult:
+    ok: bool
+    key: str
+    found: bool
+    attachment_key: str  # final attachment key; empty unless outcome == "attached"
+    error: str
+    endpoint: str
+    outcome: str = ""  # "attached", "not_found", "unsettled", "unknown" (bridge timeout), or "error"
+    moved: bool = False  # ZotMoov replaced the downloaded attachment with a linked file
+    link_mode: str = ""
+    attachments: list[dict[str, str]] = field(default_factory=list)  # new file attachments last observed
+    message: str = ""
+
+    def to_dict(self) -> dict[str, object]:
+        return asdict(self)
+
+
+def find_available_pdf_for_item(
+    key: str,
+    *,
+    debug_bridge_endpoint: str = DEFAULT_DEBUG_BRIDGE_ENDPOINT,
+    debug_bridge_token: str = "",
+) -> FindPdfResult:
+    """Trigger Zotero's own "Find Available PDF" search for an existing library item.
+
+    Runs Zotero.Attachments.addAvailableFile (addAvailablePDF on older Zotero) via
+    debug-bridge -- the same lookup Zotero's own "Find Available PDF" context-menu action
+    uses (OA repositories, publisher pages, etc.). Requires the debug-bridge plugin; use this
+    as a fallback when check-pdf finds no local PDF attachment, before resorting to link-pdf.
+
+    With ZotMoov's auto-move active, the downloaded attachment is replaced a few seconds later
+    (extensions.zotmoov.auto_process_delay) by a linked-file attachment under a new key. When
+    ZotMoov's own conditions predict that move, this waits for the replacement (without
+    triggering a move itself) and reports only a key it observed as current; otherwise the
+    outcome is "unsettled". A debug-bridge timeout gives outcome "unknown".
+    """
+    js = f"""
+var scriptStart = Date.now();
+var item = await Zotero.Items.getByLibraryAndKeyAsync(Zotero.Libraries.userLibraryID, {json.dumps(key)});
+if (!item) {{
+    return {{ error: 'item not found' }};
+}}
+var A = Zotero.Attachments;
+var addFile = A && (A.addAvailableFile || A.addAvailablePDF);
+if (typeof addFile !== 'function') {{
+    return {{ error: 'Zotero.Attachments.addAvailableFile is not available' }};
+}}
+{_FILE_CHILDREN_JS}
+var before = (await fileChildren()).map(function (a) {{ return a.id; }});
+var attachment = await addFile.call(A, item);
+if (!attachment) {{
+    return {{ found: false }};
+}}
+{_SETTLE_JS}
 """
     result = execute_javascript(
         js, endpoint=debug_bridge_endpoint, token=debug_bridge_token, timeout=FIND_PDF_TIMEOUT_SECONDS
@@ -512,35 +567,22 @@ return {{
             message=(
                 "Zotero's PDF resolvers (the same lookup as 'Find Available PDF') found no PDF for "
                 "this item. If an open-access copy exists (e.g. the publisher's open-access page or "
-                f"arXiv), download it and attach it with: link-pdf --key {key} --file <path-to-pdf>"
+                f"arXiv), attach it from its direct PDF link with: link-pdf --key {key} --url "
+                "<direct-pdf-url> (or --file <path-to-pdf> for a local copy)"
             ),
         )
-    attachments = [
-        {
-            "key": str(entry.get("key", "")),
-            "link_mode": _link_mode_name(entry.get("linkMode")),
-            "content_type": str(entry.get("contentType") or ""),
-        }
-        for entry in payload.get("attachments") or []
-        if isinstance(entry, dict)
-    ]
-    original_key = str(payload.get("originalKey", ""))
-    final_key = str(payload.get("attachmentKey") or "")
-    if payload.get("settled") and final_key:
-        moved = final_key != original_key
+    settled = _parse_settled(payload)
+    if settled.settled:
         return FindPdfResult(
-            ok=True, key=key, found=True, attachment_key=final_key, error="", endpoint=debug_bridge_endpoint,
-            outcome="attached", moved=moved, link_mode=_link_mode_name(payload.get("linkMode")),
-            attachments=attachments,
-            message=(
-                f"ZotMoov replaced the downloaded attachment {original_key} with a linked file; "
-                f"{final_key} is the current attachment key."
-                if moved else ""
-            ),
+            ok=True, key=key, found=True, attachment_key=settled.final_key, error="",
+            endpoint=debug_bridge_endpoint, outcome="attached", moved=settled.moved,
+            link_mode=settled.link_mode, attachments=settled.attachments,
+            message=_moved_message(settled),
         )
+    original_key = settled.original_key
     return FindPdfResult(
         ok=True, key=key, found=True, attachment_key="", error="", endpoint=debug_bridge_endpoint,
-        outcome="unsettled", attachments=attachments,
+        outcome="unsettled", attachments=settled.attachments,
         message=(
             f"Zotero attached a file (initial attachment {original_key}), but the item's attachments "
             "had not settled by the end of the wait -- ZotMoov's auto-move may still be "
@@ -548,6 +590,15 @@ return {{
             "Do not rerun find-pdf, which could attach a second copy; check the item in Zotero "
             f"(or run check-pdf --key {key}) after a moment."
         ),
+    )
+
+
+def _moved_message(settled: _Settled) -> str:
+    if not settled.moved:
+        return ""
+    return (
+        f"ZotMoov replaced the downloaded attachment {settled.original_key} with a linked file; "
+        f"{settled.final_key} is the current attachment key."
     )
 
 
@@ -662,6 +713,280 @@ return {{ linked: true, moved: true, key: moved.key, path: moved.getFilePath() }
         ok=False, key="", attachment_key="", path="", moved=False, warning="",
         error="unexpected response from debug-bridge", endpoint=debug_bridge_endpoint,
     )
+
+
+# ---------------------------------------------------------------------------
+# link-pdf --url: download, validate, import as a stored copy, settle
+# ---------------------------------------------------------------------------
+
+PDF_CONTENT_TYPE = "application/pdf"
+# The read-only pre-check lists attachments only; it needs no long wait.
+LIST_ATTACHMENTS_TIMEOUT_SECONDS = 30
+
+
+@dataclass
+class FileAttachmentList:
+    ok: bool
+    attachments: list[dict[str, str]]  # every file attachment: key, link_mode, content_type
+    error: str
+
+    @property
+    def pdfs(self) -> list[dict[str, str]]:
+        return [a for a in self.attachments if a["content_type"] == PDF_CONTENT_TYPE]
+
+
+def list_file_attachments(
+    parent_key: str,
+    *,
+    debug_bridge_endpoint: str = DEFAULT_DEBUG_BRIDGE_ENDPOINT,
+    debug_bridge_token: str = "",
+) -> FileAttachmentList:
+    """Read the parent's file attachments live from Zotero through debug-bridge (read-only).
+
+    Unlike check-pdf, which reads the SQLite file, this sees attachments added seconds ago.
+    """
+    js = f"""
+var item = await Zotero.Items.getByLibraryAndKeyAsync(Zotero.Libraries.userLibraryID, {json.dumps(parent_key)});
+if (!item) {{
+    return {{ error: 'item not found' }};
+}}
+{_FILE_CHILDREN_JS}
+return {{
+    attachments: (await fileChildren()).map(function (a) {{
+        return {{ key: a.key, linkMode: a.attachmentLinkMode, contentType: a.attachmentContentType }};
+    }})
+}};
+"""
+    result = execute_javascript(
+        js, endpoint=debug_bridge_endpoint, token=debug_bridge_token, timeout=LIST_ATTACHMENTS_TIMEOUT_SECONDS
+    )
+    if not result.ok:
+        return FileAttachmentList(ok=False, attachments=[], error=result.error)
+    payload = result.result
+    if not isinstance(payload, dict) or payload.get("error") or not isinstance(payload.get("attachments"), list):
+        error = payload.get("error") if isinstance(payload, dict) else None
+        return FileAttachmentList(
+            ok=False, attachments=[], error=str(error or "unexpected response from debug-bridge")
+        )
+    return FileAttachmentList(ok=True, attachments=_attachment_entries(payload["attachments"]), error="")
+
+
+def _attachment_entries(entries: list[Any]) -> list[dict[str, str]]:
+    return [
+        {
+            "key": str(entry.get("key", "")),
+            "link_mode": _link_mode_name(entry.get("linkMode")),
+            "content_type": str(entry.get("contentType") or ""),
+        }
+        for entry in entries
+        if isinstance(entry, dict)
+    ]
+
+
+@dataclass
+class LinkPdfUrlResult:
+    ok: bool
+    key: str  # final attachment key, as in LinkPdfResult; empty unless outcome == "attached"
+    attachment_key: str
+    path: str  # final attachment's file path as Zotero reports it
+    moved: bool  # ZotMoov replaced the stored copy with a linked file
+    warning: str
+    error: str
+    endpoint: str
+    # "attached", "refused_existing_pdf", "unsettled", "unknown" (bridge timeout) or "error"
+    outcome: str
+    parent_key: str
+    source_url: str
+    final_url: str = ""
+    content_type: str = ""  # as the server declared it; recorded, not trusted
+    size: int = 0
+    sha256: str = ""
+    verified_hash: bool = False  # the final file's SHA-256 equals the downloaded file's
+    link_mode: str = ""
+    attachments: list[dict[str, str]] = field(default_factory=list)
+    existing_pdfs: list[dict[str, str]] = field(default_factory=list)
+    message: str = ""
+
+    def to_dict(self) -> dict[str, object]:
+        return asdict(self)
+
+
+def attach_pdf_from_url(
+    parent_key: str,
+    url: str,
+    *,
+    allow_additional: bool = False,
+    max_bytes: int = DEFAULT_MAX_BYTES,
+    debug_bridge_endpoint: str = DEFAULT_DEBUG_BRIDGE_ENDPOINT,
+    debug_bridge_token: str = "",
+) -> LinkPdfUrlResult:
+    """Download a PDF from ``url`` and attach it to ``parent_key`` as a stored copy.
+
+    1. URL policy (https, no userinfo); the host checks run per redirect hop inside fetch_pdf.
+    2. Live, read-only pre-check of the parent's file attachments: refuse when it already has a
+       PDF unless ``allow_additional``. This also makes a rerun after an unknown outcome safe.
+    3. fetch_pdf into a fresh temporary directory (size cap, ``%PDF-`` check, SHA-256).
+    4. Zotero.Attachments.importFromFile, which copies the file into Zotero's storage, then the
+       same settle wait as find-pdf (a ZotMoov auto-move replaces the stored copy by a linked file).
+    5. Re-hash the file at the final attachment's path and require the downloaded SHA-256.
+
+    The temporary directory is always removed; nothing is written to output_root. A bridge
+    timeout during the import gives outcome "unknown" and is never retried.
+    """
+    res = LinkPdfUrlResult(
+        ok=False, key="", attachment_key="", path="", moved=False, warning="", error="",
+        endpoint=debug_bridge_endpoint, outcome="error", parent_key=parent_key, source_url=url,
+    )
+
+    def finish(outcome: str, error: str, message: str) -> LinkPdfUrlResult:
+        res.outcome, res.error, res.message = outcome, error, message
+        return res
+
+    def refuse(pdfs: list[dict[str, str]], downloaded: bool) -> LinkPdfUrlResult:
+        res.existing_pdfs = pdfs
+        return finish(
+            "refused_existing_pdf",
+            f"item {parent_key} already has a PDF attachment ({', '.join(a['key'] for a in pdfs)})",
+            ("Nothing was attached." if downloaded else "Nothing was downloaded or attached.")
+            + " Pass --allow-additional to attach another PDF anyway.",
+        )
+
+    try:
+        check_url(url)
+    except PdfFetchError as exc:
+        return finish("error", str(exc), "Nothing was downloaded or attached.")
+
+    existing = list_file_attachments(
+        parent_key, debug_bridge_endpoint=debug_bridge_endpoint, debug_bridge_token=debug_bridge_token
+    )
+    if not existing.ok:
+        return finish(
+            "error", f"pre-check of the item's attachments failed: {existing.error}",
+            "Nothing was downloaded or attached.",
+        )
+    if existing.pdfs and not allow_additional:
+        return refuse(existing.pdfs, downloaded=False)
+
+    staging = Path(tempfile.mkdtemp(prefix="zotero-pdf-text-"))
+    try:
+        try:
+            fetched = fetch_pdf(url, staging, max_bytes, file_name=f"{_safe_name(parent_key)}.pdf")
+        except PdfFetchError as exc:
+            return finish("error", str(exc), "Nothing was attached.")
+        res.final_url, res.content_type = fetched.final_url, fetched.content_type
+        res.size, res.sha256 = fetched.size, fetched.sha256
+        result = execute_javascript(
+            _import_file_js(parent_key, str(fetched.path), allow_additional),
+            endpoint=debug_bridge_endpoint, token=debug_bridge_token, timeout=FIND_PDF_TIMEOUT_SECONDS,
+        )
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
+        if staging.exists():
+            res.warning = f"the temporary download folder could not be removed: {staging}"
+
+    if result.timed_out:
+        return finish(
+            "unknown", result.error,
+            "Zotero may have attached the file after all. Do not rerun link-pdf, which could attach a "
+            f"second copy; check the item in Zotero (or run check-pdf --key {parent_key}) first.",
+        )
+    payload = result.result
+    if not result.ok or not isinstance(payload, dict):
+        return finish("error", result.error or "unexpected response from debug-bridge", "")
+    if payload.get("refused"):
+        return refuse(_attachment_entries(payload.get("attachments") or []), downloaded=True)
+    if not payload.get("found"):
+        return finish("error", str(payload.get("error") or "unexpected response from debug-bridge"), "")
+
+    settled = _parse_settled(payload)
+    res.attachments = settled.attachments
+    if not settled.settled:
+        res.ok = True
+        return finish(
+            "unsettled", "",
+            f"Zotero stored the file (initial attachment {settled.original_key}), but the item's "
+            "attachments had not settled by the end of the wait -- ZotMoov's auto-move may still be "
+            "running, so 'attachments' is only the last observed state and its keys may be stale. "
+            "Do not rerun link-pdf, which could attach a second copy; check the item in Zotero "
+            f"(or run check-pdf --key {parent_key}) after a moment.",
+        )
+
+    res.key = res.attachment_key = settled.final_key
+    res.path, res.moved, res.link_mode = settled.path, settled.moved, settled.link_mode
+    verified, verify_error = _verify_hash(settled.path, fetched.sha256)
+    res.ok = res.verified_hash = verified
+    if not verified:
+        return finish(
+            "attached", verify_error,
+            f"{verify_error} The attachment exists in Zotero ({settled.final_key}); check it there "
+            "and do not rerun link-pdf, which would attach a second copy.",
+        )
+    return finish("attached", "", _moved_message(settled))
+
+
+def _verify_hash(path: str, expected: str) -> tuple[bool, str]:
+    if not path:
+        return False, "Zotero reported no file path for the attachment, so its hash could not be checked."
+    try:
+        actual = sha256_file(Path(path))
+    except OSError as exc:
+        return False, f"could not read the attached file to check its hash: {exc}."
+    if actual != expected:
+        return False, "the attached file's SHA-256 does not match the downloaded file."
+    return True, ""
+
+
+def _safe_name(value: str) -> str:
+    return re.sub(r"[^A-Za-z0-9_-]", "_", value)[:64] or "download"
+
+
+def _import_file_js(parent_key: str, file_path: str, allow_additional: bool) -> str:
+    # Zotero.Attachments.importFromFile({file, parentItemID, contentType, fileBaseName}) copies the
+    # file into the attachment's storage directory (LINK_MODE_IMPORTED_FILE) and returns the new
+    # item (chrome/content/zotero/xpcom/attachments.js, Zotero 9.0.6 and main). It does not rename
+    # on its own, so the name follows Zotero's auto-rename setting the way importFromURL does.
+    return f"""
+var scriptStart = Date.now();
+var item = await Zotero.Items.getByLibraryAndKeyAsync(Zotero.Libraries.userLibraryID, {json.dumps(parent_key)});
+if (!item) {{
+    return {{ error: 'item not found' }};
+}}
+var A = Zotero.Attachments;
+if (typeof A.importFromFile !== 'function') {{
+    return {{ error: 'Zotero.Attachments.importFromFile is not available' }};
+}}
+{_FILE_CHILDREN_JS}
+var existing = await fileChildren();
+var before = existing.map(function (a) {{ return a.id; }});
+var pdfs = existing.filter(function (a) {{ return a.attachmentContentType === {json.dumps(PDF_CONTENT_TYPE)}; }});
+if (pdfs.length && !{json.dumps(allow_additional)}) {{
+    return {{
+        refused: true,
+        attachments: pdfs.map(function (a) {{
+            return {{ key: a.key, linkMode: a.attachmentLinkMode, contentType: a.attachmentContentType }};
+        }})
+    }};
+}}
+var sourcePath = {json.dumps(file_path)};
+if (!(await IOUtils.exists(sourcePath))) {{
+    return {{ error: 'downloaded file is missing: ' + sourcePath }};
+}}
+var fileBaseName;
+if (typeof A.shouldAutoRenameFile === 'function' && typeof A.getFileBaseNameFromItem === 'function'
+        && A.shouldAutoRenameFile(false, item.libraryID)) {{
+    fileBaseName = A.getFileBaseNameFromItem(item) || undefined;
+}}
+var attachment = await A.importFromFile({{
+    file: sourcePath,
+    parentItemID: item.id,
+    contentType: {json.dumps(PDF_CONTENT_TYPE)},
+    fileBaseName: fileBaseName
+}});
+if (!attachment) {{
+    return {{ error: 'importFromFile returned no attachment' }};
+}}
+{_SETTLE_JS}
+"""
 
 
 def _fetch_doi_metadata(doi: str) -> dict[str, object]:

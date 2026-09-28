@@ -1,6 +1,6 @@
 # Debug-bridge token setup
 
-The `find-pdf` and `link-pdf` CLI commands (and manual item-creation via debug-bridge JS, see
+The `find-pdf` and `link-pdf` CLI commands and `import-doi --with-pdf` (and manual item-creation via debug-bridge JS, see
 the MCP server's notes) drive Zotero through the **debug-bridge** plugin — the test fixture
 plugin from the `zotero-better-bibtex` project:
 <https://github.com/retorquere/zotero-better-bibtex/tree/master/test/fixtures/debug-bridge>.
@@ -72,6 +72,11 @@ institutional/paywall access.
   working.
 - **Paywalled papers must be attached manually**: drag the PDF onto the item, or right-click the
   item → *Add Attachment → Attach Stored Copy of File*.
+- When you know a direct, openly accessible PDF link that Zotero's resolvers missed, use
+  `link-pdf --key <ITEM_KEY> --url <direct-pdf-url>` (or `import-doi --with-pdf --pdf-url ...`)
+  instead of writing your own `importFromURL` script through the bridge. It refuses non-public
+  hosts and non-PDF responses, and it reports the attachment key as it stands after a ZotMoov
+  auto-move.
 
 ## Notes
 

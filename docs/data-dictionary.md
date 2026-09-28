@@ -765,6 +765,11 @@ The Zotero-writing CLI commands report results the assistant must not over-read:
 - `import-doi`: `key_source` is `created_item`, `connector_lookup`, `ambiguous` (the translator
   created several items; `key` is null and `keys` lists them all) or null. A debug-bridge timeout
   fails with `outcome: "unknown"` and no connector fallback: check Zotero before importing again.
+  With `--with-pdf`, `pdf_outcome` and `steps` report the PDF steps; the PDF steps run only for
+  `created_item`, `connector_lookup` or an item already in the library (`key_source:
+  "already_in_library"`), and stop at `unsettled` or `unknown`.
+- `link-pdf --url`: the same `outcome` rule as `find-pdf`, plus `refused_existing_pdf`; `ok` also
+  requires `verified_hash` (the attached file matches the download's `sha256`).
 - `zotero-write apply`: `auto_run_timed_out: true` means the script may have run: check Zotero,
   never rerun the script.
 

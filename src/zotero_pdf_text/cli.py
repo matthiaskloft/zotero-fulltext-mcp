@@ -22,12 +22,14 @@ from .bibtex import (
     DEFAULT_CONNECTOR_ENDPOINT,
     DEFAULT_DEBUG_BRIDGE_ENDPOINT,
     append_bibtex_entries,
+    attach_pdf_from_url,
     check_better_bibtex,
     export_bibtex_entries,
     find_available_pdf_for_item,
     find_item_key_via_connector,
     import_doi_via_connector,
     link_local_pdf,
+    list_file_attachments,
 )
 from .artifacts import (
     ArtifactError,
@@ -656,6 +658,20 @@ def build_parser() -> argparse.ArgumentParser:
         default="",
         help="debug-bridge Bearer token (overrides ZOTERO_DEBUG_BRIDGE_TOKEN env var).",
     )
+    import_doi.add_argument(
+        "--with-pdf",
+        action="store_true",
+        help=(
+            "After the import (or for the item already in the library), attach a PDF: skip when the "
+            "item already has one, otherwise run find-pdf and, if it finds nothing and --pdf-url is "
+            "given, link-pdf --url. Adds 'steps' and 'pdf_outcome' to the output. Requires debug-bridge."
+        ),
+    )
+    import_doi.add_argument(
+        "--pdf-url",
+        default=None,
+        help="Direct https link to the PDF, used only when find-pdf finds nothing (requires --with-pdf).",
+    )
     check_pdf = subparsers.add_parser(
         "check-pdf",
         help="Check whether a Zotero item has a PDF attachment (reads local SQLite, no connector required).",
@@ -687,15 +703,32 @@ def build_parser() -> argparse.ArgumentParser:
     link_pdf = subparsers.add_parser(
         "link-pdf",
         help=(
-            "Link a local PDF to a Zotero item, then relocate it into the managed linked-attachments "
-            "folder via the ZotMoov plugin (copies + renames it, matching Zotero's own auto-move "
-            "behavior). Use this instead of manually attaching a PDF found outside Zotero's storage -- "
-            "a plain link left at its original location becomes a dangling attachment if that location "
-            "is ever cleaned up. Requires the debug-bridge and ZotMoov plugins."
+            "--file: link a local PDF to a Zotero item, then relocate it into the managed "
+            "linked-attachments folder via the ZotMoov plugin (copies + renames it, matching Zotero's "
+            "own auto-move behavior). Use this instead of manually attaching a PDF found outside "
+            "Zotero's storage -- a plain link left at its original location becomes a dangling "
+            "attachment if that location is ever cleaned up. Requires the debug-bridge and ZotMoov "
+            "plugins. --url: download the PDF from a direct https link (public hosts only, size cap, "
+            "must be a PDF), store it in Zotero as a copy (a ZotMoov auto-move is awaited like "
+            "find-pdf) and check its SHA-256; refuses when the item already has a PDF unless "
+            "--allow-additional. Requires debug-bridge."
         ),
     )
     link_pdf.add_argument("--key", required=True, help="Zotero parent item key (8-character alphanumeric).")
-    link_pdf.add_argument("--file", required=True, help="Absolute path to the local PDF to attach.")
+    link_pdf_source = link_pdf.add_mutually_exclusive_group(required=True)
+    link_pdf_source.add_argument("--file", help="Absolute path to the local PDF to attach.")
+    link_pdf_source.add_argument("--url", help="Direct https link to the PDF to download and attach.")
+    link_pdf.add_argument(
+        "--allow-additional",
+        action="store_true",
+        help="With --url: attach even when the item already has a PDF attachment.",
+    )
+    link_pdf.add_argument(
+        "--max-mb",
+        type=float,
+        default=None,
+        help="With --url: largest download accepted, in MB (default 200).",
+    )
     link_pdf.add_argument("--config", type=Path, default=resolve_config_path(), help="Path to project config JSON. Default: resolved for this machine.")
     link_pdf.add_argument(
         "--debug-bridge-endpoint",
@@ -943,6 +976,63 @@ def _print_provenance_apply(payload: dict[str, object]) -> None:
     for row in cast("list[dict[str, str]]", payload["rows"]):
         if row["outcome"] != provenance_reconvert.OUTCOME_PUBLISHED:
             print(f"  {row['attachment_key']}: {row['outcome']} -- {row['reason']}")
+
+
+# Keys certain enough to attach a PDF to: the created item itself, the item the duplicate check
+# found by DOI, or a connector lookup filtered by the same DOI. Not "ambiguous", never null.
+_PDF_CHAIN_KEY_SOURCES = {"created_item", "already_in_library", "connector_lookup"}
+
+
+def _import_doi_attach_pdf(args: argparse.Namespace, report: dict[str, object]) -> int:
+    """import-doi --with-pdf: existing-PDF check, find-pdf, then link-pdf --url on not_found.
+
+    Stops at the first step whose outcome is not a clear go-ahead (unsettled, unknown, error), so
+    it never chains past an uncertain Zotero state.
+    """
+    steps: list[dict[str, object]] = []
+    report["steps"] = steps
+    bridge = {"debug_bridge_endpoint": args.debug_bridge_endpoint, "debug_bridge_token": args.debug_bridge_token}
+
+    def done(pdf_outcome: str, rc: int, message: str = "") -> int:
+        report["pdf_outcome"] = pdf_outcome
+        if message:
+            report["pdf_message"] = message
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        return rc
+
+    key = report.get("key")
+    if not isinstance(key, str) or not key or report.get("key_source") not in _PDF_CHAIN_KEY_SOURCES:
+        return done(
+            "skipped_no_key", 1,
+            "No certain item key, so no PDF step ran. Confirm the item in Zotero, then run "
+            "find-pdf --key <key> (or link-pdf --key <key> --url <direct-pdf-url>).",
+        )
+
+    existing = list_file_attachments(key, **bridge)
+    if not existing.ok:
+        steps.append({"step": "check-existing-pdf", "outcome": "error", "error": existing.error})
+        return done("error", 1)
+    steps.append({
+        "step": "check-existing-pdf",
+        "outcome": "has_pdf" if existing.pdfs else "no_pdf",
+        "attachments": existing.pdfs,
+    })
+    if existing.pdfs:
+        return done("already_has_pdf", 0)
+
+    found = find_available_pdf_for_item(key, **bridge)
+    steps.append({"step": "find-pdf", **found.to_dict()})
+    if found.outcome != "not_found":
+        return done(found.outcome, 0 if found.ok else 1)
+    if not args.pdf_url:
+        return done(
+            "not_found", 0,
+            f"No PDF found. If a direct open-access PDF link exists, run: link-pdf --key {key} --url <direct-pdf-url>",
+        )
+
+    linked = attach_pdf_from_url(key, args.pdf_url, **bridge)
+    steps.append({"step": "link-pdf --url", **linked.to_dict()})
+    return done(linked.outcome, 0 if linked.ok else 1)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -1476,15 +1566,20 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "import-doi":
         import time
         from .zotero_db import find_item_by_doi  # used only for pre-import dedup check
+        if args.pdf_url and not args.with_pdf:
+            parser.error("--pdf-url requires --with-pdf")
         config = load_config(args.config)
         validate_config(config)
         doi = args.doi.strip()
 
         existing_key = find_item_by_doi(doi, config.zotero_sqlite)
         if existing_key:
-            print(json.dumps({"status": "already_in_library", "doi": doi, "key": existing_key},
-                             ensure_ascii=False, indent=2))
-            return 0
+            existing_report: dict[str, object] = {"status": "already_in_library", "doi": doi, "key": existing_key}
+            if not args.with_pdf:
+                print(json.dumps(existing_report, ensure_ascii=False, indent=2))
+                return 0
+            existing_report.update({"key_source": "already_in_library", "item_type": None, "title": None})
+            return _import_doi_attach_pdf(args, existing_report)
 
         import_result = import_doi_via_connector(
             doi,
@@ -1514,7 +1609,7 @@ def main(argv: list[str] | None = None) -> int:
                     key_source = "connector_lookup"
                     break
 
-        print(json.dumps({
+        imported_report: dict[str, object] = {
             "status": "imported",
             "doi": doi,
             "title": import_result.title,
@@ -1522,7 +1617,10 @@ def main(argv: list[str] | None = None) -> int:
             "key": new_key,
             "key_source": key_source,
             "keys": import_result.item_keys,
-        }, ensure_ascii=False, indent=2))
+        }
+        if args.with_pdf:
+            return _import_doi_attach_pdf(args, imported_report)
+        print(json.dumps(imported_report, ensure_ascii=False, indent=2))
         return 0
     if args.command == "check-pdf":
         from .zotero_db import check_pdf_attachment
@@ -1547,6 +1645,22 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(find_result.to_dict(), ensure_ascii=False, indent=2))
         return 0 if find_result.ok else 1
     if args.command == "link-pdf":
+        if args.file is not None and (args.allow_additional or args.max_mb is not None):
+            parser.error("--allow-additional and --max-mb apply only to --url")
+        if args.url is not None:
+            max_mb = 200.0 if args.max_mb is None else args.max_mb
+            if not 0 < max_mb < float("inf"):
+                parser.error("--max-mb must be a positive number")
+            url_result = attach_pdf_from_url(
+                args.key,
+                args.url,
+                allow_additional=args.allow_additional,
+                max_bytes=int(max_mb * 1024 * 1024),
+                debug_bridge_endpoint=args.debug_bridge_endpoint,
+                debug_bridge_token=args.debug_bridge_token,
+            )
+            print(json.dumps(url_result.to_dict(), ensure_ascii=False, indent=2))
+            return 0 if url_result.ok else 1
         link_result = link_local_pdf(
             args.key,
             args.file,

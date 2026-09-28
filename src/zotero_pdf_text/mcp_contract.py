@@ -1232,8 +1232,15 @@ def _write_operations(*, enable_reconvert: bool, enable_retry_timeout: bool) -> 
             surface="cli",
             enabled=True,
             writes="zotero",
-            purpose="Add a paper to Zotero by DOI through the Zotero connector.",
-            how_to_enable_or_run=f"{_CLI} import-doi --doi <DOI> (Zotero must be running).",
+            purpose=(
+                "Add a paper to Zotero by DOI through the Zotero connector; --with-pdf then attaches "
+                "a PDF (find-pdf, then the --pdf-url link if nothing is found) and reports "
+                "pdf_outcome, stopping at unsettled or unknown."
+            ),
+            how_to_enable_or_run=(
+                f"{_CLI} import-doi --doi <DOI> [--with-pdf [--pdf-url <direct-pdf-url>]] "
+                "(Zotero must be running; --with-pdf also needs the write-side plugins described in the README)."
+            ),
         ),
         WriteOperation(
             name="check-pdf",
@@ -1260,8 +1267,14 @@ def _write_operations(*, enable_reconvert: bool, enable_retry_timeout: bool) -> 
             surface="cli",
             enabled=True,
             writes="zotero",
-            purpose="Attach a local PDF to a Zotero item and move it into the managed attachments folder.",
-            how_to_enable_or_run=f"{_CLI} link-pdf --key <item key> --file <pdf> {_PLUGINS}",
+            purpose=(
+                "Attach a local PDF (--file) or a PDF downloaded from a direct https link (--url; "
+                "refused when the item already has a PDF) to a Zotero item. After --url outcome "
+                "unsettled or unknown, check Zotero and never rerun."
+            ),
+            how_to_enable_or_run=(
+                f"{_CLI} link-pdf --key <item key> --file <pdf> | --url <direct-pdf-url> {_PLUGINS}"
+            ),
         ),
         WriteOperation(
             name="zotero-write",

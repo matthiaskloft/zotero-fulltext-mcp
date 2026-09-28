@@ -11,8 +11,13 @@
 // move that has come due, so a 13 s wait finishes instantly.
 //
 // Prints {response, elapsedMs, children} where children is the parent's attachments at the end.
+//
+// File operations are real only where a scenario points at real directories: importFromFile
+// copies its source into `storageDir`, and the fake ZotMoov moves an existing file into a real
+// `dst_dir`. Without those the paths stay fake strings, as in the find-pdf cases.
 
 const fs = require('fs');
+const nodePath = require('path');
 
 const [scenarioPath, scriptPath] = process.argv.slice(2);
 const scenario = JSON.parse(fs.readFileSync(scenarioPath, 'utf8'));
@@ -74,6 +79,7 @@ function addAttachment(parent, spec) {
 function addRegularItem(spec) {
     return addItem({
         key: spec.key,
+        libraryID: 1,
         itemTypeID: spec.itemTypeID,
         _title: spec.title || '',
         getField(name) {
@@ -131,12 +137,17 @@ function queueAutoMove(attachment) {
         return;
     }
     schedule(Number(prefs.auto_process_delay), () => {
+        const source = String(attachment.getFilePath());
+        const target = prefs.dst_dir + '/' + source.split(/[\\/]/).pop();
+        if (fs.existsSync(source) && fs.existsSync(prefs.dst_dir)) {
+            fs.renameSync(source, target);
+        }
         items.delete(attachment.id);
         addAttachment(parent, {
             key: scenario.movedKey,
             linkMode: LINK_MODE_LINKED_FILE,
             contentType: attachment.attachmentContentType,
-            path: '/fake/zotmoov/destination/' + String(attachment.getFilePath()).split(/[\\/]/).pop(),
+            path: target,
         });
     });
 }
@@ -222,9 +233,52 @@ globalThis.Zotero = {
         addAvailablePDF(item) {
             return this.addAvailableFile(item);
         },
+        // Zotero.Attachments.importFromFile (chrome/content/zotero/xpcom/attachments.js): copies
+        // options.file into a new storage directory as LINK_MODE_IMPORTED_FILE, named
+        // fileBaseName + extension when given, and returns the new attachment item.
+        async importFromFile(options) {
+            if (!fs.existsSync(options.file)) {
+                throw new Error('fake importFromFile: no such file ' + options.file);
+            }
+            const owner = items.get(options.parentItemID);
+            const leaf = options.fileBaseName
+                ? options.fileBaseName + '.' + extensionOf(options.file)
+                : nodePath.basename(options.file);
+            const key = scenario.importKey;
+            let path = '/fake/storage/' + key + '/' + leaf;
+            if (scenario.storageDir) {
+                fs.mkdirSync(nodePath.join(scenario.storageDir, key), { recursive: true });
+                path = nodePath.join(scenario.storageDir, key, leaf);
+                fs.copyFileSync(options.file, path);
+            }
+            const attachment = addAttachment(owner, {
+                key,
+                linkMode: LINK_MODE_IMPORTED_FILE,
+                contentType: options.contentType,
+                path,
+            });
+            queueAutoMove(attachment);
+            return attachment;
+        },
+        shouldAutoRenameFile(isLink, libraryID) {
+            if (isLink !== false || libraryID !== 1) {
+                throw new Error('unexpected shouldAutoRenameFile(' + isLink + ', ' + libraryID + ')');
+            }
+            return !!scenario.autoRename;
+        },
+        getFileBaseNameFromItem(item) {
+            return 'Renamed from ' + item.key;
+        },
     },
     Translate: { Search: FakeSearchTranslate },
     ZotMoov: env.zotmoov ? {} : undefined,
+};
+
+// IOUtils is a chrome global in Zotero; the scripts only ask whether a file exists.
+globalThis.IOUtils = {
+    async exists(path) {
+        return fs.existsSync(path);
+    },
 };
 
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;

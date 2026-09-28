@@ -2,8 +2,12 @@
 
 `import-doi`, `find-pdf` and `link-pdf` run JavaScript inside Zotero through debug-bridge. The
 normal suite checks that code offline: recorded bridge payloads go through the parsers, and the
-generated `find-pdf` script runs in Node against a fake `Zotero` seeded from a recorded
-environment (`tests/test_zotero_bridge_fixtures.py`, fixtures in `tests/fixtures/zotero_bridge/`).
+generated `find-pdf` and `link-pdf --url` scripts run in Node against a fake `Zotero` seeded from
+a recorded environment (`tests/test_zotero_bridge_fixtures.py`, fixtures in
+`tests/fixtures/zotero_bridge/`). The live test does not cover `link-pdf --url` yet; its
+`importFromFile` behavior is modeled on Zotero's source, not on a recording. To check it by hand,
+run `link-pdf --key <key> --url <direct-pdf-url>` on a throwaway item without a PDF in the test
+profile, then `check-pdf --key <key>`.
 A fake cannot tell you that real Zotero still behaves the way it was recorded. The opt-in live
 test does that: it runs the real CLI against a running Zotero.
 
