@@ -412,6 +412,126 @@ class OrphanCandidateCliTests(unittest.TestCase):
             self.assertEqual(exit_code, 1)
 
 
+class ImportDoiAndFindPdfCliTests(unittest.TestCase):
+    def _config(self, root: Path) -> Path:
+        (root / "data").mkdir()
+        (root / "data" / "zotero.sqlite").write_bytes(b"")
+        config_path = root / "config.json"
+        config_path.write_text(
+            json.dumps({
+                "zotero_root": str(root),
+                "zotero_data_directory": str(root / "data"),
+                "linked_attachments": str(root),
+                "output_root": str(root / "out"),
+            }),
+            encoding="utf-8",
+        )
+        return config_path
+
+    def _import(self, import_result, lookup_key):
+        with tempfile.TemporaryDirectory() as tmp:
+            config_path = self._config(Path(tmp))
+            output = io.StringIO()
+            with (
+                patch("zotero_pdf_text.zotero_db.find_item_by_doi", return_value=None),
+                patch("zotero_pdf_text.cli.import_doi_via_connector", return_value=import_result),
+                patch("zotero_pdf_text.cli.find_item_key_via_connector", return_value=lookup_key) as lookup,
+                patch("time.sleep"),
+                redirect_stdout(output),
+            ):
+                rc = main(["import-doi", "--doi", "10.1000/example", "--config", str(config_path)])
+        return rc, json.loads(output.getvalue()), lookup
+
+    def test_import_doi_uses_created_item_key_without_polling(self):
+        from zotero_pdf_text.bibtex import ConnectorImportResult
+
+        import_result = ConnectorImportResult(
+            ok=True, doi="10.1000/example", item_type="journalArticle", title="A Paper", error="",
+            connector_endpoint="http://x", item_key="NEWITEM1",
+        )
+        rc, result, lookup = self._import(import_result, lookup_key="OTHER001")
+
+        self.assertEqual(rc, 0)
+        lookup.assert_not_called()
+        self.assertEqual(result["key"], "NEWITEM1")
+        self.assertEqual(result["key_source"], "created_item")
+        self.assertEqual(result["item_type"], "journalArticle")
+
+    def test_import_doi_marks_connector_lookup_key(self):
+        from zotero_pdf_text.bibtex import ConnectorImportResult
+
+        import_result = ConnectorImportResult(
+            ok=True, doi="10.1000/example", item_type="journalArticle", title="A Paper", error="",
+            connector_endpoint="http://x",
+        )
+        rc, result, lookup = self._import(import_result, lookup_key="FOUND001")
+
+        self.assertEqual(rc, 0)
+        lookup.assert_called_once()
+        self.assertEqual(result["key"], "FOUND001")
+        self.assertEqual(result["key_source"], "connector_lookup")
+
+    def test_import_doi_reports_missing_key_source_when_lookup_fails(self):
+        from zotero_pdf_text.bibtex import ConnectorImportResult
+
+        import_result = ConnectorImportResult(
+            ok=True, doi="10.1000/example", item_type="journalArticle", title="A Paper", error="",
+            connector_endpoint="http://x",
+        )
+        rc, result, lookup = self._import(import_result, lookup_key=None)
+
+        self.assertEqual(rc, 0)
+        self.assertEqual(lookup.call_count, 5)
+        self.assertIsNone(result["key"])
+        self.assertIsNone(result["key_source"])
+
+    def test_import_doi_reports_every_key_as_ambiguous_when_translator_creates_several(self):
+        from zotero_pdf_text.bibtex import ConnectorImportResult
+
+        import_result = ConnectorImportResult(
+            ok=True, doi="10.1000/example", item_type="journalArticle", title="A Paper", error="",
+            connector_endpoint="http://x", item_keys=["NEWITEM1", "NEWITEM2"],
+        )
+        rc, result, lookup = self._import(import_result, lookup_key="FOUND001")
+
+        self.assertEqual(rc, 0)
+        lookup.assert_not_called()
+        self.assertIsNone(result["key"])
+        self.assertEqual(result["key_source"], "ambiguous")
+        self.assertEqual(result["keys"], ["NEWITEM1", "NEWITEM2"])
+
+    def test_find_pdf_bridge_timeout_prints_unknown_outcome(self):
+        from zotero_pdf_text.bibtex import JavaScriptResult
+
+        js_result = JavaScriptResult(
+            ok=False, result=None, error="debug-bridge did not answer within 90 s", endpoint="http://x",
+            timed_out=True,
+        )
+        output = io.StringIO()
+        with patch("zotero_pdf_text.bibtex.execute_javascript", return_value=js_result), redirect_stdout(output):
+            rc = main(["find-pdf", "--key", "ABCD1234"])
+
+        self.assertEqual(rc, 1)
+        result = json.loads(output.getvalue())
+        self.assertEqual(result["outcome"], "unknown")
+        self.assertEqual(result["attachment_key"], "")
+        self.assertIn("Do not rerun find-pdf", result["message"])
+
+    def test_find_pdf_not_found_prints_outcome_and_advice(self):
+        from zotero_pdf_text.bibtex import JavaScriptResult
+
+        js_result = JavaScriptResult(ok=True, result={"found": False}, error="", endpoint="http://x")
+        output = io.StringIO()
+        with patch("zotero_pdf_text.bibtex.execute_javascript", return_value=js_result), redirect_stdout(output):
+            rc = main(["find-pdf", "--key", "ABCD1234"])
+
+        self.assertEqual(rc, 0)
+        result = json.loads(output.getvalue())
+        self.assertFalse(result["found"])
+        self.assertEqual(result["outcome"], "not_found")
+        self.assertIn("link-pdf --key ABCD1234 --file", result["message"])
+
+
 class ShellQuoteTests(unittest.TestCase):
     def test_plain_windows_path_is_not_quoted(self):
         self.assertEqual(_shell_quote(r"C:\Users\you\Scripts\zotero-fulltext-mcp.exe"), r"C:\Users\you\Scripts\zotero-fulltext-mcp.exe")
@@ -777,6 +897,7 @@ class InstallMcpCliTests(unittest.TestCase):
                     "list_timeout_candidates",
                     "list_orphan_candidates",
                     "library_status",
+                    "guide",
                     "reconvert_with_math_ocr",
                 ],
             )

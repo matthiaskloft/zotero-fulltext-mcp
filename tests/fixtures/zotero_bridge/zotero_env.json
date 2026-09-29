@@ -1,0 +1,28 @@
+{
+  "_provenance": "probe, captured 2026-09-28 from a live Zotero 9.0.6 via debug-bridge (read-only probe); restructured into named fields. extensions.zotmoov.dst_dir was set: only that fact is kept (dst_dir_set), never the path.",
+  "zoteroVersion": "9.0.6",
+  "functions": {
+    "Zotero.Attachments.addAvailableFile": "function",
+    "Zotero.Attachments.addAvailablePDF": "function",
+    "Zotero.ItemTypes.getName": "function",
+    "Zotero.Items.exists": "function",
+    "Zotero.File.getExtension": "function",
+    "Zotero.Promise.delay": "function"
+  },
+  "itemTypeNames": {
+    "11": "conferencePaper"
+  },
+  "linkModes": {
+    "LINK_MODE_IMPORTED_FILE": 0,
+    "LINK_MODE_IMPORTED_URL": 1,
+    "LINK_MODE_LINKED_FILE": 2
+  },
+  "zotmoov": true,
+  "zotmoovPrefs": {
+    "enable_automove": true,
+    "file_behavior": "move",
+    "dst_dir_set": true,
+    "allowed_fileext": "[\"pdf\",\"epub\",\"docx\",\"djvu\"]",
+    "auto_process_delay": 5000
+  }
+}

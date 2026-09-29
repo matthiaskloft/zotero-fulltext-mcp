@@ -138,10 +138,28 @@ actually needed.
 
 ## `import-doi` Returns No Item Key
 
-`import-doi` posts to Zotero's local connector but does not hand back the new item's key, so
-`check-pdf`/`find-pdf`/`link-pdf` (all require `--key`) can't be chained directly afterward — you
-have to look the key up yourself. Also, CrossRef's metadata fetch can transiently return HTTP 404;
-retry once before assuming a DOI is bad.
+`import-doi` prints `status`, `doi`, `title`, `item_type` (a Zotero type name such as
+`journalArticle`), `key`, `key_source` and `keys`:
+
+- `key_source: "created_item"` -- the debug-bridge path imported the item with Zotero's own
+  translators and reported the created item's key directly.
+- `key: null`, `key_source: "ambiguous"` -- the translator created more than one item for the
+  DOI. `keys` lists all of them; check them in Zotero and decide which one is the paper (and
+  whether to trash the others) before chaining `check-pdf`/`find-pdf`/`link-pdf`.
+- `key_source: "connector_lookup"` -- the plugin-free connector path saved the item without
+  returning a key; the CLI then searched Zotero's local API for an item with the same DOI for up
+  to about 5 s. This is weaker evidence: confirm the item in Zotero before chaining writes.
+- `key: null`, `key_source: null` -- neither path produced a key. `check-pdf`/`find-pdf`/
+  `link-pdf` (all require `--key`) can't be chained directly; look the key up yourself as below.
+
+If the debug-bridge call times out, `import-doi` exits with an error and `outcome: "unknown"`
+instead of falling back to the connector path: Zotero may still have created the item, and a
+second import would duplicate it. Check Zotero for the DOI before importing again; do not rerun
+`import-doi` blindly. The connector fallback runs only when debug-bridge is unavailable (not
+installed, unreachable, or refusing the request).
+
+CrossRef's metadata fetch can transiently return HTTP 404; retry once before assuming a DOI is
+bad.
 
 To find the key, query the **live** `zotero.sqlite` (the one at `zotero_data_directory` in your
 config) — not any other `zotero.sqlite` that might exist elsewhere in an old/backup location, which
@@ -164,6 +182,38 @@ c.close()
 
 Caveat: `immutable=1` ignores the WAL, so a very recently connector-created item may not appear
 until Zotero checkpoints (usually visible within seconds in practice).
+
+## `find-pdf` Reports A Missing Or Stale Attachment Key
+
+`find-pdf` runs Zotero's "Find Available PDF" lookup and reports an `outcome` alongside the
+older fields (`ok`, `found`, `attachment_key`, `error`). Only `outcome == "attached"` means
+`attachment_key` is usable; `found: true` alone is not enough, because an `unsettled` result also
+has `found: true`.
+
+- `attached` -- `attachment_key` is the current attachment, observed after the lookup finished.
+  With ZotMoov's auto-move enabled, Zotero first stores the download and ZotMoov replaces it
+  `extensions.zotmoov.auto_process_delay` (default 5 s) later with a linked-file attachment under a
+  new key. `find-pdf` predicts that move from ZotMoov's own conditions (auto-move on, file behavior
+  `move`, a non-empty `dst_dir`, the file extension in `allowed_fileext` unless that list is empty,
+  a stored rather than linked file), waits for it until the delay plus 5 s after the file was
+  attached (at most 75 s into the run), and reports the new key with `moved: true` and
+  `link_mode: "linked_file"`. `find-pdf` never triggers a ZotMoov move itself.
+- `unsettled` -- a file was attached, but a predicted move was not observed before the wait ended
+  (for example because Zotero was syncing, which makes ZotMoov postpone). `attachment_key` is
+  empty and `attachments` lists only the last observed state. Do not rerun `find-pdf`, which could
+  attach a second copy; check the item in Zotero (or with `check-pdf --key`) after a moment.
+- `not_found` -- Zotero's resolvers found no openly available PDF. If an open-access copy exists
+  (publisher OA page, arXiv, a repository), download it and attach it with
+  `link-pdf --key <ITEM_KEY> --file <path-to-pdf>`.
+- `unknown` (`ok: false`) -- the debug-bridge call did not answer within 90 s. Zotero may still
+  have attached a file, so the outcome is unknown: do not rerun `find-pdf`; check the item in
+  Zotero (or with `check-pdf --key`) first.
+- `error` (`ok: false`) -- the bridge was unavailable or the Zotero-side script failed; see
+  `error`.
+
+A `zotero-write apply` whose debug-bridge auto-run times out likewise reports
+`auto_run_timed_out: true`: the script may have run, so check Zotero for the planned changes and
+do not run the script again by hand.
 
 ## Stale Full-Text Index
 

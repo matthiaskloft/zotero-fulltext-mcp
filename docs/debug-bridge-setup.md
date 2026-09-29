@@ -66,8 +66,10 @@ available** copy (OA repositories, publisher OA, Unpaywall-style sources). It do
 institutional/paywall access.
 
 - For **paywalled** items it will find nothing, and the debug-bridge call may **time out** (the CLI
-  uses a 30s hard timeout) rather than returning a quick `found: false`. A timeout here is *not* a
-  token/config problem — if you have progressed past `token not configured`, the bridge is working.
+  allows `find-pdf` 90 s) rather than returning a quick `found: false`. The CLI then reports
+  `outcome: "unknown"`: check the item in Zotero (or `check-pdf`) before rerunning. A timeout here is
+  *not* a token/config problem — if you have progressed past `token not configured`, the bridge is
+  working.
 - **Paywalled papers must be attached manually**: drag the PDF onto the item, or right-click the
   item → *Add Attachment → Attach Stored Copy of File*.
 
