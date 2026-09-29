@@ -138,7 +138,7 @@ class BibtexTests(unittest.TestCase):
         self.assertEqual(result.outcome, "not_found")
         self.assertEqual(result.attachment_key, "")
         self.assertIn("found no PDF", result.message)
-        self.assertIn("link-pdf --key ABCD1234 --file", result.message)
+        self.assertIn("link-pdf --key ABCD1234 --url <direct-pdf-url>", result.message)
 
     def test_find_available_pdf_for_item_surfaces_js_error(self):
         js_result = JavaScriptResult(ok=True, result={"error": "item not found"}, error="", endpoint="http://x")

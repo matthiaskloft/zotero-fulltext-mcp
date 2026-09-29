@@ -203,7 +203,8 @@ has `found: true`.
   empty and `attachments` lists only the last observed state. Do not rerun `find-pdf`, which could
   attach a second copy; check the item in Zotero (or with `check-pdf --key`) after a moment.
 - `not_found` -- Zotero's resolvers found no openly available PDF. If an open-access copy exists
-  (publisher OA page, arXiv, a repository), download it and attach it with
+  (publisher OA page, arXiv, a repository), attach it from its direct PDF link with
+  `link-pdf --key <ITEM_KEY> --url <direct-pdf-url>` (see below), or from a local copy with
   `link-pdf --key <ITEM_KEY> --file <path-to-pdf>`.
 - `unknown` (`ok: false`) -- the debug-bridge call did not answer within 90 s. Zotero may still
   have attached a file, so the outcome is unknown: do not rerun `find-pdf`; check the item in
@@ -214,6 +215,39 @@ has `found: true`.
 A `zotero-write apply` whose debug-bridge auto-run times out likewise reports
 `auto_run_timed_out: true`: the script may have run, so check Zotero for the planned changes and
 do not run the script again by hand.
+
+## `link-pdf --url` Or `import-doi --with-pdf` Did Not Attach A PDF
+
+`link-pdf --key <ITEM_KEY> --url <direct-pdf-url>` downloads the file in Python, then stores it in
+Zotero with `Zotero.Attachments.importFromFile` and waits for a ZotMoov auto-move the same way
+`find-pdf` does. Read `outcome`:
+
+- `refused_existing_pdf` -- the item already has a PDF attachment (checked live through
+  debug-bridge, listed in `existing_pdfs`); nothing was downloaded. Pass `--allow-additional` only
+  if you really want a second PDF.
+- `error` with a URL message -- the link was refused before anything was attached: it is not
+  `https`, contains a user name or password, resolves (directly or after a redirect) to a
+  loopback, private, link-local or otherwise non-public address, or needs more than 5 redirects.
+  These checks keep a link taken from paper text away from Zotero's local port and your network.
+- `error` with "not a PDF" -- the server returned something that does not start with `%PDF-`,
+  usually a publisher landing page, a login page or a cookie wall. Find the direct link to the
+  PDF file itself; logins and cookies are not supported.
+- `error` with a size message -- the file is larger than `--max-mb` (default 200).
+- `attached` with `verified_hash: false` (`ok: false`) -- the attachment exists, but the file at
+  its final path could not be read or its SHA-256 differs from the download. Check the attachment
+  in Zotero; do not rerun, which would attach a second copy.
+- `unsettled` / `unknown` -- as for `find-pdf` above: a file was, or may have been, attached. Do
+  not rerun; check the item in Zotero (or `check-pdf --key`). A rerun would be refused anyway once
+  the PDF shows up, because of the existing-PDF check.
+
+The download is staged in a temporary folder that is always removed; if removal fails, `warning`
+names the folder. Nothing is written to `output_root`.
+
+`import-doi --with-pdf` reports each step in `steps` and the result in `pdf_outcome`:
+`already_has_pdf` (nothing to do), `attached`, `not_found` (no `--pdf-url` was given; the
+`pdf_message` names the `link-pdf --url` command), `unsettled`, `unknown`, `error`,
+`refused_existing_pdf`, or `skipped_no_key` when the import produced no certain key
+(`key_source` `ambiguous` or null). It stops at the first uncertain step and never retries.
 
 ## Stale Full-Text Index
 

@@ -582,9 +582,9 @@ since they never depend on it.
 `import-doi`, `find-pdf`, and `link-pdf` are explicit CLI commands that drive Zotero's
 UI-equivalent actions through the
 **debug-bridge** plugin — see `docs/debug-bridge-setup.md` for setup, including generating your
-own bridge token. `link-pdf` additionally uses the **ZotMoov** plugin to relocate linked files
-into your managed `linked_attachments` folder. Both are optional; core search/conversion works
-without them.
+own bridge token. `link-pdf --file` additionally uses the **ZotMoov** plugin to relocate linked
+files into your managed `linked_attachments` folder. Both are optional; core search/conversion
+works without them.
 
 Run them with the Python of the environment the server is installed in
 (`<venv python> -m zotero_pdf_text <command>`, or the `zotero-pdf-text` console script next to
@@ -594,11 +594,29 @@ it); `uv run` works only from a checkout with `uv` on `PATH`. A typical add-by-D
 in `keys`), then `check-pdf --key <key>`, then `find-pdf --key <key>`. `find-pdf` reports
 `outcome`: `attached` (with the attachment key as it stands after any ZotMoov auto-move -- the
 only outcome whose `attachment_key` is usable), `not_found` (Zotero's resolvers found nothing;
-download an open-access copy and use `link-pdf --key <key> --file <pdf>`), `unsettled` (a file
+attach an open-access copy with `link-pdf --key <key> --url <direct-pdf-url>`, or
+`--file <pdf>` for a local copy), `unsettled` (a file
 was added but its final key was not observed in time), or `unknown` (the bridge timed out). A
 debug-bridge timeout never means "failed": `import-doi` does not fall back to the connector and
 `zotero-write apply` reports `auto_run_timed_out`, because Zotero may already have made the
-change. After `unsettled`, `unknown` or a timeout, check Zotero; do not rerun. MCP clients
+change. After `unsettled`, `unknown` or a timeout, check Zotero; do not rerun.
+
+`link-pdf --key <key> --url <direct-pdf-url>` downloads the PDF itself and stores it in Zotero
+as a copy (`Zotero.Attachments.importFromFile`); with ZotMoov's auto-move on, it waits for the
+move exactly like `find-pdf` and reports the same outcomes (`attached`, `unsettled`, `unknown`,
+`error`, plus `refused_existing_pdf`). The URL must be `https` without a user name or password,
+and every redirect hop (at most 5) must resolve to public addresses only, so a link from paper
+text cannot reach the Zotero connector, debug-bridge or your local network. The download is capped
+(`--max-mb`, default 200) and must start with `%PDF-`, so a publisher landing page is refused. It
+is staged in a temporary folder that is always removed; nothing is written to `output_root`. The
+item's attachments are checked live first, and an item that already has a PDF is refused unless
+`--allow-additional` is given. The output adds `source_url`, `final_url`, `size`, `sha256` and
+`verified_hash` (the attached file's SHA-256 matches the download). `import-doi --with-pdf
+[--pdf-url <direct-pdf-url>]` chains the steps: it skips an item that already has a PDF, runs
+`find-pdf`, and on `not_found` runs `link-pdf --url` with the given link. It runs for a new item
+(`key_source` `created_item` or `connector_lookup`) or one already in the library, stops at
+`unsettled`, `unknown` or an error, and adds `steps` and `pdf_outcome` to the output (unchanged
+without `--with-pdf`). MCP clients
 discover these commands through `guide("writes")` and propose the exact command for you to
 approve; the server itself never writes to Zotero.
 
@@ -647,7 +665,7 @@ add new placeholders to `PLACEHOLDER_NAMES` rather than choosing realistic-looki
 ### Testing the Zotero bridge
 
 The write commands (`import-doi`, `find-pdf`, `link-pdf`) run JavaScript inside Zotero. The
-normal suite runs the generated `find-pdf` script in Node against a fake Zotero seeded from
+normal suite runs the generated `find-pdf` and `link-pdf --url` scripts in Node against a fake Zotero seeded from
 recorded responses, so it needs `node` on `PATH`. Those tests are skipped without it. An
 opt-in live test (`pytest -m live_zotero`) runs the real CLI against a separate Zotero profile
 and can re-record the fixtures. See [docs/live-zotero-test.md](docs/live-zotero-test.md).

@@ -42,6 +42,22 @@ dated section once it has been stress-tested against a large library.
   and that directory is not the one your normal config uses. With `ZOTERO_LIVE_RECORD=1` it
   replaces the fixtures with sanitized raw captures. Setup: `docs/live-zotero-test.md`. The
   release checklist in `AGENTS.md` now includes this run.
+- `link-pdf --key <key> --url <direct-pdf-url>`: downloads an open-access PDF and stores it in
+  Zotero as a copy (`Zotero.Attachments.importFromFile`), then waits for a ZotMoov auto-move with
+  the same logic and outcomes as `find-pdf` (now one shared implementation). Only `https` links
+  without user name or password are accepted, and every redirect hop (at most 5) must resolve to
+  public addresses, so a link from paper text cannot reach Zotero's local port or the local
+  network. The download is capped (`--max-mb`, default 200), must start with `%PDF-`, is staged
+  in a temporary folder that is always removed, and its SHA-256 is checked against the attached
+  file (`verified_hash`). An item that already has a PDF (checked live) is refused unless
+  `--allow-additional`. A debug-bridge timeout reports `outcome: "unknown"` and is never retried.
+  `link-pdf --file` is unchanged. The download and validation live in
+  `zotero_pdf_text.pdf_fetch.fetch_pdf` for reuse.
+- `import-doi --with-pdf [--pdf-url <direct-pdf-url>]`: after the import (or for an item already
+  in the library), skips an item that already has a PDF, runs `find-pdf`, and on `not_found` runs
+  `link-pdf --url`. It needs a certain key, stops at `unsettled`, `unknown` or an error, and adds
+  `steps` and `pdf_outcome`; without `--with-pdf` the output is unchanged. `guide("writes")` lists
+  the new options under the existing `import-doi` and `link-pdf` operations.
 
 ### Changed
 
@@ -84,7 +100,7 @@ dated section once it has been stress-tested against a large library.
   `error`). When ZotMoov's own settings predict an auto-move (including its destination folder,
   allowed file extensions and `auto_process_delay`), it waits for the move and reports the
   attachment key that is current afterwards, instead of the key of the attachment ZotMoov
-  replaced; a lookup that finds nothing now says so and names `link-pdf` as the next step.
+  replaced; a lookup that finds nothing now says so and names `link-pdf --url` as the next step.
 - A debug-bridge call that times out is treated as an unknown outcome, not a failure: it no
   longer raises, `import-doi` no longer falls back to the connector path (which could create a
   duplicate item), `find-pdf` reports `outcome: "unknown"`, and `zotero-write apply` reports

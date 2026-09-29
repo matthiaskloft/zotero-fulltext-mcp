@@ -529,7 +529,7 @@ class ImportDoiAndFindPdfCliTests(unittest.TestCase):
         result = json.loads(output.getvalue())
         self.assertFalse(result["found"])
         self.assertEqual(result["outcome"], "not_found")
-        self.assertIn("link-pdf --key ABCD1234 --file", result["message"])
+        self.assertIn("link-pdf --key ABCD1234 --url <direct-pdf-url>", result["message"])
 
 
 class ShellQuoteTests(unittest.TestCase):
