@@ -46,10 +46,13 @@ risk, the one that produces evidence for a later decision goes first.
 
 ## Current state
 
-Version 0.10.0 (2026-09-26). The server is installable on Windows, macOS and Linux, read-only by
-default, and has crash-safe index publication, library auditing, and tools to search the library,
-search within one paper, look up a citation key, and read chunks with verified locators. The
-completed work is listed under "History" at the end.
+Version 0.10.0 (2026-09-26), plus unreleased work on `master` (see `CHANGELOG.md`). The server is
+installable on Windows, macOS and Linux, read-only by default, and has crash-safe index
+publication, library auditing, and tools to search the library, search within one paper, look up a
+citation key, and read chunks with verified locators. The unreleased work adds the canonical
+library layout, performance baselines, end-to-end tests, a `guide` tool, and the opt-in Zotero
+write commands (`import-doi --with-pdf`, `find-pdf`, `link-pdf --url`). The completed work is
+listed under "History" at the end.
 
 There are two tracks of remaining work. They don't depend on each other.
 
@@ -74,7 +77,8 @@ semantic discovery follows. Two rules shape the order:
 | **S6** | Optional semantic paper discovery with a local embedding model, as a separate opt-in index and MCP tool | [#1](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/1) | contained | S1, S3 (S4 for passage embeddings) | Built as its own artifact, so publishing the full-text index never depends on an embedding service running. S1's numbers decide whether hybrid ranking or passage embeddings are worth adding. The phased plan is in a comment on #1. |
 | **S7** | Citation graph within the library, built from reference entries | [#83](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/83) | contained | S3, S4 | Future. It is filed now so that S4's reference-entry format keeps what it needs. |
 
-**Start here:** S1 and S2 are unblocked, zero-risk, and independent of each other.
+**Status:** no Track 1 step has started. **Start here:** S1 and S2 are unblocked, zero-risk, and
+independent of each other.
 
 ## Track 2: Hardening leftovers
 
@@ -91,7 +95,8 @@ Package 3. `tests/test_end_to_end.py` runs `convert-new` and `rebuild-index` on 
 queries a real server process started as `install-mcp` registers it. It covers recovery from a
 publication interrupted before the pointer swap, and audit/status output. One finding: after such
 a crash, `convert-new` converts the interrupted run's new items again, because it picks new items
-before recovery runs. The result is correct; only the conversion time is spent twice.
+before recovery runs. The result is correct; only the conversion time is spent twice
+([#94](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/94)).
 
 **Package 3, steps 1 and 2: canonical library layout.** Done in reduced form, without migration.
 `convert-verified` and `convert-new` write straight to `library/markdown/<key>.md` and
@@ -103,8 +108,8 @@ are not planned. Still open:
 
 - Provenance reconversion, index repair, `retry-timeout` and unverified reviews write into run
   folders, so a record they replace points there again. They must not change the file the current
-  index reads before their own publication succeeds. Publishing their validated output into `library/` is the next
-  step.
+  index reads before their own publication succeeds. Publishing their validated output into
+  `library/` is the next step, tracked in [#93](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/93).
 - Steps 3 and 6 were covered by earlier work (source hashes in the index, the repair plan).
 
 The evidence behind this came from `library-status --full --mapping-report <run>` and
@@ -122,9 +127,18 @@ upgrade to the library layout is a reconversion followed by
 
 ## Other open work, not scheduled
 
+- [#91](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/91): `check-pdf` and `import-doi`'s duplicate check read the live `zotero.sqlite` with
+  `immutable=1`, which can miss just-written rows (WAL mode) or see a half-written state. A wrong
+  answer can lead to a duplicate item or a second PDF copy, so this is the first thing to fix among
+  the unscheduled items. The proposed fix is a live debug-bridge read where available.
+- [#92](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/92): the optional `[marker]` extra pins `pillow<11` and, before Marker 2.0, `transformers<5`,
+  which leaves 22 Dependabot alerts on `uv.lock`. Marker 2.0 lifts the pins but needs Docker or a
+  `llama-server` binary. Decision for now: stay on marker-pdf 1.10.2 and dismiss the alerts, because
+  the pipeline only processes the user's own PDFs.
 - [#34](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/34): an opt-in review-and-apply
   workflow for Zotero item writes from MCP. It is a separate entry point because the default server
-  stays read-only.
+  stays read-only. The CLI write commands (`import-doi`, `find-pdf`, `link-pdf`) already exist; #91
+  should land before #34 builds on the same duplicate check.
 - [#2](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/2) and
   [#3](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/3): a sidecar library of the
   reader's own comments linked to source passages. #3 tracks it together with #1.
@@ -152,4 +166,6 @@ These are the completed items, in the order they shipped. The source plans are
 | Package 5 steps 2 and 4: schema-compatibility and adversarial tests | Old indexes migrate or fail with a recovery instruction; hostile generation IDs, path escapes and injected instructions are tested. |
 | Package 3 steps 4 and 7 (read-only half): `audit-library`, `library_status` | Per-attachment drift report and a status tool. This also added `source_sha256` and `indexed_at` to index records, because `source_changed` can't be computed without them. |
 | Package 4B step 2: SQL aggregates and truthful status | `index-stats` (formerly `coverage-report`) and `library_status`, which never conflates indexed counts with library coverage (PRs #8–#10). |
+| Canonical library layout, performance baselines, end-to-end tests (unreleased) | `convert-verified`/`convert-new` write to `library/markdown` and `library/images`; recorded latency baselines and a passage-lookup index; real-process fixture tests (PRs #84–#87). |
+| Zotero write CLI (unreleased) | `import-doi`, `find-pdf`, `link-pdf --url`, `import-doi --with-pdf`, and a `guide("writes")` listing of every write path (PRs #89, #90). |
 | Issue-driven work through v0.10.0 | Checkpointed conversion, selective index repair, provenance reconversion, `search_within_fulltext`, `lookup_citation_key`, a first-use guide and more. See `CHANGELOG.md`. |
