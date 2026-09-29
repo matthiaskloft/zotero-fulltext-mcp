@@ -5,7 +5,9 @@ the MCP server's notes) drive Zotero through the **debug-bridge** plugin — the
 plugin from the `zotero-better-bibtex` project:
 <https://github.com/retorquere/zotero-better-bibtex/tree/master/test/fixtures/debug-bridge>.
 It is not bundled with this repository; install it as its own Zotero plugin (XPI) from that
-source.
+source. `import-doi` and `check-pdf` also use it, read-only, for their live duplicate/PDF
+checks; without it they fall back to a verified copy of `zotero.sqlite` and label the answer as
+not live.
 
 The bridge requires a shared Bearer token, identical on two sides:
 

@@ -767,7 +767,15 @@ The Zotero-writing CLI commands report results the assistant must not over-read:
   fails with `outcome: "unknown"` and no connector fallback: check Zotero before importing again.
   With `--with-pdf`, `pdf_outcome` and `steps` report the PDF steps; the PDF steps run only for
   `created_item`, `connector_lookup` or an item already in the library (`key_source:
-  "already_in_library"`), and stop at `unsettled` or `unknown`.
+  "already_in_library"`), and stop at `unsettled` or `unknown`. Both `imported` and
+  `already_in_library` reports carry `duplicate_check`: `source` (`debug_bridge` or
+  `zotero_db_copy`), `live` (false means a verified copy of `zotero.sqlite` answered, not live
+  Zotero) and, when not live, `bridge_error`. If the duplicate check cannot read Zotero at all,
+  nothing is imported and the command exits 1 with `status: "error"` on stderr.
+- `check-pdf`: `found` is true or false only when the check really ran; `source` and `live` say
+  where the answer came from and `bridge_error` (fallback only) why the live read failed. When
+  neither live Zotero nor a verified copy can be read, `found` is null (never false) with an
+  `error`, and the exit code is 1. Trashed PDF attachments still count as found.
 - `link-pdf --url`: the same `outcome` rule as `find-pdf`, plus `refused_existing_pdf`; `ok` also
   requires `verified_hash` (the attached file matches the download's `sha256`).
 - `zotero-write apply`: `auto_run_timed_out: true` means the script may have run: check Zotero,

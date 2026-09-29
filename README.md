@@ -591,7 +591,15 @@ Run them with the Python of the environment the server is installed in
 it); `uv run` works only from a checkout with `uv` on `PATH`. A typical add-by-DOI flow is
 `import-doi --doi <DOI>` (prints the new item's `key`, its `item_type` name and `key_source`;
 `key_source: "ambiguous"` with `key: null` when the translator created several items, all listed
-in `keys`), then `check-pdf --key <key>`, then `find-pdf --key <key>`. `find-pdf` reports
+in `keys`), then `check-pdf --key <key>`, then `find-pdf --key <key>`. Before it imports,
+`import-doi` looks for an existing item with that DOI, and `check-pdf` looks for an existing PDF.
+Both read live from Zotero through debug-bridge when it answers; otherwise they read a
+hash-verified copy of `zotero.sqlite` (so `import-doi` still works without plugins) and say so:
+`duplicate_check` in the `import-doi` output, and `source`/`live` (plus `bridge_error`) in the
+`check-pdf` output, with a note on stderr / in the text. If neither can be read, `import-doi`
+imports nothing and exits 1, and `check-pdf` prints `found: null` and exits 1: an unchecked
+answer is never reported as "no duplicate" or "no PDF". A write that lands between the check and
+the import is still a race. `find-pdf` reports
 `outcome`: `attached` (with the attachment key as it stands after any ZotMoov auto-move -- the
 only outcome whose `attachment_key` is usable), `not_found` (Zotero's resolvers found nothing;
 attach an open-access copy with `link-pdf --key <key> --url <direct-pdf-url>`, or

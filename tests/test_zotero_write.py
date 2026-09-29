@@ -436,7 +436,7 @@ class ZoteroWriteTests(unittest.TestCase):
                 encoding="utf-8",
             )
             with (
-                patch("zotero_pdf_text.zotero_db.find_item_by_doi", return_value="KEY00001"),
+                patch("zotero_pdf_text.cli.check_doi_duplicate", return_value={"key": "KEY00001", "source": "debug_bridge", "live": True}),
                 redirect_stdout(StringIO()) as out,
             ):
                 rc = main(["import-doi", "--doi", "10.1000/dup", "--config", str(config_path)])

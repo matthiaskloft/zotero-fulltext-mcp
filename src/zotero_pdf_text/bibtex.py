@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any, TypedDict, cast
 
 from .pdf_fetch import DEFAULT_MAX_BYTES, PdfFetchError, check_url, fetch_pdf, sha256_file
+from .zotero_db import DOI_ROWS_SQL, PDF_ATTACHMENTS_SQL
 
 
 DEFAULT_BBT_ENDPOINT = "http://127.0.0.1:23119/better-bibtex/json-rpc"
@@ -781,6 +782,83 @@ def _attachment_entries(entries: list[Any]) -> list[dict[str, str]]:
         for entry in entries
         if isinstance(entry, dict)
     ]
+
+
+# ---------------------------------------------------------------------------
+# Live pre-write reads: the SQL of check-pdf / the import-doi duplicate check, run inside Zotero
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class LiveRows:
+    ok: bool
+    rows: list[dict[str, object]]
+    error: str
+    # The bridge did not answer in time, so the query's outcome is unknown (it is read-only, so
+    # nothing was written either way).
+    timed_out: bool = False
+
+
+def _query_rows_live(
+    sql: str,
+    params: list[str],
+    columns: tuple[str, ...],
+    *,
+    debug_bridge_endpoint: str,
+    debug_bridge_token: str,
+) -> LiveRows:
+    """Run a SELECT with `Zotero.DB.queryAsync` (sees the WAL, transactionally consistent).
+
+    Only a payload of exactly ``{"rows": [...]}`` whose rows are objects carrying every expected
+    column counts as success. Anything else is a failure, never "no rows": a wrong empty answer
+    is what lets a duplicate be written.
+    """
+    projection = ", ".join(f"{json.dumps(column)}: r[{json.dumps(column)}]" for column in columns)
+    js = f"""
+var rows = await Zotero.DB.queryAsync({json.dumps(sql)}, {json.dumps(params)});
+if (!Array.isArray(rows)) {{
+    return {{ error: 'unexpected' }};
+}}
+return {{ rows: rows.map(function (r) {{ return {{ {projection} }}; }}) }};
+"""
+    result = execute_javascript(
+        js, endpoint=debug_bridge_endpoint, token=debug_bridge_token, timeout=LIST_ATTACHMENTS_TIMEOUT_SECONDS
+    )
+    if not result.ok:
+        return LiveRows(ok=False, rows=[], error=result.error or "debug-bridge call failed", timed_out=result.timed_out)
+    payload = result.result
+    if not isinstance(payload, dict) or set(payload) != {"rows"} or not isinstance(payload["rows"], list):
+        error = payload.get("error") if isinstance(payload, dict) else None
+        return LiveRows(ok=False, rows=[], error=str(error or "unexpected response from debug-bridge"))
+    rows = payload["rows"]
+    if not all(isinstance(row, dict) and all(column in row for column in columns) for row in rows):
+        return LiveRows(ok=False, rows=[], error="unexpected row shape from debug-bridge")
+    return LiveRows(ok=True, rows=rows, error="")
+
+
+def query_doi_rows_live(
+    *,
+    debug_bridge_endpoint: str = DEFAULT_DEBUG_BRIDGE_ENDPOINT,
+    debug_bridge_token: str = "",
+) -> LiveRows:
+    """Every non-deleted DOI row (`key`, `doi_value`), read live; normalize and match in Python."""
+    return _query_rows_live(
+        DOI_ROWS_SQL, [], ("key", "doi_value"),
+        debug_bridge_endpoint=debug_bridge_endpoint, debug_bridge_token=debug_bridge_token,
+    )
+
+
+def query_pdf_attachment_rows_live(
+    parent_key: str,
+    *,
+    debug_bridge_endpoint: str = DEFAULT_DEBUG_BRIDGE_ENDPOINT,
+    debug_bridge_token: str = "",
+) -> LiveRows:
+    """The parent's PDF attachment rows (`attachment_key`, `path`, `content_type`), read live."""
+    return _query_rows_live(
+        PDF_ATTACHMENTS_SQL, [parent_key], ("attachment_key", "path", "content_type"),
+        debug_bridge_endpoint=debug_bridge_endpoint, debug_bridge_token=debug_bridge_token,
+    )
 
 
 @dataclass

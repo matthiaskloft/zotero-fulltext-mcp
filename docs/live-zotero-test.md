@@ -70,7 +70,10 @@ runs in CI.
 
 The test imports the first open-access arXiv DOI from a short list that is not yet in the test
 library, as `import-doi`'s own duplicate check reports it. It then runs `check-pdf`, `find-pdf`
-and `check-pdf` again. It asserts that `item_type` is a type name, that `key_source` is
+and `check-pdf` again. `check-pdf` and the duplicate check read live through debug-bridge, so the
+"no PDF yet" guard asserts `source == "debug_bridge"` and `found is False` (it fails rather than
+trust a copy of the database). The retry after `find-pdf` only covers ZotMoov settling the file.
+It asserts that `item_type` is a type name, that `key_source` is
 `created_item`, and that `find-pdf` reports `attached`. It also asserts that the final attachment
 key is the single PDF that `check-pdf` sees afterwards. When every DOI on the list is already
 present, the test is skipped with "reset the test profile". To reset, empty the test library

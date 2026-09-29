@@ -167,8 +167,8 @@ def _cli(config_path: Path, records: Path | None, *args: str) -> tuple[int, dict
 
 
 def _check_pdf_until_found(config_path: Path, key: str, attempts: int = 15) -> dict[str, Any]:
-    # check-pdf reads an immutable SQLite snapshot, which does not see commits still in Zotero's WAL;
-    # give Zotero a moment to checkpoint instead of reporting a false "not found".
+    # check-pdf reads live through debug-bridge, so it sees commits immediately; the retry only
+    # covers the moment a ZotMoov auto-move takes to settle the attachment's final path.
     result: dict[str, Any] = {}
     for _ in range(attempts):
         _, result, _ = _cli(config_path, None, "check-pdf", "--key", key, "--json")
@@ -207,6 +207,9 @@ def test_import_doi_then_find_pdf_against_a_live_zotero_profile(live: dict[str, 
     assert imported["keys"] == [item_key], imported
 
     _, before, text = _cli(config_path, None, "check-pdf", "--key", item_key, "--json")
+    assert before.get("source") == "debug_bridge", (
+        f"check-pdf did not read live, so 'no PDF yet' is not trustworthy (is debug-bridge reachable?):\n{text}"
+    )
     assert before.get("found") is False, (
         f"item {item_key} already has a PDF before find-pdf, so find-pdf would add a second copy:\n{text}"
     )

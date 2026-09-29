@@ -433,7 +433,7 @@ class ImportDoiAndFindPdfCliTests(unittest.TestCase):
             config_path = self._config(Path(tmp))
             output = io.StringIO()
             with (
-                patch("zotero_pdf_text.zotero_db.find_item_by_doi", return_value=None),
+                patch("zotero_pdf_text.cli.check_doi_duplicate", return_value={"key": None, "source": "debug_bridge", "live": True}),
                 patch("zotero_pdf_text.cli.import_doi_via_connector", return_value=import_result),
                 patch("zotero_pdf_text.cli.find_item_key_via_connector", return_value=lookup_key) as lookup,
                 patch("time.sleep"),
@@ -530,6 +530,130 @@ class ImportDoiAndFindPdfCliTests(unittest.TestCase):
         self.assertFalse(result["found"])
         self.assertEqual(result["outcome"], "not_found")
         self.assertIn("link-pdf --key ABCD1234 --url <direct-pdf-url>", result["message"])
+
+    # -- pre-write checks: live vs verified copy vs unavailable ---------------------------------
+
+    LIVE_PDF = {
+        "parent_key": "ABCD1234", "found": True, "source": "debug_bridge", "live": True,
+        "attachments": [{"key": "PDFKEY01", "path": "storage:a.pdf", "content_type": "application/pdf"}],
+    }
+    COPY_PDF = {
+        "parent_key": "ABCD1234", "found": False, "attachments": [], "source": "zotero_db_copy",
+        "live": False, "bridge_error": "debug-bridge unreachable: refused",
+    }
+
+    def _check_pdf(self, *extra, result=None, error=None):
+        from zotero_pdf_text.pre_write_checks import PreWriteCheckUnavailable
+
+        out, err = io.StringIO(), io.StringIO()
+        with tempfile.TemporaryDirectory() as tmp:
+            config_path = self._config(Path(tmp))
+            side = PreWriteCheckUnavailable(error) if error else None
+            with (
+                patch("zotero_pdf_text.cli.check_existing_pdf", return_value=result, side_effect=side) as check,
+                redirect_stdout(out),
+                redirect_stderr(err),
+            ):
+                rc = main(["check-pdf", "--key", "ABCD1234", "--config", str(config_path), *extra])
+        return rc, out.getvalue(), err.getvalue(), check
+
+    def test_check_pdf_json_reports_live_source(self):
+        rc, out, _, check = self._check_pdf("--json", result=self.LIVE_PDF)
+        self.assertEqual(rc, 0)
+        payload = json.loads(out)
+        self.assertEqual((payload["source"], payload["live"], payload["found"]), ("debug_bridge", True, True))
+        self.assertNotIn("bridge_error", payload)
+        self.assertIn("debug_bridge_endpoint", check.call_args.kwargs)
+
+    def test_check_pdf_json_reports_copy_fallback(self):
+        rc, out, _, _ = self._check_pdf("--json", result=self.COPY_PDF)
+        self.assertEqual(rc, 0)
+        payload = json.loads(out)
+        self.assertEqual((payload["source"], payload["live"]), ("zotero_db_copy", False))
+        self.assertIn("unreachable", payload["bridge_error"])
+
+    def test_check_pdf_text_labels_live_and_copy(self):
+        _, live_out, _, _ = self._check_pdf(result=self.LIVE_PDF)
+        self.assertIn("(read live from Zotero)", live_out)
+        _, copy_out, _, _ = self._check_pdf(result=self.COPY_PDF)
+        self.assertIn("(read from a verified copy of zotero.sqlite; debug-bridge unavailable:", copy_out)
+        self.assertIn("No PDF attachment found", copy_out)
+
+    def test_check_pdf_unavailable_exits_one_with_found_null(self):
+        rc, out, _, _ = self._check_pdf("--json", error="both down")
+        self.assertEqual(rc, 1)
+        payload = json.loads(out)
+        self.assertIsNone(payload["found"])
+        self.assertIn("both down", payload["error"])
+        rc, out, err, _ = self._check_pdf(error="both down")
+        self.assertEqual(rc, 1)
+        self.assertNotIn("No PDF attachment found", out + err)
+
+    def _import_with_duplicate_check(self, duplicate=None, error=None):
+        from zotero_pdf_text.bibtex import ConnectorImportResult
+        from zotero_pdf_text.pre_write_checks import PreWriteCheckUnavailable
+
+        import_result = ConnectorImportResult(
+            ok=True, doi="10.1000/example", item_type="journalArticle", title="A Paper", error="",
+            connector_endpoint="http://x", item_key="NEWITEM1",
+        )
+        out, err = io.StringIO(), io.StringIO()
+        with tempfile.TemporaryDirectory() as tmp:
+            config_path = self._config(Path(tmp))
+            with (
+                patch(
+                    "zotero_pdf_text.cli.check_doi_duplicate",
+                    return_value=duplicate,
+                    side_effect=PreWriteCheckUnavailable(error) if error else None,
+                ),
+                patch("zotero_pdf_text.cli.import_doi_via_connector", return_value=import_result) as importer,
+                redirect_stdout(out),
+                redirect_stderr(err),
+            ):
+                rc = main(["import-doi", "--doi", "10.1000/example", "--config", str(config_path)])
+        return rc, out.getvalue(), err.getvalue(), importer
+
+    def test_import_doi_reports_live_duplicate_check(self):
+        rc, out, err, importer = self._import_with_duplicate_check(
+            {"key": None, "source": "debug_bridge", "live": True}
+        )
+        self.assertEqual(rc, 0)
+        importer.assert_called_once()
+        self.assertEqual(json.loads(out)["duplicate_check"], {"source": "debug_bridge", "live": True})
+        self.assertEqual(err, "")
+
+    def test_import_doi_labels_copy_fallback_and_notes_it_on_stderr(self):
+        rc, out, err, importer = self._import_with_duplicate_check(
+            {"key": None, "source": "zotero_db_copy", "live": False, "bridge_error": "debug-bridge unreachable"}
+        )
+        self.assertEqual(rc, 0)
+        importer.assert_called_once()
+        self.assertEqual(
+            json.loads(out)["duplicate_check"],
+            {"source": "zotero_db_copy", "live": False, "bridge_error": "debug-bridge unreachable"},
+        )
+        self.assertIn("verified copy", err)
+
+    def test_import_doi_live_duplicate_is_already_in_library_and_not_imported(self):
+        rc, out, _, importer = self._import_with_duplicate_check(
+            {"key": "DUPKEY01", "source": "debug_bridge", "live": True}
+        )
+        self.assertEqual(rc, 0)
+        importer.assert_not_called()
+        payload = json.loads(out)
+        self.assertEqual((payload["status"], payload["key"]), ("already_in_library", "DUPKEY01"))
+        self.assertEqual(payload["duplicate_check"], {"source": "debug_bridge", "live": True})
+
+    def test_import_doi_refuses_when_the_duplicate_check_is_unavailable(self):
+        rc, out, err, importer = self._import_with_duplicate_check(error="both down")
+        self.assertEqual(rc, 1)
+        importer.assert_not_called()
+        self.assertEqual(out, "")
+        payload = json.loads(err)
+        self.assertEqual(payload["status"], "error")
+        self.assertEqual(payload["doi"], "10.1000/example")
+        self.assertIn("duplicate check could not read Zotero", payload["error"])
+        self.assertIn("Nothing was imported.", payload["error"])
 
 
 class ShellQuoteTests(unittest.TestCase):

@@ -91,7 +91,7 @@ def test_import_doi_cli_reports_the_recorded_payload(tmp_path: Path) -> None:
     )
     output = io.StringIO()
     with (
-        patch("zotero_pdf_text.zotero_db.find_item_by_doi", return_value=None),
+        patch("zotero_pdf_text.cli.check_doi_duplicate", return_value={"key": None, "source": "debug_bridge", "live": True}),
         patch("zotero_pdf_text.bibtex.execute_javascript", return_value=_bridge(fixture["payload"])),
         patch("zotero_pdf_text.cli.find_item_key_via_connector") as lookup,
         redirect_stdout(output),

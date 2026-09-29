@@ -87,6 +87,14 @@ dated section once it has been stress-tested against a large library.
 
 ### Fixed
 
+- `import-doi`'s duplicate check and `check-pdf` no longer read the live database with
+  `immutable=1`, which ignores the write-ahead log and could report a wrong "none" (and so allow a
+  duplicate item or a second PDF copy) (#91). They now read live through debug-bridge
+  (`Zotero.DB.queryAsync`), fall back to a hash-verified copy of `zotero.sqlite` and label it not
+  live, and refuse when neither works (`import-doi` exits 1 without importing; `check-pdf` prints
+  `found: null` and exits 1). New output fields are additive: `duplicate_check` on `import-doi`;
+  `source`, `live` and `bridge_error` on `check-pdf`, which also gains `--debug-bridge-endpoint` and
+  `--debug-bridge-token`. Orphan discovery still reads with `immutable=1`.
 - Server instructions are built from the startup flags and stay well under Claude Code's
   2048-character truncation limit; they had reached 2032 characters, so any addition would have
   been cut silently. They keep the safety rules, name the enabled write tools, and move workflow
