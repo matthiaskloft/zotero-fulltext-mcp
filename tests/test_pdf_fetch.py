@@ -186,6 +186,24 @@ def test_downloads_pdf_with_hash_and_pins_the_checked_address(tmp_path: Path) ->
     assert sorted(p.name for p in tmp_path.iterdir()) == ["download.pdf"]
 
 
+@pytest.mark.parametrize(
+    "url, target",
+    [
+        ("https://papers.example/café.pdf?q=über", "/caf%C3%A9.pdf?q=%C3%BCber"),
+        ("https://papers.example/a%20b.pdf?x=1&y=a%2Fb", "/a%20b.pdf?x=1&y=a%2Fb"),
+        ("https://papers.example/a b.pdf", "/a%20b.pdf"),
+    ],
+)
+def test_request_target_is_percent_encoded_ascii(tmp_path: Path, url: str, target: str) -> None:
+    web = FakeWeb()
+    web.serve("papers.example", target, FakeResponse(200, {}, PDF_BYTES))
+
+    fetched = web.fetch(url, tmp_path)
+
+    assert web.requests == [("papers.example", target)]
+    assert fetched.path.read_bytes() == PDF_BYTES
+
+
 def test_follows_a_relative_redirect_and_reports_the_final_url(tmp_path: Path) -> None:
     web = FakeWeb()
     web.serve("papers.example", "/landing", FakeResponse(302, {"Location": "/files/paper.pdf"}))

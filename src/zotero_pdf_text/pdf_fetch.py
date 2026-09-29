@@ -162,7 +162,7 @@ def fetch_pdf(
         host = parts.hostname or ""
         port = parts.port or 443
         address = resolve_public_addresses(host, port, resolver)[0]
-        target = urllib.parse.urlunsplit(("", "", parts.path or "/", parts.query, ""))
+        target = _request_target(parts)
         connection = connect(host, port, address, timeout)
         try:
             try:
@@ -175,7 +175,7 @@ def fetch_pdf(
                     },
                 )
                 response = connection.getresponse()
-            except (OSError, http.client.HTTPException) as exc:
+            except (OSError, http.client.HTTPException, UnicodeError) as exc:
                 raise PdfFetchError(f"request to {host} failed: {exc}") from exc
             if response.status in _REDIRECT_STATUSES:
                 location = response.getheader("Location")
@@ -189,6 +189,16 @@ def fetch_pdf(
         finally:
             connection.close()
     raise PdfFetchError(f"more than {max_redirects} redirects")
+
+
+def _request_target(parts: urllib.parse.SplitResult) -> str:
+    """Path and query as ASCII: http.client cannot send a raw non-ASCII request target.
+
+    Existing %XX escapes and reserved characters are kept, so an already encoded URL is unchanged.
+    """
+    path = urllib.parse.quote(parts.path or "/", safe="/%:@!$&'()*+,;=~")
+    query = urllib.parse.quote(parts.query, safe="/?%:@!$&'()*+,;=~")
+    return path + ("?" + query if query else "")
 
 
 def _stream_to_file(
