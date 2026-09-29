@@ -584,6 +584,8 @@ class ImportDoiAndFindPdfCliTests(unittest.TestCase):
         self.assertEqual(rc, 1)
         payload = json.loads(out)
         self.assertIsNone(payload["found"])
+        self.assertIsNone(payload["source"])
+        self.assertIs(payload["live"], False)
         self.assertIn("both down", payload["error"])
         rc, out, err, _ = self._check_pdf(error="both down")
         self.assertEqual(rc, 1)

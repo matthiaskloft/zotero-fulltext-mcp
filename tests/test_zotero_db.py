@@ -4,6 +4,8 @@ import unittest
 from pathlib import Path
 
 from zotero_pdf_text.zotero_db import (
+    DOI_ROWS_SQL,
+    PDF_ATTACHMENTS_SQL,
     _citation_key,
     check_pdf_attachment,
     find_item_by_doi,
@@ -306,9 +308,12 @@ class WalVisibilityTests(unittest.TestCase):
             writer = sqlite3.connect(db)
             try:
                 writer.execute("PRAGMA journal_mode=WAL")
-                writer.execute("PRAGMA wal_autocheckpoint=0")
                 writer.executescript(self.SCHEMA)
                 writer.commit()
+                # The schema must be in the main file: only the rows below belong in the WAL, so
+                # an immutable read sees an empty library (the #91 wrong "none"), not an error.
+                writer.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+                writer.execute("PRAGMA wal_autocheckpoint=0")
                 writer.executescript(
                     """
                     INSERT INTO items VALUES (1, 'PARENTKY', 1);
@@ -320,6 +325,13 @@ class WalVisibilityTests(unittest.TestCase):
                 )
                 writer.commit()
                 self.assertTrue(Path(f"{db}-wal").exists(), "fixture failed to leave rows in the WAL")
+                # Control: the old `immutable=1` reader answers "none" for this very database.
+                stale = sqlite3.connect(read_only_uri(db, immutable=True), uri=True)
+                try:
+                    self.assertEqual(stale.execute(DOI_ROWS_SQL).fetchall(), [])
+                    self.assertEqual(stale.execute(PDF_ATTACHMENTS_SQL, ("PARENTKY",)).fetchall(), [])
+                finally:
+                    stale.close()
                 before = {p.name for p in Path(tmp).rglob("*")}
 
                 self.assertEqual(find_item_by_doi("10.1000/waldoi", db), "PARENTKY")

@@ -599,7 +599,9 @@ hash-verified copy of `zotero.sqlite` (so `import-doi` still works without plugi
 `check-pdf` output, with a note on stderr / in the text. If neither can be read, `import-doi`
 imports nothing and exits 1, and `check-pdf` prints `found: null` and exits 1: an unchecked
 answer is never reported as "no duplicate" or "no PDF". A write that lands between the check and
-the import is still a race. `find-pdf` reports
+the import is still a race. Without a working bridge each run copies and hashes `zotero.sqlite`
+and its sidecars, and `import-doi` refuses (fails closed) if Zotero is writing during the copy;
+re-run when it is idle. `find-pdf` reports
 `outcome`: `attached` (with the attachment key as it stands after any ZotMoov auto-move -- the
 only outcome whose `attachment_key` is usable), `not_found` (Zotero's resolvers found nothing;
 attach an open-access copy with `link-pdf --key <key> --url <direct-pdf-url>`, or

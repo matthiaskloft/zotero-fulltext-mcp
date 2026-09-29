@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import http.client
 import json
+import re
 import sqlite3
 from pathlib import Path
 from unittest.mock import patch
@@ -29,6 +31,20 @@ def _ok(result: object) -> JavaScriptResult:
 
 def _down(error: str = "debug-bridge unreachable: refused", timed_out: bool = False) -> JavaScriptResult:
     return JavaScriptResult(ok=False, result=None, error=error, endpoint="http://x", timed_out=timed_out)
+
+
+def _embedded_sql(script: str) -> str:
+    """The SQL literal the generated script passes to Zotero.DB.queryAsync."""
+    start = script.index("queryAsync(") + len("queryAsync(")
+    literal, _ = json.JSONDecoder().raw_decode(script[start:])
+    return str(literal)
+
+
+def _zotero_op(sql: str) -> str:
+    """Zotero's own test (xpcom/db.js): rows are returned only when this is select/pragma."""
+    match = re.match(r"^[^a-zA-Z]*[^ ]+", sql)
+    assert match
+    return match.group().lower()
 
 
 MALFORMED = [
@@ -84,9 +100,43 @@ class TestDoiDuplicate:
         with patch(BRIDGE, return_value=_ok({"rows": []})) as bridge:
             check_doi_duplicate("10.1000/example", DB)
         script = bridge.call_args.args[0]
-        assert json.dumps(DOI_ROWS_SQL) in script
+        assert json.dumps(DOI_ROWS_SQL.strip()) in script
+        assert _embedded_sql(script) == DOI_ROWS_SQL.strip()
+        assert _zotero_op(_embedded_sql(script)) == "select"
         assert "Zotero.DB.queryAsync" in script
         assert "Array.isArray(rows)" in script
+
+
+ESCAPING_ERRORS = [
+    http.client.RemoteDisconnected("Remote end closed connection without response"),
+    http.client.IncompleteRead(b"par", 10),
+    ConnectionResetError("reset"),
+    UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid start byte"),
+]
+
+
+class TestEscapingTransportErrors:
+    """Errors execute_javascript does not map must still reach the copy fallback, not a traceback."""
+
+    @pytest.mark.parametrize("exc", ESCAPING_ERRORS, ids=lambda e: type(e).__name__)
+    def test_doi_check_falls_back(self, exc: Exception) -> None:
+        with patch(BRIDGE, side_effect=exc), patch(SQLITE_DOI, return_value=None):
+            result = check_doi_duplicate("10.1000/example", DB)
+        assert result["source"] == "zotero_db_copy" and result["live"] is False
+        assert type(exc).__name__ in str(result["bridge_error"])
+
+    @pytest.mark.parametrize("exc", ESCAPING_ERRORS, ids=lambda e: type(e).__name__)
+    def test_pdf_check_falls_back(self, exc: Exception) -> None:
+        copy = {"parent_key": "PARENTKY", "found": False, "attachments": []}
+        with patch(BRIDGE, side_effect=exc), patch(SQLITE_PDF, return_value=copy):
+            result = check_existing_pdf("PARENTKY", DB)
+        assert result["source"] == "zotero_db_copy" and result["live"] is False
+
+    def test_a_long_http_body_is_summarized(self) -> None:
+        body = "HTTP 500: " + "x" * 5000
+        with patch(BRIDGE, return_value=_down(body)), patch(SQLITE_DOI, return_value=None):
+            result = check_doi_duplicate("10.1000/example", DB)
+        assert len(str(result["bridge_error"])) <= 200
 
 
 class TestExistingPdf:
@@ -128,5 +178,6 @@ class TestExistingPdf:
         with patch(BRIDGE, return_value=_ok({"rows": []})) as bridge:
             check_existing_pdf(hostile, DB)
         script = bridge.call_args.args[0]
-        assert json.dumps(PDF_ATTACHMENTS_SQL) in script
+        assert _embedded_sql(script) == PDF_ATTACHMENTS_SQL.strip()
+        assert _zotero_op(_embedded_sql(script)) == "select"
         assert json.dumps([hostile]) in script

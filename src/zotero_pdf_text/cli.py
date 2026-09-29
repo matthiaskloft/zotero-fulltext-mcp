@@ -1690,7 +1690,14 @@ def main(argv: list[str] | None = None) -> int:
             if args.json:
                 print(
                     json.dumps(
-                        {"parent_key": args.key, "found": None, "attachments": [], "error": message},
+                        {
+                            "parent_key": args.key,
+                            "found": None,
+                            "attachments": [],
+                            "source": None,
+                            "live": False,
+                            "error": message,
+                        },
                         ensure_ascii=False,
                         indent=2,
                     )

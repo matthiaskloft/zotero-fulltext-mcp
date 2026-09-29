@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import http.client
 import json
 import re
 import shutil
@@ -794,9 +795,12 @@ class LiveRows:
     ok: bool
     rows: list[dict[str, object]]
     error: str
-    # The bridge did not answer in time, so the query's outcome is unknown (it is read-only, so
-    # nothing was written either way).
-    timed_out: bool = False
+
+
+def _short_error(message: object, limit: int = 200) -> str:
+    """One line, bounded: a bridge error can carry a whole HTTP body."""
+    text = " ".join(str(message).split()) or "debug-bridge call failed"
+    return text if len(text) <= limit else text[: limit - 3] + "..."
 
 
 def _query_rows_live(
@@ -812,7 +816,12 @@ def _query_rows_live(
     Only a payload of exactly ``{"rows": [...]}`` whose rows are objects carrying every expected
     column counts as success. Anything else is a failure, never "no rows": a wrong empty answer
     is what lets a duplicate be written.
+
+    The SQL is stripped because `Zotero.DB.queryAsync` returns rows only when the statement's first
+    token is `select`/`pragma`, judged on a match that keeps leading whitespace; an indented
+    statement returns undefined and would silently never succeed.
     """
+    sql = sql.strip()
     projection = ", ".join(f"{json.dumps(column)}: r[{json.dumps(column)}]" for column in columns)
     js = f"""
 var rows = await Zotero.DB.queryAsync({json.dumps(sql)}, {json.dumps(params)});
@@ -821,15 +830,20 @@ if (!Array.isArray(rows)) {{
 }}
 return {{ rows: rows.map(function (r) {{ return {{ {projection} }}; }}) }};
 """
-    result = execute_javascript(
-        js, endpoint=debug_bridge_endpoint, token=debug_bridge_token, timeout=LIST_ATTACHMENTS_TIMEOUT_SECONDS
-    )
+    try:
+        result = execute_javascript(
+            js, endpoint=debug_bridge_endpoint, token=debug_bridge_token, timeout=LIST_ATTACHMENTS_TIMEOUT_SECONDS
+        )
+    except (OSError, http.client.HTTPException, ValueError) as exc:
+        # execute_javascript only maps HTTPError/URLError/TimeoutError; a dropped connection or a
+        # short read escapes as something else. It is still just "the bridge did not answer".
+        return LiveRows(ok=False, rows=[], error=_short_error(f"debug-bridge failed: {type(exc).__name__}: {exc}"))
     if not result.ok:
-        return LiveRows(ok=False, rows=[], error=result.error or "debug-bridge call failed", timed_out=result.timed_out)
+        return LiveRows(ok=False, rows=[], error=_short_error(result.error))
     payload = result.result
     if not isinstance(payload, dict) or set(payload) != {"rows"} or not isinstance(payload["rows"], list):
         error = payload.get("error") if isinstance(payload, dict) else None
-        return LiveRows(ok=False, rows=[], error=str(error or "unexpected response from debug-bridge"))
+        return LiveRows(ok=False, rows=[], error=_short_error(error or "unexpected response from debug-bridge"))
     rows = payload["rows"]
     if not all(isinstance(row, dict) and all(column in row for column in columns) for row in rows):
         return LiveRows(ok=False, rows=[], error="unexpected row shape from debug-bridge")
