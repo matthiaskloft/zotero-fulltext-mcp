@@ -50,9 +50,10 @@ Version 0.10.0 (2026-09-26), plus unreleased work on `master` (see `CHANGELOG.md
 installable on Windows, macOS and Linux, read-only by default, and has crash-safe index
 publication, library auditing, and tools to search the library, search within one paper, look up a
 citation key, and read chunks with verified locators. The unreleased work adds the canonical
-library layout, performance baselines, end-to-end tests, a `guide` tool, and the opt-in Zotero
-write commands (`import-doi --with-pdf`, `find-pdf`, `link-pdf --url`). The completed work is
-listed under "History" at the end.
+library layout, performance baselines, end-to-end tests, a `guide` tool, the opt-in Zotero
+write commands (`import-doi --with-pdf`, `find-pdf`, `link-pdf --url`) with duplicate and PDF checks
+that read live from Zotero, a retrieval-quality harness, and `author`, `title`, `citation_key` and
+year-range filters on search. The completed work is listed under "History" at the end.
 
 There are three tracks of remaining work. They mostly don't depend on each other. The exceptions are
 noted in each table's "Needs" column.
@@ -70,16 +71,18 @@ semantic discovery follows. Two rules shape the order:
 
 | Step | What it does | Issues | Risk | Needs | Why here |
 |------|--------------|--------|------|-------|----------|
-| **S1** | Scores search quality (recall@k, MRR) on a personal question set that is never committed | [#78](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/78) | none | — | Every later step is judged by it. |
-| **S2** | Adds `author`, `title`, `citation_key` and year-range filters to `search_fulltext` | [#77](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/77) A + B | none | — | Query code only, with no schema change or rebuild. Fixes the most visible gap: an author search today also matches every reference list that cites that author. |
+| **S1** (done) | Scores search quality (recall@k, MRR) on a personal question set that is never committed | [#78](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/78) | none | — | Every later step is judged by it. |
+| **S2** (done) | Adds `author`, `title`, `citation_key` and year-range filters to `search_fulltext` | [#77](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/77) A + B | none | — | Query code only, with no schema change or rebuild. Fixes the most visible gap: an author search today also matches every reference list that cites that author. |
 | **S3** | Stores the Zotero fields the index drops (abstract, tags, venue, item type, creator roles, …), and scores each paper's extraction quality | [#76](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/76), [#82](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/82) | contained | — | Needs a rebuild but no reconversion. The abstracts and tags are what S4's new columns and S6 build on. The quality score explains papers that are missing because extraction failed. |
 | **S4** | Records page offsets during conversion, splits chunks at headings and paragraphs with page ranges, and tags each chunk's section (front matter, body, references, appendix). In the same schema bump it adds stemming, prefix and proximity search, and abstract/tag columns. | [#79](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/79) → [#80](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/80) → [#81](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/81), #77 C, D, E, F | contained | S1, S3 | The single reconversion and schema bump for this track. Rewrites derived Markdown and the index, never PDFs or Zotero. Existing locators answer `stale_locator` afterwards. |
 | **S5** | Adds a section filter to search, and search over reference-list entries ("which of my papers cite X?") | #77 H, #81 | none | S4 | Query code on top of S4's section tags. |
 | **S6** | Optional semantic paper discovery with a local embedding model, as a separate opt-in index and MCP tool | [#1](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/1) | contained | S1, S3 (S4 for passage embeddings) | Built as its own artifact, so publishing the full-text index never depends on an embedding service running. S1's numbers decide whether hybrid ranking or passage embeddings are worth adding. The phased plan is in a comment on #1. |
 | **S7** | Citation graph within the library, built from reference entries | [#83](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/83) | contained | S3, S4 | Future. It is filed now so that S4's reference-entry format keeps what it needs. |
 
-**Status:** no Track 1 step has started. **Start here:** S1 and S2 are unblocked, zero-risk, and
-independent of each other.
+**Status:** S1 ([#98](https://github.com/matthiaskloft/zotero-fulltext-mcp/pull/98)) and S2
+([#99](https://github.com/matthiaskloft/zotero-fulltext-mcp/pull/99)) are done and unreleased. Run the
+S1 harness before and after any change to ranking or chunking. **Start here:** S3, which needs a
+rebuild but no reconversion. #77 stays open for its parts C to H.
 
 ## Track 2: Hardening leftovers
 
@@ -133,14 +136,17 @@ risk column here is about Zotero and dependencies, not the converted library.
 
 | Step | What it does | Issues | Risk | Needs | Why here |
 |------|--------------|--------|------|-------|----------|
-| **M1** | Fixes the duplicate check in `check-pdf` and `import-doi`. Today they read the live `zotero.sqlite` with `immutable=1`, which can miss just-written rows (WAL mode) or see a half-written state, so a wrong answer can create a duplicate item or a second PDF copy. Proposed fix: a live debug-bridge read where available. | [#91](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/91) | none | — | A correctness bug in shipped write commands, so it comes first. It changes no derived data. |
+| **M1** (done) | Fixes the duplicate check in `check-pdf` and `import-doi`. Today they read the live `zotero.sqlite` with `immutable=1`, which can miss just-written rows (WAL mode) or see a half-written state, so a wrong answer can create a duplicate item or a second PDF copy. Proposed fix: a live debug-bridge read where available. | [#91](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/91) | none | — | A correctness bug in shipped write commands, so it comes first. It changes no derived data. |
 | **M2** | Dismisses the 22 Dependabot alerts on `uv.lock` and records why. The optional `[marker]` extra pins `pillow<11` and, before Marker 2.0, `transformers<5`. Marker 2.0 lifts the pins but needs Docker or a `llama-server` binary. Decision: stay on marker-pdf 1.10.2, because the pipeline only processes the user's own PDFs. | [#92](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/92) | none | — | The decision is made. What remains is the dismissal and a note. Revisit when Marker 2.0 no longer needs Docker. |
 | **M3** | An opt-in review-and-apply workflow for Zotero item writes from MCP, as a separate entry point because the default server stays read-only. The CLI write commands (`import-doi`, `find-pdf`, `link-pdf`) already exist. | [#34](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/34) | contained | M1 | It builds on the same duplicate check, so M1 must land first. |
 | **M4** | A sidecar library of the reader's own comments, linked to source passages. #3 tracks it together with #1. | [#2](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/2), [#3](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/3) | contained | S4, S6 | Links to passages by locator, and S4 re-chunks the library once. Building it earlier would mean re-linking every comment. |
 | **M5** | Image OCR (`ocr-images`): stress-test on a large library, then decide whether to document it in the release notes. It is packaged but left out of the notes by decision. | — | none | a large-library run | No date. It is released once the stress test passes (see `CHANGELOG.md`). |
 
-**Status:** no Track 3 step has started. **Start here:** M1 and M2 are unblocked and can run
-alongside S1 and S2.
+**Status:** M1 is done ([#97](https://github.com/matthiaskloft/zotero-fulltext-mcp/pull/97)); its
+live path is checked against Zotero's source and a fake bridge, and `pytest -m live_zotero` has not
+been run against a real Zotero. M2's decision is made; what remains is dismissing the alerts on
+GitHub, which is a repository security setting and stays with the maintainer. M3 is unblocked now
+that M1 has landed.
 
 Out of scope for this project: live Zotero browsing of collections, tags and notes. That belongs to
 the companion Zotero MCP server (see `AGENTS.md`).
@@ -165,4 +171,6 @@ These are the completed items, in the order they shipped. The source plans are
 | Package 4B step 2: SQL aggregates and truthful status | `index-stats` (formerly `coverage-report`) and `library_status`, which never conflates indexed counts with library coverage (PRs #8–#10). |
 | Canonical library layout, performance baselines, end-to-end tests (unreleased) | `convert-verified`/`convert-new` write to `library/markdown` and `library/images`; recorded latency baselines and a passage-lookup index; real-process fixture tests (PRs #84–#87). |
 | Zotero write CLI (unreleased) | `import-doi`, `find-pdf`, `link-pdf --url`, `import-doi --with-pdf`, and a `guide("writes")` listing of every write path (PRs #89, #90). |
+| Retrieval-quality harness and search filters (unreleased) | `benchmarks/retrieval.py` scores recall@k and MRR on a private question set and compares runs (S1, PR #98). `search_fulltext` accepts `author`, `title`, `citation_key` and year-range filters (S2, #77 A and B, PR #99). |
+| Live pre-write checks (unreleased) | `import-doi`'s duplicate check and `check-pdf` read live through debug-bridge, fall back to a verified copy, and refuse when neither works (M1, #91, PR #97). Conversion run folders got microsecond names after a collision made CI flaky (PR #101). |
 | Issue-driven work through v0.10.0 | Checkpointed conversion, selective index repair, provenance reconversion, `search_within_fulltext`, `lookup_citation_key`, a first-use guide and more. See `CHANGELOG.md`. |
