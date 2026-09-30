@@ -50,6 +50,12 @@ get_fulltext_chunk(attachment_key="EFGH5678", chunk_index=<source_locator.chunk_
   -> the passage, or stale_locator if it was replaced since the search
 ```
 
+To find papers *by* an author rather than papers that merely cite them, filter by field:
+
+```text
+search_fulltext(author="Doe", query="heuristics", year_from=1970, year_to=1985)
+```
+
 - `matched_fields` tells you what matched: if it contains `text`, the hit is a body-text passage;
   if it lists only `title`, `creators` or `citation_key`, it is a **metadata-only discovery hit**
   and its chunk is a starting point, not evidence. Read the chunk before relying on either.
@@ -264,6 +270,10 @@ Smoke-test the index directly:
 Search uses `all_terms` by default. Pass `--search-mode any_terms` for a broader fallback, or
 `--search-mode phrase` to require the normalized query words in order.
 
+`search-fts` also takes `--author`, `--title`, `--citation-key`, `--year-from` and `--year-to`
+(same semantics as the MCP tool below); `--query` is optional when one of the first three is
+given. Invalid input prints a message to stderr and exits with status 2.
+
 To see where the Markdown used by the published index actually lives, run
 `output-status --config .\config.json`. New runs use `mapping-runs/` for mapping
 snapshots and `conversion-runs/{verified,samples,unverified-review,provenance-reconvert,index-repair}/` for converted
@@ -420,11 +430,21 @@ Expected status: `Connected`.
 
 The safe default server exposes:
 
-- `search_fulltext(query, limit=10, search_mode="all_terms")` — ranked search (one hit per paper,
+- `search_fulltext(query="", limit=10, search_mode="all_terms", author="", title="", citation_key="", year_from=None, year_to=None)` — ranked search (one hit per paper,
   at most 20) over converted body text and
   indexed title/creator/citation-key metadata, with bounded snippets and `matched_fields` showing
   which indexed fields actually matched. `any_terms` is the broader fallback and `phrase`
-  requires normalized words in order.
+  requires normalized words in order. The optional filters narrow the search before ranking and
+  limits: `author` (matches every creator role, editors included), `title` and `citation_key`
+  each require all their words in that field (whole words in any order, case- and
+  diacritic-insensitive: `muller` matches `Müller`, `Mueller` does not; no substring or prefix
+  matching). The `citation_key` filter is a whole-word, case-insensitive match, unlike the
+  case-sensitive `lookup_citation_key`. When a field filter is given, `query` matches body text
+  only and may be omitted ("all papers by X"; such hits are metadata-only navigation starting
+  points at chunk 0). `search_mode` applies to `query` only. `year_from`/`year_to` (1-9999)
+  are inclusive; records whose year is missing or not a plain four-digit year are excluded
+  when a year filter is set, and a year filter needs a query or a field filter. Blank strings
+  count as absent. Calls without filters behave as before.
 - `search_within_fulltext(attachment_key, query, search_mode="all_terms", limit=10)` — the same
   search constrained to one indexed attachment (siblings under the same parent item are not
   searched). It matches converted body text only, so every hit is a passage rather than a

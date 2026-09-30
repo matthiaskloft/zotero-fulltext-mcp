@@ -436,6 +436,47 @@ class McpServerTests(unittest.TestCase):
                 limit=MAX_CONTEXT_RECORDS,
             )
 
+    def test_search_filters_return_same_shape_and_typed_errors(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _, sqlite_path, _ = _build_index(Path(tmp))
+            server = create_server(sqlite_path, mcp_factory=FakeFastMCP)
+            search = server.tools["search_fulltext"]
+
+            plain = search("searchable")
+            self.assertEqual(set(plain), {"search_mode", "no_results", "results"})
+            filtered = search("searchable", author="disclose", year_from=2026, year_to=2026)
+            self.assertEqual(set(filtered), set(plain))
+            self.assertEqual(filtered["results"][0]["matched_fields"], ["creators", "text"])
+            # Positional order of the pre-existing parameters is unchanged.
+            self.assertEqual(search("searchable", 5, "any_terms")["search_mode"], "any_terms")
+            # A field filter alone (no query) is allowed; blank strings count as absent.
+            only_author = search(author="disclose")
+            self.assertEqual(only_author["results"][0]["matched_fields"], ["creators"])
+            self.assertEqual(search("searchable", author="", title=" ", citation_key="", year_from=None), plain)
+            self.assertTrue(search(citation_key="IGNOREINSTRUCTIONS2026")["results"])
+            self.assertTrue(search("searchable", year_from=2027)["no_results"])
+
+            for kwargs, code in [
+                ({"author": 5}, "invalid_author"),
+                ({"author": " / "}, "invalid_author"),
+                ({"title": "w " * 21}, "invalid_title"),
+                ({"citation_key": "x" * 1_001}, "invalid_citation_key"),
+                ({"query": "searchable", "year_from": True}, "invalid_year_from"),
+                ({"query": "searchable", "year_from": "2020"}, "invalid_year_from"),
+                ({"query": "searchable", "year_to": 1.5}, "invalid_year_to"),
+                ({"query": "searchable", "year_to": 10_000}, "invalid_year_to"),
+                ({"query": "searchable", "year_from": 2020, "year_to": 2010}, "invalid_year_range"),
+                ({}, "invalid_query"),
+                ({"query": "  "}, "invalid_query"),
+                ({"year_from": 2000}, "invalid_query"),
+            ]:
+                with self.subTest(kwargs=kwargs):
+                    _assert_tool_error(self, lambda kwargs=kwargs: search(**kwargs), code)
+
+            guide = server.tools["guide"]("search")["text"]
+            self.assertIn("author", guide)
+            self.assertIn("year_from", guide)
+
     def test_invalid_inputs_and_missing_database_return_stable_errors(self):
         with tempfile.TemporaryDirectory() as tmp:
             _, sqlite_path, _ = _build_index(Path(tmp))

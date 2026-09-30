@@ -40,6 +40,24 @@ class McpProtocolTests(unittest.TestCase):
             self.assertEqual(tools["search_fulltext"].inputSchema["properties"]["limit"]["type"], "integer")
             self.assertEqual(tools["search_fulltext"].inputSchema["properties"]["search_mode"]["enum"], ["all_terms", "any_terms", "phrase"])
 
+            search_schema = tools["search_fulltext"].inputSchema
+            self.assertNotIn("query", search_schema.get("required", []))
+            for name in ("author", "title", "citation_key"):
+                self.assertEqual(search_schema["properties"][name]["type"], "string")
+            for name in ("year_from", "year_to"):
+                self.assertEqual(
+                    search_schema["properties"][name]["anyOf"],
+                    [{"type": "integer", "minimum": 1, "maximum": 9999}, {"type": "null"}],
+                )
+            filter_only = self._call(server, "search_fulltext", {"author": "disclose"})
+            self.assertFalse(filter_only.isError)
+            self.assertTrue(filter_only.structuredContent["results"])
+            self._assert_schema(tools["search_fulltext"], filter_only.structuredContent)
+            string_year = self._call(server, "search_fulltext", {"query": "searchable", "year_from": "2020"})
+            self.assertTrue(string_year.isError)
+            self.assertIn("invalid_year_from: ", string_year.content[0].text)
+            self.assertNotIn("pydantic", string_year.content[0].text.lower())
+
             search = self._call(server, "search_fulltext", {"query": "searchable"})
             self.assertFalse(search.isError)
             self.assertIsNotNone(search.structuredContent)

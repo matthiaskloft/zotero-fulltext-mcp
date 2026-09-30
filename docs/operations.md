@@ -614,6 +614,18 @@ explicit `no_results` flag. Each JSON result also includes `matched_fields` and
 up to 1,000 query characters, 20 normalized terms, and 64 characters per term. CLI searches
 accept at most 100 results; the MCP server further caps requests at 20 results.
 
+Field and year filters: `--author`, `--title` and `--citation-key` each require all their words
+in that field (whole words, case- and diacritic-insensitive; `--author` matches every creator role),
+and `--year-from` / `--year-to` bound the publication year inclusively (records without a plain
+four-digit year are excluded). With a field filter the query matches body text only and `--query`
+may be omitted; a year filter alone is rejected. Invalid input prints a message to stderr and
+exits with status 2. See "SQLite FTS" in `docs/data-dictionary.md` for the exact semantics.
+
+```powershell
+& $python -m zotero_pdf_text search-fts --db $data\index\zotero_text_index.sqlite `
+  --author "Doe" --query "heuristics" --year-from 1970 --year-to 1985
+```
+
 Fetch bounded text:
 
 ```powershell

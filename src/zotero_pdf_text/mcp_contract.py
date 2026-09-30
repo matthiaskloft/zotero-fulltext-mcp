@@ -66,6 +66,8 @@ from .timeout_candidates import (
 if TYPE_CHECKING:
     # Runtime aliases are installed by create_server() for Pydantic's schema generation.
     QueryInput = object
+    FilterInput = object
+    YearInput = object
     LimitInput = object
     SearchModeInput = object
     AttachmentKeyInput = object
@@ -599,6 +601,11 @@ def create_server(
         if WithJsonSchema is not None:
             globals().update(
                 QueryInput=Annotated[object, WithJsonSchema({"type": "string", "maxLength": MAX_QUERY_CHARS})],
+                FilterInput=Annotated[object, WithJsonSchema({"type": "string", "maxLength": MAX_QUERY_CHARS})],
+                YearInput=Annotated[
+                    object,
+                    WithJsonSchema({"anyOf": [{"type": "integer", "minimum": 1, "maximum": 9999}, {"type": "null"}]}),
+                ],
                 LimitInput=Annotated[object, WithJsonSchema({"type": "integer", "minimum": 1, "maximum": MAX_SEARCH_RESULTS})],
                 SearchModeInput=Annotated[object, WithJsonSchema({"enum": sorted(SEARCH_MODES)})],
                 AttachmentKeyInput=Annotated[object, WithJsonSchema({"type": "string", "maxLength": MAX_CITATION_KEY_CHARS})],
@@ -651,9 +658,14 @@ def create_server(
 
     @mcp.tool(annotations=READ_ONLY_TOOL_ANNOTATIONS)
     def search_fulltext(
-        query: QueryInput,
+        query: QueryInput = "",
         limit: LimitInput = 10,
         search_mode: SearchModeInput = "all_terms",
+        author: FilterInput = "",
+        title: FilterInput = "",
+        citation_key: FilterInput = "",
+        year_from: YearInput = None,
+        year_to: YearInput = None,
     ) -> SearchResponse:
         """Search title, creators, citation key, and converted body text.
 
@@ -663,12 +675,39 @@ def create_server(
         treating a hit as body-text evidence. matched_fields identifies why the record matched;
         for metadata-only hits, the chunk locator is a navigation starting point rather than proof
         that the query occurs in body text.
+
+        Optional filters: author (every creator role, editors included), title and citation_key
+        need all their words in that field (whole words, any order, case and accents ignored);
+        with one of them, query matches body text only and may be omitted. year_from/year_to are
+        inclusive; records without a four-digit year are excluded. A year filter needs a query
+        or a field filter.
         """
 
         def operation() -> SearchResponse:
             validated_mode = _validate_search_mode(search_mode)
+            validated_query = _validate_optional_query(query)
+            validated_limit = _validate_limit(limit)
+            filters = {
+                "author": _validate_search_filter(author, "author"),
+                "title": _validate_search_filter(title, "title"),
+                "citation_key": _validate_search_filter(citation_key, "citation_key"),
+            }
+            validated_from = _validate_year(year_from, "year_from")
+            validated_to = _validate_year(year_to, "year_to")
+            if validated_from is not None and validated_to is not None and validated_from > validated_to:
+                raise PublicMcpError("invalid_year_range", "year_from must not be greater than year_to.")
+            if validated_query is None and not any(filters.values()):
+                raise PublicMcpError("invalid_query", "Supply a query or at least one of author, title, citation_key.")
             results = search_fts(
-                _resolve_request_db(db_path), _validate_query(query), limit=_validate_limit(limit), search_mode=validated_mode
+                _resolve_request_db(db_path),
+                validated_query,
+                limit=validated_limit,
+                search_mode=validated_mode,
+                author=filters["author"],
+                title=filters["title"],
+                citation_key=filters["citation_key"],
+                year_from=validated_from,
+                year_to=validated_to,
             )
             return {
                 "search_mode": validated_mode,
@@ -1121,7 +1160,10 @@ def guide_response(
         text = (
             "Start with search_fulltext using concise terms and search_mode all_terms (the default: "
             "every normalized term must match). Use any_terms only to broaden a search that found "
-            "too little, and phrase for exact wording in order. A hit is discovery, not evidence: "
+            "too little, and phrase for exact wording in order. To restrict by field, pass author, "
+            "title or citation_key (all their words must match that field) and year_from/year_to; "
+            "papers by X about Y is author=\"X\", query=\"Y\", and a filter alone lists a "
+            "field's papers. A hit is discovery, not evidence: "
             "matched_fields says why it matched, and for a metadata-only hit the chunk locator is a "
             "starting point, not proof that the words occur in the body. search_within_fulltext "
             "searches one attachment's body text only; title, creator and citation-key terms are "
@@ -2186,6 +2228,37 @@ def _validate_query(query: object) -> str:
     if any(len(term) > MAX_QUERY_TERM_CHARS for term in terms):
         raise PublicMcpError("invalid_query", f"Each query term may contain at most {MAX_QUERY_TERM_CHARS} characters.")
     return query
+
+
+def _validate_optional_query(query: object) -> str | None:
+    """Like _validate_query, but a blank query means none was given (a field filter may stand in)."""
+    if isinstance(query, str) and not query.strip():
+        return None
+    return _validate_query(query)
+
+
+def _validate_search_filter(value: object, field: str) -> str | None:
+    code = f"invalid_{field}"
+    if not isinstance(value, str) or len(value) > MAX_QUERY_CHARS:
+        raise PublicMcpError(code, f"{field} must be a string of at most {MAX_QUERY_CHARS} characters.")
+    if not value.strip():
+        return None
+    terms = re.findall(r"[\w]+", value, flags=re.UNICODE)
+    if not terms:
+        raise PublicMcpError(code, f"{field} must contain at least one searchable term.")
+    if len(terms) > MAX_QUERY_TERMS:
+        raise PublicMcpError(code, f"{field} may contain at most {MAX_QUERY_TERMS} searchable terms.")
+    if any(len(term) > MAX_QUERY_TERM_CHARS for term in terms):
+        raise PublicMcpError(code, f"Each {field} term may contain at most {MAX_QUERY_TERM_CHARS} characters.")
+    return value
+
+
+def _validate_year(value: object, field: str) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= 9999:
+        raise PublicMcpError(f"invalid_{field}", f"{field} must be an integer between 1 and 9999.")
+    return value
 
 
 def _validate_guide_topic(topic: object) -> str:

@@ -1486,6 +1486,190 @@ class ImageDestinationChunkBoundaryTests(unittest.TestCase):
                 self.assertNotIn("png", result.snippet)
 
 
+def _filter_record(key: str, **overrides: object) -> dict[str, object]:
+    record: dict[str, object] = {
+        "zotero_parent_key": f"P{key}",
+        "zotero_attachment_key": key,
+        "title": "Untitled study",
+        "creators": "Someone Else",
+        "year": "2000",
+        "doi": "",
+        "citation_key": "",
+        "source_path": f"{key}.pdf",
+        "markdown_path": f"{key}.md",
+        "markdown_sha256": f"sha-{key}",
+        "extraction_tool": "pymupdf4llm.to_markdown",
+        "char_count": 100,
+        "word_count": 10,
+        "page_count": "1",
+        "classification": "mapped_verified",
+        "identity_status": "verified",
+        "identity_rule": "doi_exact",
+        "text": "Nothing relevant here.",
+    }
+    record.update(overrides)
+    return record
+
+
+class SearchFilterTests(unittest.TestCase):
+    def _build(self, tmp: str, extra: list[dict[str, object]] | None = None) -> Path:
+        root = Path(tmp)
+        records = [
+            _filter_record("A", creators="John Doe; Jane Smith", year="1974", title="Judgment under uncertainty",
+                           citation_key="doeJudgment1974", text="Heuristics and biases in judgment."),
+            _filter_record("B", creators="Pat Lee", year="2020", title="A survey",
+                           text="As Doe heuristics show, people err (Doe, 1974)."),
+            _filter_record("C", creators="John Doe", year="", title="Undated note", text="More on heuristics."),
+            _filter_record("D", creators="Anna Müller", year="2011", title="Reading study", text="Nothing relevant."),
+            _filter_record("E", creators="John Doe", year="2020-05", title="Malformed year", text="Heuristics again."),
+            _filter_record("F", creators="John Doe", year="2005", title="Heuristics primer", text="Plain prose only."),
+            *(extra or []),
+        ]
+        jsonl = root / "index.jsonl"
+        jsonl.write_text("".join(json.dumps(r) + "\n" for r in records), encoding="utf-8")
+        db = root / "index.sqlite"
+        build_fts_index(jsonl, db)
+        return db
+
+    @staticmethod
+    def _keys(results) -> set[str]:
+        return {r.zotero_attachment_key for r in results}
+
+    def test_author_filter_excludes_papers_that_only_cite_the_author(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = self._build(tmp)
+            results = search_fts(db, "heuristics", author="doe")
+            self.assertEqual(self._keys(results), {"A", "C", "E"})
+            self.assertTrue(all(r.matched_fields == ["creators", "text"] for r in results))
+
+    def test_unfiltered_calls_unchanged_and_blank_filters_are_absent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = self._build(tmp)
+            plain = search_fts(db, "heuristics")
+            self.assertEqual(self._keys(plain), {"A", "B", "C", "E", "F"})
+            self.assertEqual(plain, search_fts(db, "heuristics", author=None, title="", citation_key="  "))
+            self.assertEqual(plain, search_fts(db, "heuristics", author="   ", year_from=None, year_to=None))
+
+    def test_filter_only_search_returns_chunk_zero_metadata_hits(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = self._build(tmp)
+            results = search_fts(db, None, author="doe")
+            self.assertEqual(self._keys(results), {"A", "C", "E", "F"})
+            for result in results:
+                self.assertEqual(result.chunk_index, 0)
+                self.assertEqual(result.matched_fields, ["creators"])
+            self.assertEqual(self._keys(search_fts(db, "", author="doe")), {"A", "C", "E", "F"})
+
+    def test_filter_only_hit_is_chunk_zero_for_multi_chunk_records(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            long_text = "Long body text about many things. " * 12
+            jsonl = root / "index.jsonl"
+            jsonl.write_text(
+                json.dumps(_filter_record("L", creators="John Doe", text=long_text)) + "\n", encoding="utf-8"
+            )
+            db = root / "index.sqlite"
+            build_fts_index(jsonl, db, chunk_chars=60, overlap_chars=5)
+            (hit,) = search_fts(db, None, author="doe")
+            self.assertEqual((hit.chunk_index, hit.matched_fields), (0, ["creators"]))
+
+    def test_multi_word_filter_requires_all_words_in_any_order(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = self._build(tmp)
+            self.assertEqual(self._keys(search_fts(db, None, author="John Doe")), {"A", "C", "E", "F"})
+            self.assertEqual(self._keys(search_fts(db, None, author="doe smith")), {"A"})
+            self.assertEqual(self._keys(search_fts(db, None, author="Smith Doe")), {"A"})
+            self.assertEqual(search_fts(db, None, author="Do"), [])
+            self.assertEqual(search_fts(db, None, author="Smi"), [])
+
+    def test_author_is_diacritic_insensitive_but_not_transliterating(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = self._build(tmp)
+            self.assertEqual(self._keys(search_fts(db, None, author="MULLER")), {"D"})
+            self.assertEqual(self._keys(search_fts(db, None, author="Müller")), {"D"})
+            self.assertEqual(search_fts(db, None, author="Mueller"), [])
+
+    def test_title_and_citation_key_filters(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = self._build(tmp)
+            self.assertEqual(self._keys(search_fts(db, None, title="uncertainty judgment")), {"A"})
+            # With a field filter the query matches body text only: F's title says "heuristics", its body does not.
+            self.assertEqual(search_fts(db, "heuristics", title="primer"), [])
+            hits = search_fts(db, None, title="primer")
+            self.assertEqual([(h.zotero_attachment_key, h.matched_fields) for h in hits], [("F", ["title"])])
+            self.assertEqual(self._keys(search_fts(db, None, citation_key="DOEJUDGMENT1974")), {"A"})
+            self.assertEqual(search_fts(db, None, citation_key="doeJudgment"), [])
+            self.assertEqual(search_fts(db, None, citation_key="1974"), [])
+
+    def test_year_bounds_are_inclusive_and_exclude_missing_or_malformed_years(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = self._build(tmp)
+            self.assertEqual(self._keys(search_fts(db, "heuristics", year_from=1974, year_to=2005)), {"A", "F"})
+            self.assertEqual(self._keys(search_fts(db, "heuristics", year_from=2005)), {"B", "F"})
+            self.assertEqual(self._keys(search_fts(db, "heuristics", year_to=1974)), {"A"})
+            self.assertEqual(self._keys(search_fts(db, "heuristics", year_from=1975, year_to=1999)), set())
+            # C has no year and E a malformed one: neither matches any year filter.
+            everything = search_fts(db, "heuristics", year_from=1, year_to=9999)
+            self.assertEqual(self._keys(everything), {"A", "B", "F"})
+            self.assertEqual(self._keys(search_fts(db, None, author="doe", year_from=2000)), {"F"})
+
+    def test_filters_apply_before_candidate_limit(self):
+        noise = [
+            _filter_record(f"N{i:03d}", creators="Noise Author", year="1990", title="Heuristics heuristics heuristics",
+                           text="heuristics " * 30)
+            for i in range(fts_module.MIN_SEARCH_CANDIDATES + 10)
+        ]
+        target = _filter_record("TARGET", creators="Target Writer", year="2015", title="Other", text="A heuristics remark.")
+        with tempfile.TemporaryDirectory() as tmp:
+            db = self._build(tmp, [*noise, target])
+            self.assertEqual(self._keys(search_fts(db, "heuristics", limit=1, year_from=2010)), {"TARGET"})
+            self.assertEqual(self._keys(search_fts(db, "heuristics", limit=1, author="target")), {"TARGET"})
+
+    def test_search_mode_applies_to_query_and_author_stays_required(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = self._build(tmp)
+            self.assertEqual(self._keys(search_fts(db, "heuristics biases", search_mode="phrase", author="doe")), set())
+            self.assertEqual(self._keys(search_fts(db, "heuristics and", search_mode="phrase", author="doe")), {"A"})
+            any_terms = search_fts(db, "biases prose", search_mode="any_terms", author="smith")
+            self.assertEqual(self._keys(any_terms), {"A"})
+            self.assertEqual(self._keys(search_fts(db, "biases nonsense", search_mode="any_terms", author="lee")), set())
+
+    def test_rejects_invalid_requests(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = self._build(tmp)
+            invalid_calls = [
+                dict(query=None),
+                dict(query="", author="  "),
+                dict(query=None, year_from=2000),
+                dict(query="heuristics", year_from=2010, year_to=2000),
+                dict(query="heuristics", year_from=True),
+                dict(query="heuristics", year_from="2020"),
+                dict(query="heuristics", year_to=0),
+                dict(query="heuristics", year_to=10000),
+                dict(query="heuristics", author=" / "),
+                dict(query="heuristics", title="w " * 21),
+                dict(query="heuristics", citation_key="x" * 65),
+                dict(query="heuristics", author="a" * 1001),
+                dict(query="heuristics", attachment_key="A", author="doe"),
+                dict(query="heuristics", attachment_key="A", year_from=2000),
+            ]
+            for kwargs in invalid_calls:
+                with self.subTest(kwargs=kwargs), self.assertRaises(ValueError):
+                    search_fts(db, **kwargs)
+
+    def test_filtered_hit_locator_round_trips_to_get_fulltext(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = self._build(tmp)
+            (hit,) = search_fts(db, "heuristics", author="smith")
+            chunk = get_fulltext(
+                db,
+                attachment_key=hit.zotero_attachment_key,
+                chunk_index=hit.chunk_index,
+                expected_chunk_sha256=hit.chunk_sha256,
+            )
+            self.assertIn("Heuristics and biases", chunk.text)
+
+
 def _write_jsonl(path: Path) -> None:
     records = [
         {

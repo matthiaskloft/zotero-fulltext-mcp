@@ -268,11 +268,16 @@ def _check_integrity(db_path: Path) -> None:
 
 def search_fts(
     db_path: Path,
-    query: str,
+    query: str | None,
     *,
     limit: int = 10,
     search_mode: SearchMode = "all_terms",
     attachment_key: str | None = None,
+    author: str | None = None,
+    title: str | None = None,
+    citation_key: str | None = None,
+    year_from: int | None = None,
+    year_to: int | None = None,
 ) -> list[SearchResult]:
     """Search the index; with attachment_key, rank that one attachment's chunks instead.
 
@@ -282,11 +287,43 @@ def search_fts(
     that are not evidence. It searches the same single record get_fulltext resolves for the key,
     so it never mixes records. An attachment key absent from the index raises KeyError, so it is
     distinguishable from no match.
+
+    Optional filters narrow a global search before ranking and limits. author (matches the flat
+    creators field, so every creator role including editors), title and citation_key each require
+    all of their words in that one field (whole words, case- and diacritic-insensitive, no prefix
+    or substring matching); when any of them is given, query matches body text only. A query may
+    be omitted when at least one of those three is given, which returns records by metadata alone
+    (hits then point at chunk 0 as a navigation start, not as evidence). year_from/year_to bound
+    metadata.year inclusively and exclude records whose year is not a plain four-digit year. A
+    year filter alone is rejected. Filters cannot be combined with attachment_key.
     """
-    terms = _validate_search_request(query, limit, search_mode)
-    match_query = _match_query(terms, search_mode)
+    terms, field_terms, year_from, year_to = _validate_search_request(
+        query, limit, search_mode, author=author, title=title, citation_key=citation_key,
+        year_from=year_from, year_to=year_to,
+    )
+    if attachment_key is not None and (field_terms or year_from is not None or year_to is not None):
+        raise ValueError("attachment_key cannot be combined with author, title, citation_key or year filters")
+    match_query = _compose_match_query(terms, search_mode, field_terms)
+    # A metadata-only match (field filter, no query) scores every chunk of a record on the same
+    # metadata, so bm25 length normalization would pick an arbitrary chunk; take chunk 0, the
+    # natural navigation start.
+    record_order = (
+        "CASE WHEN instr(body_match_marker, char(2)) > 0 THEN 0 ELSE 1 END, score ASC, chunk_index ASC"
+        if terms
+        else "chunk_index ASC"
+    )
+    year_filter = ""
+    year_params: tuple[object, ...] = ()
+    if year_from is not None or year_to is not None:
+        year_filter = "AND trim(m.year) GLOB '[0-9][0-9][0-9][0-9]'"
+        if year_from is not None:
+            year_filter += " AND CAST(trim(m.year) AS INTEGER) >= ?"
+            year_params += (year_from,)
+        if year_to is not None:
+            year_filter += " AND CAST(trim(m.year) AS INTEGER) <= ?"
+            year_params += (year_to,)
     candidate_limit = min(MAX_SEARCH_CANDIDATES, max(limit * SEARCH_CANDIDATE_MULTIPLIER, MIN_SEARCH_CANDIDATES))
-    params: tuple[object, ...] = (match_query, candidate_limit)
+    params: tuple[object, ...] = (match_query, *year_params, candidate_limit)
     attachment_filter = ""
     rank_filter = "WHERE record_rank = 1"
     con = connect_readonly(db_path)
@@ -353,11 +390,11 @@ def search_fts(
                 FROM chunks_fts f
                 JOIN chunks c ON c.chunk_id = f.chunk_id
                 JOIN metadata m ON m.record_id = f.record_id
-                WHERE chunks_fts MATCH ? {attachment_filter}
+                WHERE chunks_fts MATCH ? {attachment_filter} {year_filter}
             ), ranked AS (
                 SELECT *, ROW_NUMBER() OVER (
                     PARTITION BY record_id
-                    ORDER BY CASE WHEN instr(body_match_marker, char(2)) > 0 THEN 0 ELSE 1 END, score ASC, chunk_index ASC
+                    ORDER BY {record_order}
                 ) AS record_rank
                 FROM matches
             )
@@ -1207,21 +1244,65 @@ def _validate_chunking(chunk_chars: int, overlap_chars: int) -> None:
         raise ValueError("overlap_chars must be smaller than chunk_chars")
 
 
-def _validate_search_request(query: str, limit: int, search_mode: str) -> list[str]:
-    if not isinstance(query, str) or not query.strip() or len(query) > MAX_QUERY_CHARS:
-        raise ValueError(f"query must contain 1 to {MAX_QUERY_CHARS} characters")
-    terms = re.findall(r"[\w]+", query, flags=re.UNICODE)
+# Fixed allowlist: the FTS column for each public filter name. Column names in the MATCH expression
+# come only from here, never from caller input.
+_FILTER_COLUMNS = {"author": "creators", "title": "title", "citation_key": "citation_key"}
+
+
+def _normalize_terms(value: str | None, field: str) -> list[str]:
+    """Split a query or filter into searchable word terms; None or blank means not supplied."""
+    if value is None:
+        return []
+    if not isinstance(value, str) or len(value) > MAX_QUERY_CHARS:
+        raise ValueError(f"{field} must contain 1 to {MAX_QUERY_CHARS} characters")
+    if not value.strip():
+        return []
+    terms = re.findall(r"[\w]+", value, flags=re.UNICODE)
     if not terms:
-        raise ValueError("query must contain at least one searchable term")
+        raise ValueError(f"{field} must contain at least one searchable term")
     if len(terms) > MAX_QUERY_TERMS:
-        raise ValueError(f"query may contain at most {MAX_QUERY_TERMS} searchable terms")
+        raise ValueError(f"{field} may contain at most {MAX_QUERY_TERMS} searchable terms")
     if any(len(term) > MAX_QUERY_TERM_CHARS for term in terms):
-        raise ValueError(f"query terms may contain at most {MAX_QUERY_TERM_CHARS} characters")
+        raise ValueError(f"{field} terms may contain at most {MAX_QUERY_TERM_CHARS} characters")
+    return terms
+
+
+def _validate_year(value: object, field: str) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= 9999:
+        raise ValueError(f"{field} must be an integer between 1 and 9999")
+    return value
+
+
+def _validate_search_request(
+    query: str | None,
+    limit: int,
+    search_mode: str,
+    *,
+    author: str | None = None,
+    title: str | None = None,
+    citation_key: str | None = None,
+    year_from: object = None,
+    year_to: object = None,
+) -> tuple[list[str], dict[str, list[str]], int | None, int | None]:
+    terms = _normalize_terms(query, "query")
+    field_terms = {
+        name: normalized
+        for name, value in (("author", author), ("title", title), ("citation_key", citation_key))
+        if (normalized := _normalize_terms(value, name))
+    }
+    if not terms and not field_terms:
+        raise ValueError("Supply a query or at least one of author, title, citation_key.")
     if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= MAX_SEARCH_RESULTS:
         raise ValueError(f"limit must be between 1 and {MAX_SEARCH_RESULTS}")
     if search_mode not in SEARCH_MODES:
         raise ValueError(f"search_mode must be one of: {', '.join(sorted(SEARCH_MODES))}")
-    return terms
+    year_low = _validate_year(year_from, "year_from")
+    year_high = _validate_year(year_to, "year_to")
+    if year_low is not None and year_high is not None and year_low > year_high:
+        raise ValueError("year_from must not be greater than year_to")
+    return terms, field_terms, year_low, year_high
 
 
 def _match_query(terms: list[str], search_mode: str) -> str:
@@ -1229,6 +1310,22 @@ def _match_query(terms: list[str], search_mode: str) -> str:
         return '"' + " ".join(terms) + '"'
     operator = " AND " if search_mode == "all_terms" else " OR "
     return operator.join(f'"{term}"' for term in terms)
+
+
+def _compose_match_query(terms: list[str], search_mode: str, field_terms: dict[str, list[str]]) -> str:
+    """Build the FTS5 MATCH string; with field filters the query is restricted to body text.
+
+    search_mode applies to the query only; every filter requires all of its words in its column.
+    """
+    if not field_terms:
+        return _match_query(terms, search_mode)
+    parts = []
+    if terms:
+        parts.append(f"text : ({_match_query(terms, search_mode)})")
+    for name, words in field_terms.items():
+        quoted = " AND ".join('"' + word + '"' for word in words)
+        parts.append(f"{_FILTER_COLUMNS[name]} : ({quoted})")
+    return " AND ".join(f"({part})" for part in parts)
 
 
 def connect_readonly(db_path: Path) -> sqlite3.Connection:
