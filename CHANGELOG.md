@@ -87,6 +87,12 @@ dated section once it has been stress-tested against a large library.
 
 ### Fixed
 
+- Two conversion runs started in the same second no longer collide on the run folder name.
+  `convert-verified`, `convert-new`, `convert-unverified-review` and the sample run named their folder
+  with one-second resolution, so a second run started within that second stopped with
+  `FileExistsError: ... already holds a conversion run`. The names now include microseconds. This
+  was also an intermittent CI failure in `test_end_to_end`.
+
 - Server instructions are built from the startup flags and stay well under Claude Code's
   2048-character truncation limit; they had reached 2032 characters, so any addition would have
   been cut silently. They keep the safety rules, name the enabled write tools, and move workflow
