@@ -54,7 +54,8 @@ library layout, performance baselines, end-to-end tests, a `guide` tool, and the
 write commands (`import-doi --with-pdf`, `find-pdf`, `link-pdf --url`). The completed work is
 listed under "History" at the end.
 
-There are two tracks of remaining work. They don't depend on each other.
+There are three tracks of remaining work. They mostly don't depend on each other. The exceptions are
+noted in each table's "Needs" column.
 
 ## Track 1: Search and retrieval (active)
 
@@ -125,25 +126,21 @@ The evidence behind this came from `library-status --full --mapping-report <run>
 upgrade to the library layout is a reconversion followed by
 `rebuild-index --manifest <run>/manifest.csv --keep-current`.
 
-## Other open work, not scheduled
+## Track 3: Zotero writes, dependencies and later work
 
-- [#91](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/91): `check-pdf` and `import-doi`'s duplicate check read the live `zotero.sqlite` with
-  `immutable=1`, which can miss just-written rows (WAL mode) or see a half-written state. A wrong
-  answer can lead to a duplicate item or a second PDF copy, so this is the first thing to fix among
-  the unscheduled items. The proposed fix is a live debug-bridge read where available.
-- [#92](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/92): the optional `[marker]` extra pins `pillow<11` and, before Marker 2.0, `transformers<5`,
-  which leaves 22 Dependabot alerts on `uv.lock`. Marker 2.0 lifts the pins but needs Docker or a
-  `llama-server` binary. Decision for now: stay on marker-pdf 1.10.2 and dismiss the alerts, because
-  the pipeline only processes the user's own PDFs.
-- [#34](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/34): an opt-in review-and-apply
-  workflow for Zotero item writes from MCP. It is a separate entry point because the default server
-  stays read-only. The CLI write commands (`import-doi`, `find-pdf`, `link-pdf`) already exist; #91
-  should land before #34 builds on the same duplicate check.
-- [#2](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/2) and
-  [#3](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/3): a sidecar library of the
-  reader's own comments linked to source passages. #3 tracks it together with #1.
-- **Image OCR** (`ocr-images`) is packaged but left out of the release notes by decision. It stays
-  out until it has been stress-tested on a large library (see `CHANGELOG.md`).
+These items were previously unscheduled. They are ordered the same way as the other tracks. The
+risk column here is about Zotero and dependencies, not the converted library.
+
+| Step | What it does | Issues | Risk | Needs | Why here |
+|------|--------------|--------|------|-------|----------|
+| **M1** | Fixes the duplicate check in `check-pdf` and `import-doi`. Today they read the live `zotero.sqlite` with `immutable=1`, which can miss just-written rows (WAL mode) or see a half-written state, so a wrong answer can create a duplicate item or a second PDF copy. Proposed fix: a live debug-bridge read where available. | [#91](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/91) | none | — | A correctness bug in shipped write commands, so it comes first. It changes no derived data. |
+| **M2** | Dismisses the 22 Dependabot alerts on `uv.lock` and records why. The optional `[marker]` extra pins `pillow<11` and, before Marker 2.0, `transformers<5`. Marker 2.0 lifts the pins but needs Docker or a `llama-server` binary. Decision: stay on marker-pdf 1.10.2, because the pipeline only processes the user's own PDFs. | [#92](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/92) | none | — | The decision is made. What remains is the dismissal and a note. Revisit when Marker 2.0 no longer needs Docker. |
+| **M3** | An opt-in review-and-apply workflow for Zotero item writes from MCP, as a separate entry point because the default server stays read-only. The CLI write commands (`import-doi`, `find-pdf`, `link-pdf`) already exist. | [#34](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/34) | contained | M1 | It builds on the same duplicate check, so M1 must land first. |
+| **M4** | A sidecar library of the reader's own comments, linked to source passages. #3 tracks it together with #1. | [#2](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/2), [#3](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/3) | contained | S4, S6 | Links to passages by locator, and S4 re-chunks the library once. Building it earlier would mean re-linking every comment. |
+| **M5** | Image OCR (`ocr-images`): stress-test on a large library, then decide whether to document it in the release notes. It is packaged but left out of the notes by decision. | — | none | a large-library run | No date. It is released once the stress test passes (see `CHANGELOG.md`). |
+
+**Status:** no Track 3 step has started. **Start here:** M1 and M2 are unblocked and can run
+alongside S1 and S2.
 
 Out of scope for this project: live Zotero browsing of collections, tags and notes. That belongs to
 the companion Zotero MCP server (see `AGENTS.md`).
