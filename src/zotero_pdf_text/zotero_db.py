@@ -6,7 +6,7 @@ import shutil
 import contextlib
 import sqlite3
 import tempfile
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -55,47 +55,17 @@ def read_only_uri(db_path: Path, *, immutable: bool) -> str:
     return f"{uri}?mode=ro&immutable=1" if immutable else f"{uri}?mode=ro"
 
 
-def find_item_by_doi(doi: str, zotero_sqlite: Path) -> str | None:
-    """Return the Zotero parent key for an item with the given DOI, or None if not found.
-
-    Opens the database in immutable read-only mode so that Zotero's WAL write locks
-    are bypassed. The tradeoff is that items committed after the last WAL checkpoint
-    may not appear; for dedup checks this is acceptable.
-    """
-    from .identity import normalize_doi
-    needle = normalize_doi(doi)
-    if not needle:
-        return None
-    uri = read_only_uri(zotero_sqlite, immutable=True)
-    con = sqlite3.connect(uri, uri=True)
-    con.row_factory = sqlite3.Row
-    cur = con.cursor()
-    rows = cur.execute(
-        """
-        SELECT i.key, iv.value AS doi_value
+DOI_ROWS_SQL = """
+        SELECT i.key AS key, iv.value AS doi_value
         FROM items i
         JOIN itemData id ON id.itemID = i.itemID
         JOIN itemDataValues iv ON iv.valueID = id.valueID
         JOIN fields f ON f.fieldID = id.fieldID
         WHERE f.fieldName = 'DOI'
           AND i.itemID NOT IN (SELECT itemID FROM deletedItems)
-        """,
-    ).fetchall()
-    con.close()
-    for row in rows:
-        if normalize_doi(str(row["doi_value"])) == needle:
-            return str(row["key"])
-    return None
-
-
-def check_pdf_attachment(parent_key: str, zotero_sqlite: Path) -> dict[str, object]:
-    """Return PDF attachment info for a Zotero item key, reading directly from SQLite."""
-    uri = read_only_uri(zotero_sqlite, immutable=True)
-    con = sqlite3.connect(uri, uri=True)
-    con.row_factory = sqlite3.Row
-    cur = con.cursor()
-    rows = cur.execute(
         """
+
+PDF_ATTACHMENTS_SQL = """
         SELECT ai.key AS attachment_key,
                ia.path AS path,
                ia.contentType AS content_type
@@ -107,15 +77,74 @@ def check_pdf_attachment(parent_key: str, zotero_sqlite: Path) -> dict[str, obje
             lower(coalesce(ia.contentType, '')) = 'application/pdf'
             OR lower(coalesce(ia.path, '')) LIKE '%.pdf'
           )
-        """,
-        (parent_key,),
-    ).fetchall()
-    con.close()
+        """
+
+
+def match_doi_rows(rows: Iterable[Mapping[str, object]], doi: str) -> str | None:
+    """Return the key of the first row whose `doi_value` normalizes to `doi`, else None.
+
+    Rows are mappings with `key` and `doi_value`, as `DOI_ROWS_SQL` yields them (from SQLite or
+    from Zotero through debug-bridge).
+    """
+    needle = normalize_doi(doi)
+    if not needle:
+        return None
+    for row in rows:
+        if normalize_doi(str(row["doi_value"])) == needle:
+            return str(row["key"])
+    return None
+
+
+def pdf_attachment_result(parent_key: str, rows: Iterable[Mapping[str, object]]) -> dict[str, object]:
+    """Shape `PDF_ATTACHMENTS_SQL` rows (attachment_key, path, content_type) as check-pdf output."""
     attachments = [
-        {"key": row["attachment_key"], "path": row["path"] or "", "content_type": row["content_type"] or ""}
+        {
+            "key": row["attachment_key"],
+            "path": row["path"] or "",
+            "content_type": row["content_type"] or "",
+        }
         for row in rows
     ]
     return {"parent_key": parent_key, "found": len(attachments) > 0, "attachments": attachments}
+
+
+def find_item_by_doi(doi: str, zotero_sqlite: Path) -> str | None:
+    """Return the Zotero parent key for an item with the given DOI, or None if not found.
+
+    Reads a hash-verified throwaway copy (`snapshot_for_reading`), so rows still in the WAL are
+    seen and nothing is created next to the live database. Raises `SnapshotUnstableError`,
+    `SnapshotUnsafeError` or `sqlite3.Error` when no consistent copy can be read; callers must
+    treat that as "not checked", never as "no duplicate". The live, preferred path is
+    `pre_write_checks.check_doi_duplicate`.
+    """
+    if not normalize_doi(doi):
+        return None
+    with snapshot_for_reading(zotero_sqlite) as snap:
+        con = sqlite3.connect(snap)
+        try:
+            con.row_factory = sqlite3.Row
+            rows = con.execute(DOI_ROWS_SQL).fetchall()
+        finally:
+            con.close()
+    return match_doi_rows(rows, doi)
+
+
+def check_pdf_attachment(parent_key: str, zotero_sqlite: Path) -> dict[str, object]:
+    """Return PDF attachment info for a Zotero item key, read from a verified copy of the SQLite file.
+
+    Like `find_item_by_doi`, reads through `snapshot_for_reading` (sees the WAL, writes nothing
+    beside the live database) and raises when no consistent copy can be read. Trashed
+    attachments still count as found. The live, preferred path is
+    `pre_write_checks.check_existing_pdf`.
+    """
+    with snapshot_for_reading(zotero_sqlite) as snap:
+        con = sqlite3.connect(snap)
+        try:
+            con.row_factory = sqlite3.Row
+            rows = con.execute(PDF_ATTACHMENTS_SQL, (parent_key,)).fetchall()
+        finally:
+            con.close()
+    return pdf_attachment_result(parent_key, rows)
 
 
 @dataclass(frozen=True)
@@ -156,9 +185,10 @@ def load_items_without_pdf_attachment(
     (moved/renamed/deleted outside Zotero's own management) -- `had_stale_attachment` distinguishes
     the two cases on the returned record. These are the only items an orphan PDF could plausibly
     belong to, so orphan-candidate discovery scores against this set rather than the whole library.
-    Opens the database in immutable read-only mode (mirroring
-    `check_pdf_attachment`/`find_item_by_doi`) so Zotero's WAL write locks are bypassed; items
-    committed after the last WAL checkpoint may not appear.
+    Opens the database in immutable read-only mode so Zotero's WAL write locks are bypassed; items
+    committed after the last WAL checkpoint may not appear. (`check_pdf_attachment` and
+    `find_item_by_doi` no longer do this: they read a verified copy, because a stale "none" there
+    can cause a duplicate write. This read-only discovery has not been moved yet.)
     """
     uri = read_only_uri(zotero_sqlite, immutable=True)
     con = sqlite3.connect(uri, uri=True)

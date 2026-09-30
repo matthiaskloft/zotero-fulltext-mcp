@@ -31,6 +31,7 @@ from .bibtex import (
     link_local_pdf,
     list_file_attachments,
 )
+from .pre_write_checks import PreWriteCheckUnavailable, check_doi_duplicate, check_existing_pdf
 from .artifacts import (
     ArtifactError,
     ManagedIndexMissingError,
@@ -639,7 +640,11 @@ def build_parser() -> argparse.ArgumentParser:
     write_status.add_argument("--plan", type=Path, required=True, help="Write-plan JSONL.")
     import_doi = subparsers.add_parser(
         "import-doi",
-        help="Add a reference to Zotero by DOI via the Zotero connector (no plugins required).",
+        help=(
+            "Add a reference to Zotero by DOI via the Zotero connector (no plugins required). "
+            "Checks for an existing item first, live through debug-bridge when available, else "
+            "a verified copy of zotero.sqlite; refuses to import if neither can be read."
+        ),
     )
     import_doi.add_argument("--doi", required=True, help="DOI to import (e.g. 10.1037/xge0001375).")
     import_doi.add_argument("--config", type=Path, default=resolve_config_path(), help="Path to project config JSON. Default: resolved for this machine.")
@@ -674,11 +679,25 @@ def build_parser() -> argparse.ArgumentParser:
     )
     check_pdf = subparsers.add_parser(
         "check-pdf",
-        help="Check whether a Zotero item has a PDF attachment (reads local SQLite, no connector required).",
+        help=(
+            "Check whether a Zotero item has a PDF attachment. Reads live from Zotero through "
+            "debug-bridge when available, else a verified copy of zotero.sqlite (labelled as not "
+            "live); exits 1 with found: null when neither can be read."
+        ),
     )
     check_pdf.add_argument("--key", required=True, help="Zotero item key (8-character alphanumeric).")
     check_pdf.add_argument("--config", type=Path, default=resolve_config_path(), help="Path to project config JSON. Default: resolved for this machine.")
     check_pdf.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+    check_pdf.add_argument(
+        "--debug-bridge-endpoint",
+        default=DEFAULT_DEBUG_BRIDGE_ENDPOINT,
+        help="debug-bridge execute endpoint (requires plugin + ZOTERO_DEBUG_BRIDGE_TOKEN env var).",
+    )
+    check_pdf.add_argument(
+        "--debug-bridge-token",
+        default="",
+        help="debug-bridge Bearer token (overrides ZOTERO_DEBUG_BRIDGE_TOKEN env var).",
+    )
     find_pdf = subparsers.add_parser(
         "find-pdf",
         help=(
@@ -1565,16 +1584,49 @@ def main(argv: list[str] | None = None) -> int:
             return 0
     if args.command == "import-doi":
         import time
-        from .zotero_db import find_item_by_doi  # used only for pre-import dedup check
         if args.pdf_url and not args.with_pdf:
             parser.error("--pdf-url requires --with-pdf")
         config = load_config(args.config)
         validate_config(config)
         doi = args.doi.strip()
 
-        existing_key = find_item_by_doi(doi, config.zotero_sqlite)
+        try:
+            duplicate = check_doi_duplicate(
+                doi,
+                config.zotero_sqlite,
+                debug_bridge_endpoint=args.debug_bridge_endpoint,
+                debug_bridge_token=args.debug_bridge_token,
+            )
+        except PreWriteCheckUnavailable as exc:
+            print(
+                json.dumps(
+                    {
+                        "status": "error",
+                        "doi": doi,
+                        "error": f"duplicate check could not read Zotero ({exc}). Nothing was imported.",
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                file=sys.stderr,
+            )
+            return 1
+        duplicate_check: dict[str, object] = {"source": duplicate["source"], "live": duplicate["live"]}
+        if not duplicate["live"]:
+            duplicate_check["bridge_error"] = duplicate["bridge_error"]
+            print(
+                "Note: duplicate check read a verified copy of zotero.sqlite, not live Zotero "
+                f"(debug-bridge unavailable: {duplicate['bridge_error']}).",
+                file=sys.stderr,
+            )
+        existing_key = duplicate["key"]
         if existing_key:
-            existing_report: dict[str, object] = {"status": "already_in_library", "doi": doi, "key": existing_key}
+            existing_report: dict[str, object] = {
+                "status": "already_in_library",
+                "doi": doi,
+                "key": existing_key,
+                "duplicate_check": duplicate_check,
+            }
             if not args.with_pdf:
                 print(json.dumps(existing_report, ensure_ascii=False, indent=2))
                 return 0
@@ -1617,24 +1669,58 @@ def main(argv: list[str] | None = None) -> int:
             "key": new_key,
             "key_source": key_source,
             "keys": import_result.item_keys,
+            "duplicate_check": duplicate_check,
         }
         if args.with_pdf:
             return _import_doi_attach_pdf(args, imported_report)
         print(json.dumps(imported_report, ensure_ascii=False, indent=2))
         return 0
     if args.command == "check-pdf":
-        from .zotero_db import check_pdf_attachment
         config = load_config(args.config)
         validate_config(config)
-        result = check_pdf_attachment(args.key, config.zotero_sqlite)
+        try:
+            result = check_existing_pdf(
+                args.key,
+                config.zotero_sqlite,
+                debug_bridge_endpoint=args.debug_bridge_endpoint,
+                debug_bridge_token=args.debug_bridge_token,
+            )
+        except PreWriteCheckUnavailable as exc:
+            message = f"PDF check could not read Zotero ({exc})."
+            if args.json:
+                print(
+                    json.dumps(
+                        {
+                            "parent_key": args.key,
+                            "found": None,
+                            "attachments": [],
+                            "source": None,
+                            "live": False,
+                            "error": message,
+                        },
+                        ensure_ascii=False,
+                        indent=2,
+                    )
+                )
+            else:
+                print(f"Could not check {args.key}: {message}", file=sys.stderr)
+            return 1
         if args.json:
             print(json.dumps(result, ensure_ascii=False, indent=2))
-        elif result["found"]:
-            print(f"PDF attachment found for {args.key}:")
-            for att in cast("list[dict[str, object]]", result["attachments"]):
-                print(f"  key={att['key']}  path={att['path']}")
         else:
-            print(f"No PDF attachment found for {args.key}.")
+            if result["live"]:
+                provenance = "(read live from Zotero)"
+            else:
+                provenance = (
+                    "(read from a verified copy of zotero.sqlite; "
+                    f"debug-bridge unavailable: {result['bridge_error']})"
+                )
+            if result["found"]:
+                print(f"PDF attachment found for {args.key} {provenance}:")
+                for att in cast("list[dict[str, object]]", result["attachments"]):
+                    print(f"  key={att['key']}  path={att['path']}")
+            else:
+                print(f"No PDF attachment found for {args.key} {provenance}.")
         return 0
     if args.command == "find-pdf":
         find_result = find_available_pdf_for_item(

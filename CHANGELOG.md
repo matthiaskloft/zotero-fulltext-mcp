@@ -87,6 +87,20 @@ dated section once it has been stress-tested against a large library.
 
 ### Fixed
 
+- `import-doi`'s duplicate check and `check-pdf` no longer read the live database with
+  `immutable=1`, which ignores the write-ahead log and could report a wrong "none" (and so allow a
+  duplicate item or a second PDF copy) (#91). They now read live through debug-bridge
+  (`Zotero.DB.queryAsync`), fall back to a hash-verified copy of `zotero.sqlite` and label it not
+  live, and refuse when neither works (`import-doi` exits 1 without importing; `check-pdf` prints
+  `found: null` and exits 1). New output fields are additive: `duplicate_check` on `import-doi`;
+  `source`, `live` and `bridge_error` on `check-pdf`, which also gains `--debug-bridge-endpoint` and
+  `--debug-bridge-token`. The `check-pdf` text output now ends its first line with a provenance
+  label ("(read live from Zotero)" or "(read from a verified copy of zotero.sqlite; ...)").
+  Without a working bridge, each run copies and hashes `zotero.sqlite` plus its sidecars, and
+  `import-doi` and `check-pdf` refuse (fail closed: exit 1, `found: null` for `check-pdf`) if
+  Zotero keeps writing during the copy. Orphan discovery
+  still reads with `immutable=1`.
+
 - Two conversion runs started in the same second no longer collide on the run folder name.
   `convert-verified`, `convert-new`, `convert-unverified-review` and the sample run named their folder
   with one-second resolution, so a second run started within that second stopped with

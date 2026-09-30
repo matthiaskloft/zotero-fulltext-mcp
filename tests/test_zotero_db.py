@@ -4,9 +4,13 @@ import unittest
 from pathlib import Path
 
 from zotero_pdf_text.zotero_db import (
+    DOI_ROWS_SQL,
+    PDF_ATTACHMENTS_SQL,
     _citation_key,
     check_pdf_attachment,
+    find_item_by_doi,
     load_attachment_records,
+    match_doi_rows,
     load_items_without_pdf_attachment,
     read_only_uri,
 )
@@ -178,7 +182,7 @@ class ReadOnlyUriTests(unittest.TestCase):
         self.assertTrue(uri.endswith("?mode=ro&immutable=1"))
 
     def test_a_reader_opens_the_real_database_not_a_truncated_path(self):
-        """End-to-end guard for the three `immutable=1` readers that still build URIs."""
+        """End-to-end guard for the one `immutable=1` reader that still builds a URI (orphan discovery)."""
         with tempfile.TemporaryDirectory() as tmp:
             holder = Path(tmp) / "library#1"
             holder.mkdir()
@@ -262,6 +266,83 @@ class LoadItemsWithoutPdfAttachmentTests(unittest.TestCase):
             self.assertIn("STALE01", by_key)
             self.assertTrue(by_key["STALE01"].had_stale_attachment)
             self.assertNotIn("WORKING01", by_key)
+
+
+class MatchDoiRowsTests(unittest.TestCase):
+    ROWS = [
+        {"key": "AAAA1111", "doi_value": "https://doi.org/10.1000/Example."},
+        {"key": "BBBB2222", "doi_value": "10.5555/other"},
+    ]
+
+    def test_prefix_case_and_trailing_punctuation_are_normalized(self):
+        self.assertEqual(match_doi_rows(self.ROWS, "DOI: 10.1000/EXAMPLE"), "AAAA1111")
+        self.assertEqual(match_doi_rows(self.ROWS, "10.5555/OTHER"), "BBBB2222")
+
+    def test_no_match_and_empty_needle_return_none(self):
+        self.assertIsNone(match_doi_rows(self.ROWS, "10.9999/absent"))
+        self.assertIsNone(match_doi_rows(self.ROWS, "  "))
+        self.assertIsNone(match_doi_rows([], "10.1000/example"))
+
+
+class WalVisibilityTests(unittest.TestCase):
+    """The pre-write checks must see rows still in the WAL and create nothing beside the database.
+
+    `immutable=1` ignores the -wal, so a just-committed duplicate looked absent.
+    """
+
+    SCHEMA = """
+        CREATE TABLE items (itemID INTEGER PRIMARY KEY, key TEXT, itemTypeID INTEGER);
+        CREATE TABLE deletedItems (itemID INTEGER PRIMARY KEY);
+        CREATE TABLE fields (fieldID INTEGER PRIMARY KEY, fieldName TEXT);
+        CREATE TABLE itemDataValues (valueID INTEGER PRIMARY KEY, value TEXT);
+        CREATE TABLE itemData (itemID INTEGER, fieldID INTEGER, valueID INTEGER);
+        CREATE TABLE itemAttachments (
+            itemID INTEGER PRIMARY KEY, parentItemID INTEGER, linkMode INTEGER, contentType TEXT, path TEXT
+        );
+        INSERT INTO fields VALUES (1, 'DOI');
+    """
+
+    def test_rows_committed_to_the_wal_are_seen_and_nothing_is_created(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / "zotero.sqlite"
+            writer = sqlite3.connect(db)
+            try:
+                writer.execute("PRAGMA journal_mode=WAL")
+                writer.executescript(self.SCHEMA)
+                writer.commit()
+                # The schema must be in the main file: only the rows below belong in the WAL, so
+                # an immutable read sees an empty library (the #91 wrong "none"), not an error.
+                writer.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+                writer.execute("PRAGMA wal_autocheckpoint=0")
+                writer.executescript(
+                    """
+                    INSERT INTO items VALUES (1, 'PARENTKY', 1);
+                    INSERT INTO items VALUES (2, 'PDFKEY01', 2);
+                    INSERT INTO itemDataValues VALUES (1, 'https://doi.org/10.1000/WalDoi');
+                    INSERT INTO itemData VALUES (1, 1, 1);
+                    INSERT INTO itemAttachments VALUES (2, 1, 2, 'application/pdf', 'storage:x.pdf');
+                    """
+                )
+                writer.commit()
+                self.assertTrue(Path(f"{db}-wal").exists(), "fixture failed to leave rows in the WAL")
+                # Control: the old `immutable=1` reader answers "none" for this very database.
+                stale = sqlite3.connect(read_only_uri(db, immutable=True), uri=True)
+                try:
+                    self.assertEqual(stale.execute(DOI_ROWS_SQL).fetchall(), [])
+                    self.assertEqual(stale.execute(PDF_ATTACHMENTS_SQL, ("PARENTKY",)).fetchall(), [])
+                finally:
+                    stale.close()
+                before = {p.name for p in Path(tmp).rglob("*")}
+
+                self.assertEqual(find_item_by_doi("10.1000/waldoi", db), "PARENTKY")
+                result = check_pdf_attachment("PARENTKY", db)
+
+                self.assertTrue(result["found"])
+                self.assertEqual([a["key"] for a in result["attachments"]], ["PDFKEY01"])
+                created = {p.name for p in Path(tmp).rglob("*")} - before
+                self.assertEqual(created, set(), f"reading created files: {created}")
+            finally:
+                writer.close()
 
 
 if __name__ == "__main__":
