@@ -18,3 +18,8 @@ config.*.json
 # Cached benchmark source PDFs: fetched on first use, never committed. Only the derived
 # crops + labels under benchmarks/preprints/ are tracked (self-contained for CI).
 benchmarks/preprints/.cache/
+# Retrieval question sets name real papers in a personal library: never commit them. Only the
+# synthetic fixtures under tests/fixtures/retrieval/ are tracked (tests/test_no_personal_data.py
+# enforces both the location and "synthetic": true).
+*.questions.json
+!tests/fixtures/retrieval/*.questions.json

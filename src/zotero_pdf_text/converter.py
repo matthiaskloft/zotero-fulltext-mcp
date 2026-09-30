@@ -115,7 +115,7 @@ def convert_sample(
     if not mapping_report.exists():
         raise FileNotFoundError(mapping_report)
 
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     run_dir = output_dir or config.output_root / "conversion-runs" / "samples" / timestamp
     return _convert_verified_rows(
         mapping_report,
@@ -154,7 +154,7 @@ def convert_verified(
     if not mapping_report.exists():
         raise FileNotFoundError(mapping_report)
 
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     run_dir = output_dir or config.output_root / "conversion-runs" / "verified" / timestamp
     return _convert_mapping_rows(
         mapping_report,
@@ -190,7 +190,7 @@ def convert_unverified(
     if not mapping_report.exists():
         raise FileNotFoundError(mapping_report)
 
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     run_dir = output_dir or config.output_root / "conversion-runs" / "unverified-review" / timestamp
     classifications = {"mapped_unverified"}
     if include_possible_mismatch:

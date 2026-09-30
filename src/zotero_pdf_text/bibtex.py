@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import http.client
 import json
 import re
 import shutil
@@ -13,6 +14,7 @@ from pathlib import Path
 from typing import Any, TypedDict, cast
 
 from .pdf_fetch import DEFAULT_MAX_BYTES, PdfFetchError, check_url, fetch_pdf, sha256_file
+from .zotero_db import DOI_ROWS_SQL, PDF_ATTACHMENTS_SQL
 
 
 DEFAULT_BBT_ENDPOINT = "http://127.0.0.1:23119/better-bibtex/json-rpc"
@@ -781,6 +783,106 @@ def _attachment_entries(entries: list[Any]) -> list[dict[str, str]]:
         for entry in entries
         if isinstance(entry, dict)
     ]
+
+
+# ---------------------------------------------------------------------------
+# Live pre-write reads: the SQL of check-pdf / the import-doi duplicate check, run inside Zotero
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class LiveRows:
+    ok: bool
+    rows: list[dict[str, object]]
+    error: str
+
+
+def _short_error(message: object, limit: int = 200) -> str:
+    """One line, bounded: a bridge error can carry a whole HTTP body."""
+    text = " ".join(str(message).split()) or "debug-bridge call failed"
+    return text if len(text) <= limit else text[: limit - 3] + "..."
+
+
+def _query_rows_live(
+    sql: str,
+    params: list[str],
+    columns: tuple[str, ...],
+    *,
+    debug_bridge_endpoint: str,
+    debug_bridge_token: str,
+) -> LiveRows:
+    """Run a SELECT with `Zotero.DB.queryAsync` inside Zotero (sees the WAL, needs no file copy).
+
+    The script first awaits `Zotero.DB.waitForTransaction()`, so it does not read in the middle of
+    a Zotero write transaction; queryAsync itself shares the write connection and does not wait.
+
+    Only a payload of exactly ``{"rows": [...]}`` whose rows are objects carrying every expected
+    column counts as success. Anything else is a failure, never "no rows": a wrong empty answer
+    is what lets a duplicate be written.
+
+    The SQL is stripped because `Zotero.DB.queryAsync` returns rows only when the statement's first
+    token is `select`/`pragma`, judged on a match that keeps leading whitespace; an indented
+    statement returns undefined and would silently never succeed.
+    """
+    sql = sql.strip()
+    projection = ", ".join(f"{json.dumps(column)}: r[{json.dumps(column)}]" for column in columns)
+    js = f"""
+await Zotero.DB.waitForTransaction();
+var rows = await Zotero.DB.queryAsync({json.dumps(sql)}, {json.dumps(params)});
+if (!Array.isArray(rows)) {{
+    return {{ error: 'unexpected' }};
+}}
+return {{ rows: rows.map(function (r) {{ return {{ {projection} }}; }}) }};
+"""
+    try:
+        result = execute_javascript(
+            js, endpoint=debug_bridge_endpoint, token=debug_bridge_token, timeout=LIST_ATTACHMENTS_TIMEOUT_SECONDS
+        )
+    except (OSError, http.client.HTTPException, ValueError) as exc:
+        # execute_javascript only maps HTTPError/URLError/TimeoutError; a dropped connection or a
+        # short read escapes as something else. It is still just "the bridge did not answer".
+        return LiveRows(ok=False, rows=[], error=_short_error(f"debug-bridge failed: {type(exc).__name__}: {exc}"))
+    if not result.ok:
+        if result.timed_out:
+            # execute_javascript's own text warns that the script may still be running; for a
+            # read-only SELECT that advice is wrong, so report the plain fact.
+            return LiveRows(
+                ok=False, rows=[], error=f"debug-bridge did not answer within {LIST_ATTACHMENTS_TIMEOUT_SECONDS} s"
+            )
+        return LiveRows(ok=False, rows=[], error=_short_error(result.error))
+    payload = result.result
+    if not isinstance(payload, dict) or set(payload) != {"rows"} or not isinstance(payload["rows"], list):
+        error = payload.get("error") if isinstance(payload, dict) else None
+        return LiveRows(ok=False, rows=[], error=_short_error(error or "unexpected response from debug-bridge"))
+    rows = payload["rows"]
+    if not all(isinstance(row, dict) and all(column in row for column in columns) for row in rows):
+        return LiveRows(ok=False, rows=[], error="unexpected row shape from debug-bridge")
+    return LiveRows(ok=True, rows=rows, error="")
+
+
+def query_doi_rows_live(
+    *,
+    debug_bridge_endpoint: str = DEFAULT_DEBUG_BRIDGE_ENDPOINT,
+    debug_bridge_token: str = "",
+) -> LiveRows:
+    """Every non-deleted DOI row (`key`, `doi_value`), read live; normalize and match in Python."""
+    return _query_rows_live(
+        DOI_ROWS_SQL, [], ("key", "doi_value"),
+        debug_bridge_endpoint=debug_bridge_endpoint, debug_bridge_token=debug_bridge_token,
+    )
+
+
+def query_pdf_attachment_rows_live(
+    parent_key: str,
+    *,
+    debug_bridge_endpoint: str = DEFAULT_DEBUG_BRIDGE_ENDPOINT,
+    debug_bridge_token: str = "",
+) -> LiveRows:
+    """The parent's PDF attachment rows (`attachment_key`, `path`, `content_type`), read live."""
+    return _query_rows_live(
+        PDF_ATTACHMENTS_SQL, [parent_key], ("attachment_key", "path", "content_type"),
+        debug_bridge_endpoint=debug_bridge_endpoint, debug_bridge_token=debug_bridge_token,
+    )
 
 
 @dataclass

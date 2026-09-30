@@ -338,7 +338,7 @@ def _import_with_pdf(
     config_path = _config(tmp_path)
     output = io.StringIO()
     with (
-        patch("zotero_pdf_text.zotero_db.find_item_by_doi", return_value=existing_key),
+        patch("zotero_pdf_text.cli.check_doi_duplicate", return_value={"key": existing_key, "source": "debug_bridge", "live": True}),
         patch("zotero_pdf_text.cli.import_doi_via_connector", return_value=import_result),
         patch("zotero_pdf_text.cli.find_item_key_via_connector", return_value=None),
         patch("zotero_pdf_text.bibtex.execute_javascript", return_value=attachments),
@@ -355,7 +355,7 @@ def test_import_doi_output_is_unchanged_without_with_pdf(tmp_path: Path) -> None
     rc, report, find_mock, _ = _import_with_pdf(tmp_path, extra_args=[])
 
     assert rc == 0
-    assert set(report) == {"status", "doi", "title", "item_type", "key", "key_source", "keys"}
+    assert set(report) == {"status", "doi", "title", "item_type", "key", "key_source", "keys", "duplicate_check"}
     find_mock.assert_not_called()
 
 
@@ -455,7 +455,12 @@ def test_already_in_library_output_is_unchanged_without_with_pdf(tmp_path: Path)
     rc, report, _, _ = _import_with_pdf(tmp_path, extra_args=[], existing_key="OLDITEM1")
 
     assert rc == 0
-    assert report == {"status": "already_in_library", "doi": "10.1000/example", "key": "OLDITEM1"}
+    assert report == {
+        "status": "already_in_library",
+        "doi": "10.1000/example",
+        "key": "OLDITEM1",
+        "duplicate_check": {"source": "debug_bridge", "live": True},
+    }
 
 
 def test_with_pdf_skips_an_item_that_already_has_a_pdf(tmp_path: Path) -> None:

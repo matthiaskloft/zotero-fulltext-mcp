@@ -1,0 +1,23 @@
+{
+  "format": "zotero-fulltext-retrieval-questions",
+  "version": 1,
+  "synthetic": true,
+  "questions": [
+    {"id": "q01", "type": "conceptual", "query": "hierarchical shrinkage",
+     "expected": [{"citation_key": "doe2020"}]},
+    {"id": "q02", "type": "conceptual", "query": "latent variable",
+     "expected": [{"attachment_key": "ATTACH3"}]},
+    {"id": "q03", "type": "exact_phrase", "query": "quantile regression", "search_mode": "phrase",
+     "expected": [{"attachment_key": "ATTACH4"}]},
+    {"id": "q04", "type": "conceptual", "query": "panel attrition",
+     "expected": [{"attachment_key": "ATTACH5"}, {"attachment_key": "ATTACH4"}]},
+    {"id": "q05", "type": "citation", "query": "nonresponse weighting",
+     "expected": [{"citation_key": "roe2019"}]},
+    {"id": "q06", "type": "citation", "query": "calibration",
+     "expected": [{"attachment_key": "ATTACH_GONE"}]},
+    {"id": "q07", "query": "imputation weighting",
+     "expected": [{"attachment_key": "ATTACH7"}]},
+    {"id": "q08", "type": "exact_phrase", "query": "cohort sampling",
+     "expected": [{"attachment_key": "ATTACH8"}]}
+  ]
+}
