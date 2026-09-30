@@ -111,6 +111,12 @@ end-to-end and recorded-bridge tests, and an opt-in live Zotero test.
 
 ### Fixed
 
+- The optional `[marker]` extra is capped at `marker-pdf<2`. Marker 2.0 runs its OCR models through
+  an inference server that needs Docker or a `llama-server` binary, which broke math and image OCR
+  for a fresh install that had resolved it (#92). The lock stays on marker-pdf 1.10.2.
+- `zotero_pdf_text.__version__` reports the installed package version; it was a stale hard-coded
+  `0.1.0`.
+
 - `import-doi`'s duplicate check and `check-pdf` no longer read the live database with
   `immutable=1`, which ignores the write-ahead log and could report a wrong "none" (and so allow a
   duplicate item or a second PDF copy) (#91). They now read live through debug-bridge

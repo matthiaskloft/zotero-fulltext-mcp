@@ -3157,7 +3157,7 @@ zotero-write = [
 
 [package.metadata]
 requires-dist = [
-    { name = "marker-pdf", marker = "extra == 'marker'", specifier = ">=1.0" },
+    { name = "marker-pdf", marker = "extra == 'marker'", specifier = ">=1.0,<2" },
     { name = "mcp", marker = "extra == 'mcp'", specifier = ">=1.28,<2" },
     { name = "mypy", marker = "extra == 'test'", specifier = ">=1.19,<2" },
     { name = "pymupdf", specifier = ">=1.24.3" },
