@@ -46,10 +46,10 @@ risk, the one that produces evidence for a later decision goes first.
 
 ## Current state
 
-Version 0.10.0 (2026-09-26), plus unreleased work on `master` (see `CHANGELOG.md`). The server is
+Version 0.11.0 (2026-09-30), see `CHANGELOG.md`. The server is
 installable on Windows, macOS and Linux, read-only by default, and has crash-safe index
 publication, library auditing, and tools to search the library, search within one paper, look up a
-citation key, and read chunks with verified locators. The unreleased work adds the canonical
+citation key, and read chunks with verified locators. Version 0.11.0 adds the canonical
 library layout, performance baselines, end-to-end tests, a `guide` tool, the opt-in Zotero
 write commands (`import-doi --with-pdf`, `find-pdf`, `link-pdf --url`) with duplicate and PDF checks
 that read live from Zotero, a retrieval-quality harness, and `author`, `title`, `citation_key` and
