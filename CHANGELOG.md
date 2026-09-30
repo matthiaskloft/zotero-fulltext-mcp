@@ -13,6 +13,10 @@ dated section once it has been stress-tested against a large library.
 
 ### Added
 
+- `benchmarks/retrieval.py` scores search quality (recall@k and MRR, overall and per question
+  type, with changed-question lists across index generations and search modes) on a private
+  `*.questions.json` set that is never committed. Read-only; output is ids, ranks and aggregates
+  only. Synthetic fixtures, tests, a git-tracking guard and `docs/search-quality.md` accompany it.
 - `guide(topic)` MCP tool: instant, read-only usage guidance (`overview`, `search`, `citing`,
   `status`, `writes`, `reporting`). `guide("writes")` lists every write path as `operations` --
   MCP write tools with whether they are enabled and the `install-mcp` flag that enables them, and

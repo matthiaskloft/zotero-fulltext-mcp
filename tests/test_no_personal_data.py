@@ -18,6 +18,7 @@ recognising which names are real, it recognises the short list that is allowed a
 """
 
 import hashlib
+import json
 import os
 import re
 import subprocess
@@ -199,6 +200,15 @@ def collect_scannable_contents(repo_root: Path = REPO_ROOT) -> dict[str, str]:
     return contents
 
 
+QUESTION_SET_SUFFIX = ".questions.json"
+SYNTHETIC_QUESTION_DIR = "tests/fixtures/retrieval/"
+
+
+def _is_allowed_question_set_path(path: str) -> bool:
+    """A retrieval question set is private library data; only the synthetic fixtures may be tracked."""
+    return path.startswith(SYNTHETIC_QUESTION_DIR) and "/" not in path[len(SYNTHETIC_QUESTION_DIR):]
+
+
 class NoPersonalDataTests(unittest.TestCase):
     """The repository must not carry anyone's real identity, machine, or credentials."""
 
@@ -271,6 +281,26 @@ class NoPersonalDataTests(unittest.TestCase):
                     f"{path} names something this project does not publish ({', '.join(sorted(found))}). "
                     "The word is stored as a digest, so this message cannot quote it back to you.",
                 )
+
+    def test_only_synthetic_question_sets_are_tracked(self):
+        """Retrieval question sets name real papers; only the synthetic fixtures may be committed."""
+        tracked = _git(REPO_ROOT, "ls-files", "-z").stdout.split("\0")
+        question_sets = [p for p in tracked if p.endswith(QUESTION_SET_SUFFIX)]
+        self.assertTrue(question_sets, "the synthetic fixture question set should be tracked")
+        for path in question_sets:
+            with self.subTest(path=path):
+                self.assertTrue(
+                    _is_allowed_question_set_path(path),
+                    f"{path}: question sets are private; keep them outside the repository",
+                )
+                data = json.loads((REPO_ROOT / path).read_text(encoding="utf-8"))
+                self.assertIs(data.get("synthetic"), True, f"{path} must declare \"synthetic\": true")
+
+    def test_question_set_guard_rejects_paths_outside_the_fixture_directory(self):
+        self.assertFalse(_is_allowed_question_set_path("benchmarks/my.questions.json"))
+        self.assertFalse(_is_allowed_question_set_path("my.questions.json"))
+        self.assertFalse(_is_allowed_question_set_path("tests/fixtures/retrieval/sub/my.questions.json"))
+        self.assertTrue(_is_allowed_question_set_path("tests/fixtures/retrieval/synthetic.questions.json"))
 
     def test_the_guard_actually_matches_the_things_it_forbids(self):
         """Without this, a broken regex would make every check above pass silently.
