@@ -16,8 +16,11 @@ Each question has a query and the papers that should be found. The script runs t
 - Both are reported overall and per question `type`, with the number of questions `n`.
 - A **configuration** is one index (`--db`) crossed with one search mode (`--mode`). The first
   configuration is the baseline; every other one lists the questions whose outcome changed
-  against it, split into *improved* and *regressed*. An outcome is the rank of the first hit and
-  the number of expected papers found; a lower first rank is better, no hit is worst.
+  against it, split into *improved*, *regressed* and *mixed*. A question changed when the rank of
+  its first hit, the number of expected papers found, or its recall at any cutoff differs; a lower
+  first rank and a higher recall are better, no hit is worst. *Mixed* means some of these got
+  better and others worse. Each row lists the cutoffs whose recall changed, so a recall drop is
+  never hidden behind an unchanged first-hit rank.
 
 Output is Markdown by default, JSON with `--json`, on stdout only. It contains question ids,
 ranks and aggregates, never query text, keys, titles or paths, so it can be pasted into a pull

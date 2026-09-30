@@ -179,6 +179,31 @@ class FixtureRunTests(unittest.TestCase):
         self.assertEqual([r["id"] for r in change["regressed"]], ["q08"])
         self.assertEqual((change["regressed"][0]["baseline_rank"], change["regressed"][0]["rank"]), (1, 2))
 
+    def test_a_recall_change_at_a_cutoff_is_reported_even_when_rank_and_found_are_equal(self):
+        two = [{"attachment_key": "X"}, {"attachment_key": "Y"}]
+        question = retrieval.Question(id="q1", query="x", type="t", search_mode=None, expected=tuple(two))
+        ks = [5, 10]
+        base = {"scores": {"q1": retrieval.score_question([("X", ""), ("Y", "")], two, ks)}}
+        other_ranked = [("X", "")] + [(f"Z{i}", "") for i in range(8)] + [("Y", "")]
+        other = {"scores": {"q1": retrieval.score_question(other_ranked, two, ks)}}
+        change = retrieval.compare(base, other, [question])
+        self.assertEqual([r["id"] for r in change["regressed"]], ["q1"])
+        self.assertEqual(change["regressed"][0]["recall_changes"], {"5": [1.0, 0.5]})
+        self.assertEqual(change["improved"] + change["mixed"], [])
+        # The same change seen from the other side is an improvement.
+        self.assertEqual([r["id"] for r in retrieval.compare(other, base, [question])["improved"]], ["q1"])
+
+    def test_opposing_signals_are_reported_as_mixed(self):
+        two = [{"attachment_key": "X"}, {"attachment_key": "Y"}]
+        question = retrieval.Question(id="q1", query="x", type="t", search_mode=None, expected=tuple(two))
+        ks = [1, 5]
+        # Baseline: X first, Y eighth. Candidate: X second, Y third. R@1 falls, R@5 rises.
+        base_ranked = [("X", "")] + [(f"Z{i}", "") for i in range(6)] + [("Y", "")]
+        base = {"scores": {"q1": retrieval.score_question(base_ranked, two, ks)}}
+        other = {"scores": {"q1": retrieval.score_question([("Z", ""), ("X", ""), ("Y", "")], two, ks)}}
+        change = retrieval.compare(base, other, [question])
+        self.assertEqual([r["id"] for r in change["mixed"]], ["q1"])
+
     def test_per_question_mode_is_the_default(self):
         report = json.loads(_run(["--questions", str(QUESTIONS), "--db", str(self.db), "--json"]))
         (config,) = report["configurations"]

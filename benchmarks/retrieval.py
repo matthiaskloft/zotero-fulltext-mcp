@@ -226,13 +226,32 @@ def run_configuration(
     }
 
 
+def _direction(delta: float) -> int:
+    """-1 when the candidate is better, 1 when worse, 0 when equal (recall is higher-is-better)."""
+    return -1 if delta > 1e-9 else 1 if delta < -1e-9 else 0
+
+
 def compare(base: dict[str, object], other: dict[str, object], questions: list[Question]) -> dict[str, list]:
+    """Per-question changes against the baseline: first-hit rank, entries found, and recall@k.
+
+    A question is *improved* when something got better and nothing got worse, *regressed* in the
+    opposite case, and *mixed* when the signals disagree, so an aggregate change is never hidden.
+    """
     improved: list[dict[str, object]] = []
     regressed: list[dict[str, object]] = []
+    mixed: list[dict[str, object]] = []
     for q in questions:
         a: QuestionScore = base["scores"][q.id]  # type: ignore[index]
         b: QuestionScore = other["scores"][q.id]  # type: ignore[index]
-        if _outcome_key(a) == _outcome_key(b):
+        ka, kb = _outcome_key(a), _outcome_key(b)
+        signals = [-1 if kb < ka else 1 if kb > ka else 0]
+        recall_changes = {}
+        for k in sorted(a.recall):
+            signals.append(_direction(b.recall[k] - a.recall[k]))
+            if signals[-1]:
+                recall_changes[str(k)] = [round(a.recall[k], 3), round(b.recall[k], 3)]
+        better, worse = min(signals) < 0, max(signals) > 0
+        if not (better or worse):
             continue
         row = {
             "id": q.id,
@@ -241,9 +260,10 @@ def compare(base: dict[str, object], other: dict[str, object], questions: list[Q
             "rank": b.first_rank,
             "found_baseline": a.found,
             "found": b.found,
+            "recall_changes": recall_changes,
         }
-        (improved if _outcome_key(b) < _outcome_key(a) else regressed).append(row)
-    return {"improved": improved, "regressed": regressed}
+        (mixed if better and worse else improved if better else regressed).append(row)
+    return {"improved": improved, "regressed": regressed, "mixed": mixed}
 
 
 # --- output -------------------------------------------------------------------------------------
@@ -290,12 +310,15 @@ def render_markdown(report: dict, ks: list[int]) -> str:
             out += ["", f"invalid_queries ({c['label']}, {c['mode']}): " + ", ".join(c["invalid_queries"])]
     for ch in report["changes"]:
         out += ["", f"## Changed vs baseline: {ch['baseline']} -> {ch['against']}"]
-        for name in ("improved", "regressed"):
+        for name in ("improved", "regressed", "mixed"):
             out += ["", f"{name} ({len(ch[name])})"]
             for r in ch[name]:
+                cutoffs = "".join(
+                    f", R@{k} {before:.3f} -> {after:.3f}" for k, (before, after) in r["recall_changes"].items()
+                )
                 out.append(
                     f"- {r['id']} ({r['type']}): rank {_rank(r['baseline_rank'])} -> {_rank(r['rank'])}, "
-                    f"found {r['found_baseline']} -> {r['found']}"
+                    f"found {r['found_baseline']} -> {r['found']}{cutoffs}"
                 )
     return "\n".join(out) + "\n"
 
