@@ -1492,8 +1492,50 @@ class SearchCliTests(unittest.TestCase):
                 )
 
         self.assertEqual(exit_code, 0)
-        search.assert_called_once_with(Path("unused.sqlite"), "topic", limit=10, search_mode="any_terms")
+        search.assert_called_once_with(
+            Path("unused.sqlite"), "topic", limit=10, search_mode="any_terms",
+            author=None, title=None, citation_key=None, year_from=None, year_to=None,
+        )
         self.assertEqual(json.loads(output.getvalue()), {"search_mode": "any_terms", "no_results": True, "results": []})
+
+    def test_filter_only_search_runs_against_a_real_index_without_query(self):
+        from test_mcp_server import _build_index
+
+        with tempfile.TemporaryDirectory() as tmp:
+            _, sqlite_path, _ = _build_index(Path(tmp))
+            output = io.StringIO()
+            with redirect_stdout(output):
+                exit_code = main(
+                    ["search-fts", "--db", str(sqlite_path), "--author", "disclose", "--year-from", "2000", "--json"]
+                )
+            self.assertEqual(exit_code, 0)
+            payload = json.loads(output.getvalue())
+            self.assertEqual(set(payload), {"search_mode", "no_results", "results"})
+            self.assertEqual(payload["results"][0]["matched_fields"], ["creators"])
+
+            human = io.StringIO()
+            with redirect_stdout(human):
+                self.assertEqual(main(["search-fts", "--db", str(sqlite_path), "--author", "disclose"]), 0)
+            self.assertIn("filters: author=disclose", human.getvalue())
+
+    def test_invalid_search_input_exits_2_with_message_on_stderr(self):
+        from test_mcp_server import _build_index
+
+        with tempfile.TemporaryDirectory() as tmp:
+            _, sqlite_path, _ = _build_index(Path(tmp))
+            for argv in (
+                ["--year-from", "2000"],
+                ["--query", "searchable", "--year-from", "2020", "--year-to", "2010"],
+                ["--query", "searchable", "--year-from", "0"],
+            ):
+                with self.subTest(argv=argv):
+                    stdout, stderr = io.StringIO(), io.StringIO()
+                    with redirect_stdout(stdout), redirect_stderr(stderr):
+                        exit_code = main(["search-fts", "--db", str(sqlite_path), *argv])
+                    self.assertEqual(exit_code, 2)
+                    self.assertEqual(stdout.getvalue(), "")
+                    self.assertTrue(stderr.getvalue().strip())
+                    self.assertNotIn("Traceback", stderr.getvalue())
 
     def test_json_search_result_includes_content_hash_and_matching_fields(self):
         result = SearchResult(

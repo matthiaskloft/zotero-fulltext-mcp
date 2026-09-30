@@ -17,6 +17,16 @@ dated section once it has been stress-tested against a large library.
   type, with changed-question lists across index generations and search modes) on a private
   `*.questions.json` set that is never committed. Read-only; output is ids, ranks and aggregates
   only. Synthetic fixtures, tests, a git-tracking guard and `docs/search-quality.md` accompany it.
+- `search_fulltext` and `search-fts` accept `author`, `title` and `citation_key` field filters and
+  an inclusive `year_from` / `year_to` range (CLI: `--author`, `--title`, `--citation-key`,
+  `--year-from`, `--year-to`). Each field filter requires all its words in that field (whole words,
+  case- and diacritic-insensitive; `author` matches every creator role, editors included); with a
+  field filter the query matches body text only, and `query` may be omitted ("all papers by X").
+  Records without a plain four-digit year are excluded when a year filter is set. Filters apply
+  before ranking and result limits. No schema change or rebuild; calls without filters return the
+  same results as before. The `search-fts` CLI now reports invalid search input (for example
+  an inverted year range) as a message on stderr with exit status 2, where it previously raised a
+  traceback.
 - `guide(topic)` MCP tool: instant, read-only usage guidance (`overview`, `search`, `citing`,
   `status`, `writes`, `reporting`). `guide("writes")` lists every write path as `operations` --
   MCP write tools with whether they are enabled and the `install-mcp` flag that enables them, and

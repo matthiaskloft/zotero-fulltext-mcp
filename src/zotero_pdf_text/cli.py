@@ -362,7 +362,12 @@ def build_parser() -> argparse.ArgumentParser:
     ensure.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
     search = subparsers.add_parser("search-fts", help="Search the SQLite FTS full-text index.")
     search.add_argument("--db", type=Path, default=DEFAULT_FTS_DB, help="SQLite FTS database path.")
-    search.add_argument("--query", required=True, help="Search query.")
+    search.add_argument("--query", default=None, help="Search query (optional when --author, --title or --citation-key is given).")
+    search.add_argument("--author", default=None, help="Require all these words in the creators field (any creator role).")
+    search.add_argument("--title", default=None, help="Require all these words in the title.")
+    search.add_argument("--citation-key", default=None, help="Require all these words in the citation key (whole words, case-insensitive).")
+    search.add_argument("--year-from", type=int, default=None, help="Earliest publication year, inclusive.")
+    search.add_argument("--year-to", type=int, default=None, help="Latest publication year, inclusive.")
     search.add_argument(
         "--search-mode",
         choices=("all_terms", "any_terms", "phrase"),
@@ -1302,8 +1307,18 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "search-fts":
         try:
             db_path = resolve_reader_db_path(args.db)
-            search_results = search_fts(db_path, args.query, limit=args.limit, search_mode=args.search_mode)
-        except (ArtifactError, IndexSchemaUnsupportedError) as exc:
+            search_results = search_fts(
+                db_path,
+                args.query,
+                limit=args.limit,
+                search_mode=args.search_mode,
+                author=args.author,
+                title=args.title,
+                citation_key=args.citation_key,
+                year_from=args.year_from,
+                year_to=args.year_to,
+            )
+        except (ArtifactError, IndexSchemaUnsupportedError, ValueError) as exc:
             print(str(exc), file=sys.stderr)
             return 2
         if args.json:
@@ -1315,7 +1330,21 @@ def main(argv: list[str] | None = None) -> int:
                 )
             )
         else:
-            _print_search_results(search_results, search_mode=args.search_mode)
+            _print_search_results(
+                search_results,
+                search_mode=args.search_mode,
+                filters={
+                    name: value
+                    for name, value in (
+                        ("author", args.author),
+                        ("title", args.title),
+                        ("citation_key", args.citation_key),
+                        ("year_from", args.year_from),
+                        ("year_to", args.year_to),
+                    )
+                    if value is not None and str(value).strip()
+                },
+            )
         return 0
     if args.command == "get-fulltext":
         try:
@@ -2354,8 +2383,12 @@ def _configure_stdio() -> None:
             stream.reconfigure(encoding="utf-8", errors="replace")
 
 
-def _print_search_results(results: list[SearchResult], *, search_mode: str) -> None:
+def _print_search_results(
+    results: list[SearchResult], *, search_mode: str, filters: dict[str, object] | None = None
+) -> None:
     print(f"search_mode: {search_mode}")
+    if filters:
+        print("filters: " + ", ".join(f"{name}={value}" for name, value in filters.items()))
     if not results:
         print("No results.")
         return

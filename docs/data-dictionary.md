@@ -325,6 +325,27 @@ navigation, but does not claim that the query occurs in that chunk's body text.
 Search normalizes query text into at most 20 word terms. `all_terms` is the default mode,
 `any_terms` matches any normalized term, and `phrase` requires the normalized terms in order.
 
+Optional filters (no schema change; they read existing columns) narrow the search before ranking
+and the result limit:
+
+- `author` matches `chunks_fts.creators`, the flat `First Last; First Last` string, which holds
+  every creator role. Editors therefore match too until structured creators exist.
+- `title` matches `chunks_fts.title`; `citation_key` matches `chunks_fts.citation_key`.
+- Each filter is normalized like a query (at most 20 terms, 64 characters per term, 1,000
+  characters) and requires all of its words in that one column, in any order, and the
+  column is flat, so `John Smith` matches a paper by `Jane Smith; John Doe`. Matching is whole-word only (`Kah` does not match
+  `Kahneman`), case-insensitive and diacritic-insensitive under `unicode61` (`muller` matches
+  `Müller`; `Mueller` does not). The `citation_key` filter therefore differs from the
+  case-sensitive exact `lookup_citation_key`.
+- When any field filter is present, the query is restricted to the body `text` column and may be
+  omitted. `search_mode` applies to the query only. `matched_fields` includes the filtered
+  columns (query plus author gives `["creators", "text"]`; a filter alone gives `["creators"]`),
+  and a filter-only hit selects chunk 0 as a navigation starting point, not as evidence.
+- `year_from` / `year_to` (1-9999, inclusive) compare `metadata.year` as an integer, applied before
+  ranking and limits. Only a plain four-digit year qualifies: records with an empty or malformed
+  year (such as `2020-05` or `n.d.`) are excluded whenever a year filter is set. A year filter alone
+  is rejected; combine it with a query or a field filter.
+
 ## Library Audit
 
 `audit-library` compares four independent views of the same library -- Zotero's own attachment
