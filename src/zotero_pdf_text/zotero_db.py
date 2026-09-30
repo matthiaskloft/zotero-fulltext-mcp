@@ -56,7 +56,7 @@ def read_only_uri(db_path: Path, *, immutable: bool) -> str:
 
 
 DOI_ROWS_SQL = """
-        SELECT i.key, iv.value AS doi_value
+        SELECT i.key AS key, iv.value AS doi_value
         FROM items i
         JOIN itemData id ON id.itemID = i.itemID
         JOIN itemDataValues iv ON iv.valueID = id.valueID

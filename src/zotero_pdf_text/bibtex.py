@@ -811,7 +811,10 @@ def _query_rows_live(
     debug_bridge_endpoint: str,
     debug_bridge_token: str,
 ) -> LiveRows:
-    """Run a SELECT with `Zotero.DB.queryAsync` (sees the WAL, transactionally consistent).
+    """Run a SELECT with `Zotero.DB.queryAsync` inside Zotero (sees the WAL, needs no file copy).
+
+    The script first awaits `Zotero.DB.waitForTransaction()`, so it does not read in the middle of
+    a Zotero write transaction; queryAsync itself shares the write connection and does not wait.
 
     Only a payload of exactly ``{"rows": [...]}`` whose rows are objects carrying every expected
     column counts as success. Anything else is a failure, never "no rows": a wrong empty answer
@@ -824,6 +827,7 @@ def _query_rows_live(
     sql = sql.strip()
     projection = ", ".join(f"{json.dumps(column)}: r[{json.dumps(column)}]" for column in columns)
     js = f"""
+await Zotero.DB.waitForTransaction();
 var rows = await Zotero.DB.queryAsync({json.dumps(sql)}, {json.dumps(params)});
 if (!Array.isArray(rows)) {{
     return {{ error: 'unexpected' }};
@@ -839,6 +843,12 @@ return {{ rows: rows.map(function (r) {{ return {{ {projection} }}; }}) }};
         # short read escapes as something else. It is still just "the bridge did not answer".
         return LiveRows(ok=False, rows=[], error=_short_error(f"debug-bridge failed: {type(exc).__name__}: {exc}"))
     if not result.ok:
+        if result.timed_out:
+            # execute_javascript's own text warns that the script may still be running; for a
+            # read-only SELECT that advice is wrong, so report the plain fact.
+            return LiveRows(
+                ok=False, rows=[], error=f"debug-bridge did not answer within {LIST_ATTACHMENTS_TIMEOUT_SECONDS} s"
+            )
         return LiveRows(ok=False, rows=[], error=_short_error(result.error))
     payload = result.result
     if not isinstance(payload, dict) or set(payload) != {"rows"} or not isinstance(payload["rows"], list):

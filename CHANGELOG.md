@@ -97,7 +97,8 @@ dated section once it has been stress-tested against a large library.
   `--debug-bridge-token`. The `check-pdf` text output now ends its first line with a provenance
   label ("(read live from Zotero)" or "(read from a verified copy of zotero.sqlite; ...)").
   Without a working bridge, each run copies and hashes `zotero.sqlite` plus its sidecars, and
-  `import-doi` refuses (fails closed) if Zotero keeps writing during the copy. Orphan discovery
+  `import-doi` and `check-pdf` refuse (fail closed: exit 1, `found: null` for `check-pdf`) if
+  Zotero keeps writing during the copy. Orphan discovery
   still reads with `immutable=1`.
 - Server instructions are built from the startup flags and stay well under Claude Code's
   2048-character truncation limit; they had reached 2032 characters, so any addition would have

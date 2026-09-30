@@ -4,7 +4,8 @@ A wrong "nothing there" from one of these can cause a duplicate item or a second
 answer must come from a source that sees recent commits, and an unanswered check must never look
 like an empty one:
 
-1. Live, through debug-bridge (`Zotero.DB.queryAsync`: sees the WAL, transactionally consistent).
+1. Live, through debug-bridge (`Zotero.DB.queryAsync`: sees the WAL; the script waits for any open Zotero
+   write transaction first).
 2. Otherwise a hash-verified copy of `zotero.sqlite` (`zotero_db.snapshot_for_reading`), reported
    with ``live: False`` so the caller can say so.
 3. Otherwise `PreWriteCheckUnavailable`: fail closed, never report "no duplicate"/"no PDF".

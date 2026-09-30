@@ -132,6 +132,19 @@ class TestEscapingTransportErrors:
             result = check_existing_pdf("PARENTKY", DB)
         assert result["source"] == "zotero_db_copy" and result["live"] is False
 
+    def test_a_timeout_is_reported_plainly_not_as_a_possibly_running_write(self) -> None:
+        runs_on = "the script may still be running in Zotero, so its outcome is unknown"
+        with patch(BRIDGE, return_value=_down(runs_on, timed_out=True)), patch(SQLITE_DOI, return_value=None):
+            result = check_doi_duplicate("10.1000/example", DB)
+        assert result["bridge_error"] == "debug-bridge did not answer within 30 s"
+        assert "rerunning" not in str(result["bridge_error"])
+
+    def test_script_waits_for_an_open_transaction_before_reading(self) -> None:
+        with patch(BRIDGE, return_value=_ok({"rows": []})) as bridge:
+            check_doi_duplicate("10.1000/example", DB)
+        script = bridge.call_args.args[0]
+        assert script.index("Zotero.DB.waitForTransaction()") < script.index("Zotero.DB.queryAsync")
+
     def test_a_long_http_body_is_summarized(self) -> None:
         body = "HTTP 500: " + "x" * 5000
         with patch(BRIDGE, return_value=_down(body)), patch(SQLITE_DOI, return_value=None):
