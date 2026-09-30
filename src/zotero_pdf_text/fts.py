@@ -268,7 +268,7 @@ def _check_integrity(db_path: Path) -> None:
 
 def search_fts(
     db_path: Path,
-    query: str | None,
+    query: str | None = None,
     *,
     limit: int = 10,
     search_mode: SearchMode = "all_terms",

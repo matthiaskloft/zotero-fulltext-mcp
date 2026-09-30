@@ -1560,6 +1560,14 @@ class SearchFilterTests(unittest.TestCase):
                 self.assertEqual(result.matched_fields, ["creators"])
             self.assertEqual(self._keys(search_fts(db, "", author="doe")), {"A", "C", "E", "F"})
 
+    def test_a_filter_only_python_call_may_omit_the_query_argument(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = self._build(tmp)
+            self.assertEqual(self._keys(search_fts(db, author="doe")), {"A", "C", "E", "F"})
+            self.assertEqual(search_fts(db, author="doe"), search_fts(db, None, author="doe"))
+            with self.assertRaises(ValueError):
+                search_fts(db)
+
     def test_filter_only_hit_is_chunk_zero_for_multi_chunk_records(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
