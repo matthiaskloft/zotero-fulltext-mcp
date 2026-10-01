@@ -22,6 +22,8 @@ All notable changes to this project are documented here. Format loosely follows
 
 ### Fixed
 
+- Source distributions exclude local test evidence/checkouts even when nested example config
+  files match the repository's config-file allowlist.
 - Live PDF checks use a suffix comparison instead of a literal `LIKE` pattern, which Zotero's
   SQLite wrapper rejects. The real-Zotero container exposed the unintended database-copy fallback.
 
