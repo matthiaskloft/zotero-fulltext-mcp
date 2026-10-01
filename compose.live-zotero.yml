@@ -1,0 +1,20 @@
+services:
+  zotero-test:
+    build:
+      context: .
+      dockerfile: containers/live-zotero/Dockerfile
+    platform: linux/amd64
+    init: true
+    shm_size: 256m
+    volumes:
+      - zotero-test-state:/work
+    command: test
+    networks:
+      - isolated
+
+volumes:
+  zotero-test-state:
+
+networks:
+  isolated:
+    internal: true

@@ -39,7 +39,7 @@ jobs:
         run: uv run mypy
 
       - name: Run tests
-        run: uv run pytest -q
+        run: uv run pytest -q -m "not live_zotero and not live_zotero_container"
 
       - name: Build wheel and sdist
         run: uv build

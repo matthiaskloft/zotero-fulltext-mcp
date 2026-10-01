@@ -75,7 +75,7 @@ PDF_ATTACHMENTS_SQL = """
         WHERE pi.key = ?
           AND (
             lower(coalesce(ia.contentType, '')) = 'application/pdf'
-            OR lower(coalesce(ia.path, '')) LIKE '%.pdf'
+            OR substr(lower(coalesce(ia.path, '')), -4) = '.pdf'
           )
         """
 

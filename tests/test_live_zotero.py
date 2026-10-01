@@ -1,7 +1,8 @@
 """Opt-in end-to-end test of import-doi / check-pdf / find-pdf against a running Zotero.
 
 This WRITES to Zotero (it imports an item and attaches a PDF), so it is built to run only against a
-separate Zotero profile and never in normal CI. See docs/live-zotero-test.md.
+separate Zotero profile. The isolated container has its own deterministic CI tests.
+See docs/live-zotero-test.md.
 
 Skipped unless all of these hold:
 * ``ZOTERO_LIVE_TEST=1``;
@@ -33,7 +34,9 @@ from typing import Any
 
 import pytest
 
-from zotero_pdf_text.bibtex import execute_javascript
+from conftest import isolated_container
+
+from zotero_pdf_text.bibtex import DEFAULT_CONNECTOR_ENDPOINT, DEFAULT_DEBUG_BRIDGE_ENDPOINT, execute_javascript
 from zotero_pdf_text.config import load_config, resolve_config_path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -122,27 +125,45 @@ def _refusal(config_path: Path, env: dict[str, Any]) -> str | None:
                 "ZOTERO_LIVE_TEST_CONFIG at a separate test config and unset ZOTERO_PDF_TEXT_CONFIG "
                 "for this run."
             )
-        if _same_dir(load_config(normal_path).zotero_data_directory, config.zotero_data_directory):
+        normal = load_config(normal_path)
+        if _same_dir(normal.zotero_data_directory, config.zotero_data_directory):
             return (
                 f"the test config's zotero_data_directory is the same one your normal config "
                 f"({normal_path.name}) uses. The live test must run against a separate Zotero profile "
                 "with its own data directory."
             )
+        for label, writable in (("output", config.output_root), ("data", config.zotero_data_directory),
+                                ("linked PDFs", config.linked_attachments)):
+            writable = writable.resolve()
+            for protected in (normal.output_root, normal.zotero_data_directory, normal.linked_attachments):
+                protected = protected.resolve()
+                if writable == protected or writable in protected.parents or protected in writable.parents:
+                    return f"the test {label} overlaps your normal library or converted output. Use separate test folders."
+    for source in (config.zotero_data_directory, config.linked_attachments):
+        output, source = config.output_root.resolve(), source.resolve()
+        if output == source or output in source.parents or source in output.parents:
+            return "the test output overlaps its Zotero data or linked PDFs. Use a separate test output folder."
     return None
 
 
 @pytest.fixture(scope="module")
 def live() -> dict[str, Any]:
+    if not isolated_container():
+        pytest.skip("Live Zotero tests require the isolated container; native libraries are never used")
+    unavailable = pytest.fail if os.environ.get("ZOTERO_LIVE_CONTAINER") == "1" else pytest.skip
     if os.environ.get("ZOTERO_LIVE_TEST") != "1":
-        pytest.skip("live Zotero test: set ZOTERO_LIVE_TEST=1 (see docs/live-zotero-test.md)")
+        unavailable("live Zotero test: set ZOTERO_LIVE_TEST=1 (see docs/live-zotero-test.md)")
     config_env = os.environ.get("ZOTERO_LIVE_TEST_CONFIG", "")
     if not config_env or not Path(config_env).is_file():
-        pytest.skip("live Zotero test: ZOTERO_LIVE_TEST_CONFIG must name an existing test config")
+        unavailable("live Zotero test: ZOTERO_LIVE_TEST_CONFIG must name an existing test config")
     config_path = Path(config_env).resolve()
 
-    probe = execute_javascript(PROBE_JS, timeout=15)
+    probe = execute_javascript(
+        PROBE_JS, timeout=15,
+        endpoint=os.environ.get("ZOTERO_LIVE_BRIDGE_ENDPOINT", DEFAULT_DEBUG_BRIDGE_ENDPOINT),
+    )
     if not probe.ok or not isinstance(probe.result, dict):
-        pytest.skip(f"live Zotero test: debug-bridge did not answer the probe ({probe.error or probe.result!r})")
+        unavailable(f"live Zotero test: debug-bridge did not answer the probe ({probe.error or probe.result!r})")
     env: dict[str, Any] = probe.result
 
     refusal = _refusal(config_path, env)
@@ -151,12 +172,17 @@ def live() -> dict[str, Any]:
     return {"config_path": config_path, "env": env}
 
 
-def _cli(config_path: Path, records: Path | None, *args: str) -> tuple[int, dict[str, Any], str]:
+def _cli(config_path: Path, records: Path | None, *args: str, timeout: int = 180) -> tuple[int, dict[str, Any], str]:
     command = [sys.executable, "-m", "zotero_pdf_text"] if records is None else [sys.executable, str(RECORDER), str(records)]
     run_env = dict(os.environ, ZOTERO_PDF_TEXT_CONFIG=str(config_path))
+    endpoints: list[str] = []
+    if args[0] in {"import-doi", "check-pdf", "find-pdf", "link-pdf"}:
+        endpoints += ["--debug-bridge-endpoint", os.environ.get("ZOTERO_LIVE_BRIDGE_ENDPOINT", DEFAULT_DEBUG_BRIDGE_ENDPOINT)]
+    if args[0] == "import-doi":
+        endpoints += ["--connector-endpoint", os.environ.get("ZOTERO_LIVE_CONNECTOR_ENDPOINT", DEFAULT_CONNECTOR_ENDPOINT)]
     completed = subprocess.run(
-        [*command, *args, "--config", str(config_path)],
-        capture_output=True, text=True, encoding="utf-8", env=run_env, timeout=180,
+        [*command, *args, "--config", str(config_path), *endpoints],
+        capture_output=True, text=True, encoding="utf-8", env=run_env, timeout=timeout,
     )
     stream = completed.stdout if completed.stdout.strip() else completed.stderr
     try:
@@ -229,6 +255,59 @@ def test_import_doi_then_find_pdf_against_a_live_zotero_profile(live: dict[str, 
     if record:
         assert import_records is not None and find_records is not None
         _record_fixtures(live["env"], doi, imported, import_records, found, find_records, after)
+
+
+@pytest.mark.live_zotero
+def test_live_library_conversion_search_and_verified_passage(live: dict[str, Any]) -> None:
+    """Exercise actual linked PDFs and the real MCP transport in the isolated profile."""
+    if os.environ.get("ZOTERO_LIVE_PIPELINE") != "1":
+        pytest.skip("set ZOTERO_LIVE_PIPELINE=1 to convert and index the test profile's linked PDFs")
+
+    from test_end_to_end import _call_server, _fetch
+    from zotero_pdf_text.artifacts import resolve_reader_db_path
+    from zotero_pdf_text.fts import chunk_sha256, connect_readonly
+
+    config_path = live["config_path"]
+    config = load_config(config_path)
+    assert any(config.linked_attachments.rglob("*.pdf")), (
+        "Seed the test profile with linked PDFs first (see docs/live-zotero-test.md)."
+    )
+    rc, _, output = _cli(config_path, None, "convert-new", "--workers", "1", timeout=900)
+    assert rc == 0, output
+    db = config.output_root / "index" / "zotero_text_index.sqlite"
+    connection = connect_readonly(resolve_reader_db_path(db))
+    try:
+        paper = connection.execute(
+            "SELECT m.zotero_attachment_key, m.title, c.text FROM metadata m "
+            "JOIN chunks c ON c.record_id = m.record_id "
+            "WHERE c.chunk_index = 0 AND length(c.text) > 0 AND length(m.title) > 0 "
+            "ORDER BY m.zotero_attachment_key LIMIT 1"
+        ).fetchone()
+    finally:
+        connection.close()
+    assert paper is not None, "No paper with searchable text was indexed from the test library."
+    key, title, text = paper
+    words = re.findall(r"[A-Za-z]{6,}", text)
+    assert words, "The first paper has no word suitable for a lexical smoke test."
+    command = [sys.executable, "-m", "zotero_pdf_text.mcp_server", "--db", str(db), "--config", str(config_path)]
+    tools, (search,) = _call_server(command, [
+        ("search_fulltext", {"query": words[0], "title": title, "limit": 20}),
+    ])
+    assert "search_fulltext" in tools and "get_fulltext_chunk" in tools
+    assert not search.isError, search
+    hits = search.structuredContent["results"]
+    hit = next((hit for hit in hits if hit["attachment_key"] == key), None)
+    assert hit is not None, "The indexed paper was not found through its title and body term."
+    _, (passage,) = _call_server(command, [_fetch(hit)])
+    assert not passage.isError, passage
+    assert chunk_sha256(passage.structuredContent["text"]) == hit["source_locator"]["chunk_sha256"]
+
+    rc, _, output = _cli(config_path, None, "convert-new", "--workers", "1", timeout=900)
+    assert rc == 0, output
+    assert "Index is up to date" in output, output
+    _, (unchanged,) = _call_server(command, [_fetch(hit)])
+    assert not unchanged.isError, unchanged
+    assert unchanged.structuredContent["text"] == passage.structuredContent["text"]
 
 
 # ---------------------------------------------------------------------------
@@ -331,11 +410,12 @@ def _record_fixtures(
 def _write_config(path: Path, data_dir: Path) -> Path:
     data_dir.mkdir(parents=True, exist_ok=True)
     path.parent.mkdir(parents=True, exist_ok=True)
+    (path.parent / "linked").mkdir(exist_ok=True)
     path.write_text(
         json.dumps({
             "zotero_root": str(path.parent),
             "zotero_data_directory": str(data_dir),
-            "linked_attachments": str(path.parent),
+            "linked_attachments": str(path.parent / "linked"),
             "output_root": str(path.parent / "out"),
         }),
         encoding="utf-8",
@@ -383,6 +463,44 @@ def test_guard_allows_a_separate_profile(tmp_path: Path, monkeypatch) -> None:
     test_config = _write_config(tmp_path / "live" / "test.json", tmp_path / "test-profile")
 
     assert _refusal(test_config, {"dataDirectory": str(tmp_path / "test-profile")}) is None
+
+
+@pytest.mark.parametrize("protected", ["out", "data", "linked"])
+@pytest.mark.parametrize("relationship", ["same", "child", "parent"])
+def test_guard_refuses_output_overlapping_normal_library(tmp_path: Path, monkeypatch, protected: str, relationship: str) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("ZOTERO_PDF_TEXT_CONFIG", raising=False)
+    _write_config(tmp_path / "normal" / "config.json", tmp_path / "normal" / "data")
+    monkeypatch.setenv("ZOTERO_PDF_TEXT_CONFIG", str(tmp_path / "normal" / "config.json"))
+    test_config = _write_config(tmp_path / "live" / "test.json", tmp_path / "test-profile")
+    folder = tmp_path / "normal" / protected
+    output = folder if relationship == "same" else folder / "nested" if relationship == "child" else folder.parent
+    payload = json.loads(test_config.read_text(encoding="utf-8"))
+    payload["output_root"] = str(output)
+    test_config.write_text(json.dumps(payload), encoding="utf-8")
+    refusal = _refusal(test_config, {"dataDirectory": str(tmp_path / "test-profile")})
+    assert refusal is not None and "output overlaps" in refusal
+
+
+def test_guard_refuses_output_inside_test_source(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("ZOTERO_PDF_TEXT_CONFIG", raising=False)
+    test_config = _write_config(tmp_path / "live" / "test.json", tmp_path / "test-profile")
+    payload = json.loads(test_config.read_text(encoding="utf-8"))
+    payload["output_root"] = str(tmp_path / "test-profile" / "output")
+    test_config.write_text(json.dumps(payload), encoding="utf-8")
+    refusal = _refusal(test_config, {"dataDirectory": str(tmp_path / "test-profile")})
+    assert refusal is not None and "output overlaps" in refusal
+
+
+def test_pipeline_harness_against_offline_fixture(tmp_path: Path, monkeypatch) -> None:
+    pytest.importorskip("mcp")
+    from test_end_to_end import FIRST, Library
+
+    library = Library(tmp_path)
+    library.add(FIRST)
+    monkeypatch.setenv("ZOTERO_LIVE_PIPELINE", "1")
+    test_live_library_conversion_search_and_verified_passage({"config_path": library.config_path})
 
 
 def test_sanitizer_replaces_keys_and_drops_titles_and_paths() -> None:
@@ -445,3 +563,42 @@ def test_recorded_fixtures_keep_the_shape_the_offline_tests_read(tmp_path: Path,
         parsed = find_available_pdf_for_item(fnd["item_key"]).to_dict()
     assert {k: parsed[k] for k in fnd["expected"]} == fnd["expected"]
     assert json.loads((tmp_path / "zotero_env.json").read_text(encoding="utf-8"))["_provenance"].startswith("probe, captured")
+
+
+@pytest.mark.parametrize("writable", ["zotero_data_directory", "linked_attachments"])
+@pytest.mark.parametrize("protected", ["out", "data", "linked"])
+@pytest.mark.parametrize("relationship", ["same", "child", "parent"])
+def test_guard_refuses_test_sources_overlapping_normal_library(tmp_path, monkeypatch, writable, protected, relationship):
+    monkeypatch.chdir(tmp_path)
+    normal = _write_config(tmp_path / "normal" / "config.json", tmp_path / "normal" / "data")
+    monkeypatch.setenv("ZOTERO_PDF_TEXT_CONFIG", str(normal))
+    test = _write_config(tmp_path / "live" / "test.json", tmp_path / "test-profile")
+    folder = tmp_path / "normal" / protected
+    overlap = folder if relationship == "same" else folder / "nested" if relationship == "child" else folder.parent
+    payload = json.loads(test.read_text())
+    payload[writable] = str(overlap)
+    test.write_text(json.dumps(payload))
+    refusal = _refusal(test, {"dataDirectory": payload["zotero_data_directory"]})
+    assert refusal is not None
+
+
+@pytest.mark.parametrize("container", [False, True])
+def test_bridge_probe_failure_fails_container_but_skips_optional_host(tmp_path, monkeypatch, container):
+    from types import SimpleNamespace
+    monkeypatch.setenv("ZOTERO_LIVE_TEST", "1")
+    monkeypatch.setenv("ZOTERO_LIVE_CONTAINER", "1" if container else "0")
+    monkeypatch.setattr(sys.modules[__name__], "isolated_container", lambda: container)
+    config = _write_config(tmp_path / "live" / "test.json", tmp_path / "test-profile")
+    monkeypatch.setenv("ZOTERO_LIVE_TEST_CONFIG", str(config))
+    monkeypatch.setattr(sys.modules[__name__], "execute_javascript", lambda *a, **k: SimpleNamespace(ok=False, error="offline", result=None))
+    with pytest.raises(pytest.fail.Exception if container else pytest.skip.Exception,
+                       match="did not answer" if container else "isolated container"):
+        live.__wrapped__()
+
+
+
+def test_host_cannot_enable_live_test_with_container_environment_flag(monkeypatch):
+    monkeypatch.setenv("ZOTERO_LIVE_CONTAINER", "1")
+    monkeypatch.setenv("ZOTERO_LIVE_TEST", "1")
+    with pytest.raises(pytest.skip.Exception, match="isolated container"):
+        live.__wrapped__()

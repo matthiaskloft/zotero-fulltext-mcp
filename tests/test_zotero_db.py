@@ -94,6 +94,18 @@ class CheckPdfAttachmentTests(unittest.TestCase):
             keys = {a["key"] for a in result["attachments"]}
             self.assertIn("EXTKEY01", keys)
 
+    def test_pdf_suffix_handles_unusual_names_and_null_metadata(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = self._make_db(Path(tmp))
+            paths = ["attachments:100%_résumé (final).PDF", "storage:under_score.pdf", "storage:fake_pdf", None]
+            with sqlite3.connect(db) as con:
+                for item_id, path in enumerate(paths, 4):
+                    con.execute("INSERT INTO items VALUES (?, ?, 2)", (item_id, f"NAME{item_id:04}"))
+                    con.execute("INSERT INTO itemAttachments VALUES (?, 1, 2, NULL, ?)", (item_id, path))
+            con.close()
+            keys = {a["key"] for a in check_pdf_attachment("PARENTKEY", db)["attachments"]}
+            self.assertEqual(keys, {"PDFKEY001", "NAME0004", "NAME0005"})
+
 
 class LoadAttachmentRecordsTests(unittest.TestCase):
     def _make_db(self, tmp: Path) -> Path:

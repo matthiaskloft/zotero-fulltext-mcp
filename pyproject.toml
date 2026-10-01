@@ -32,6 +32,9 @@ dependencies = [
 [tool.hatch.build.targets.wheel]
 packages = ["src/zotero_pdf_text"]
 
+[tool.hatch.build.targets.sdist]
+exclude = ["/test-results/**"]
+
 [project.scripts]
 zotero-pdf-text = "zotero_pdf_text.cli:main"
 zotero-fulltext-mcp = "zotero_pdf_text.mcp_server:main"
@@ -62,7 +65,8 @@ Changelog = "https://github.com/matthiaskloft/zotero-fulltext-mcp/blob/master/CH
 pythonpath = ["src", "benchmarks"]
 testpaths = ["tests"]
 markers = [
-  "live_zotero: opt-in test that writes to a running Zotero test profile; skipped unless ZOTERO_LIVE_TEST=1 and ZOTERO_LIVE_TEST_CONFIG are set (docs/live-zotero-test.md)",
+  "live_zotero: optional network acquisition test in the isolated Linux container only (docs/live-zotero-test.md)",
+  "live_zotero_container: deterministic tests against real Zotero in the isolated Linux container",
 ]
 
 [tool.ruff]

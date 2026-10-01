@@ -1,105 +1,103 @@
 # Live Zotero test
 
-`import-doi`, `find-pdf` and `link-pdf` run JavaScript inside Zotero through debug-bridge. The
-normal suite checks that code offline: recorded bridge payloads go through the parsers, and the
-generated `find-pdf` and `link-pdf --url` scripts run in Node against a fake `Zotero` seeded from
-a recorded environment (`tests/test_zotero_bridge_fixtures.py`, fixtures in
-`tests/fixtures/zotero_bridge/`). The live test does not cover `link-pdf --url` yet; its
-`importFromFile` behavior is modeled on Zotero's source, not on a recording. To check it by hand,
-run `link-pdf --key <key> --url <direct-pdf-url>` on a throwaway item without a PDF in the test
-profile, then `check-pdf --key <key>`.
-A fake cannot tell you that real Zotero still behaves the way it was recorded. The opt-in live
-test does that: it runs the real CLI against a running Zotero.
+For a live independent LLM agent performing acquisition, conversion and retrieval, see
+[manual-agent-workflow.md](manual-agent-workflow.md). It documents the fresh-context prompts,
+captured tools, automated seven-step verifier, evidence retention and observed Luna run. The
+default container suite below validates integration without dispatching an LLM.
 
-**The live test writes to Zotero.** It imports a paper by DOI and attaches its PDF. It never
-deletes anything. Run it only against a separate Zotero profile with its own data directory,
-never against your everyday library. The test refuses to write when it can tell that it would
-touch your everyday library (see [Guards](#guards)).
+For complete fresh-clone setup, prerequisites and a portable command helper, see
+[dev-test-setup.md](dev-test-setup.md).
 
-## One-time setup: a separate Zotero profile
+## Portable container environment (recommended)
 
-1. Close Zotero. Only one Zotero can listen on the local port that debug-bridge and the connector
-   use (23119), so the live test must never run while your everyday Zotero is open.
-2. Start the profile manager with `zotero -P` (on Windows,
-   `"C:\Program Files\Zotero\zotero.exe" -P`). Create a profile, for example `zotero-live-test`,
-   and start it.
-3. In that profile, set a separate data directory: Settings → Advanced → Files and Folders →
-   Data Directory Location → Custom, for example `C:\Users\you\ZoteroLiveTest\data`. Restart
-   when Zotero asks you to.
-4. Set the Linked Attachment Base Directory (same settings pane) to a test folder, for example
-   `C:\Users\you\ZoteroLiveTest\linked`.
-5. Install the plugins in this profile:
-   - **debug-bridge**, with the token pref set as described in
-     [debug-bridge-setup.md](debug-bridge-setup.md). The same `ZOTERO_DEBUG_BRIDGE_TOKEN` works
-     for both profiles.
-   - **ZotMoov**, with its destination directory set to the linked folder from step 4, automatic
-     moving on, and file behavior "move". This is the setup whose auto-move `find-pdf` waits for.
-6. Write a test config, outside the repository, whose `zotero_data_directory` is the test
-   profile's data directory. For example, `C:\Users\you\ZoteroLiveTest\config.live-test.json`:
+Install Docker with a Linux container engine and Docker Compose, then run from a checkout:
 
-   ```json
-   {
-     "zotero_root": "C:\\Users\\you\\ZoteroLiveTest",
-     "zotero_data_directory": "C:\\Users\\you\\ZoteroLiveTest\\data",
-     "linked_attachments": "C:\\Users\\you\\ZoteroLiveTest\\linked",
-     "output_root": "C:\\Users\\you\\ZoteroLiveTest\\converted_text"
-   }
-   ```
-
-   Every path must exist (`check-setup --config <test config>` confirms that).
-
-## Run it
-
-Start Zotero with the test profile (`zotero -P zotero-live-test`), then run the test from the
-repository root:
-
-```bash
-ZOTERO_LIVE_TEST=1 ZOTERO_LIVE_TEST_CONFIG=<test config> .venv/Scripts/python.exe -m pytest -m live_zotero -s
+```console
+docker compose -f compose.live-zotero.yml run --build --rm zotero-test
 ```
 
-```powershell
-$env:ZOTERO_LIVE_TEST = "1"
-$env:ZOTERO_LIVE_TEST_CONFIG = "C:\Users\you\ZoteroLiveTest\config.live-test.json"
-.\.venv\Scripts\python.exe -m pytest -m live_zotero -s
-Remove-Item Env:ZOTERO_LIVE_TEST, Env:ZOTERO_LIVE_TEST_CONFIG
+This builds an independent Linux Zotero installation with a virtual display, debug-bridge,
+ZotMoov, Python and the locked project dependencies. No host Zotero installation, profile,
+config, account or PDF folder is mounted. No ports are published. The Docker build context
+uses an allowlist so personal configs and local environments are not sent to the builder.
+The container runs as an unprivileged user, with automatic sync and application updates disabled.
+Zotero 9.0.6, debug-bridge 3.0.1 and ZotMoov 1.2.32 are pinned and checksum-verified. The Python
+base image is pinned by digest. Update the versions and checksums in the Dockerfile together.
+
+The default tests seed two synthetic papers through the **real Zotero API**, import real PDFs,
+wait for real ZotMoov to turn them into linked attachments, check duplicate detection through
+the CLI, convert and index the PDFs, and query a real MCP server. Assertions cover expected
+body matches, author filtering despite an author appearing in another paper's reference list,
+year filtering, citation-key lookup, hash-verified passages and repeat-run behavior. Expected
+results come from the seeded corpus rather than being inferred from the resulting index.
+These tests have no DOI/publisher dependency; the Compose runtime network blocks outbound
+access while allowing the localhost bridge. Downloads happen during the image build only.
+
+The same command works on Windows, Linux and macOS with Linux containers. The image uses
+`linux/amd64`; ARM development machines need Docker's x86 emulation, so native ARM support
+is not claimed. A change to source or tests requires rebuilding; the command above does this.
+
+The named volume `zotero-test-state` keeps the test profile, PDFs, converted output and bridge
+token across runs. Seeding is repeatable and reuses existing synthetic items. To start another
+independent environment without deleting the current one, choose a new Compose project name:
+
+```console
+docker compose -p zotero-experiment -f compose.live-zotero.yml run --build --rm zotero-test
 ```
 
-`-s` shows the keys the test created. Without `ZOTERO_LIVE_TEST=1` and a test config that exists,
-the test is skipped, and it is skipped when debug-bridge does not answer. That is why it never
-runs in CI.
+The default service runs tests and exits. To leave Zotero running for experiments instead
+(no desktop viewer is bundled):
 
-The test imports the first open-access arXiv DOI from a short list that is not yet in the test
-library, as `import-doi`'s own duplicate check reports it. It then runs `check-pdf`, `find-pdf`
-and `check-pdf` again. `check-pdf` and the duplicate check read live through debug-bridge, so the
-"no PDF yet" guard asserts `source == "debug_bridge"` and `found is False` (it fails rather than
-trust a copy of the database). The retry after `find-pdf` only covers ZotMoov settling the file.
-It asserts that `item_type` is a type name, that `key_source` is
-`created_item`, and that `find-pdf` reports `attached`. It also asserts that the final attachment
-key is the single PDF that `check-pdf` sees afterwards. When every DOI on the list is already
-present, the test is skipped with "reset the test profile". To reset, empty the test library
-(select all items, move them to the trash, then empty the trash) or create a new test profile.
+```console
+docker compose -f compose.live-zotero.yml run --name zotero-experiment --rm zotero-test serve
+```
 
-## Guards
+In another terminal, use `docker exec -it zotero-experiment bash`. The test config is
+`/work/config.live-test.json`. Read the bridge token from `/work/bridge-token.txt` inside the
+container when invoking write CLI commands; never copy it into the repository. Paths supplied
+to Zotero and the CLI are container paths. Ordinary CLI conversion/search uses explicit
+`--config /work/config.live-test.json`; the sidecar index is under `/work/converted_text/index`.
+Stop the experiment with Ctrl+C. No normal library is involved.
 
-Before its first write, the test asks the running Zotero for its data directory
-(`Zotero.DataDirectory.dir`, a read-only probe) and fails without writing when:
+### GitHub Actions
 
-- that directory is not the test config's `zotero_data_directory`, which means the Zotero
-  answering on the port is some other profile, for example your everyday library;
-- that directory is the one your normal config uses (`resolve_config_path()`: the
-  `ZOTERO_PDF_TEXT_CONFIG` env var, or `config.<hostname>.json`/`config.json` in the current
-  directory). The test config is also refused when it *is* your normal config.
+`.github/workflows/live-zotero.yml` builds the same image on an Ubuntu runner and starts it with
+`--network none`. It runs on relevant pull requests and pushes to `master`, and can also be
+started manually. It needs no Zotero account, token secret or private data: a local bridge token
+is generated inside the container. Startup or missing plugins fail the job before pytest, rather
+than silently skipping live tests. JUnit results and the Zotero startup log are uploaded; the
+profile, token and database are not. The regular three-OS offline suite remains outside Docker
+and explicitly excludes `live_zotero` and `live_zotero_container` tests. Extraction, OCR,
+corpus-quality, mock bridge and configuration-guard tests run on the host whenever they do
+not require Zotero. See [workflow-test-corpus.md](workflow-test-corpus.md) for public PDF
+sources, coverage gaps and user stories with testable acceptance criteria.
 
-## Recording fixtures
+This verifies real Zotero on Linux; native host Zotero tests are disabled. It does not
+measure extraction/search quality on real research papers. For realistic quality assessment,
+copy selected public or locally authorized papers into a separate container experiment and
+use a private question set as described in [search-quality.md](search-quality.md).
 
-Add `ZOTERO_LIVE_RECORD=1` (`$env:ZOTERO_LIVE_RECORD = "1"`) to save the raw bridge payloads of
-the run into `tests/fixtures/zotero_bridge/`. The recorder replaces the reconstructed fixtures
-with raw captures. It runs the real CLI through `tests/live_zotero_recorder.py`, which wraps
-`execute_javascript`. Before anything is written, the payloads are sanitized: Zotero keys become
-placeholders (`AAAA1111`, `BBBB2222`, ...), titles become `<title withheld>`, and paths are
-removed (a linked path keeps only its `attachments:` prefix). A key the sanitizer missed makes
-the recording fail. Review the diff before committing. Each fixture's `_provenance` field records
-how it was captured.
+### Optional network acquisition tests
 
-Record again whenever the bridge code in `src/zotero_pdf_text/bibtex.py` changes, and after a
-Zotero or ZotMoov upgrade.
+The older DOI/Find Available PDF test below remains an optional check of translator/resolver
+behavior. It needs internet access and can fail because a publisher or resolver changes.
+Run it separately, outside the isolated Compose network:
+
+```console
+docker build --platform linux/amd64 -f containers/live-zotero/Dockerfile -t zotero-live-test .
+docker run --platform linux/amd64 --rm --init --shm-size 256m zotero-live-test network
+```
+
+That run uses a fresh disposable container and performs real DOI imports and PDF downloads.
+It is excluded from the deterministic GitHub job.
+
+## Host test isolation
+
+Live Zotero tests require a Linux Docker container and the fixed `/work` test configuration.
+Setting live-test environment variables on a developer machine does not enable native tests.
+Host tests run with a temporary working directory/config, without inherited Zotero settings
+or credentials, and block connections to Zotero's port. They never use a private library or
+an existing MCP registration. All real Zotero workflows run inside the isolated image.
+
+The offline suite verifies captured bridge payloads, generated scripts against a fake Zotero,
+configuration guards, conversion, indexing and MCP behavior with test fixtures.

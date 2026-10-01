@@ -1,0 +1,17 @@
+**
+!pyproject.toml
+!uv.lock
+!README.md
+!LICENSE
+!src/
+!src/**
+!tests/
+!tests/**
+!benchmarks/
+!benchmarks/**
+!containers/
+!containers/**
+**/__pycache__/
+**/.cache/
+**/*.questions.json
+!tests/fixtures/retrieval/*.questions.json

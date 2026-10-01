@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "sources": [
+    {
+      "id": "crowdsourcing-survey",
+      "title": "Making Better Use of the Crowd: How Crowdsourcing Can Advance Machine Learning Research",
+      "url": "https://jmlr.org/papers/volume18/17-234/17-234.pdf",
+      "rights_source": "https://jmlr.org/papers/v18/17-234.html",
+      "license": "CC-BY-4.0 (notice in PDF)",
+      "sha256": "357e1c039acaf2fd35f5cfadc4ba0f52b56d1c97cee660a400850551bf105583",
+      "pages": 46,
+      "styles": ["native text", "one column", "long prose", "references"]
+    },
+    {
+      "id": "data-sharing",
+      "title": "Sharing Detailed Research Data Is Associated with Increased Citation Rate",
+      "url": "https://journals.plos.org/plosone/article/file?id=10.1371/journal.pone.0000308&type=printable",
+      "rights_source": "https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0000308",
+      "license": "Creative Commons Attribution (version not stated in inspected notice)",
+      "sha256": "b52ca44dfd09d240543b80315f0cd43fe9ba7946f2b5650d5580213ed5d9186c",
+      "pages": 5,
+      "styles": ["native text", "two columns", "tables", "plots", "headers and footers"]
+    },
+    {
+      "id": "gaussian-coresets",
+      "title": "Training Gaussian Mixture Models at Scale via Coresets",
+      "url": "https://jmlr.org/papers/volume18/15-506/15-506.pdf",
+      "rights_source": "https://jmlr.org/papers/v18/15-506.html",
+      "license": "CC-BY-4.0 (notice in PDF)",
+      "sha256": "f0b882dbb00daf24a4fed8f4d4e21cfa44138404388dfa8a75354c89e3b57717",
+      "pages": 25,
+      "styles": ["native text", "equations", "theorems", "Greek symbols", "color figures"]
+    },
+    {
+      "id": "origin-of-species-scan",
+      "title": "Origin of species (historical scanned edition)",
+      "url": "https://archive.org/download/originofspecies1900darw/originofspecies1900darw.pdf",
+      "rights_source": "https://commons.wikimedia.org/wiki/File:Origin_of_species_(IA_originofspecies1900darw).pdf",
+      "license": "Public domain in the United States; see rights source for jurisdiction details",
+      "sha256": "75cec7723d7d20cf7234b91c40e06f3c82e11db5f59b7eba0ee428a268f94b16",
+      "pages": 532,
+      "styles": ["scanned pages", "noisy existing OCR", "historical typography", "uneven page alignment"],
+      "note": "Hash identifies Internet Archive bytes, not the separately hosted Commons file. Existing OCR means this is not an image-only OCR fixture."
+    }
+  ]
+}
