@@ -33,6 +33,7 @@ from engines import (
     score_engine,
 )
 from recognition import corpus_element_ids, corpus_expected_tokens
+from zotero_pdf_text.config import ImageOcrSettings
 
 # Two corpus elements with disjoint expected tokens, used to prove windows are element-specific.
 EQ_001 = "CORPUSMARK-EQ-001"  # ["sum", "w_", "frac"]
@@ -423,7 +424,9 @@ class RunnerTests(unittest.TestCase):
         absent reads as "one engine, works fine" rather than "one engine works, one is broken here".
         """
         captured = io.StringIO()
-        with self._marker_failing_with(self.BROKEN_CUDA_STDERR):
+        with self._marker_failing_with(self.BROKEN_CUDA_STDERR), patch.object(
+            self.runner, "_ocr_settings", return_value=ImageOcrSettings(),
+        ):
             with contextlib.redirect_stdout(captured):
                 exit_code = self.runner.main(["--engine", "marker", "--json"])
         self.assertEqual(exit_code, 0)  # marker was attempted, so something WAS compared
@@ -441,7 +444,8 @@ class RunnerTests(unittest.TestCase):
 
     def test_nothing_measured_exits_non_zero(self):
         # An empty comparison redirected to a file would otherwise look like a valid artifact.
-        self.assertEqual(self.runner.main(["--engine", "mineru"]), 1)
+        with patch.object(self.runner, "_ocr_settings", return_value=ImageOcrSettings()):
+            self.assertEqual(self.runner.main(["--engine", "mineru"]), 1)
 
 
 if __name__ == "__main__":

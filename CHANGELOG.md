@@ -5,6 +5,26 @@ All notable changes to this project are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Added
+
+- Portable developer test helper and fresh-checkout guide covering prerequisite checks, locked
+  host setup, disposable live Zotero tests, public corpus fetching and manual agent environments.
+  Test runtimes/caches and diagnostics stay local and ignored; host tests use disposable configs.
+- Manual independent-agent acquisition workflow with captured CLI/MCP actions and deterministic
+  step verification against isolated Zotero state, pinned PDF bytes, index identity and passage hashes.
+- Checksum-pinned public PDF corpus manifest and host-side fetcher, with layout diversity,
+  a historical scan with existing OCR, and workflow acceptance criteria separating host tests
+  from real-Zotero container tests.
+- Portable live-Zotero test container with pinned Zotero/plugins, a virtual display and isolated
+  persistent state. Deterministic tests create synthetic papers through real Zotero, exercise
+  ZotMoov, conversion, MCP search filters and verified passage retrieval. A separate GitHub Actions
+  workflow runs the same image without external networking; DOI acquisition stays opt-in.
+
+### Fixed
+
+- Live PDF checks use a suffix comparison instead of a literal `LIKE` pattern, which Zotero's
+  SQLite wrapper rejects. The real-Zotero container exposed the unintended database-copy fallback.
+
 Local image OCR is held back from the release notes, not from the release artifact. The code below
 is packaged with every tagged install and `ocr-images` is a registered CLI command, so it is
 unannounced rather than absent: present, inert unless explicitly configured and invoked, and not yet

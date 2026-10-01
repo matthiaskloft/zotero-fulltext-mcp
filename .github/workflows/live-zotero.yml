@@ -1,0 +1,66 @@
+name: Live Zotero (container)
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [master]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'containers/**'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - 'compose.live-zotero.yml'
+      - '.dockerignore'
+      - '.github/workflows/live-zotero.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'containers/**'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - 'compose.live-zotero.yml'
+      - '.dockerignore'
+      - '.github/workflows/live-zotero.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  live-zotero:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build pinned Zotero test image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: containers/live-zotero/Dockerfile
+          platforms: linux/amd64
+          load: true
+          tags: zotero-live-test:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Test real Zotero without external network access
+        run: >-
+          docker run --name zotero-live-ci --init --network none --shm-size 256m
+          zotero-live-test:ci test --junitxml=/work/junit.xml
+      - name: Collect test diagnostics
+        if: always()
+        run: |
+          mkdir -p live-zotero-results
+          docker cp zotero-live-ci:/work/zotero.log live-zotero-results/zotero.log || true
+          docker cp zotero-live-ci:/work/junit.xml live-zotero-results/junit.xml || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: live-zotero-results
+          path: live-zotero-results/
+          if-no-files-found: ignore
+      - name: Remove CI container
+        if: always()
+        run: docker rm -f zotero-live-ci || true
