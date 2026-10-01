@@ -33,7 +33,7 @@ dependencies = [
 packages = ["src/zotero_pdf_text"]
 
 [tool.hatch.build.targets.sdist]
-exclude = ["/test-results"]
+exclude = ["/test-results/**"]
 
 [project.scripts]
 zotero-pdf-text = "zotero_pdf_text.cli:main"
