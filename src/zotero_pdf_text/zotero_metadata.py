@@ -22,21 +22,38 @@ from ._atomic import replace_with_retry
 from .zotero_db import snapshot_for_reading
 
 # Scalar index fields -> the Zotero fieldName that feeds them. `venue` has its own fallback chain.
-_SCALAR_FIELDS: dict[str, str] = {
+_SCALAR_FIELDS: dict[str, str | tuple[str, ...]] = {
     "abstract": "abstractNote",
     "journal_abbreviation": "journalAbbreviation",
     "volume": "volume",
     "issue": "issue",
     "pages": "pages",
     "date": "date",
-    "publisher": "publisher",
+    "publisher": ("publisher", "university", "institution", "company", "studio", "network", "label"),
     "place": "place",
     "isbn": "ISBN",
     "issn": "ISSN",
     "url": "url",
     "language": "language",
 }
-_VENUE_FIELDS = ("publicationTitle", "proceedingsTitle", "bookTitle", "conferenceName", "publisher")
+# Zotero's type-specific fields that map to a base field (university, institution -> publisher;
+# websiteTitle, blogTitle, ... -> publicationTitle) are listed explicitly, in preference order,
+# rather than read from baseFieldMappingsCombined, so a library without that table still works.
+_VENUE_FIELDS = (
+    "publicationTitle",
+    "proceedingsTitle",
+    "bookTitle",
+    "conferenceName",
+    "websiteTitle",
+    "blogTitle",
+    "forumTitle",
+    "encyclopediaTitle",
+    "dictionaryTitle",
+    "programTitle",
+    "publisher",
+    "university",
+    "institution",
+)
 
 # Every key this module adds to a JSONL record. Readers treat all of them as optional.
 ZOTERO_METADATA_KEYS: tuple[str, ...] = (
@@ -135,8 +152,9 @@ def _load(con: sqlite3.Connection) -> dict[str, dict[str, Any]]:
         item_fields = fields.get(item_id, {})
         record: dict[str, Any] = {"item_type": row["item_type"] or ""}
         record["venue"] = next((item_fields[f] for f in _VENUE_FIELDS if item_fields.get(f)), "")
-        for key, field_name in _SCALAR_FIELDS.items():
-            record[key] = item_fields.get(field_name, "")
+        for key, names in _SCALAR_FIELDS.items():
+            candidates = (names,) if isinstance(names, str) else names
+            record[key] = next((item_fields[n] for n in candidates if item_fields.get(n)), "")
         record["tags"] = tags.get(item_id, [])
         record["creators_structured"] = creators.get(item_id, [])
         result[str(row["key"])] = record

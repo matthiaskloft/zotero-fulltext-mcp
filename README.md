@@ -305,7 +305,8 @@ only the summary:
 
 `list-degraded-records` lists indexed papers whose extracted text looks degraded or unusable
 (for example a scan with no text layer) as an OCR or reconversion worklist, and `index-stats`
-counts records by extraction quality. An index built before these fields existed still opens; run
+counts records by extraction quality and reports how many hold stored Zotero fields
+(`zotero_metadata_populated`). An index built before these fields existed still opens; run
 `rebuild-index --config .\config.json --refresh-zotero-metadata` once to add the stored Zotero
 fields and scores (no reconversion; see `docs/operations.md`).
 

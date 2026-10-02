@@ -317,6 +317,8 @@ contains:
 `metadata` also stores Zotero fields the first schema dropped. All are optional: a record or index
 without them holds empty values, never a guess, and a reader opens an older index with these
 fields empty (`index-stats` and `library_status` report `schema_current: false` until a rebuild).
+`schema_current` only says the columns exist; `zotero_metadata_populated` counts the records that
+actually hold Zotero fields and stays 0 until a `--refresh-zotero-metadata` rebuild has run.
 Populate them with `rebuild-index --refresh-zotero-metadata`; see "Adding stored Zotero fields"
 in `docs/operations.md`.
 

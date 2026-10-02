@@ -159,6 +159,16 @@ REFRESH_METADATA_HELP = (
 )
 
 
+# What a metadata refresh can raise from the Zotero snapshot, the database copy or the config.
+REFRESH_ERRORS = (
+    SnapshotUnstableError,
+    SnapshotUnsafeError,
+    sqlite3.DatabaseError,
+    KeyError,
+    TypeError,
+)
+
+
 def _with_metadata_refresh(args: argparse.Namespace, writer):
     """Wrap a staging writer so it also merges Zotero fields, when --refresh-zotero-metadata is set."""
     if not getattr(args, "refresh_zotero_metadata", False):
@@ -1245,7 +1255,7 @@ def main(argv: list[str] | None = None) -> int:
         except PipelineLockedError as exc:
             print(str(exc), file=sys.stderr)
             return 2
-        except (ArtifactError, FileNotFoundError, ValueError) as exc:
+        except (ArtifactError, FileNotFoundError, ValueError) + REFRESH_ERRORS as exc:
             print(str(exc), file=sys.stderr)
             return 2
         result = info.summary.to_dict()
@@ -1285,7 +1295,7 @@ def main(argv: list[str] | None = None) -> int:
         except PipelineLockedError as exc:
             print(str(exc), file=sys.stderr)
             return 2
-        except (ArtifactError, OSError, ValueError) as exc:
+        except (ArtifactError, OSError, ValueError) + REFRESH_ERRORS as exc:
             print(str(exc), file=sys.stderr)
             return 2
         result = info.summary.to_dict()
@@ -2514,9 +2524,10 @@ def _print_index_statistics(report: IndexStatistics) -> None:
             print(f"- {key}: {count}")
     print("")
     print(str(report["scope_note"]))
-    if not report["schema_current"]:
+    print(f"Records with Zotero fields: {report['zotero_metadata_populated']} of {report['records']}")
+    if not report["schema_current"] or report["zotero_metadata_populated"] < report["records"]:
         print(
-            "This index predates the stored Zotero fields or extraction-quality scores; run "
+            "Some records lack stored Zotero fields or extraction-quality scores; run "
             "'zotero-pdf-text rebuild-index --refresh-zotero-metadata' to add them."
         )
 

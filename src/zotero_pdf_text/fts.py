@@ -913,7 +913,11 @@ class IndexStatistics(TypedDict):
     by_extraction_tool: dict[str, int]
     by_has_math: dict[bool, int]
     by_extraction_quality: dict[str, int]
+    # `schema_current` only says the columns exist. `zotero_metadata_populated` counts the records
+    # that actually hold Zotero fields (a non-empty item type, which any matched parent has), so a
+    # rebuilt-but-never-refreshed index is not mistaken for a populated one.
     schema_current: bool
+    zotero_metadata_populated: int
 
 
 _GROUPED_STATISTIC_COLUMNS: tuple[tuple[str, str], ...] = (
@@ -972,6 +976,11 @@ def index_statistics(
         # as "unscored" and say the schema is not current, rather than failing the whole summary.
         columns = {row[1] for row in con.execute("PRAGMA table_info(metadata)").fetchall()}
         schema_current = set(DERIVED_COLUMNS + ZOTERO_TEXT_COLUMNS + ZOTERO_JSON_COLUMNS) <= columns
+        populated = (
+            int(con.execute("SELECT COUNT(*) FROM metadata WHERE item_type != ''").fetchone()[0])
+            if "item_type" in columns
+            else 0
+        )
         if "quality_label" in columns:
             by_quality = {
                 (value or "unscored"): count
@@ -997,6 +1006,7 @@ def index_statistics(
         "by_has_math": {bool(row["flag"]): int(row["n"]) for row in has_math_rows},
         "by_extraction_quality": by_quality,
         "schema_current": schema_current,
+        "zotero_metadata_populated": populated,
     }
 
 

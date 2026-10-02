@@ -47,7 +47,7 @@ _IMAGE_MARKUP = re.compile(r"!\[[^\]]*\]\([^)]*\)")
 _WORDLIKE = re.compile(r"^[^\W\d_]{2,}$")
 _TOKEN_EDGE = re.compile(r"^[\W_]+|[\W_]+$")
 # U+FFFD plus the Private Use Areas, where a failed font mapping leaves its glyph codes.
-_GARBAGE_CHARS = re.compile("[�-\U000f0000-\U000ffffd]")
+_GARBAGE_CHARS = re.compile("[\ufffd\ue000-\uf8ff\U000f0000-\U000ffffd]")
 
 
 def quality_signals(text: str, page_count: str | int | None) -> dict[str, float]:

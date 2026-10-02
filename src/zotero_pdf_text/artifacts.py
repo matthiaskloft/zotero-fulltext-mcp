@@ -572,10 +572,20 @@ def write_jsonl_from_manifest_keeping_current(
     kept = len(set(current) - converted_keys)
 
     def _write(jsonl_path: Path) -> None:
+        old_records: dict[str, dict[str, object]] = {}
+        with current_jsonl.open("r", encoding="utf-8") as source:
+            for line in source:
+                if line.strip():
+                    old = json.loads(line)
+                    if isinstance(old, dict) and old.get("zotero_attachment_key") in converted_keys:
+                        old_records[str(old["zotero_attachment_key"])] = old
         with jsonl_path.open("w", encoding="utf-8", newline="\n") as handle:
             for row in rows:
                 record = _record_from_manifest_row(row)
-                handle.write(json.dumps(_record_dict(record), ensure_ascii=False) + "\n")
+                merged = _carry_zotero_metadata(
+                    _record_dict(record), old_records.get(row.get("zotero_attachment_key", ""))
+                )
+                handle.write(json.dumps(merged, ensure_ascii=False) + "\n")
             with current_jsonl.open("r", encoding="utf-8") as source:
                 for line in source:
                     if not line.strip():
@@ -864,7 +874,9 @@ def _carry_zotero_metadata(new: dict[str, object], old: object) -> dict[str, obj
     without this a replaced record would silently lose its abstract and tags until the next
     metadata refresh.
     """
-    if isinstance(old, dict):
+    # Only the same Zotero parent: an attachment moved to another item must not inherit the
+    # previous item's abstract and tags.
+    if isinstance(old, dict) and old.get("zotero_parent_key") == new.get("zotero_parent_key"):
         for key in ZOTERO_METADATA_KEYS:
             if not new.get(key) and old.get(key):
                 new[key] = old[key]

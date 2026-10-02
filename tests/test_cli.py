@@ -1942,6 +1942,7 @@ class IndexStatsCliTests(unittest.TestCase):
             "by_extraction_tool": {"pymupdf4llm.to_markdown": 2},
             "by_extraction_quality": {"good": 2},
             "schema_current": True,
+            "zotero_metadata_populated": 2,
             "by_has_math": {True: 1, False: 1},
         }
 

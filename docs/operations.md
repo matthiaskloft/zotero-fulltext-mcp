@@ -215,7 +215,8 @@ generation database it names.
 ### Adding stored Zotero fields and extraction-quality scores
 
 An index built before roadmap step S3 opens normally: the new fields read as empty and
-`library_status` reports `schema_current: false`. To populate them without reconverting anything,
+`library_status` reports `schema_current: false`. A rebuilt index whose records were never
+refreshed has `schema_current: true` but `zotero_metadata_populated: 0`. To populate them without reconverting anything,
 rebuild once with a Zotero metadata refresh:
 
 ```powershell

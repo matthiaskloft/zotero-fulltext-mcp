@@ -408,6 +408,7 @@ class IndexSnapshotStats(TypedDict):
     by_extraction_tool: dict[str, int]
     by_extraction_quality: dict[str, int]
     schema_current: bool
+    zotero_metadata_populated: int
 
 
 class LibraryHealth(TypedDict):
@@ -1237,7 +1238,9 @@ def guide_response(
             "cache_age_seconds say whether the audit half was reused. by_extraction_quality counts "
             "records by how usable their indexed text is; a degraded or unusable record may be "
             "missing from search because extraction failed, not because the paper lacks the "
-            "passage. schema_current false means the index predates newer fields and needs a rebuild."
+            "passage. schema_current false means the index predates newer fields and needs a rebuild; "
+            "zotero_metadata_populated counts records that hold Zotero fields, and is 0 until a "
+            "metadata refresh has run."
         )
     elif topic == "writes":
         text = (
@@ -1497,6 +1500,7 @@ def _index_snapshot_stats(db_path: Path) -> IndexSnapshotStats:
         by_extraction_tool=stats["by_extraction_tool"],
         by_extraction_quality=stats["by_extraction_quality"],
         schema_current=stats["schema_current"],
+        zotero_metadata_populated=stats["zotero_metadata_populated"],
     )
 
 

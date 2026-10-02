@@ -6,6 +6,7 @@ import sqlite3
 import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
+from unittest.mock import patch
 from pathlib import Path
 
 from zotero_pdf_text.artifacts import (
@@ -14,6 +15,7 @@ from zotero_pdf_text.artifacts import (
     read_current_pointer,
     stage_and_publish,
     write_jsonl_from_existing,
+    write_jsonl_from_manifest_keeping_current,
     write_jsonl_upserting_record,
 )
 from zotero_pdf_text.cli import main
@@ -34,6 +36,7 @@ from zotero_pdf_text.quality import (
     detect_language,
     score_extraction,
 )
+from zotero_pdf_text.zotero_db import SnapshotUnstableError
 from zotero_pdf_text.zotero_metadata import load_parent_metadata, with_zotero_metadata
 
 PROSE = (
@@ -180,6 +183,8 @@ class StoredFieldsTests(unittest.TestCase):
             limited = list_extraction_quality(db, limit=1)
         self.assertEqual(stats["by_extraction_quality"], {"good": 1, "unusable": 2})
         self.assertTrue(stats["schema_current"])
+        # Columns exist but nothing was ever refreshed from Zotero.
+        self.assertEqual(stats["zotero_metadata_populated"], 0)
         self.assertEqual({r["attachment_key"] for r in worklist}, {"EMPTY1", "EMPTY2"})
         self.assertEqual([r["attachment_key"] for r in only_good], ["GOOD1"])
         self.assertEqual(len(limited), 1)
@@ -229,6 +234,7 @@ class LegacyIndexTests(unittest.TestCase):
         self.assertEqual(served["abstract"], "")
         self.assertEqual(served["extraction_quality"], {"label": "", "score": None, "signals": {}})
         self.assertFalse(stats["schema_current"])
+        self.assertEqual(stats["zotero_metadata_populated"], 0)
         self.assertEqual(stats["by_extraction_quality"], {"unscored": 1})
 
     def test_worklist_refuses_an_unscored_index_with_the_recovery_command(self):
@@ -318,6 +324,26 @@ class ZoteroMetadataTests(unittest.TestCase):
         self.assertEqual((chapter["abstract"], chapter["tags"], chapter["creators_structured"]), ("", [], []))
         self.assertEqual(loaded["CONF0001"]["venue"], "Proceedings of X")
 
+    def test_type_specific_fields_resolve_to_publisher_and_venue(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = _zotero_fixture(tmp)
+            con = sqlite3.connect(db)
+            con.executescript(
+                """
+                INSERT INTO itemTypesCombined VALUES (5, 'thesis'), (6, 'webpage');
+                INSERT INTO fieldsCombined VALUES (10, 'university'), (11, 'websiteTitle');
+                INSERT INTO itemDataValues VALUES (20, 'State University'), (21, 'A Website');
+                INSERT INTO items VALUES (6, 'THESIS01', 5), (7, 'WEBPAGE1', 6);
+                INSERT INTO itemData VALUES (6,10,20), (7,11,21);
+                """
+            )
+            con.commit()
+            con.close()
+            loaded = load_parent_metadata(db)
+        self.assertEqual(loaded["THESIS01"]["publisher"], "State University")
+        self.assertEqual(loaded["THESIS01"]["venue"], "State University")
+        self.assertEqual(loaded["WEBPAGE1"]["venue"], "A Website")
+
     def test_writer_wrapper_merges_by_parent_and_keeps_unmatched(self):
         with tempfile.TemporaryDirectory() as tmp:
             zotero = _zotero_fixture(tmp)
@@ -339,6 +365,39 @@ class ZoteroMetadataTests(unittest.TestCase):
         self.assertNotIn("venue", rows[1])
         self.assertEqual(rows[1]["abstract"], "kept")
         self.assertEqual(leftovers, [])
+
+
+class KeepCurrentCarryTests(unittest.TestCase):
+    def _manifest(self, root: Path, rows: list[tuple[str, str]]) -> Path:
+        manifest = root / "manifest.csv"
+        lines = ["status,output_path,zotero_attachment_key,zotero_parent_key,title,extraction_tool"]
+        for key, parent in rows:
+            md = root / f"{key}.md"
+            md.write_text(PROSE, encoding="utf-8")
+            lines.append(f"converted,{md},{key},{parent},New title,pymupdf4llm.to_markdown")
+        manifest.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        return manifest
+
+    def test_replaced_record_keeps_fields_only_for_the_same_parent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            current = root / "current.jsonl"
+            fields = {"abstract": "Kept.", "venue": "J. Tests", "tags": [{"name": "x", "type": "manual"}]}
+            _write_jsonl(
+                current,
+                [_record("A1", "P1", **fields), _record("A2", "P2", **fields)],
+            )
+            # A2's attachment now belongs to a different parent item.
+            manifest = self._manifest(root, [("A1", "P1"), ("A2", "P9")])
+            writer, _ = write_jsonl_from_manifest_keeping_current(manifest, current)
+            out = root / "out.jsonl"
+            writer(out)
+            parsed = map(json.loads, out.read_text(encoding="utf-8").splitlines())
+            rows = {r["zotero_attachment_key"]: r for r in parsed}
+        self.assertEqual(rows["A1"]["title"], "New title")
+        self.assertEqual((rows["A1"]["abstract"], rows["A1"]["venue"]), ("Kept.", "J. Tests"))
+        self.assertNotIn("abstract", rows["A2"])
+        self.assertNotIn("tags", rows["A2"])
 
 
 class ManagedPublicationTests(unittest.TestCase):
@@ -363,6 +422,44 @@ class ManagedPublicationTests(unittest.TestCase):
         generation = resolve_generation_dir(index_root, str(pointer["current_generation"]))
         return get_item_context(generation / GENERATION_DB_FILENAME, attachment_key=key)["records"][0]
 
+    def test_refresh_failures_exit_2_with_a_message(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            zotero = _zotero_fixture(tmp)
+            config = self._config(root, zotero)
+            index_root = root / "out" / "index"
+            index_root.mkdir(parents=True)
+            seed = root / "seed.jsonl"
+            _write_jsonl(seed, [_record("A1", "ARTICLE1")])
+            stage_and_publish(index_root, write_jsonl_from_existing(seed), command="rebuild-index")
+            argv = ["rebuild-index", "--config", str(config), "--refresh-zotero-metadata"]
+
+            err = io.StringIO()
+            with patch(
+                "zotero_pdf_text.zotero_metadata.snapshot_for_reading",
+                side_effect=SnapshotUnstableError("changed while copying"),
+            ), redirect_stderr(err), redirect_stdout(io.StringIO()):
+                self.assertEqual(main(argv), 2)
+            self.assertIn("changed while copying", err.getvalue())
+
+            zotero.write_bytes(b"not a sqlite database" * 100)
+            err = io.StringIO()
+            with redirect_stderr(err), redirect_stdout(io.StringIO()):
+                self.assertEqual(main(argv), 2)
+            self.assertNotEqual(err.getvalue(), "")
+
+            broken = root / "broken.json"
+            broken.write_text("{}", encoding="utf-8")
+            manifest = root / "none.csv"
+            manifest.write_text("status\n", encoding="utf-8")
+            err = io.StringIO()
+            with redirect_stderr(err), redirect_stdout(io.StringIO()):
+                code = main(
+                    ["update-index", "--config", str(broken), "--refresh-zotero-metadata",
+                     "--manifest", str(manifest)]
+                )
+            self.assertEqual(code, 2)
+
     def test_refresh_flag_rebuilds_with_fields_and_default_rebuild_preserves_them(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -384,6 +481,13 @@ class ManagedPublicationTests(unittest.TestCase):
             refreshed = self._context(output_root, "A1")
             self.assertEqual(refreshed["venue"], "J. Tests")
             self.assertEqual(refreshed["item_type"], "journalArticle")
+            index_db = (
+                index_root
+                / "generations"
+                / str(read_current_pointer(index_root)["current_generation"])
+                / GENERATION_DB_FILENAME
+            )
+            self.assertEqual(index_statistics(index_db)["zotero_metadata_populated"], 1)
             self.assertEqual(self._context(output_root, "A2")["venue"], "")
 
             # A plain rebuild (no Zotero access) copies the JSONL, so the stored fields survive.
