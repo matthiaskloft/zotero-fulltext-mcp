@@ -9,7 +9,12 @@
       "license": "CC-BY-4.0 (notice in PDF)",
       "sha256": "357e1c039acaf2fd35f5cfadc4ba0f52b56d1c97cee660a400850551bf105583",
       "pages": 46,
-      "styles": ["native text", "one column", "long prose", "references"]
+      "styles": [
+        "native text",
+        "one column",
+        "long prose",
+        "references"
+      ]
     },
     {
       "id": "data-sharing",
@@ -19,7 +24,13 @@
       "license": "Creative Commons Attribution (version not stated in inspected notice)",
       "sha256": "b52ca44dfd09d240543b80315f0cd43fe9ba7946f2b5650d5580213ed5d9186c",
       "pages": 5,
-      "styles": ["native text", "two columns", "tables", "plots", "headers and footers"]
+      "styles": [
+        "native text",
+        "two columns",
+        "tables",
+        "plots",
+        "headers and footers"
+      ]
     },
     {
       "id": "gaussian-coresets",
@@ -29,7 +40,13 @@
       "license": "CC-BY-4.0 (notice in PDF)",
       "sha256": "f0b882dbb00daf24a4fed8f4d4e21cfa44138404388dfa8a75354c89e3b57717",
       "pages": 25,
-      "styles": ["native text", "equations", "theorems", "Greek symbols", "color figures"]
+      "styles": [
+        "native text",
+        "equations",
+        "theorems",
+        "Greek symbols",
+        "color figures"
+      ]
     },
     {
       "id": "origin-of-species-scan",
@@ -39,8 +56,1643 @@
       "license": "Public domain in the United States; see rights source for jurisdiction details",
       "sha256": "75cec7723d7d20cf7234b91c40e06f3c82e11db5f59b7eba0ee428a268f94b16",
       "pages": 532,
-      "styles": ["scanned pages", "noisy existing OCR", "historical typography", "uneven page alignment"],
+      "styles": [
+        "scanned pages",
+        "noisy existing OCR",
+        "historical typography",
+        "uneven page alignment"
+      ],
       "note": "Hash identifies Internet Archive bytes, not the separately hosted Commons file. Existing OCR means this is not an image-only OCR fixture."
+    },
+    {
+      "id": "plosmed-research-findings-false",
+      "title": "Why Most Published Research Findings Are False",
+      "url": "https://journals.plos.org/plosmedicine/article/file?id=10.1371/journal.pmed.0020124&type=printable",
+      "rights_source": "https://journals.plos.org/plosmedicine/article?id=10.1371/journal.pmed.0020124",
+      "license": "CC BY 4.0",
+      "sha256": "ffc1005680cb620eec4c913437dfabbf311b535cfe16cbaeb2faec1f92afc362",
+      "pages": 6,
+      "styles": [
+        "native text"
+      ],
+      "field": "clinical-medicine",
+      "language": "en",
+      "doi": "10.1371/journal.pmed.0020124",
+      "expected_quality": "",
+      "quality_notes": ""
+    },
+    {
+      "id": "plosmed-prisma-2009",
+      "title": "Preferred Reporting Items for Systematic Reviews and Meta-Analyses: The PRISMA Statement",
+      "url": "https://journals.plos.org/plosmedicine/article/file?id=10.1371/journal.pmed.1000097&type=printable",
+      "rights_source": "https://journals.plos.org/plosmedicine/article?id=10.1371/journal.pmed.1000097",
+      "license": "CC BY 4.0",
+      "sha256": "e0b0b3717e905d9d9de18db3c9fcd3ea1a4a8de1ac743b83b27f28416ca35077",
+      "pages": 6,
+      "styles": [
+        "native text"
+      ],
+      "field": "clinical-medicine",
+      "language": "en",
+      "doi": "10.1371/journal.pmed.1000097",
+      "expected_quality": "",
+      "quality_notes": ""
+    },
+    {
+      "id": "npjdm-federated-learning",
+      "title": "The future of digital health with federated learning",
+      "url": "https://pmc-oa-opendata.s3.amazonaws.com/PMC7490367.1/PMC7490367.1.pdf",
+      "rights_source": "https://www.nature.com/articles/s41746-020-00323-1",
+      "license": "CC BY 4.0",
+      "sha256": "54c8fec6c58b886beee8c6a842e5edf19c5d5295236b505a70fe17bfd281e97a",
+      "pages": 7,
+      "styles": [
+        "native text"
+      ],
+      "field": "clinical-medicine",
+      "language": "en",
+      "doi": "10.1038/s41746-020-00323-1",
+      "expected_quality": "",
+      "quality_notes": "",
+      "note": "PubMed Central open-access copy of the publisher PDF."
+    },
+    {
+      "id": "npjdm-clinical-decision-support",
+      "title": "An overview of clinical decision support systems: benefits, risks, and strategies for success",
+      "url": "https://pmc-oa-opendata.s3.amazonaws.com/PMC7005290.1/PMC7005290.1.pdf",
+      "rights_source": "https://www.nature.com/articles/s41746-020-0221-y",
+      "license": "CC BY 4.0",
+      "sha256": "796cf3a502ba87076b9de8293817579e40e7e3822de051b0438d6e22228ba3d1",
+      "pages": 10,
+      "styles": [
+        "native text"
+      ],
+      "field": "clinical-medicine",
+      "language": "en",
+      "doi": "10.1038/s41746-020-0221-y",
+      "expected_quality": "",
+      "quality_notes": "",
+      "note": "PubMed Central open-access copy of the publisher PDF."
+    },
+    {
+      "id": "jmir-cherries",
+      "title": "Improving the Quality of Web Surveys: The Checklist for Reporting Results of Internet E-Surveys (CHERRIES)",
+      "url": "https://www.jmir.org/2004/3/e34/PDF",
+      "rights_source": "https://www.jmir.org/2004/3/e34/",
+      "license": "CC BY 2.0",
+      "sha256": "c60dbf7803e007c5b5549d97839eed07955154eb8dd637d81dacc044c2d49e02",
+      "pages": 6,
+      "styles": [
+        "native text"
+      ],
+      "field": "clinical-medicine",
+      "language": "en",
+      "doi": "10.2196/jmir.6.3.e34",
+      "expected_quality": "",
+      "quality_notes": "",
+      "note": "Publisher refuses scripted downloads; open url in a browser, save the PDF as benchmarks/public_pdfs/.cache/jmir-cherries.pdf, then rerun the fetch tool to verify the checksum."
+    },
+    {
+      "id": "jmir-law-of-attrition",
+      "title": "The Law of Attrition",
+      "url": "https://www.jmir.org/2005/1/e11/PDF",
+      "rights_source": "https://www.jmir.org/2005/1/e11/",
+      "license": "CC BY 2.0",
+      "sha256": "f2fb6dc5ac22f4a58e32a6eb47c7fd5c21b14bcf2676a6eccdf2ce9f09886e09",
+      "pages": 9,
+      "styles": [
+        "native text"
+      ],
+      "field": "clinical-medicine",
+      "language": "en",
+      "doi": "10.2196/jmir.7.1.e11",
+      "expected_quality": "",
+      "quality_notes": "",
+      "note": "Publisher refuses scripted downloads; open url in a browser, save the PDF as benchmarks/public_pdfs/.cache/jmir-law-of-attrition.pdf, then rerun the fetch tool to verify the checksum."
+    },
+    {
+      "id": "prx-weyl-semimetal",
+      "title": "Weyl Semimetal Phase in Noncentrosymmetric Transition-Metal Monophosphides",
+      "url": "https://journals.aps.org/prx/pdf/10.1103/PhysRevX.5.011029",
+      "rights_source": "https://journals.aps.org/prx/abstract/10.1103/PhysRevX.5.011029",
+      "license": "CC BY 3.0",
+      "sha256": "1f1ba7eb04bd42e4f4d9681c9b9ab96080189983d818eb6b94d899d0a3b7fd65",
+      "pages": 10,
+      "styles": [
+        "native text"
+      ],
+      "field": "physics",
+      "language": "en",
+      "doi": "10.1103/PhysRevX.5.011029",
+      "expected_quality": "",
+      "quality_notes": ""
+    },
+    {
+      "id": "prx-quantum-simulation",
+      "title": "Scalable Quantum Simulation of Molecular Energies",
+      "url": "https://journals.aps.org/prx/pdf/10.1103/PhysRevX.6.031007",
+      "rights_source": "https://journals.aps.org/prx/abstract/10.1103/PhysRevX.6.031007",
+      "license": "CC BY 3.0",
+      "sha256": "1330c1821104053cd42f27ba2fcbc1065f2e22fde1625e7b68d8b13c8f46a2db",
+      "pages": 13,
+      "styles": [
+        "native text"
+      ],
+      "field": "physics",
+      "language": "en",
+      "doi": "10.1103/PhysRevX.6.031007",
+      "expected_quality": "",
+      "quality_notes": ""
+    },
+    {
+      "id": "ap-silicon-modulators",
+      "title": "Taking silicon photonics modulators to a higher performance level: state-of-the-art and a review of new technologies",
+      "url": "https://biblio.ugent.be/publication/8728539/file/8728542.pdf",
+      "rights_source": "https://doi.org/10.1117/1.AP.3.2.024003",
+      "license": "CC BY 4.0",
+      "sha256": "e18de35aac708e74259d537b81ee7a9304f4fd6ccbbca2949018277926e3c031",
+      "pages": 23,
+      "styles": [
+        "native text"
+      ],
+      "field": "physics",
+      "language": "en",
+      "doi": "10.1117/1.AP.3.2.024003",
+      "expected_quality": "",
+      "quality_notes": "",
+      "note": "Ghent University repository copy of the published SPIE PDF."
+    },
+    {
+      "id": "jhep-replica-wormholes",
+      "title": "Replica wormholes and the entropy of Hawking radiation",
+      "url": "https://link.springer.com/content/pdf/10.1007/JHEP05(2020)013.pdf",
+      "rights_source": "https://link.springer.com/article/10.1007/JHEP05(2020)013",
+      "license": "CC BY 4.0",
+      "sha256": "d1b4ceb52a1b0797266a077b91e4d19770cdea757b06817de148c671539cc56a",
+      "pages": 42,
+      "styles": [
+        "native text"
+      ],
+      "field": "physics",
+      "language": "en",
+      "doi": "10.1007/JHEP05(2020)013",
+      "expected_quality": "",
+      "quality_notes": "",
+      "note": "Publisher refuses scripted downloads; open url in a browser, save the PDF as benchmarks/public_pdfs/.cache/jhep-replica-wormholes.pdf, then rerun the fetch tool to verify the checksum."
+    },
+    {
+      "id": "jhep-nufit-5",
+      "title": "The fate of hints: updated global analysis of three-flavor neutrino oscillations",
+      "url": "https://link.springer.com/content/pdf/10.1007/JHEP09(2020)178.pdf",
+      "rights_source": "https://link.springer.com/article/10.1007/JHEP09(2020)178",
+      "license": "CC BY 4.0",
+      "sha256": "6ba380a8d2f6461879df46ea19d57abe13460fc49233d2811d54c57ee14f96cf",
+      "pages": 22,
+      "styles": [
+        "native text"
+      ],
+      "field": "physics",
+      "language": "en",
+      "doi": "10.1007/JHEP09(2020)178",
+      "expected_quality": "",
+      "quality_notes": "",
+      "note": "Publisher refuses scripted downloads; open url in a browser, save the PDF as benchmarks/public_pdfs/.cache/jhep-nufit-5.pdf, then rerun the fetch tool to verify the checksum."
+    },
+    {
+      "id": "jacsau-deuterated-fluorophores",
+      "title": "A General Method to Improve Fluorophores Using Deuterated Auxochromes",
+      "url": "https://pmc-oa-opendata.s3.amazonaws.com/PMC8154212.2/PMC8154212.2.pdf",
+      "rights_source": "https://europepmc.org/article/PMC/PMC8154212",
+      "license": "CC BY 4.0",
+      "sha256": "647a2c7399194599b335f55a977ac0e93375f98f8c8beb1ade9c6ecedc904f7b",
+      "pages": 7,
+      "styles": [
+        "native text"
+      ],
+      "field": "chemistry",
+      "language": "en",
+      "doi": "10.1021/jacsau.1c00006",
+      "expected_quality": "",
+      "quality_notes": "",
+      "note": "PubMed Central open-access copy of the publisher PDF."
+    },
+    {
+      "id": "jacsau-bicyclopentanes",
+      "title": "Conquering the Synthesis and Functionalization of Bicyclo[1.1.1]pentanes",
+      "url": "https://pmc-oa-opendata.s3.amazonaws.com/PMC10301682.1/PMC10301682.1.pdf",
+      "rights_source": "https://europepmc.org/article/PMC/PMC10301682",
+      "license": "CC BY 4.0",
+      "sha256": "1782ea97fd21c5bb0378599451910cd9e9e974901eea9c576b2600dc7ac84b33",
+      "pages": 15,
+      "styles": [
+        "native text"
+      ],
+      "field": "chemistry",
+      "language": "en",
+      "doi": "10.1021/jacsau.3c00014",
+      "expected_quality": "",
+      "quality_notes": "",
+      "note": "PubMed Central open-access copy of the publisher PDF."
+    },
+    {
+      "id": "chemsci-sers-review",
+      "title": "Surface-enhanced Raman spectroscopy: benefits, trade-offs and future developments",
+      "url": "https://pmc-oa-opendata.s3.amazonaws.com/PMC8159237.1/PMC8159237.1.pdf",
+      "rights_source": "https://europepmc.org/article/PMC/PMC8159237",
+      "license": "CC BY 3.0",
+      "sha256": "b840e14bcfdd951f027035f0b9eee4c5db67db13a844e536299230671a801c84",
+      "pages": 15,
+      "styles": [
+        "native text"
+      ],
+      "field": "chemistry",
+      "language": "en",
+      "doi": "10.1039/D0SC00809E",
+      "expected_quality": "",
+      "quality_notes": "",
+      "note": "PubMed Central open-access copy of the publisher PDF."
+    },
+    {
+      "id": "chemsci-perovskite-traps",
+      "title": "Reversible photo-induced trap formation in mixed-halide hybrid perovskites for photovoltaics",
+      "url": "https://pmc-oa-opendata.s3.amazonaws.com/PMC5491962.1/PMC5491962.1.pdf",
+      "rights_source": "https://europepmc.org/article/PMC/PMC5491962",
+      "license": "CC BY 3.0",
+      "sha256": "1fd0e13ffef19774a56845a2d20ff9531f88a67758ad23aa9c5615e98d4158b0",
+      "pages": 5,
+      "styles": [
+        "native text"
+      ],
+      "field": "chemistry",
+      "language": "en",
+      "doi": "10.1039/C4SC03141E",
+      "expected_quality": "",
+      "quality_notes": "",
+      "note": "PubMed Central open-access copy of the publisher PDF."
+    },
+    {
+      "id": "bjoc-heterocycle-drugs",
+      "title": "An overview of the synthetic routes to the best selling drugs containing 6-membered heterocycles",
+      "url": "https://www.beilstein-journals.org/bjoc/content/pdf/1860-5397-9-265.pdf",
+      "rights_source": "https://www.beilstein-journals.org/bjoc/articles/9/265",
+      "license": "CC BY 2.0",
+      "sha256": "73589abce332f40b4dc454198d645b06116b5d6837012e8b74146d9762148b95",
+      "pages": 55,
+      "styles": [
+        "native text"
+      ],
+      "field": "chemistry",
+      "language": "en",
+      "doi": "10.3762/bjoc.9.265",
+      "expected_quality": "",
+      "quality_notes": ""
+    },
+    {
+      "id": "bjoc-friedel-crafts",
+      "title": "A review of new developments in the Friedel–Crafts alkylation – From green chemistry to asymmetric catalysis",
+      "url": "https://www.beilstein-journals.org/bjoc/content/pdf/1860-5397-6-6.pdf",
+      "rights_source": "https://www.beilstein-journals.org/bjoc/articles/6/6",
+      "license": "CC BY 2.0",
+      "sha256": "9c62d6c21f89a557197a1e57a18d5f2bbe831e32cafc92bf634dba7676f77fae",
+      "pages": 24,
+      "styles": [
+        "native text"
+      ],
+      "field": "chemistry",
+      "language": "en",
+      "doi": "10.3762/bjoc.6.6",
+      "expected_quality": "",
+      "quality_notes": ""
+    },
+    {
+      "id": "natcomm-metascape",
+      "title": "Metascape provides a biologist-oriented resource for the analysis of systems-level datasets",
+      "url": "https://pmc-oa-opendata.s3.amazonaws.com/PMC6447622.1/PMC6447622.1.pdf",
+      "rights_source": "https://www.nature.com/articles/s41467-019-09234-6",
+      "license": "CC BY 4.0",
+      "sha256": "18a91dd8f78d73c48f53400b76ed7cdc50e4f334007c97d3c8e4bf0be2f7bc12",
+      "pages": 10,
+      "styles": [
+        "native text"
+      ],
+      "field": "ecology-biology",
+      "language": "en",
+      "doi": "10.1038/s41467-019-09234-6",
+      "expected_quality": "",
+      "quality_notes": "",
+      "note": "PubMed Central open-access copy of the publisher PDF."
+    },
+    {
+      "id": "natcomm-medsam",
+      "title": "Segment anything in medical images",
+      "url": "https://pmc-oa-opendata.s3.amazonaws.com/PMC10803759.1/PMC10803759.1.pdf",
+      "rights_source": "https://www.nature.com/articles/s41467-024-44824-z",
+      "license": "CC BY 4.0",
+      "sha256": "78925a99aaf7f17d728bc1e4e4c262fc234d33f4319d258d9f6b2080b42ded2b",
+      "pages": 9,
+      "styles": [
+        "native text"
+      ],
+      "field": "ecology-biology",
+      "language": "en",
+      "doi": "10.1038/s41467-024-44824-z",
+      "expected_quality": "",
+      "quality_notes": "",
+      "note": "PubMed Central open-access copy of the publisher PDF."
+    },
+    {
+      "id": "elife-human-cell-atlas",
+      "title": "The Human Cell Atlas",
+      "url": "https://cdn.elifesciences.org/articles/27041/elife-27041-v1.pdf",
+      "rights_source": "https://elifesciences.org/articles/27041",
+      "license": "CC BY 4.0",
+      "sha256": "c9fe5792daa10432cd53e8de54d77861ab02c5cee159dc6c24802433ebfde84a",
+      "pages": 59,
+      "styles": [
+        "native text"
+      ],
+      "field": "ecology-biology",
+      "language": "en",
+      "doi": "10.7554/eLife.27041",
+      "expected_quality": "",
+      "quality_notes": ""
+    },
+    {
+      "id": "elife-relion-3",
+      "title": "New tools for automated high-resolution cryo-EM structure determination in RELION-3",
+      "url": "https://cdn.elifesciences.org/articles/42166/elife-42166-v2.pdf",
+      "rights_source": "https://elifesciences.org/articles/42166",
+      "license": "CC BY 4.0",
+      "sha256": "581c153d73db9e0173d9cd6ca93dc539aa46d223b1701fecf342af73b2b28a23",
+      "pages": 22,
+      "styles": [
+        "native text"
+      ],
+      "field": "ecology-biology",
+      "language": "en",
+      "doi": "10.7554/eLife.42166",
+      "expected_quality": "",
+      "quality_notes": ""
+    },
+    {
+      "id": "plosbio-arrive-2",
+      "title": "The ARRIVE guidelines 2.0: Updated guidelines for reporting animal research",
+      "url": "https://journals.plos.org/plosbiology/article/file?id=10.1371/journal.pbio.3000410&type=printable",
+      "rights_source": "https://journals.plos.org/plosbiology/article?id=10.1371/journal.pbio.3000410",
+      "license": "CC0 1.0",
+      "sha256": "00957028eae5b9935a86a8bc912fd2a85b95ca9be11bf175fbfea65d97fe83fc",
+      "pages": 12,
+      "styles": [
+        "native text"
+      ],
+      "field": "ecology-biology",
+      "language": "en",
+      "doi": "10.1371/journal.pbio.3000410",
+      "expected_quality": "",
+      "quality_notes": ""
+    },
+    {
+      "id": "plosbio-cells-in-body",
+      "title": "Revised Estimates for the Number of Human and Bacteria Cells in the Body",
+      "url": "https://journals.plos.org/plosbiology/article/file?id=10.1371/journal.pbio.1002533&type=printable",
+      "rights_source": "https://journals.plos.org/plosbiology/article?id=10.1371/journal.pbio.1002533",
+      "license": "CC BY 4.0",
+      "sha256": "23a547d8c8c95a665e6d2f8b7bdea4d1b0369b8273db5b13fd2b01a3f2b2f09b",
+      "pages": 14,
+      "styles": [
+        "native text"
+      ],
+      "field": "ecology-biology",
+      "language": "en",
+      "doi": "10.1371/journal.pbio.1002533",
+      "expected_quality": "",
+      "quality_notes": ""
+    },
+    {
+      "id": "jss-lme4",
+      "title": "Fitting Linear Mixed-Effects Models Using lme4",
+      "url": "https://www.jstatsoft.org/index.php/jss/article/view/v067i01/946",
+      "rights_source": "https://www.jstatsoft.org/article/view/v067i01",
+      "license": "CC BY 3.0",
+      "sha256": "a9ae8934fbe46ac4c3a6d333a75c2c815f9d2ed7725d7613ddce1d5a5244bbff",
+      "pages": 48,
+      "styles": [
+        "native text"
+      ],
+      "field": "statistics",
+      "language": "en",
+      "doi": "10.18637/jss.v067.i01",
+      "expected_quality": "",
+      "quality_notes": ""
+    },
+    {
+      "id": "jss-stan",
+      "title": "Stan: A Probabilistic Programming Language",
+      "url": "https://www.jstatsoft.org/index.php/jss/article/view/v076i01/1080",
+      "rights_source": "https://www.jstatsoft.org/article/view/v076i01",
+      "license": "CC BY 3.0",
+      "sha256": "2cfd730beed232bc91edffa4155277ec4b34084a80ca05241f006ef732764465",
+      "pages": 32,
+      "styles": [
+        "native text"
+      ],
+      "field": "statistics",
+      "language": "en",
+      "doi": "10.18637/jss.v076.i01",
+      "expected_quality": "",
+      "quality_notes": ""
+    },
+    {
+      "id": "ejs-horseshoe",
+      "title": "Sparsity information and regularization in the horseshoe and other shrinkage priors",
+      "url": "https://projecteuclid.org/journals/electronic-journal-of-statistics/volume-11/issue-2/Sparsity-information-and-regularization-in-the-horseshoe-and-other-shrinkage/10.1214/17-EJS1337SI.pdf",
+      "rights_source": "https://projecteuclid.org/journals/electronic-journal-of-statistics/volume-11/issue-2/Sparsity-information-and-regularization-in-the-horseshoe-and-other-shrinkage/10.1214/17-EJS1337SI.full",
+      "license": "CC BY 4.0",
+      "sha256": "611610c7c28fdb2a666e3a548ce7da6e3b9e009f221a3383a5c973f05a95c8ed",
+      "pages": 34,
+      "styles": [
+        "native text"
+      ],
+      "field": "statistics",
+      "language": "en",
+      "doi": "10.1214/17-EJS1337SI",
+      "expected_quality": "",
+      "quality_notes": "",
+      "note": "Publisher refuses scripted downloads; open url in a browser, save the PDF as benchmarks/public_pdfs/.cache/ejs-horseshoe.pdf, then rerun the fetch tool to verify the checksum."
+    },
+    {
+      "id": "ejs-doubly-robust",
+      "title": "Towards optimal doubly robust estimation of heterogeneous causal effects",
+      "url": "https://projecteuclid.org/journals/electronic-journal-of-statistics/volume-17/issue-2/Towards-optimal-doubly-robust-estimation-of-heterogeneous-causal-effects/10.1214/23-EJS2157.pdf",
+      "rights_source": "https://projecteuclid.org/journals/electronic-journal-of-statistics/volume-17/issue-2/Towards-optimal-doubly-robust-estimation-of-heterogeneous-causal-effects/10.1214/23-EJS2157.full",
+      "license": "CC BY 4.0",
+      "sha256": "157299cf0855aab1794fab6aeb364d1d7a29892b71a82be5598aa3bb9ff0a888",
+      "pages": 42,
+      "styles": [
+        "native text"
+      ],
+      "field": "statistics",
+      "language": "en",
+      "doi": "10.1214/23-EJS2157",
+      "expected_quality": "",
+      "quality_notes": "",
+      "note": "Publisher refuses scripted downloads; open url in a browser, save the PDF as benchmarks/public_pdfs/.cache/ejs-doubly-robust.pdf, then rerun the fetch tool to verify the checksum."
+    },
+    {
+      "id": "ba-rank-normalized-rhat",
+      "title": "Rank-Normalization, Folding, and Localization: An Improved Rˆ for Assessing Convergence of MCMC (with Discussion)",
+      "url": "https://projecteuclid.org/journals/bayesian-analysis/volume-16/issue-2/Rank-Normalization-Folding-and-Localization--An-Improved-R%cb%86-for/10.1214/20-BA1221.pdf",
+      "rights_source": "https://projecteuclid.org/journals/bayesian-analysis/volume-16/issue-2/Rank-Normalization-Folding-and-Localization--An-Improved-R%cb%86-for/10.1214/20-BA1221.full",
+      "license": "CC BY 4.0",
+      "sha256": "172ccec25ce789fbf3a8959c5deb92d7700387ac09b89e4b403a489973b26d26",
+      "pages": 52,
+      "styles": [
+        "native text"
+      ],
+      "field": "statistics",
+      "language": "en",
+      "doi": "10.1214/20-BA1221",
+      "expected_quality": "",
+      "quality_notes": "",
+      "note": "Publisher refuses scripted downloads; open url in a browser, save the PDF as benchmarks/public_pdfs/.cache/ba-rank-normalized-rhat.pdf, then rerun the fetch tool to verify the checksum."
+    },
+    {
+      "id": "ba-constrained-bayesopt",
+      "title": "Constrained Bayesian Optimization with Noisy Experiments",
+      "url": "https://projecteuclid.org/journals/bayesian-analysis/volume-14/issue-2/Constrained-Bayesian-Optimization-with-Noisy-Experiments/10.1214/18-BA1110.pdf",
+      "rights_source": "https://projecteuclid.org/journals/bayesian-analysis/volume-14/issue-2/Constrained-Bayesian-Optimization-with-Noisy-Experiments/10.1214/18-BA1110.full",
+      "license": "CC BY 4.0",
+      "sha256": "25dd1ff16b3bed19c8417b841b97e3b4b37abb65631ef017155a7944bb70633a",
+      "pages": 25,
+      "styles": [
+        "native text"
+      ],
+      "field": "statistics",
+      "language": "en",
+      "doi": "10.1214/18-BA1110",
+      "expected_quality": "",
+      "quality_notes": "",
+      "note": "Publisher refuses scripted downloads; open url in a browser, save the PDF as benchmarks/public_pdfs/.cache/ba-constrained-bayesopt.pdf, then rerun the fetch tool to verify the checksum."
+    },
+    {
+      "id": "psych-bootstrap-ega",
+      "title": "Estimating the Stability of Psychological Dimensions via Bootstrap Exploratory Graph Analysis: A Monte Carlo Simulation and Tutorial",
+      "url": "https://mdpi-res.com/d_attachment/psych/psych-03-00032/article_deploy/psych-03-00032.pdf",
+      "rights_source": "https://www.mdpi.com/2624-8611/3/3/32",
+      "license": "CC BY 4.0",
+      "sha256": "186cb55420ce124a6c4020dece1642c45d9b64534dcd4e5a7f2730262b2db9ff",
+      "pages": 22,
+      "styles": [
+        "native text"
+      ],
+      "field": "psychometrics",
+      "language": "en",
+      "doi": "10.3390/psych3030032",
+      "expected_quality": "",
+      "quality_notes": "",
+      "note": "MDPI file server copy of the published PDF."
+    },
+    {
+      "id": "psych-nvivo-guide",
+      "title": "Qualitative Methods with Nvivo Software: A Practical Guide for Analyzing Qualitative Data",
+      "url": "https://mdpi-res.com/d_attachment/psych/psych-04-00013/article_deploy/psych-04-00013.pdf",
+      "rights_source": "https://www.mdpi.com/2624-8611/4/2/13",
+      "license": "CC BY 4.0",
+      "sha256": "7dbc37ac36e022f0a674b93e44f8c98e92f456f64cfcde0397d2c7ee68b1ad70",
+      "pages": 18,
+      "styles": [
+        "native text"
+      ],
+      "field": "psychometrics",
+      "language": "en",
+      "doi": "10.3390/psych4020013",
+      "expected_quality": "",
+      "quality_notes": "",
+      "note": "MDPI file server copy of the published PDF."
+    },
+    {
+      "id": "lsae-ilsa-review",
+      "title": "Modern international large-scale assessment in education: an integrative review and mapping of the literature",
+      "url": "https://link.springer.com/content/pdf/10.1186/s40536-021-00109-1.pdf",
+      "rights_source": "https://link.springer.com/article/10.1186/s40536-021-00109-1",
+      "license": "CC BY 4.0",
+      "sha256": "e0c77a31a59d0b69fb0c85d68883968c010c9b4015c486a22eec12e5c6947d44",
+      "pages": 33,
+      "styles": [
+        "native text"
+      ],
+      "field": "psychometrics",
+      "language": "en",
+      "doi": "10.1186/s40536-021-00109-1",
+      "expected_quality": "",
+      "quality_notes": "",
+      "note": "Publisher refuses scripted downloads; open url in a browser, save the PDF as benchmarks/public_pdfs/.cache/lsae-ilsa-review.pdf, then rerun the fetch tool to verify the checksum."
+    },
+    {
+      "id": "lsae-multilevel-effect-sizes",
+      "title": "Effect size measures for multilevel models: definition, interpretation, and TIMSS example",
+      "url": "https://link.springer.com/content/pdf/10.1186/s40536-018-0061-2.pdf",
+      "rights_source": "https://link.springer.com/article/10.1186/s40536-018-0061-2",
+      "license": "CC BY 4.0",
+      "sha256": "ce13d72899da9dc4c9b9d53664f260f985d7eb661eb580deb2fb01a1576a0e89",
+      "pages": 11,
+      "styles": [
+        "native text"
+      ],
+      "field": "psychometrics",
+      "language": "en",
+      "doi": "10.1186/s40536-018-0061-2",
+      "expected_quality": "",
+      "quality_notes": "",
+      "note": "Publisher refuses scripted downloads; open url in a browser, save the PDF as benchmarks/public_pdfs/.cache/lsae-multilevel-effect-sizes.pdf, then rerun the fetch tool to verify the checksum."
+    },
+    {
+      "id": "pmet-srmr-covariates",
+      "title": "SRMR for Models with Covariates",
+      "url": "https://www.cambridge.org/core/services/aop-cambridge-core/content/view/9A572A132DC78F3E33D44999CD18684F/S0033312324000103a.pdf/div-class-title-srmr-for-models-with-covariates-div.pdf",
+      "rights_source": "https://doi.org/10.1017/psy.2024.10",
+      "license": "CC BY 4.0",
+      "sha256": "61e261d346501213f1a1f521b5623e2ad84912606381a1ab74f9b6c66bfb8287",
+      "pages": 23,
+      "styles": [
+        "native text"
+      ],
+      "field": "psychometrics",
+      "language": "en",
+      "doi": "10.1017/psy.2024.10",
+      "expected_quality": "",
+      "quality_notes": "",
+      "note": "Publisher refuses scripted downloads; open url in a browser, save the PDF as benchmarks/public_pdfs/.cache/pmet-srmr-covariates.pdf, then rerun the fetch tool to verify the checksum."
+    },
+    {
+      "id": "pmet-network-panel-models",
+      "title": "Psychometric Network Models from Time-Series and Panel Data",
+      "url": "https://pmc-oa-opendata.s3.amazonaws.com/PMC7186258.1/PMC7186258.1.pdf",
+      "rights_source": "https://doi.org/10.1007/s11336-020-09697-3",
+      "license": "CC BY 4.0",
+      "sha256": "0341e0e5f536d5f8d563a4b1f609ddf1d5970bf24ece65b3bb1fff75426793e6",
+      "pages": 26,
+      "styles": [
+        "native text"
+      ],
+      "field": "psychometrics",
+      "language": "en",
+      "doi": "10.1007/s11336-020-09697-3",
+      "expected_quality": "",
+      "quality_notes": "",
+      "note": "PubMed Central open-access copy of the publisher PDF."
+    },
+    {
+      "id": "tacl-fasttext-subwords",
+      "title": "Enriching Word Vectors with Subword Information",
+      "url": "https://aclanthology.org/Q17-1010.pdf",
+      "rights_source": "https://aclanthology.org/Q17-1010/",
+      "license": "CC BY 4.0",
+      "sha256": "608995c8a253c2189e95d819269f9a2a46dda52ca95ab37fe6916ff7ec5309bc",
+      "pages": 12,
+      "styles": [
+        "native text"
+      ],
+      "field": "computer-science",
+      "language": "en",
+      "doi": "10.1162/tacl_a_00051",
+      "expected_quality": "",
+      "quality_notes": ""
+    },
+    {
+      "id": "tacl-lost-in-the-middle",
+      "title": "Lost in the Middle: How Language Models Use Long Contexts",
+      "url": "https://aclanthology.org/2024.tacl-1.9.pdf",
+      "rights_source": "https://aclanthology.org/2024.tacl-1.9/",
+      "license": "CC BY 4.0",
+      "sha256": "f37f6fabe0fe0d8c73b67579cd115dbf14e282cfb7b7af655ae8109638402c9b",
+      "pages": 17,
+      "styles": [
+        "native text"
+      ],
+      "field": "computer-science",
+      "language": "en",
+      "doi": "10.1162/tacl_a_00638",
+      "expected_quality": "",
+      "quality_notes": ""
+    },
+    {
+      "id": "lipics-lovasz-weisfeiler-leman",
+      "title": "Lovász Meets Weisfeiler and Leman",
+      "url": "https://drops.dagstuhl.de/storage/00lipics/lipics-vol107-icalp2018/LIPIcs.ICALP.2018.40/LIPIcs.ICALP.2018.40.pdf",
+      "rights_source": "https://drops.dagstuhl.de/entities/document/10.4230/LIPIcs.ICALP.2018.40",
+      "license": "CC BY 3.0",
+      "sha256": "87f32e080addef0b4b4cfe4a99abc8e27770672100f2b1064c03b9902f416082",
+      "pages": 14,
+      "styles": [
+        "native text"
+      ],
+      "field": "computer-science",
+      "language": "en",
+      "doi": "10.4230/LIPIcs.ICALP.2018.40",
+      "expected_quality": "",
+      "quality_notes": ""
+    },
+    {
+      "id": "lipics-cubical-type-theory",
+      "title": "Cubical Type Theory: A Constructive Interpretation of the Univalence Axiom",
+      "url": "https://drops.dagstuhl.de/storage/00lipics/lipics-vol069-types2015/LIPIcs.TYPES.2015.5/LIPIcs.TYPES.2015.5.pdf",
+      "rights_source": "https://drops.dagstuhl.de/entities/document/10.4230/LIPIcs.TYPES.2015.5",
+      "license": "CC BY 3.0",
+      "sha256": "be81118458d1ec06629369d6ecd99249502c0a596eb14894a37a3c8408560ea1",
+      "pages": 34,
+      "styles": [
+        "native text"
+      ],
+      "field": "computer-science",
+      "language": "en",
+      "doi": "10.4230/LIPIcs.TYPES.2015.5",
+      "expected_quality": "",
+      "quality_notes": ""
+    },
+    {
+      "id": "jair-dp-fy-ml",
+      "title": "How to DP-fy ML: A Practical Guide to Machine Learning with Differential Privacy",
+      "url": "https://www.jair.org/index.php/jair/article/download/14649/26952",
+      "rights_source": "https://jair.org/index.php/jair/article/view/14649",
+      "license": "CC BY 4.0",
+      "sha256": "93a11d38274be47d6e0f95fc8e982264d14e3cf1ed014ecec16c6ed7500ac913",
+      "pages": 89,
+      "styles": [
+        "native text"
+      ],
+      "field": "computer-science",
+      "language": "en",
+      "doi": "10.1613/jair.1.14649",
+      "expected_quality": "",
+      "quality_notes": ""
+    },
+    {
+      "id": "jair-decision-focused-learning",
+      "title": "Decision-Focused Learning: Foundations, State of the Art, Benchmark and Future Opportunities",
+      "url": "https://jair.org/index.php/jair/article/download/15320/27076",
+      "rights_source": "https://jair.org/index.php/jair/article/view/15320",
+      "license": "CC BY 4.0",
+      "sha256": "d09c2c4291cfbe1d875bce79c9f1f93503cbf99eddea91255d988709c7161869",
+      "pages": 79,
+      "styles": [
+        "native text"
+      ],
+      "field": "computer-science",
+      "language": "en",
+      "doi": "10.1613/jair.1.15320",
+      "expected_quality": "",
+      "quality_notes": ""
+    },
+    {
+      "id": "econ-sdg-systems",
+      "title": "The Sustainable Development Goals and the systems approach to sustainability",
+      "url": "https://www.degruyterbrill.com/document/doi/10.5018/economics-ejournal.ja.2017-28/pdf?licenseType=open-access",
+      "rights_source": "https://www.degruyterbrill.com/document/doi/10.5018/economics-ejournal.ja.2017-28/html",
+      "license": "CC BY 4.0",
+      "sha256": "429b789bbc1bbc4441e43d2efe667581728e6f4071b794daf6f47e32deaedb0d",
+      "pages": 23,
+      "styles": [
+        "native text"
+      ],
+      "field": "economics",
+      "language": "en",
+      "doi": "10.5018/economics-ejournal.ja.2017-28",
+      "expected_quality": "",
+      "quality_notes": "",
+      "note": "Publisher refuses scripted downloads; open url in a browser, save the PDF as benchmarks/public_pdfs/.cache/econ-sdg-systems.pdf, then rerun the fetch tool to verify the checksum."
+    },
+    {
+      "id": "izajle-parental-income-schooling",
+      "title": "The impact of parental income and education on the schooling of their children",
+      "url": "https://link.springer.com/content/pdf/10.1186/2193-8997-2-8.pdf",
+      "rights_source": "https://link.springer.com/article/10.1186/2193-8997-2-8",
+      "license": "CC BY 2.0",
+      "sha256": "ddb58965108a4b63aa629ce73f744140101d03788a8d11dfcf5043f48baced2f",
+      "pages": 22,
+      "styles": [
+        "native text"
+      ],
+      "field": "economics",
+      "language": "en",
+      "doi": "10.1186/2193-8997-2-8",
+      "expected_quality": "",
+      "quality_notes": "",
+      "note": "Publisher refuses scripted downloads; open url in a browser, save the PDF as benchmarks/public_pdfs/.cache/izajle-parental-income-schooling.pdf, then rerun the fetch tool to verify the checksum."
+    },
+    {
+      "id": "izajle-feeling-useless",
+      "title": "Feeling useless: the effect of unemployment on mental health in the Great Recession",
+      "url": "https://link.springer.com/content/pdf/10.1186/s40172-018-0068-5.pdf",
+      "rights_source": "https://link.springer.com/article/10.1186/s40172-018-0068-5",
+      "license": "CC BY 4.0",
+      "sha256": "575fac6ed5fb2188744a204f08b2961b65ade908db3b0569be7382b4aa05a904",
+      "pages": 34,
+      "styles": [
+        "native text"
+      ],
+      "field": "economics",
+      "language": "en",
+      "doi": "10.1186/s40172-018-0068-5",
+      "expected_quality": "",
+      "quality_notes": "",
+      "note": "Publisher refuses scripted downloads; open url in a browser, save the PDF as benchmarks/public_pdfs/.cache/izajle-feeling-useless.pdf, then rerun the fetch tool to verify the checksum."
+    },
+    {
+      "id": "jlmr-onet-content-model",
+      "title": "The O*NET content model: strengths and limitations",
+      "url": "https://link.springer.com/content/pdf/10.1007/s12651-016-0199-8.pdf",
+      "rights_source": "https://link.springer.com/article/10.1007/s12651-016-0199-8",
+      "license": "CC BY (version not stated)",
+      "sha256": "d5052a0f969cd97ba3d520062238278cbb6314c41259cd8ed6d29fb761b58920",
+      "pages": 20,
+      "styles": [
+        "native text"
+      ],
+      "field": "economics",
+      "language": "en",
+      "doi": "10.1007/s12651-016-0199-8",
+      "expected_quality": "",
+      "quality_notes": "",
+      "note": "Publisher refuses scripted downloads; open url in a browser, save the PDF as benchmarks/public_pdfs/.cache/jlmr-onet-content-model.pdf, then rerun the fetch tool to verify the checksum."
+    },
+    {
+      "id": "jlmr-gender-wage-gap-china",
+      "title": "Gender wage gap in China: a large meta-analysis",
+      "url": "https://link.springer.com/content/pdf/10.1186/s12651-020-00279-5.pdf",
+      "rights_source": "https://link.springer.com/article/10.1186/s12651-020-00279-5",
+      "license": "CC BY 4.0",
+      "sha256": "506a039949b645b67b5111865078d049d0a0845f1fdb37d69a4f18c056eca380",
+      "pages": 19,
+      "styles": [
+        "native text"
+      ],
+      "field": "economics",
+      "language": "en",
+      "doi": "10.1186/s12651-020-00279-5",
+      "expected_quality": "",
+      "quality_notes": "",
+      "note": "Publisher refuses scripted downloads; open url in a browser, save the PDF as benchmarks/public_pdfs/.cache/jlmr-gender-wage-gap-china.pdf, then rerun the fetch tool to verify the checksum."
+    },
+    {
+      "id": "stam-iron-pnictides",
+      "title": "Exploration of new superconductors and functional materials, and fabrication of superconducting tapes and wires of iron pnictides",
+      "url": "https://pmc-oa-opendata.s3.amazonaws.com/PMC5099821.1/PMC5099821.1.pdf",
+      "rights_source": "https://europepmc.org/article/PMC/PMC5099821",
+      "license": "CC BY 3.0",
+      "sha256": "c7007d53b733728558d9e72ce64b4aab4aa6c1483ca9d72896da80f55ed9d496",
+      "pages": 87,
+      "styles": [
+        "native text"
+      ],
+      "field": "materials-engineering",
+      "language": "en",
+      "doi": "10.1088/1468-6996/16/3/033503",
+      "expected_quality": "",
+      "quality_notes": "",
+      "note": "PubMed Central open-access copy of the publisher PDF."
+    },
+    {
+      "id": "stam-graphene-disorders",
+      "title": "Structure of graphene and its disorders: a review",
+      "url": "https://pmc-oa-opendata.s3.amazonaws.com/PMC6116708.1/PMC6116708.1.pdf",
+      "rights_source": "https://europepmc.org/article/PMC/PMC6116708",
+      "license": "CC BY 4.0",
+      "sha256": "5c17928080442c6a4a9d3dc3ac52db870c999a59843a6fc72311ef736a6b22ca",
+      "pages": 36,
+      "styles": [
+        "native text"
+      ],
+      "field": "materials-engineering",
+      "language": "en",
+      "doi": "10.1080/14686996.2018.1494493",
+      "expected_quality": "",
+      "quality_notes": "",
+      "note": "PubMed Central open-access copy of the publisher PDF."
+    },
+    {
+      "id": "npjcm-oqmd",
+      "title": "The Open Quantum Materials Database (OQMD): assessing the accuracy of DFT formation energies",
+      "url": "https://www.nature.com/articles/npjcompumats201510.pdf",
+      "rights_source": "https://www.nature.com/articles/npjcompumats201510",
+      "license": "CC BY 4.0",
+      "sha256": "6e56c6779de8647770a0b45b5b6f5cdc09b3dd1c1e34886622218a6f19ee72e7",
+      "pages": 15,
+      "styles": [
+        "native text"
+      ],
+      "field": "materials-engineering",
+      "language": "en",
+      "doi": "10.1038/npjcompumats.2015.10",
+      "expected_quality": "",
+      "quality_notes": "",
+      "note": "Publisher refuses scripted downloads; open url in a browser, save the PDF as benchmarks/public_pdfs/.cache/npjcm-oqmd.pdf, then rerun the fetch tool to verify the checksum."
+    },
+    {
+      "id": "npjcm-ml-solid-state",
+      "title": "Recent advances and applications of machine learning in solid-state materials science",
+      "url": "https://www.nature.com/articles/s41524-019-0221-0.pdf",
+      "rights_source": "https://www.nature.com/articles/s41524-019-0221-0",
+      "license": "CC BY 4.0",
+      "sha256": "345e5d8558357a760b93872ecc7df816877250708b5eb593090db8ac37002c91",
+      "pages": 36,
+      "styles": [
+        "native text"
+      ],
+      "field": "materials-engineering",
+      "language": "en",
+      "doi": "10.1038/s41524-019-0221-0",
+      "expected_quality": "",
+      "quality_notes": "",
+      "note": "Publisher refuses scripted downloads; open url in a browser, save the PDF as benchmarks/public_pdfs/.cache/npjcm-ml-solid-state.pdf, then rerun the fetch tool to verify the checksum."
+    },
+    {
+      "id": "collabra-sample-size",
+      "title": "Sample Size Justification",
+      "url": "https://pure.tue.nl/ws/portalfiles/portal/214011492/collabra_2022_8_1_33267.pdf",
+      "rights_source": "https://doi.org/10.1525/collabra.33267",
+      "license": "CC BY 4.0",
+      "sha256": "40028a12d5d738b94d84c2455109ce6a226bb103241276954500a43726d9c1e3",
+      "pages": 29,
+      "styles": [
+        "native text"
+      ],
+      "field": "psychology",
+      "language": "en",
+      "doi": "10.1525/collabra.33267",
+      "expected_quality": "",
+      "quality_notes": "",
+      "note": "TU/e repository copy of the published PDF with a repository cover page; the cover cites the Dutch Taverne provision for the deposit, the article states CC BY 4.0."
+    },
+    {
+      "id": "fpsyg-effect-sizes",
+      "title": "Calculating and reporting effect sizes to facilitate cumulative science: a practical primer for t-tests and ANOVAs",
+      "url": "https://www.frontiersin.org/articles/10.3389/fpsyg.2013.00863/pdf",
+      "rights_source": "https://www.frontiersin.org/journals/psychology/articles/10.3389/fpsyg.2013.00863/full",
+      "license": "CC BY 3.0",
+      "sha256": "8da573ed2a5a47239420ec21c0390ea9e48646b2285f2998c7be2bb59605f0c0",
+      "pages": 12,
+      "styles": [
+        "native text"
+      ],
+      "field": "psychology",
+      "language": "en",
+      "doi": "10.3389/fpsyg.2013.00863",
+      "expected_quality": "",
+      "quality_notes": ""
+    },
+    {
+      "id": "fpsyg-hrv-recommendations",
+      "title": "Heart Rate Variability and Cardiac Vagal Tone in Psychophysiological Research – Recommendations for Experiment Planning, Data Analysis, and Data Reporting",
+      "url": "https://www.frontiersin.org/articles/10.3389/fpsyg.2017.00213/pdf",
+      "rights_source": "https://www.frontiersin.org/journals/psychology/articles/10.3389/fpsyg.2017.00213/full",
+      "license": "CC BY 4.0",
+      "sha256": "bee025e3a8868b7afd2fbaaf22ddd2ea11c13ac47df600cbe84056f584d53971",
+      "pages": 18,
+      "styles": [
+        "native text"
+      ],
+      "field": "psychology",
+      "language": "en",
+      "doi": "10.3389/fpsyg.2017.00213",
+      "expected_quality": "",
+      "quality_notes": ""
+    },
+    {
+      "id": "metapsych-prereg-secondary",
+      "title": "Preregistration of secondary data analysis: A template and tutorial",
+      "url": "https://open.lnu.se/index.php/metapsychology/article/download/2625/2508",
+      "rights_source": "https://open.lnu.se/index.php/metapsychology/article/view/2625",
+      "license": "CC BY 4.0",
+      "sha256": "366f43f0f4e4ac55848a569df6b4115ed03b2f0005f03f29ebf6f87f9a118252",
+      "pages": 19,
+      "styles": [
+        "native text"
+      ],
+      "field": "psychology",
+      "language": "en",
+      "doi": "10.15626/MP.2020.2625",
+      "expected_quality": "",
+      "quality_notes": ""
+    },
+    {
+      "id": "metapsych-lavaan-invariance",
+      "title": "Tutorial in Longitudinal Measurement Invariance and Cross-lagged Panel Models Using Lavaan",
+      "url": "https://open.lnu.se/index.php/metapsychology/article/download/2595/2599",
+      "rights_source": "https://open.lnu.se/index.php/metapsychology/article/view/2595",
+      "license": "CC BY 4.0",
+      "sha256": "3c9404cdb2e4a7aeeaaa4ed1f417dffb7da2ec8f6f47d21fadda7054113a296e",
+      "pages": 20,
+      "styles": [
+        "native text"
+      ],
+      "field": "psychology",
+      "language": "en",
+      "doi": "10.15626/MP.2020.2595",
+      "expected_quality": "",
+      "quality_notes": ""
+    },
+    {
+      "id": "ijethe-flipped-classrooms",
+      "title": "Flipped classrooms in higher education during the COVID-19 pandemic: findings and future research recommendations",
+      "url": "https://link.springer.com/content/pdf/10.1186/s41239-021-00316-4.pdf",
+      "rights_source": "https://link.springer.com/article/10.1186/s41239-021-00316-4",
+      "license": "CC BY 4.0",
+      "sha256": "731180c3774e37107cfb5963dc8e2019ed73d72b239c0e24be1d364e812a4dfc",
+      "pages": 24,
+      "styles": [
+        "native text"
+      ],
+      "field": "education",
+      "language": "en",
+      "doi": "10.1186/s41239-021-00316-4",
+      "expected_quality": "",
+      "quality_notes": "",
+      "note": "Publisher refuses scripted downloads; open url in a browser, save the PDF as benchmarks/public_pdfs/.cache/ijethe-flipped-classrooms.pdf, then rerun the fetch tool to verify the checksum."
+    },
+    {
+      "id": "ijethe-digital-higher-ed",
+      "title": "Digital higher education: a divider or bridge builder? Leadership perspectives on edtech in a COVID-19 reality",
+      "url": "https://link.springer.com/content/pdf/10.1186/s41239-021-00287-6.pdf",
+      "rights_source": "https://link.springer.com/article/10.1186/s41239-021-00287-6",
+      "license": "CC BY 4.0",
+      "sha256": "a9bbb17308cdb7c7b2f56fca1f32017e26ce41702ba1bef0fe32b5c60330ad88",
+      "pages": 17,
+      "styles": [
+        "native text"
+      ],
+      "field": "education",
+      "language": "en",
+      "doi": "10.1186/s41239-021-00287-6",
+      "expected_quality": "",
+      "quality_notes": "",
+      "note": "Publisher refuses scripted downloads; open url in a browser, save the PDF as benchmarks/public_pdfs/.cache/ijethe-digital-higher-ed.pdf, then rerun the fetch tool to verify the checksum."
+    },
+    {
+      "id": "sle-chatgpt-chatbots",
+      "title": "What if the devil is my guardian angel: ChatGPT as a case study of using chatbots in education",
+      "url": "https://link.springer.com/content/pdf/10.1186/s40561-023-00237-x.pdf",
+      "rights_source": "https://link.springer.com/article/10.1186/s40561-023-00237-x",
+      "license": "CC BY 4.0",
+      "sha256": "a34cff922e805509009365f1a7519efb2dd71175ae48479e97cbd6cde2455485",
+      "pages": 24,
+      "styles": [
+        "native text"
+      ],
+      "field": "education",
+      "language": "en",
+      "doi": "10.1186/s40561-023-00237-x",
+      "expected_quality": "",
+      "quality_notes": "",
+      "note": "Publisher refuses scripted downloads; open url in a browser, save the PDF as benchmarks/public_pdfs/.cache/sle-chatgpt-chatbots.pdf, then rerun the fetch tool to verify the checksum."
+    },
+    {
+      "id": "sle-blockchain-education",
+      "title": "Exploring blockchain technology and its potential applications for education",
+      "url": "https://link.springer.com/content/pdf/10.1186/s40561-017-0050-x.pdf",
+      "rights_source": "https://link.springer.com/article/10.1186/s40561-017-0050-x",
+      "license": "CC BY 4.0",
+      "sha256": "dbc437b2f2c442e91658e6e5bee8e973422577b3adce8af523cf3bf17bae1484",
+      "pages": 10,
+      "styles": [
+        "native text"
+      ],
+      "field": "education",
+      "language": "en",
+      "doi": "10.1186/s40561-017-0050-x",
+      "expected_quality": "",
+      "quality_notes": "",
+      "note": "Publisher refuses scripted downloads; open url in a browser, save the PDF as benchmarks/public_pdfs/.cache/sle-blockchain-education.pdf, then rerun the fetch tool to verify the checksum."
+    },
+    {
+      "id": "ijstem-integrated-framework",
+      "title": "A conceptual framework for integrated STEM education",
+      "url": "https://link.springer.com/content/pdf/10.1186/s40594-016-0046-z.pdf",
+      "rights_source": "https://link.springer.com/article/10.1186/s40594-016-0046-z",
+      "license": "CC BY 4.0",
+      "sha256": "796a6599b3804d729c435b5fd73564759281af2d6507b7ba975b61286f367ccd",
+      "pages": 11,
+      "styles": [
+        "native text"
+      ],
+      "field": "education",
+      "language": "en",
+      "doi": "10.1186/s40594-016-0046-z",
+      "expected_quality": "",
+      "quality_notes": "",
+      "note": "Publisher refuses scripted downloads; open url in a browser, save the PDF as benchmarks/public_pdfs/.cache/ijstem-integrated-framework.pdf, then rerun the fetch tool to verify the checksum."
+    },
+    {
+      "id": "ijstem-k12-integration",
+      "title": "STEM education K-12: perspectives on integration",
+      "url": "https://link.springer.com/content/pdf/10.1186/s40594-016-0036-1.pdf",
+      "rights_source": "https://link.springer.com/article/10.1186/s40594-016-0036-1",
+      "license": "CC BY 4.0",
+      "sha256": "b007b668b99ca780a42dd41107b4ac958a197e72fc6bf25a7d83f45332b52ef1",
+      "pages": 8,
+      "styles": [
+        "native text"
+      ],
+      "field": "education",
+      "language": "en",
+      "doi": "10.1186/s40594-016-0036-1",
+      "expected_quality": "",
+      "quality_notes": "",
+      "note": "Publisher refuses scripted downloads; open url in a browser, save the PDF as benchmarks/public_pdfs/.cache/ijstem-k12-integration.pdf, then rerun the fetch tool to verify the checksum."
+    },
+    {
+      "id": "socsci-nonlinear-interactions",
+      "title": "Best Practices for Estimating, Interpreting, and Presenting Nonlinear Interaction Effects",
+      "url": "https://sociologicalscience.com/download/vol-6/february/SocSci_v6_81to117.pdf",
+      "rights_source": "https://sociologicalscience.com/articles-v6-4-81/",
+      "license": "CC BY 4.0",
+      "sha256": "0b59c836e471f5b92172385ad852771aa87d721d4f873ee2865753678f99b4f7",
+      "pages": 37,
+      "styles": [
+        "native text"
+      ],
+      "field": "sociology-politics",
+      "language": "en",
+      "doi": "10.15195/v6.a4",
+      "expected_quality": "",
+      "quality_notes": ""
+    },
+    {
+      "id": "socsci-no-religious-preference",
+      "title": "Explaining Why More Americans Have No Religious Preference: Political Backlash and Generational Succession, 1987-2012",
+      "url": "https://sociologicalscience.com/download/volume%201/october/SocSci_v1_423to447.pdf",
+      "rights_source": "https://sociologicalscience.com/articles-vol1-24-423/",
+      "license": "CC BY (version not stated; notice in PDF)",
+      "sha256": "5e5a835da5269452ca9121a1124a55e146a9f70edfa50230a7258cfa573adf3a",
+      "pages": 25,
+      "styles": [
+        "native text"
+      ],
+      "field": "sociology-politics",
+      "language": "en",
+      "doi": "10.15195/v1.a24",
+      "expected_quality": "",
+      "quality_notes": ""
+    },
+    {
+      "id": "pag-policy-portfolios",
+      "title": "Patching vs Packaging in Policy Formulation: Assessing Policy Portfolio Design",
+      "url": "https://www.cogitatiopress.com/politicsandgovernance/article/download/95/96",
+      "rights_source": "https://www.cogitatiopress.com/politicsandgovernance/article/view/95",
+      "license": "CC BY 4.0 (article page; the PDF notice says CC BY 3.0)",
+      "sha256": "826c9918f0ced5c3a9871173d1e4599f4c1cfe8de6e7028a45fd72bc70208780",
+      "pages": 14,
+      "styles": [
+        "native text"
+      ],
+      "field": "sociology-politics",
+      "language": "en",
+      "doi": "10.17645/pag.v1i2.95",
+      "expected_quality": "",
+      "quality_notes": ""
+    },
+    {
+      "id": "pag-regimes-of-the-world",
+      "title": "Regimes of the World (RoW): Opening New Avenues for the Comparative Study of Political Regimes",
+      "url": "https://www.cogitatiopress.com/politicsandgovernance/article/download/1214/714",
+      "rights_source": "https://www.cogitatiopress.com/politicsandgovernance/article/view/1214",
+      "license": "CC BY 4.0",
+      "sha256": "a3e7c49da2363be5d1dae8da3e7fb939910aae88f7a403544809258c865171f3",
+      "pages": 18,
+      "styles": [
+        "native text"
+      ],
+      "field": "sociology-politics",
+      "language": "en",
+      "doi": "10.17645/pag.v6i1.1214",
+      "expected_quality": "",
+      "quality_notes": ""
+    },
+    {
+      "id": "bjpols-political-trust",
+      "title": "A Crisis of Political Trust? Global Trends in Institutional Trust from 1958 to 2019",
+      "url": "https://www.cambridge.org/core/services/aop-cambridge-core/content/view/7EF4EDA709F27C691380CFC1BCECF6B8/S0007123424000498a.pdf/div-class-title-a-crisis-of-political-trust-global-trends-in-institutional-trust-from-1958-to-2019-div.pdf",
+      "rights_source": "https://doi.org/10.1017/S0007123424000498",
+      "license": "CC BY 4.0",
+      "sha256": "a1c46484932dfb05dcbc1b3920ecac27ed1c18119bc40f57224876c3c0316485",
+      "pages": 23,
+      "styles": [
+        "native text"
+      ],
+      "field": "sociology-politics",
+      "language": "en",
+      "doi": "10.1017/S0007123424000498",
+      "expected_quality": "",
+      "quality_notes": ""
+    },
+    {
+      "id": "bjpols-media-platforming",
+      "title": "Media Platforming and the Normalisation of Extreme Right Views",
+      "url": "https://www.cambridge.org/core/services/aop-cambridge-core/content/view/747E769DA6CE4365E0151B55FDF4DEFA/S0007123425000195a.pdf/div-class-title-media-platforming-and-the-normalisation-of-extreme-right-views-div.pdf",
+      "rights_source": "https://doi.org/10.1017/S0007123425000195",
+      "license": "CC BY 4.0",
+      "sha256": "2c68666ac2cebdb96bccf9191c28c154b66f1cfffdf302788d4943574294c58f",
+      "pages": 25,
+      "styles": [
+        "native text"
+      ],
+      "field": "sociology-politics",
+      "language": "en",
+      "doi": "10.1017/S0007123425000195",
+      "expected_quality": "",
+      "quality_notes": ""
+    },
+    {
+      "id": "glj-essence-fundamental-rights",
+      "title": "Limits on Limitations: The Essence of Fundamental Rights in the EU",
+      "url": "https://www.cambridge.org/core/services/aop-cambridge-core/content/view/3071D1A8FB881031F8E3F6D5799959BD/S2071832219000622a.pdf/div-class-title-limits-on-limitations-the-essence-of-fundamental-rights-in-the-eu-div.pdf",
+      "rights_source": "https://doi.org/10.1017/glj.2019.62",
+      "license": "CC BY 4.0",
+      "sha256": "5b1393ae1b65e2a0f7ae1dbcae5f28cc578ac24b1fef37edde83cd4e3ba6ce48",
+      "pages": 15,
+      "styles": [
+        "native text"
+      ],
+      "field": "law",
+      "language": "en",
+      "doi": "10.1017/glj.2019.62",
+      "expected_quality": "",
+      "quality_notes": ""
+    },
+    {
+      "id": "glj-border-justice",
+      "title": "Border Justice: Migration and Accountability for Human Rights Violations",
+      "url": "https://www.cambridge.org/core/services/aop-cambridge-core/content/view/F43189E2B5EA3801157277E8C80F8623/S2071832220000279a.pdf/div-class-title-border-justice-migration-and-accountability-for-human-rights-violations-div.pdf",
+      "rights_source": "https://doi.org/10.1017/glj.2020.27",
+      "license": "CC BY 4.0",
+      "sha256": "3c3330240a63325c6b5ecf9d6d2004429ee7f70fa8abd4a2629af300bda3283c",
+      "pages": 24,
+      "styles": [
+        "native text"
+      ],
+      "field": "law",
+      "language": "en",
+      "doi": "10.1017/glj.2020.27",
+      "expected_quality": "",
+      "quality_notes": ""
+    },
+    {
+      "id": "ulr-political-microtargeting",
+      "title": "Online Political Microtargeting: Promises and Threats for Democracy",
+      "url": "https://utrechtlawreview.org/articles/420/files/submission/proof/420-1-1126-4-10-20180212.pdf",
+      "rights_source": "https://utrechtlawreview.org/articles/10.18352/ulr.420",
+      "license": "CC BY 4.0",
+      "sha256": "3093883085bcd0b9edc5cbbbf2e48fd06b00bdb35ee8e0788114c68041589897",
+      "pages": 15,
+      "styles": [
+        "native text"
+      ],
+      "field": "law",
+      "language": "en",
+      "doi": "10.18352/ulr.420",
+      "expected_quality": "",
+      "quality_notes": ""
+    },
+    {
+      "id": "ulr-indonesian-marriage-law",
+      "title": "Plurality of marriage law and marriage registration for Muslims in Indonesia: a plea for pragmatism",
+      "url": "https://storage.googleapis.com/jnl-up-j-ulr-files/journals/1/articles/130/submission/proof/130-1-130-1-10-20101001.pdf",
+      "rights_source": "https://utrechtlawreview.org/articles/10.18352/ulr.130",
+      "license": "CC BY 4.0",
+      "sha256": "7e842d5af2c86258628c119aad64765e5848c79bffac4913620c93ff31022281",
+      "pages": 17,
+      "styles": [
+        "native text"
+      ],
+      "field": "law",
+      "language": "en",
+      "doi": "10.18352/ulr.130",
+      "expected_quality": "",
+      "quality_notes": ""
+    },
+    {
+      "id": "laws-disability-human-rights",
+      "title": "Disability in a Human Rights Context",
+      "url": "https://mdpi-res.com/d_attachment/laws/laws-05-00035/article_deploy/laws-05-00035.pdf",
+      "rights_source": "https://www.mdpi.com/2075-471X/5/3/35",
+      "license": "CC BY 4.0",
+      "sha256": "c515b824e59a931178038db3fbc55c2f43edb1d84a5354b445d33a77e0e43680",
+      "pages": 24,
+      "styles": [
+        "native text"
+      ],
+      "field": "law",
+      "language": "en",
+      "doi": "10.3390/laws5030035",
+      "expected_quality": "",
+      "quality_notes": "",
+      "note": "MDPI file server copy of the published PDF."
+    },
+    {
+      "id": "laws-fashion-circular-economy",
+      "title": "Circular Economy and Waste in the Fashion Industry",
+      "url": "https://mdpi-res.com/d_attachment/laws/laws-08-00027/article_deploy/laws-08-00027.pdf",
+      "rights_source": "https://www.mdpi.com/2075-471X/8/4/27",
+      "license": "CC BY 4.0",
+      "sha256": "d0649b6305bef4062fbc70a4a96ab375619abe8d24914bb073a082a4c9602f75",
+      "pages": 13,
+      "styles": [
+        "native text"
+      ],
+      "field": "law",
+      "language": "en",
+      "doi": "10.3390/laws8040027",
+      "expected_quality": "",
+      "quality_notes": "",
+      "note": "MDPI file server copy of the published PDF."
+    },
+    {
+      "id": "glossa-sign-language-agreement",
+      "title": "The syntax of sign language agreement: Common ingredients, but unusual recipe",
+      "url": "https://www.glossa-journal.org/article/id/5075/download/pdf/",
+      "rights_source": "https://www.glossa-journal.org/article/id/5075/",
+      "license": "CC BY 4.0",
+      "sha256": "16b110afc9414cc1896955736e83b154ef1475a2634082ca7baa39d858ec053b",
+      "pages": 46,
+      "styles": [
+        "native text"
+      ],
+      "field": "humanities-linguistics",
+      "language": "en",
+      "doi": "10.5334/gjgl.511",
+      "expected_quality": "",
+      "quality_notes": ""
+    },
+    {
+      "id": "glossa-phylogenetic-signal",
+      "title": "The strength of the phylogenetic signal in syntactic data",
+      "url": "https://www.glossa-journal.org/article/id/10598/download/pdf/",
+      "rights_source": "https://www.glossa-journal.org/article/id/10598/",
+      "license": "CC BY 4.0",
+      "sha256": "7be60bad1c8491fd849db942cb887f62ca8a48afedd00ad30e122008b6f345f3",
+      "pages": 25,
+      "styles": [
+        "native text"
+      ],
+      "field": "humanities-linguistics",
+      "language": "en",
+      "doi": "10.16995/glossa.10598",
+      "expected_quality": "",
+      "quality_notes": ""
+    },
+    {
+      "id": "johd-language-archives-audit",
+      "title": "Accessibility, Discoverability, and Functionality: An Audit of and Recommendations for Digital Language Archives",
+      "url": "https://openhumanitiesdata.metajnl.com/articles/59/files/submission/proof/59-1-1195-1-10-20220324.pdf",
+      "rights_source": "https://openhumanitiesdata.metajnl.com/articles/10.5334/johd.59",
+      "license": "CC BY 4.0",
+      "sha256": "d34fa945b04ca8ec4c9c07af95c91960b11959985b0786ce070472d50fd9af25",
+      "pages": 19,
+      "styles": [
+        "native text"
+      ],
+      "field": "humanities-linguistics",
+      "language": "en",
+      "doi": "10.5334/johd.59",
+      "expected_quality": "",
+      "quality_notes": ""
+    },
+    {
+      "id": "johd-conlit-dataset",
+      "title": "The CONLIT Dataset of Contemporary Literature",
+      "url": "https://openhumanitiesdata.metajnl.com/articles/88/files/submission/proof/88-1-1498-1-10-20221011.pdf",
+      "rights_source": "https://openhumanitiesdata.metajnl.com/articles/10.5334/johd.88",
+      "license": "CC BY 4.0 (article; the described dataset is CC BY-NC 4.0 and is not part of this corpus)",
+      "sha256": "b23118717bfa461423c729a531b48bb0805b1db69b65ea78bc0600f1d593302f",
+      "pages": 7,
+      "styles": [
+        "native text"
+      ],
+      "field": "humanities-linguistics",
+      "language": "en",
+      "doi": "10.5334/johd.88",
+      "expected_quality": "",
+      "quality_notes": ""
+    },
+    {
+      "id": "fqs-participatory-health-research",
+      "title": "Partizipative Gesundheitsforschung: Wer partizipiert woran?",
+      "url": "https://www.qualitative-research.net/index.php/fqs/article/download/1781/3299",
+      "rights_source": "https://www.qualitative-research.net/index.php/fqs/article/view/1781",
+      "license": "CC BY 4.0",
+      "sha256": "aaffb59f715df01fc1ad74e7777d8740f34fb5c469ea349890e18b02170866e2",
+      "pages": 29,
+      "styles": [
+        "native text"
+      ],
+      "field": "extra",
+      "language": "de",
+      "doi": "10.17169/fqs-13.1.1781",
+      "expected_quality": "",
+      "quality_notes": ""
+    },
+    {
+      "id": "zfe-distance-learning-covid",
+      "title": "Was wissen wir über schulische Lehr-Lern-Prozesse im Distanzunterricht während der Corona-Pandemie? – Evidenz aus Deutschland, Österreich und der Schweiz",
+      "url": "https://link.springer.com/content/pdf/10.1007/s11618-021-01000-z.pdf",
+      "rights_source": "https://link.springer.com/article/10.1007/s11618-021-01000-z",
+      "license": "CC BY 4.0",
+      "sha256": "728a661b9acb956fa63a71f93d09a2785132a923603e656588d233ed8e966df4",
+      "pages": 75,
+      "styles": [
+        "native text"
+      ],
+      "field": "extra",
+      "language": "de",
+      "doi": "10.1007/s11618-021-01000-z",
+      "expected_quality": "",
+      "quality_notes": "",
+      "note": "Publisher refuses scripted downloads; open url in a browser, save the PDF as benchmarks/public_pdfs/.cache/zfe-distance-learning-covid.pdf, then rerun the fetch tool to verify the checksum."
+    },
+    {
+      "id": "csp-covid-stress-spain",
+      "title": "Niveles de estrés, ansiedad y depresión en la primera fase del brote del COVID-19 en una muestra recogida en el norte de España",
+      "url": "https://www.scielo.br/j/csp/a/bnNQf4rdcMNpPjgfnpWPQzr/?lang=es&format=pdf",
+      "rights_source": "https://www.scielo.br/j/csp/a/bnNQf4rdcMNpPjgfnpWPQzr/?lang=es",
+      "license": "CC BY 4.0",
+      "sha256": "53db8dcd09e49ecb19f7d3705f70fcf6ac321079c80447a8d4fcbf027fcdbff6",
+      "pages": 10,
+      "styles": [
+        "native text"
+      ],
+      "field": "extra",
+      "language": "es",
+      "doi": "10.1590/0102-311X00054020",
+      "expected_quality": "",
+      "quality_notes": ""
+    },
+    {
+      "id": "ecoaustral-vegetation-argentina",
+      "title": "Unidades de vegetación de la Argentina",
+      "url": "http://ojs.ecologiaaustral.com.ar/index.php/Ecologia_Austral/article/download/399/292",
+      "rights_source": "https://ojs.ecologiaaustral.com.ar/index.php/Ecologia_Austral/article/view/399",
+      "license": "CC BY 3.0 (article licence line; the journal policy text cites CC BY 4.0)",
+      "sha256": "d4e18f4dbf2656f5757390733edc257da04ac12057bdb096b12aa2175189aca1",
+      "pages": 24,
+      "styles": [
+        "native text"
+      ],
+      "field": "extra",
+      "language": "es",
+      "doi": "10.25260/EA.18.28.1.0.399",
+      "expected_quality": "",
+      "quality_notes": ""
+    },
+    {
+      "id": "naca-lifting-surfaces-scan",
+      "title": "Theory of Lifting Surfaces",
+      "url": "https://ntrs.nasa.gov/api/citations/20030082190/downloads/20030082190.pdf",
+      "rights_source": "https://ntrs.nasa.gov/citations/20030082190",
+      "license": "Public domain in the United States (US federal publication, 1920); NTRS: public use permitted",
+      "sha256": "3885100a3f8672d809c7a78da76678cb304705fa1bb0fa614e215f5cc9dd0e59",
+      "pages": 10,
+      "styles": [
+        "scanned pages",
+        "no text layer"
+      ],
+      "field": "extra",
+      "language": "en",
+      "expected_quality": "",
+      "quality_notes": "",
+      "note": "NACA Technical Note 10, part 2 (L. Prandtl, translation). Scanned pages without a text layer."
+    },
+    {
+      "id": "naca-report-172-scan",
+      "title": "Dynamic stability as affected by the longitudinal moment of inertia",
+      "url": "https://ntrs.nasa.gov/api/citations/19930091238/downloads/19930091238.pdf",
+      "rights_source": "https://ntrs.nasa.gov/citations/19930091238",
+      "license": "Public domain in the United States (US federal publication, 1924); NTRS: public use permitted",
+      "sha256": "854497f52cbff0e085ea724d1179b8b3f19d68c7bf7db93d0d6c326a556909e7",
+      "pages": 8,
+      "styles": [
+        "native text"
+      ],
+      "field": "extra",
+      "language": "en",
+      "expected_quality": "",
+      "quality_notes": "",
+      "note": "Scanned pages with a garbled existing OCR layer."
+    },
+    {
+      "id": "slides-clean-scientific-software",
+      "title": "Writing Clean Scientific Software",
+      "url": "https://zenodo.org/records/8185113/files/WritingCleanScientificSoftware_v4.pdf",
+      "rights_source": "https://zenodo.org/records/8185113",
+      "license": "CC BY 4.0",
+      "sha256": "f6f1c9aeb16a0ae0744b82f31f506c8f70334315bf43f002b5c3a6032f22652e",
+      "pages": 54,
+      "styles": [
+        "native text"
+      ],
+      "field": "extra",
+      "language": "en",
+      "doi": "10.5281/zenodo.8185113",
+      "expected_quality": "",
+      "quality_notes": "",
+      "note": "Slide deck."
+    },
+    {
+      "id": "langsci-history-of-english",
+      "title": "A history of English",
+      "url": "https://zenodo.org/records/6560337/files/346-hejnawalkden-2022.pdf",
+      "rights_source": "https://zenodo.org/records/6560337",
+      "license": "CC BY 4.0",
+      "sha256": "64832b03a9f58625eefb948c024938d99ea7272eb3bd427199a5aaf0a4cc8c16",
+      "pages": 461,
+      "styles": [
+        "native text"
+      ],
+      "field": "extra",
+      "language": "en",
+      "doi": "10.5281/zenodo.6560337",
+      "expected_quality": "",
+      "quality_notes": "",
+      "note": "Monograph (Language Science Press)."
+    },
+    {
+      "id": "ap-high-q-nanocavity",
+      "title": "Pushing the limit of high-Q mode of a single dielectric nanocavity",
+      "url": "https://openresearch-repository.anu.edu.au/bitstreams/c96af1a2-a24d-4265-b53a-fc6b711f75cf/download",
+      "rights_source": "https://doi.org/10.1117/1.AP.3.1.016004",
+      "license": "CC BY 4.0",
+      "sha256": "adf95ca146496a795fa0e0c6e86f323f12acf05c0438e21cbd8d37aa86c5cdde",
+      "pages": 9,
+      "styles": [
+        "native text"
+      ],
+      "field": "physics",
+      "language": "en",
+      "doi": "10.1117/1.AP.3.1.016004",
+      "expected_quality": "",
+      "quality_notes": "",
+      "note": "ANU repository copy of the published SPIE PDF."
+    },
+    {
+      "id": "econ-digital-literacy",
+      "title": "Bridging the digital divide: measuring digital literacy",
+      "url": "https://www.degruyterbrill.com/document/doi/10.5018/economics-ejournal.ja.2018-23/pdf?licenseType=open-access",
+      "rights_source": "https://www.degruyterbrill.com/document/doi/10.5018/economics-ejournal.ja.2018-23/html",
+      "license": "CC BY 4.0",
+      "sha256": "0c49bf91c29026e9b55742401bbb9be057728f44b708e901c5aef2cb5f7eb26f",
+      "pages": 21,
+      "styles": [
+        "native text"
+      ],
+      "field": "economics",
+      "language": "en",
+      "doi": "10.5018/economics-ejournal.ja.2018-23",
+      "expected_quality": "",
+      "quality_notes": "",
+      "note": "Publisher refuses scripted downloads; open url in a browser, save the PDF as benchmarks/public_pdfs/.cache/econ-digital-literacy.pdf, then rerun the fetch tool to verify the checksum."
+    },
+    {
+      "id": "collabra-self-control-inhibition",
+      "title": "Reported Self-control is not Meaningfully Associated with Inhibition-related Executive Function: A Bayesian Analysis",
+      "url": "https://discovery.dundee.ac.uk/ws/files/29130714/134_2571_2_PB.pdf",
+      "rights_source": "https://doi.org/10.1525/collabra.134",
+      "license": "CC BY 4.0",
+      "sha256": "cecf746df3a3ef979c6e7247b15bcc01173f858f538ff26947958e4299f1117d",
+      "pages": 17,
+      "styles": [
+        "native text"
+      ],
+      "field": "psychology",
+      "language": "en",
+      "doi": "10.1525/collabra.134",
+      "expected_quality": "",
+      "quality_notes": "",
+      "note": "University of Dundee repository copy of the published PDF."
+    },
+    {
+      "id": "sp-disfluencies",
+      "title": "Disfluencies as intra-utterance dialogue moves",
+      "url": "https://semprag.org/index.php/sp/article/download/sp.7.9/pdfsp79",
+      "rights_source": "https://semprag.org/index.php/sp/article/view/sp.7.9",
+      "license": "CC BY 3.0",
+      "sha256": "675a99fc9b33abbed14a7e86f8365bcaa961ef06669f4d0a31c772b736e15b56",
+      "pages": 64,
+      "styles": [
+        "native text"
+      ],
+      "field": "humanities-linguistics",
+      "language": "en",
+      "doi": "10.3765/sp.7.9",
+      "expected_quality": "",
+      "quality_notes": ""
+    },
+    {
+      "id": "sp-neg-raising-modals",
+      "title": "Neg-raising and positive polarity: The view from modals",
+      "url": "https://semprag.org/index.php/sp/article/download/sp.8.4/pdf_8_4",
+      "rights_source": "https://semprag.org/index.php/sp/article/view/sp.8.4",
+      "license": "CC BY 3.0",
+      "sha256": "f0495688266d5f5934602490b1d84db30d2a288418bc4b770124ee164e77640e",
+      "pages": 88,
+      "styles": [
+        "native text"
+      ],
+      "field": "humanities-linguistics",
+      "language": "en",
+      "doi": "10.3765/sp.8.4",
+      "expected_quality": "",
+      "quality_notes": ""
+    },
+    {
+      "id": "crbiol-penicillium-domestication",
+      "title": "La domestication des champignons Penicillium du fromage",
+      "url": "https://comptes-rendus.academie-sciences.fr/biologies/item/10.5802/crbiol.15.pdf",
+      "rights_source": "https://comptes-rendus.academie-sciences.fr/biologies/articles/10.5802/crbiol.15/",
+      "license": "CC BY 4.0",
+      "sha256": "f0d4c4f6927bf267734a452ec068528285232dac26295b76e1afcb9823eaf78e",
+      "pages": 23,
+      "styles": [
+        "native text"
+      ],
+      "field": "extra",
+      "language": "fr",
+      "doi": "10.5802/crbiol.15",
+      "expected_quality": "",
+      "quality_notes": ""
+    },
+    {
+      "id": "crmeca-damage-mechanics",
+      "title": "La mécanique de l’endommagement au secours de la mécanique de la rupture : l’évolution de cette idée en un demi-siècle",
+      "url": "https://comptes-rendus.academie-sciences.fr/mecanique/item/10.5802/crmeca.156.pdf",
+      "rights_source": "https://comptes-rendus.academie-sciences.fr/mecanique/articles/10.5802/crmeca.156/",
+      "license": "CC BY 4.0",
+      "sha256": "4860c740d91ca68e88d2cb7cf633ed59fd388af5b2785d4c0aa8a42800733cb6",
+      "pages": 22,
+      "styles": [
+        "native text"
+      ],
+      "field": "extra",
+      "language": "fr",
+      "doi": "10.5802/crmeca.156",
+      "expected_quality": "",
+      "quality_notes": ""
+    },
+    {
+      "id": "report-oa-diamond-journals",
+      "title": "OA Diamond Journals Study. Part 1: Findings",
+      "url": "https://zenodo.org/records/4558704/files/OADJS-Findings.pdf",
+      "rights_source": "https://zenodo.org/records/4558704",
+      "license": "CC BY 4.0",
+      "sha256": "787a350982b0fa2059301b0845721c8ce50c35e456eef32dfdbdddc8dae8308b",
+      "pages": 203,
+      "styles": [
+        "native text"
+      ],
+      "field": "extra",
+      "language": "en",
+      "doi": "10.5281/zenodo.4558704",
+      "expected_quality": "",
+      "quality_notes": "",
+      "note": "Grey-literature report."
     }
   ]
 }

@@ -46,7 +46,9 @@ The venue register is [`public-corpus-journals.md`](public-corpus-journals.md).
 
 ## Selection method
 
-Hierarchical, by web search only, no downloads during selection:
+Hierarchical. Journals were first ranked by web search; articles were picked from OpenAlex
+citation rankings and confirmed on their own pages (details in the
+[article list](public-corpus-articles.md)):
 
 1. **Journal.** Well regarded in the field, publishing CC BY articles (see licence rules). Prefer journals with stable PDF URLs.
 2. **Article.** Popular (highly cited or widely read) within the journal, published since 2000
@@ -96,9 +98,11 @@ threshold. Adding it is part of this work.
 
 ## Workflow
 
-1. Candidate journals per field → maintainer review.
-2. Candidate articles with verified licences → maintainer review.
-3. Host download, SHA-256 pinning, page inspection and quality labels.
+1. Candidate journals per field → maintainer review. *Done; Materials & Design unresolved.*
+2. Candidate articles with verified licences → maintainer review. *Done 2026-10-03: 82 of 84
+   journal slots and 11 extras.*
+3. Host download, SHA-256 pinning, page inspection and quality labels. *Download and pinning done
+   (93 entries); page inspection and quality labels pending.*
 4. Opt-in host test comparing scores to labels; threshold margins reported.
 5. Question set and negative-result metric.
 6. Threshold adjustments in `quality.py`, confirmed on a real library.

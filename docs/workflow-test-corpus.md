@@ -8,8 +8,9 @@ image-classification benchmarks; permission to redistribute their crops should n
 interpreted as a license to redistribute entire PDFs. The live container currently seeds
 two small synthetic PDFs, so it checks integration rather than realistic extraction quality.
 
-`benchmarks/public_pdfs/sources.json` adds four downloaded and inspected public sources,
-with SHA-256 pins, rights references and layout descriptions:
+`benchmarks/public_pdfs/sources.json` holds four downloaded and inspected public sources,
+with SHA-256 pins, rights references and layout descriptions, plus the S3b calibration corpus
+described in [`public-corpus-articles.md`](public-corpus-articles.md). The four original sources:
 
 | Source | Pages | Main purpose |
 | --- | ---: | --- |
@@ -32,6 +33,9 @@ uv run python tools/fetch_public_pdf_corpus.py
 ```
 
 The default cache is gitignored. Downloads are explicit preparation, not part of ordinary CI.
+Some publishers refuse scripted downloads; the tool reports those sources, continues with the rest
+and exits non-zero. Their `note` says to save the PDF from `url` in a browser as
+`.cache/<id>.pdf`; the next run verifies its checksum.
 The long scan is about 43 MB. Public originals are not included in the Docker build context.
 Later real-paper Zotero tests can copy selected cached files into an isolated container as test
 inputs; they must not mount a private library.

@@ -29,8 +29,17 @@ def test_cached_pdf_is_verified_without_network(tmp_path, monkeypatch):
 def test_changed_download_is_not_saved(tmp_path, monkeypatch):
     import io
 
-    monkeypatch.setattr(corpus.urllib.request, "urlopen", lambda *a, **k: io.BytesIO(b"changed upstream"))
+    monkeypatch.setattr(corpus.urllib.request, "urlopen", lambda *a, **k: io.BytesIO(b"%PDF-changed upstream"))
     with pytest.raises(ValueError, match="Checksum mismatch"):
+        corpus.fetch({"id": "fixture", "url": "https://example.org/fixture.pdf", "sha256": "0" * 64}, tmp_path)
+    assert not (tmp_path / "fixture.pdf").exists()
+
+
+def test_blocked_download_points_to_manual_save(tmp_path, monkeypatch):
+    import io
+
+    monkeypatch.setattr(corpus.urllib.request, "urlopen", lambda *a, **k: io.BytesIO(b"<!DOCTYPE html>challenge"))
+    with pytest.raises(ValueError, match="returned no PDF; save it manually"):
         corpus.fetch({"id": "fixture", "url": "https://example.org/fixture.pdf", "sha256": "0" * 64}, tmp_path)
     assert not (tmp_path / "fixture.pdf").exists()
 
