@@ -1969,7 +1969,7 @@ def serialize_context_record(record: object) -> ContextRecord:
     if not isinstance(record, dict):
         raise PublicMcpError("index_unavailable", "The local full-text index returned an invalid response.")
     attachment_key = str(record.get("zotero_attachment_key", ""))
-    return {
+    context: dict[str, object] = {
         "attachment_key": attachment_key,
         "parent_key": str(record.get("zotero_parent_key", "")),
         "title": str(record.get("title", "")),
@@ -1990,6 +1990,7 @@ def serialize_context_record(record: object) -> ContextRecord:
             str(record.get("identity_status", "")),
         ),
     }
+    return cast(ContextRecord, context)
 
 
 _EXTENDED_TEXT_FIELDS = (
