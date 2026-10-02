@@ -19,7 +19,14 @@ All notable changes to this project are documented here. Format loosely follows
   `index-stats`/`library_status`, and listed by the new read-only `list-degraded-records` command.
   The server instructions tell clients that degraded text may be incomplete.
   ([#82](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/82))
-
+- Passage-level retrieval benchmark (roadmap S1a, #107). `benchmarks/retrieval.py` accepts private
+  evidence-span judgments (quotes or offsets, grades, traps, qualifiers) and a `dev`/`heldout`
+  split, and reports graded passage nDCG, evidence-span recall/precision, duplicate rate, locator
+  validity, build time, index size and p50/p95 latency at equal top-k and at equal returned-token
+  budgets, with paired bootstrap intervals and named regressions. Chunk size, boundary
+  (characters, sentences, structure) and overlap sweeps build separate experimental indexes that
+  never replace a generation. A common ranked-result interface covers lexical, semantic and hybrid
+  retrieval; semantic stays unavailable. Only synthetic question sets are tracked.
 - Portable developer test helper and fresh-checkout guide covering prerequisite checks, locked
   host setup, disposable live Zotero tests, public corpus fetching and manual agent environments.
   Test runtimes/caches and diagnostics stay local and ignored; host tests use disposable configs.

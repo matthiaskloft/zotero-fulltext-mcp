@@ -1,0 +1,29 @@
+[
+ {
+  "zotero_parent_key": "PP1",
+  "zotero_attachment_key": "PATT1",
+  "citation_key": "pool2015",
+  "title": "Synthetic pooling",
+  "creators": "A Author",
+  "year": "2015",
+  "text": "# Partial pooling in small-area estimation\n\n## Introduction\n\nSmall areas often contribute only a handful of observations. Direct estimates for such areas are noisy, and analysts therefore borrow strength from the other areas. This synthetic paper studies partial pooling for survey estimates. It is written only for software tests and describes no real study.\n\n## Methods\n\nWe define the shrinkage factor as the ratio of the sampling variance to the total variance. The factor is reused in every later section, so a reader who skips this paragraph cannot interpret the results.\n\nThe group means follow a normal prior with a common location and scale:\n$$ \\theta_j \\sim N(\\mu, \\tau^2) $$\n\nThe prior scale is fixed at tau equal to 0.8 for all runs unless a section says otherwise. Convergence was checked with the identifier DIAG-7731-Q on every chain.\n\n## Results\n\nTable 1 lists the error of direct and pooled estimates.\n\n| Estimator | Mean error | Coverage |\n| --- | --- | --- |\n| Direct | 0.41 | 0.91 |\n| Pooled | 0.27 | 0.94 |\n\nUnder the shrinkage factor defined earlier, pooled estimates cut the mean error for the smallest areas by about one third. The gain vanishes when an area has more than two hundred observations.\n\n## Limitations\n\nThe pooled estimator assumes exchangeable areas. When areas differ systematically the prior is misspecified and pooling can bias the estimates toward the overall mean.\n\n## References\n\nSmith A. Partial pooling in small-area estimation. Synthetic Journal. 2015.\n\nJones B. Shrinkage factor and partial pooling revisited. Synthetic Journal. 2016.\n\nKim C. Partial pooling, shrinkage factor, small-area estimation and DIAG-7731-Q. Synthetic Journal. 2017."
+ },
+ {
+  "zotero_parent_key": "PP2",
+  "zotero_attachment_key": "PATT2",
+  "citation_key": "scale2019",
+  "title": "Synthetic scaling",
+  "creators": "B Author",
+  "year": "2019",
+  "text": "Notes on item scaling\n##Method\nRespondents rated twelve statements on a seven point scale. The scale labels were randomised across forms.\nMethod 2 Pilot\nA pilot with forty respondents showed that two items were misread. Those items were reworded before the main wave.\nItem nonresponse was below two percent for every statement, which is why no imputation was used.\nResults\nReliability reached 0.88 once the reworded items replaced the original ones. The remaining items were unchanged."
+ },
+ {
+  "zotero_parent_key": "PP3",
+  "zotero_attachment_key": "PATT3",
+  "citation_key": "attr2020",
+  "title": "Synthetic attrition",
+  "creators": "C Author",
+  "year": "2020",
+  "text": "# Panel attrition and weighting\n\n## Overview\n\nPanel attrition means that respondents drop out between waves. Attrition biases estimates when dropout relates to the outcome. This synthetic text exists only for tests.\n\n## Weighting\n\nInverse probability weights correct for attrition when the dropout model is correct. The weights are trimmed at the ninety-ninth percentile to limit variance.\n\n## Reference traps\n\nPanel attrition. Panel attrition. Panel attrition. Panel attrition and weighting, panel attrition and weighting."
+ }
+]

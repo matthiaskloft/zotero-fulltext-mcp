@@ -78,7 +78,7 @@ semantic discovery follows. Two rules shape the order:
 | Step | What it does | Issues | Risk | Needs | Why here |
 |------|--------------|--------|------|-------|----------|
 | **S1** (done) | Scores search quality (recall@k, MRR) on a personal question set that is never committed | [#78](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/78) | none | — | Every later step is judged by it. |
-| **S1a** | Extends S1 with private evidence-span judgments, held-out questions, passage metrics and equal returned-token budgets; compares chunk sizes, boundaries and overlap | [#107](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/107) | contained | S1 | Experimental indexes are separate derived artifacts. Establishes the yardstick for S4/S4a and S6a/S6b before promoting defaults. |
+| **S1a** (harness done) | Extends S1 with private evidence-span judgments, held-out questions, passage metrics and equal returned-token budgets; compares chunk sizes, boundaries and overlap | [#107](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/107) | contained | S1 | Experimental indexes are separate derived artifacts. Establishes the yardstick for S4/S4a and S6a/S6b before promoting defaults. |
 | **S2** (done) | Adds `author`, `title`, `citation_key` and year-range filters to `search_fulltext` | [#77](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/77) A + B | none | — | Query code only, with no schema change or rebuild. Fixes the most visible gap: an author search today also matches every reference list that cites that author. |
 | **S3** (implemented, unreleased) | Stores the Zotero fields the index drops (abstract, tags, venue, item type, creator roles, …), and scores each paper's extraction quality | [#76](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/76), [#82](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/82) | contained | — | Needs a rebuild but no reconversion. The abstracts and tags are what S4's new columns and S6 build on. The quality score explains papers that are missing because extraction failed. |
 | **S3a** | Evaluates source-preserving Markdown cleanup before chunking/embedding: Unicode repair, wrapping, conservative dehyphenation and page boilerplate, with original-span mappings | [#111](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/111) | contained | S1a (S4 page maps for page-aware rules) | #107 measures quality; this issue implements candidate transforms. Coordinate storage changes with S4, preserve original evidence and benchmark each rule before choosing defaults. |
@@ -94,8 +94,13 @@ semantic discovery follows. Two rules shape the order:
 ([#99](https://github.com/matthiaskloft/zotero-fulltext-mcp/pull/99)) shipped in v0.11.0. Run the
 S1 harness before and after any change to ranking or chunking. S3 is implemented and awaiting
 release: stored Zotero fields, structured creators, `detected_language` and the extraction-quality
-score, all through a rebuild with no reconversion. **Start here:** S1a for evaluation before
-cleanup/chunking defaults are selected. #77 stays open for its parts C to H.
+score, all through a rebuild with no reconversion. S1a's harness is implemented
+(`benchmarks/retrieval.py` passage mode, `benchmarks/passages.py`, `benchmarks/chunking.py`; see
+[`docs/search-quality.md`](docs/search-quality.md)): evidence-span judgments, held-out split,
+passage metrics, equal top-k and token budgets, paired uncertainty and chunk-size/boundary/overlap
+sweeps on separate experimental indexes. **Start here:** writing the private 80 to 120 question set
+and running the sweeps on a real library; no chunking default is chosen until a sweep has been
+inspected. #77 stays open for its parts C to H.
 
 ### Chunking experiment protocol
 

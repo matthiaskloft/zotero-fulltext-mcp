@@ -1,0 +1,142 @@
+{
+ "format": "zotero-fulltext-retrieval-questions",
+ "version": 1,
+ "synthetic": true,
+ "questions": [
+  {
+   "id": "p01",
+   "type": "conceptual",
+   "split": "dev",
+   "query": "pooled estimates smallest areas mean error",
+   "search_mode": "any_terms",
+   "evidence": [
+    {
+     "citation_key": "pool2015",
+     "quote": "pooled estimates cut the mean error for the smallest areas by about one third",
+     "grade": 3
+    }
+   ],
+   "qualifiers": [
+    {
+     "citation_key": "pool2015",
+     "quote": "The gain vanishes when an area has more than two hundred observations"
+    }
+   ]
+  },
+  {
+   "id": "p02",
+   "type": "exact_identifier",
+   "split": "dev",
+   "query": "DIAG-7731-Q",
+   "search_mode": "phrase",
+   "evidence": [
+    {
+     "citation_key": "pool2015",
+     "quote": "Convergence was checked with the identifier DIAG-7731-Q on every chain."
+    }
+   ],
+   "traps": [
+    {
+     "citation_key": "pool2015",
+     "quote": "Kim C. Partial pooling, shrinkage factor, small-area estimation and DIAG-7731-Q. Synthetic Journal. 2017."
+    }
+   ]
+  },
+  {
+   "id": "p03",
+   "type": "definition_context",
+   "split": "heldout",
+   "query": "shrinkage factor ratio sampling variance",
+   "search_mode": "any_terms",
+   "evidence": [
+    {
+     "citation_key": "pool2015",
+     "quote": "We define the shrinkage factor as the ratio of the sampling variance to the total variance.",
+     "grade": 3
+    },
+    {
+     "citation_key": "pool2015",
+     "quote": "Under the shrinkage factor defined earlier, pooled estimates cut the mean error",
+     "grade": 2
+    }
+   ]
+  },
+  {
+   "id": "p04",
+   "type": "equation",
+   "split": "heldout",
+   "query": "normal prior common location scale",
+   "search_mode": "any_terms",
+   "evidence": [
+    {
+     "citation_key": "pool2015",
+     "quote": "$$ \\theta_j \\sim N(\\mu, \\tau^2) $$"
+    }
+   ]
+  },
+  {
+   "id": "p05",
+   "type": "table",
+   "split": "dev",
+   "query": "direct pooled coverage mean error",
+   "search_mode": "any_terms",
+   "evidence": [
+    {
+     "citation_key": "pool2015",
+     "quote": "| Pooled | 0.27 | 0.94 |"
+    }
+   ]
+  },
+  {
+   "id": "p06",
+   "type": "malformed_heading",
+   "split": "heldout",
+   "query": "pilot misread items reworded",
+   "search_mode": "any_terms",
+   "evidence": [
+    {
+     "attachment_key": "PATT2",
+     "quote": "A pilot with forty respondents showed that two items were misread."
+    }
+   ]
+  },
+  {
+   "id": "p07",
+   "type": "paraphrase",
+   "split": "dev",
+   "query": "inverse probability weights attrition",
+   "search_mode": "any_terms",
+   "evidence": [
+    {
+     "attachment_key": "PATT3",
+     "quote": "Inverse probability weights correct for attrition when the dropout model is correct.",
+     "grade": 3
+    }
+   ],
+   "traps": [
+    {
+     "attachment_key": "PATT3",
+     "quote": "Panel attrition. Panel attrition. Panel attrition. Panel attrition and weighting, panel attrition and weighting."
+    }
+   ]
+  },
+  {
+   "id": "p08",
+   "type": "multi_passage",
+   "split": "heldout",
+   "query": "attrition bias dropout weights trimmed",
+   "search_mode": "any_terms",
+   "evidence": [
+    {
+     "attachment_key": "PATT3",
+     "quote": "Attrition biases estimates when dropout relates to the outcome."
+    },
+    {
+     "attachment_key": "PATT3",
+     "quote": "The weights are trimmed at the ninety-ninth percentile to limit variance.",
+     "grade": 2
+    }
+   ]
+  }
+ ]
+}

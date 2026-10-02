@@ -17,6 +17,15 @@ Question file (see docs/search-quality.md)::
      "questions": [{"id": "q01", "query": "...", "type": "conceptual", "search_mode": "phrase",
                     "expected": [{"citation_key": "..."}, {"attachment_key": "..."}]}]}
 
+Passage mode (roadmap step S1a, issue #107) adds ``--chunking``/``--sweep``/``--passages``: judged
+evidence spans, held-out splits, nDCG and evidence-span metrics at equal top-k and equal returned-token
+budgets, and chunk-size/boundary/overlap sweeps over separate experimental indexes built from
+``--corpus``. See docs/search-quality.md.
+
+    python benchmarks/retrieval.py --questions my.questions.json --corpus <index.jsonl> \
+        --chunking chars:6000:500 --chunking sentence:384:48 --sweep structural \
+        --budget 500,1000,2000 --split heldout
+
 Output contains question ids, ranks and aggregates only: never query text, keys, titles or paths.
 """
 
@@ -26,6 +35,7 @@ import argparse
 import itertools
 import json
 import string
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -45,6 +55,23 @@ DEFAULT_MODE = "all_terms"
 DEFAULT_KS = (5, 10, 20)
 UNTYPED = "untyped"
 ENTRY_KEYS = ("attachment_key", "citation_key")
+SPLITS = ("dev", "heldout")
+DEFAULT_SPLIT = "dev"
+GRADES = (1, 2, 3)
+DEFAULT_GRADE = 3
+
+
+@dataclass(frozen=True)
+class SpanSpec:
+    """A judged span as written in the question file, before quotes are resolved to offsets."""
+
+    field: str
+    key: str
+    start: int | None = None
+    end: int | None = None
+    quote: str | None = None
+    occurrence: int | None = None
+    grade: int = DEFAULT_GRADE
 
 
 @dataclass(frozen=True)
@@ -54,6 +81,10 @@ class Question:
     type: str
     search_mode: str | None
     expected: tuple[dict[str, str], ...]
+    split: str = DEFAULT_SPLIT
+    evidence: tuple[SpanSpec, ...] = ()
+    traps: tuple[SpanSpec, ...] = ()
+    qualifiers: tuple[SpanSpec, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -156,7 +187,16 @@ def load_questions(path: Path) -> tuple[list[Question], bool]:
         mode = item.get("search_mode")
         if mode is not None and mode not in SEARCH_MODES:
             raise SystemExit(f"Question {qid}: search_mode must be one of {sorted(SEARCH_MODES)}.")
+        split = item.get("split", DEFAULT_SPLIT)
+        if split not in SPLITS:
+            raise SystemExit(f"Question {qid}: split must be one of {list(SPLITS)}.")
+        evidence = _parse_spans(qid, item, "evidence", graded=True)
+        traps = _parse_spans(qid, item, "traps", graded=False)
+        qualifiers = _parse_spans(qid, item, "qualifiers", graded=False)
         expected = item.get("expected")
+        if expected is None and evidence:
+            # Papers with judged evidence are the expected papers, in first-seen order.
+            expected = [{field: key} for field, key in dict.fromkeys((s.field, s.key) for s in evidence)]
         if not isinstance(expected, list) or not expected:
             raise SystemExit(f'Question {qid}: "expected" must be a non-empty list.')
         entries: list[dict[str, str]] = []
@@ -171,8 +211,41 @@ def load_questions(path: Path) -> tuple[list[Question], bool]:
             if not isinstance(value, str) or not value.strip():
                 raise SystemExit(f"Question {qid}: expected keys must be non-empty strings.")
             entries.append({present[0]: value})
-        questions.append(Question(qid, query, qtype, mode, tuple(entries)))
+        questions.append(Question(qid, query, qtype, mode, tuple(entries), split, evidence, traps, qualifiers))
     return questions, synthetic
+
+
+def _parse_spans(qid: str, item: dict, name: str, *, graded: bool) -> tuple[SpanSpec, ...]:
+    raw = item.get(name, [])
+    if not isinstance(raw, list):
+        raise SystemExit(f"Question {qid}: {name!r} must be a list.")
+    allowed = {*ENTRY_KEYS, "quote", "start_char", "end_char", "occurrence"} | ({"grade"} if graded else set())
+    specs: list[SpanSpec] = []
+    for entry in raw:
+        if not isinstance(entry, dict) or not set(entry) <= allowed:
+            raise SystemExit(f"Question {qid}: each {name} entry may only use {sorted(allowed)}.")
+        present = [k for k in ENTRY_KEYS if k in entry]
+        if len(present) != 1 or not isinstance(entry[present[0]], str) or not entry[present[0]].strip():
+            raise SystemExit(f"Question {qid}: each {name} entry needs exactly one non-empty key.")
+        offsets = "start_char" in entry or "end_char" in entry
+        quote = entry.get("quote")
+        if offsets == (quote is not None):
+            raise SystemExit(f"Question {qid}: each {name} entry needs a quote or start_char and end_char.")
+        start, end = entry.get("start_char"), entry.get("end_char")
+        if offsets and not (
+            all(isinstance(v, int) and not isinstance(v, bool) for v in (start, end)) and 0 <= start < end
+        ):
+            raise SystemExit(f"Question {qid}: {name} offsets must be integers with 0 <= start_char < end_char.")
+        if quote is not None and (not isinstance(quote, str) or not quote.strip()):
+            raise SystemExit(f"Question {qid}: {name} quotes must be non-empty strings.")
+        occurrence = entry.get("occurrence")
+        if occurrence is not None and (not isinstance(occurrence, int) or isinstance(occurrence, bool) or occurrence < 1):
+            raise SystemExit(f"Question {qid}: occurrence must be a positive integer.")
+        grade = entry.get("grade", DEFAULT_GRADE)
+        if grade not in GRADES or isinstance(grade, bool):
+            raise SystemExit(f"Question {qid}: grade must be one of {list(GRADES)}.")
+        specs.append(SpanSpec(present[0], entry[present[0]], start, end, quote, occurrence, grade))
+    return tuple(specs)
 
 
 # --- running ------------------------------------------------------------------------------------
@@ -366,10 +439,143 @@ def _parse_ks(text: str) -> list[int]:
     return ks
 
 
+# --- passage mode (S1a) -------------------------------------------------------------------------
+
+
+def _parse_budgets(text: str) -> list[int]:
+    try:
+        budgets = sorted({int(part) for part in text.split(",")})
+    except ValueError:
+        raise SystemExit("--budget must be comma-separated integers, e.g. 500,1000,2000.") from None
+    if not budgets or budgets[0] < 1:
+        raise SystemExit("--budget values must be positive.")
+    return budgets
+
+
+def build_passage_report(
+    questions: list[Question],
+    *,
+    retrievers: list,
+    builds: dict[str, dict],
+    channels: list[str],
+    modes: list[str],
+    ks: list[int],
+    budgets: list[int],
+    docs,
+    tokenizer,
+) -> dict:
+    """Run every (retriever, channel, mode) configuration and compare each with the first live one."""
+    import passages
+
+    judgments = {q.id: passages.resolve_judgments(q, docs) for q in questions if q.evidence}
+
+    def score_paper(ranked, q):
+        return score_question(ranked, list(q.expected), ks)
+
+    configs: list[dict] = []
+    runs: list[tuple[dict, dict]] = []
+    for lexical in retrievers:
+        for channel in channels:
+            channel_retriever = {
+                passages.LEXICAL: lexical,
+                passages.SEMANTIC: passages.SemanticRetriever(),
+                passages.HYBRID: passages.HybridRetriever(lexical, passages.SemanticRetriever()),
+            }[channel]
+            for mode in modes:
+                label = lexical.name if channel == passages.LEXICAL else channel_retriever.name
+                config = {"label": label, "channel": channel, "mode": mode, "build": builds.get(lexical.name)}
+                reason = channel_retriever.unavailable_reason()
+                if reason:
+                    configs.append({**config, "status": "unavailable", "reason": reason})
+                    continue
+                run = passages.run_passage_configuration(
+                    channel_retriever, questions, mode, judgments, docs, ks, budgets, score_paper
+                )
+                entry = {
+                    **config,
+                    "status": "ok",
+                    "paper": aggregate([r.paper for r in run["results"].values()]),
+                    "paper_by_type": {
+                        t: aggregate([run["results"][q.id].paper for q in questions if q.type == t])
+                        for t in sorted({q.type for q in questions})
+                    },
+                    "passage": run["passage"],
+                    "judged_questions": run["judged"],
+                    "latency_ms": run["latency_ms"],
+                    "invalid_queries": run["invalid_queries"],
+                }
+                configs.append(entry)
+                runs.append((entry, run))
+    changes = []
+    if runs:
+        base_entry, base_run = runs[0]
+        for entry, run in runs[1:]:
+            changes.append(
+                {
+                    "baseline": f"{base_entry['label']}/{base_entry['channel']}/{base_entry['mode']}",
+                    "against": f"{entry['label']}/{entry['channel']}/{entry['mode']}",
+                    "rows": passages.compare_passage(base_run, run, ks, budgets),
+                }
+            )
+    return {
+        "k": ks,
+        "budgets": budgets,
+        "tokenizer": {"name": tokenizer.name, "version": tokenizer.version},
+        "splits": sorted({q.split for q in questions}),
+        "judged_questions": len(judgments),
+        "configurations": configs,
+        "changes": changes,
+    }
+
+
+def run_passage_mode(args, questions: list[Question], ks: list[int], modes: list[str]) -> dict:
+    import chunking
+    import passages
+
+    tokenizer = chunking.get_tokenizer(args.tokenizer)
+    budgets = _parse_budgets(args.budget)
+    channels = list(dict.fromkeys(args.channel or [passages.LEXICAL]))
+    specs = [chunking.parse_spec(text) for text in args.chunking or []]
+    for strategy in args.sweep or []:
+        specs.extend(chunking.sweep_specs(strategy))
+    specs = list(dict.fromkeys(specs))
+    docs = chunking.load_corpus(args.corpus) if args.corpus else None
+    if specs and docs is None:
+        raise SystemExit("--chunking and --sweep build experimental indexes and need --corpus.")
+    try:
+        expansions = sorted({int(v) for v in args.expand.split(",")})
+    except ValueError:
+        raise SystemExit("--expand must be comma-separated integers.") from None
+    if expansions[0] < 0:
+        raise SystemExit("--expand values must be non-negative.")
+    labels = _labels(args.label, len(args.db or []))
+    retrievers: list = []
+    builds: dict[str, dict] = {}
+    with tempfile.TemporaryDirectory(prefix="s1a-experiments-") as scratch:
+        root = args.experiment_dir or Path(scratch)
+        try:
+            for db, label in zip(args.db or [], labels, strict=True):
+                retrievers.append(passages.GenerationRetriever(db, tokenizer, label))
+            for spec in specs:
+                name = f"{spec.strategy}-{spec.target}-{spec.overlap}{chunking.EXPERIMENT_SUFFIX}"
+                summary = chunking.build_experiment_index(docs, spec, tokenizer, root / name)
+                for expand in expansions:
+                    retriever = passages.ExperimentRetriever(summary, expand)
+                    builds[retriever.name] = summary.to_dict()
+                    retrievers.append(retriever)
+            return build_passage_report(
+                questions, retrievers=retrievers, builds=builds, channels=channels, modes=modes,
+                ks=ks, budgets=budgets, docs=docs, tokenizer=tokenizer,
+            )
+        finally:
+            for retriever in retrievers:
+                getattr(retriever, "close", lambda: None)()
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--questions", type=Path, required=True, help="Local *.questions.json file.")
-    parser.add_argument("--db", type=Path, action="append", required=True, help="Generation index.sqlite; repeatable.")
+    parser.add_argument("--db", type=Path, action="append", help="Generation index.sqlite; repeatable.")
     parser.add_argument("--label", action="append", help="Name for each --db (default A, B, ...).")
     parser.add_argument(
         "--mode", action="append", choices=[PER_QUESTION, *sorted(SEARCH_MODES)],
@@ -377,12 +583,53 @@ def main(argv: list[str] | None = None) -> None:
     )
     parser.add_argument("--k", default=",".join(map(str, DEFAULT_KS)), help="Comma-separated cutoffs.")
     parser.add_argument("--json", action="store_true", help="Emit JSON instead of Markdown.")
+    parser.add_argument("--split", choices=["all", *SPLITS], default="all", help="Score only this split.")
+    passage = parser.add_argument_group("passage mode (S1a)")
+    passage.add_argument("--passages", action="store_true", help="Score passages for the --db generations.")
+    passage.add_argument(
+        "--corpus", type=Path,
+        help="Index JSONL export or JSON list: record texts for quotes, locators and experiments.",
+    )
+    passage.add_argument(
+        "--chunking", action="append", help="Experimental index spec strategy:target[:overlap]; repeatable."
+    )
+    passage.add_argument(
+        "--sweep", action="append", choices=["sentence", "structural"],
+        help="128/256/384/512/768 tokens, each with zero and bounded overlap.",
+    )
+    passage.add_argument("--expand", default="0", help="Neighbour-chunk expansion widths to evaluate (default 0).")
+    passage.add_argument(
+        "--channel", action="append", choices=["lexical", "semantic", "hybrid"],
+        help="Retrieval channel; repeatable (default lexical). Semantic stays unavailable.",
+    )
+    passage.add_argument("--budget", default="500,1000,2000", help="Returned-token budgets.")
+    passage.add_argument("--tokenizer", default="regex", help="regex (default) or tiktoken:<encoding>.")
+    passage.add_argument(
+        "--experiment-dir", type=Path,
+        help="Where to write experimental indexes (default: a scratch folder removed afterwards).",
+    )
     args = parser.parse_args(argv)
 
+    passage_mode = bool(args.passages or args.chunking or args.sweep)
+    if not args.db and not (args.chunking or args.sweep):
+        parser.error("pass --db, --chunking or --sweep.")
     ks = _parse_ks(args.k)
     questions, _ = load_questions(args.questions)
-    labels = _labels(args.label, len(args.db))
+    if args.split != "all":
+        questions = [q for q in questions if q.split == args.split]
+        if not questions:
+            raise SystemExit(f"No questions in split {args.split!r}.")
     modes = list(dict.fromkeys(args.mode or [PER_QUESTION]))
+    if passage_mode:
+        from passages import render_passage_markdown
+
+        report = run_passage_mode(args, questions, ks, modes)
+        if args.json:
+            print(json.dumps(report, indent=2))
+        else:
+            print(render_passage_markdown(report), end="")
+        return
+    labels = _labels(args.label, len(args.db))
     report = build_report(questions, args.db, labels, modes, ks)
     if args.json:
         print(json.dumps(report, indent=2))
