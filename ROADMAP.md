@@ -53,7 +53,9 @@ citation key, and read chunks with verified locators. Version 0.11.0 adds the ca
 library layout, performance baselines, end-to-end tests, a `guide` tool, the opt-in Zotero
 write commands (`import-doi --with-pdf`, `find-pdf`, `link-pdf --url`) with duplicate and PDF checks
 that read live from Zotero, a retrieval-quality harness, and `author`, `title`, `citation_key` and
-year-range filters on search. The completed work is listed under "History" at the end.
+year-range filters on search. The completed work is listed under "History" at the end. Since that release, merged work
+adds portable developer-test tooling, a pinned public PDF corpus, a disposable real-Zotero
+container and a manual independent-agent acquisition workflow (see `CHANGELOG.md`, Unreleased).
 
 There are three tracks of remaining work. They mostly don't depend on each other. The exceptions are
 noted in each table's "Needs" column.
@@ -64,25 +66,79 @@ The goal is to make search find more of the right papers. Lexical search improve
 semantic discovery follows. Two rules shape the order:
 
 1. **Measure before changing defaults.** Step S1 builds the yardstick. Any later step that changes
-   ranking or chunking is checked against it before its behavior becomes the default.
+   ranking or chunking is checked against it before its behavior becomes the default. S1a extends
+   the completed paper-level harness with evidence-span judgments and equal returned-token budgets.
 2. **Reconvert and re-chunk once.** Page offsets, new chunking, section tags, stemming and new FTS
    columns all need a new index schema, and some need reconversion. They ship together in S4, so a
-   library is reconverted once and locators are invalidated once.
+   library is reconverted once and locators are invalidated once. S4 retains source blocks and
+   parent links so later context assembly and embedding experiments reuse the same source spans.
+   Boundary/size sweeps run against separate experimental indexes before choosing the production
+   chunking; they do not repeatedly replace a user's current generation.
 
 | Step | What it does | Issues | Risk | Needs | Why here |
 |------|--------------|--------|------|-------|----------|
 | **S1** (done) | Scores search quality (recall@k, MRR) on a personal question set that is never committed | [#78](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/78) | none | — | Every later step is judged by it. |
+| **S1a** | Extends S1 with private evidence-span judgments, held-out questions, passage metrics and equal returned-token budgets; compares chunk sizes, boundaries and overlap | [#107](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/107) | contained | S1 | Experimental indexes are separate derived artifacts. Establishes the yardstick for S4/S4a and S6a/S6b before promoting defaults. |
 | **S2** (done) | Adds `author`, `title`, `citation_key` and year-range filters to `search_fulltext` | [#77](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/77) A + B | none | — | Query code only, with no schema change or rebuild. Fixes the most visible gap: an author search today also matches every reference list that cites that author. |
 | **S3** | Stores the Zotero fields the index drops (abstract, tags, venue, item type, creator roles, …), and scores each paper's extraction quality | [#76](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/76), [#82](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/82) | contained | — | Needs a rebuild but no reconversion. The abstracts and tags are what S4's new columns and S6 build on. The quality score explains papers that are missing because extraction failed. |
-| **S4** | Records page offsets during conversion, splits chunks at headings and paragraphs with page ranges, and tags each chunk's section (front matter, body, references, appendix). In the same schema bump it adds stemming, prefix and proximity search, and abstract/tag columns. | [#79](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/79) → [#80](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/80) → [#81](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/81), #77 C, D, E, F | contained | S1, S3 | The single reconversion and schema bump for this track. Rewrites derived Markdown and the index, never PDFs or Zotero. Existing locators answer `stale_locator` afterwards. |
+| **S3a** | Evaluates source-preserving Markdown cleanup before chunking/embedding: Unicode repair, wrapping, conservative dehyphenation and page boilerplate, with original-span mappings | [#111](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/111) | contained | S1a (S4 page maps for page-aware rules) | #107 measures quality; this issue implements candidate transforms. Coordinate storage changes with S4, preserve original evidence and benchmark each rule before choosing defaults. |
+| **S4** | Records page offsets; builds deterministic, token-bounded heading/paragraph chunks with exact source spans, block IDs, parent/child and neighbor links, page ranges and section tags (front matter, body, references, appendix). Adds stemming, prefix/proximity search and abstract/tag columns in the same schema bump. | [#79](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/79) → [#80](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/80) → [#81](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/81), #77 C, D, E, F | contained | S1a, S3 | The single production reconversion and schema bump. Retains the hierarchy S4a/S6a need. Rewrites derived Markdown and the index, never PDFs or Zotero; changed chunks invalidate old locators. |
+| **S4a** | Compares leaf retrieval, bounded parent/neighbor expansion and POMA-style deduplicated path assembly, with per-span citations and explicit gaps | [#108](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/108) | contained | S1a, S4 | First structural retrieval experiment; requires no embedding service. Reuses S4 source spans and measures assembly separately from ranking. |
 | **S5** | Adds a section filter to search, and search over reference-list entries ("which of my papers cite X?") | #77 H, #81 | none | S4 | Query code on top of S4's section tags. |
 | **S6** | Optional semantic paper discovery with a local embedding model, as a separate opt-in index and MCP tool | [#1](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/1) | contained | S1, S3 (S4 for passage embeddings) | Built as its own artifact, so publishing the full-text index never depends on an embedding service running. S1's numbers decide whether hybrid ranking or passage embeddings are worth adding. The phased plan is in a comment on #1. |
+| **S6a** | If passage retrieval is justified, compares independent leaf embeddings with bounded ancestor-context chunkset embeddings and lexical/semantic/hybrid ranking | [#109](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/109) | contained | S1a, S4a, S6 | Implements #1 phase 4 as an explicit experiment. Uses identical source spans and separately ablates embeddings and assembly; semantic artifacts remain optional and independently publishable. |
+| **S6b** | Compares late chunking with independent embeddings on fixed source spans and model weights, keeping assembly fixed | [#110](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/110) | contained | S1a, S6a | A separate embedding-order experiment after the leaf/chunkset baseline. Uses bounded document windows with explicit ownership; no further source re-chunk. |
 | **S7** | Citation graph within the library, built from reference entries | [#83](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/83) | contained | S3, S4 | Future. It is filed now so that S4's reference-entry format keeps what it needs. |
 
 **Status:** S1 ([#98](https://github.com/matthiaskloft/zotero-fulltext-mcp/pull/98)) and S2
-([#99](https://github.com/matthiaskloft/zotero-fulltext-mcp/pull/99)) are done and unreleased. Run the
-S1 harness before and after any change to ranking or chunking. **Start here:** S3, which needs a
-rebuild but no reconversion. #77 stays open for its parts C to H.
+([#99](https://github.com/matthiaskloft/zotero-fulltext-mcp/pull/99)) shipped in v0.11.0. Run the
+S1 harness before and after any change to ranking or chunking. **Start here:** S3 for metadata (rebuild, no reconversion), and S1a for
+evaluation before cleanup/chunking defaults are selected. #77 stays open for its parts C to H.
+
+### Chunking experiment protocol
+
+The design and research rationale are in
+[`docs/chunking-research-proposal.md`](docs/chunking-research-proposal.md). Delivery order is
+S1a evaluation → S4 source hierarchy → S4a context assembly → S6a chunkset embeddings/hybrid
+retrieval → S6b late embeddings; S6 paper discovery can proceed independently once S3 is ready.
+
+S1a extends the existing lexical-only runner with a common ranked-result interface for lexical,
+semantic and hybrid retrieval, using the same questions and paper/span judgments. Semantic runs
+remain unavailable until an embedding backend exists; benchmark support does not imply a shipped
+semantic retrieval implementation.
+
+Evaluate pre-embedding preprocessing in two stages. Before any embedding call, measure source
+coverage and dropped/duplicated text, offset/hash round-trips, heading/parent correctness, section
+classification, equation/table/caption integrity, chunk-size distributions and complete embedding
+input token budgets (including prefixes/ancestors). Use synthetic fixtures with known structure
+and reviewed private examples; expose failures rather than silently truncating input. Then compare
+each preprocessing variant through lexical, semantic and hybrid retrieval with source documents,
+questions, embedding model and ranking settings held fixed. Record extraction/preprocessing,
+chunking, tokenizer and model versions so retrieval gains can be attributed to the right stage.
+S3a ([#111](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/111)) owns the cleanup
+implementations and source mappings; S1a owns their evaluation. Develop both before selecting S4
+chunking defaults, with page-aware cleanup following S4's page provenance work.
+
+S4 starts with extracted headings and explicit Markdown blocks, with a bounded sentence/paragraph
+fallback for flat or malformed Markdown. Preserve equations, captions and table source spans.
+A pinned tokenizer measures the proposed 384-token target and 512-token ordinary-prose ceiling;
+these are starting candidates, not chosen defaults. S1a sweeps 128/256/384/512/768-token targets,
+zero versus bounded overlap, and current character slices versus sentence and structural boundaries.
+Semantic breakpoints remain an experimental challenger; generated prefixes/propositions and
+trained boundary predictors are deferred until simpler methods justify their cost.
+
+Evaluate on private held-out questions with original evidence annotations. Alongside paper
+recall/MRR, record passage nDCG, evidence-span recall/precision, duplicate rate, locator validity,
+build/storage cost and p50/p95 latency. Compare equal top-k and equal returned-token budgets,
+including ancestor and expansion text. Ablate embeddings and assembly independently, report
+paired uncertainty, and inspect exact-match regressions, missing qualifiers, bad headings and
+cross-section dependencies before promoting any default.
+
+Source blocks and hashes remain authoritative. Assembled non-contiguous context carries multiple
+original locators and a display-to-source mapping, never one fabricated continuous range or chunk
+hash. Repeated headings/table headers and embedding prefixes are identified as derived retrieval
+content. The optional semantic index records source generation, chunking/tokenizer versions and
+model identity; lexical search remains available when it is missing or stale.
 
 ## Track 2: Hardening leftovers
 
@@ -140,7 +196,7 @@ risk column here is about Zotero and dependencies, not the converted library.
 | **M2** | Dismisses the 22 Dependabot alerts on `uv.lock` and records why. The optional `[marker]` extra pins `pillow<11` and, before Marker 2.0, `transformers<5`. Marker 2.0 lifts the pins but needs Docker or a `llama-server` binary. Decision: stay on marker-pdf 1.10.2, because the pipeline only processes the user's own PDFs. | [#92](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/92) | none | — | The decision is made. What remains is the dismissal and a note. Revisit when Marker 2.0 no longer needs Docker. |
 | **M3** | An opt-in review-and-apply workflow for Zotero item writes from MCP, as a separate entry point because the default server stays read-only. The CLI write commands (`import-doi`, `find-pdf`, `link-pdf`) already exist. | [#34](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/34) | contained | M1 | It builds on the same duplicate check, so M1 must land first. |
 | **M4** | A sidecar library of the reader's own comments, linked to source passages. #3 tracks it together with #1. | [#2](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/2), [#3](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/3) | contained | S4, S6 | Links to passages by locator, and S4 re-chunks the library once. Building it earlier would mean re-linking every comment. |
-| **M5** | Image OCR (`ocr-images`): stress-test on a large library, then decide whether to document it in the release notes. It is packaged but left out of the notes by decision. | — | none | a large-library run | No date. It is released once the stress test passes (see `CHANGELOG.md`). |
+| **M5** | Image OCR (`ocr-images`): stress-test on a large library, then decide whether to document it in the release notes. It is packaged but left out of the notes by decision. | — | none | a large-library run | No date. It is announced once the stress test passes (see `CHANGELOG.md`). |
 
 **Status:** M1 is done ([#97](https://github.com/matthiaskloft/zotero-fulltext-mcp/pull/97)); its
 live path is checked against Zotero's source and a fake bridge, and `pytest -m live_zotero` has not
@@ -169,8 +225,8 @@ These are the completed items, in the order they shipped. The source plans are
 | Package 5 steps 2 and 4: schema-compatibility and adversarial tests | Old indexes migrate or fail with a recovery instruction; hostile generation IDs, path escapes and injected instructions are tested. |
 | Package 3 steps 4 and 7 (read-only half): `audit-library`, `library_status` | Per-attachment drift report and a status tool. This also added `source_sha256` and `indexed_at` to index records, because `source_changed` can't be computed without them. |
 | Package 4B step 2: SQL aggregates and truthful status | `index-stats` (formerly `coverage-report`) and `library_status`, which never conflates indexed counts with library coverage (PRs #8–#10). |
-| Canonical library layout, performance baselines, end-to-end tests (unreleased) | `convert-verified`/`convert-new` write to `library/markdown` and `library/images`; recorded latency baselines and a passage-lookup index; real-process fixture tests (PRs #84–#87). |
-| Zotero write CLI (unreleased) | `import-doi`, `find-pdf`, `link-pdf --url`, `import-doi --with-pdf`, and a `guide("writes")` listing of every write path (PRs #89, #90). |
-| Retrieval-quality harness and search filters (unreleased) | `benchmarks/retrieval.py` scores recall@k and MRR on a private question set and compares runs (S1, PR #98). `search_fulltext` accepts `author`, `title`, `citation_key` and year-range filters (S2, #77 A and B, PR #99). |
-| Live pre-write checks (unreleased) | `import-doi`'s duplicate check and `check-pdf` read live through debug-bridge, fall back to a verified copy, and refuse when neither works (M1, #91, PR #97). Conversion run folders got microsecond names after a collision made CI flaky (PR #101). |
+| Canonical library layout, performance baselines, end-to-end tests (v0.11.0) | `convert-verified`/`convert-new` write to `library/markdown` and `library/images`; recorded latency baselines and a passage-lookup index; real-process fixture tests (PRs #84–#87). |
+| Zotero write CLI (v0.11.0) | `import-doi`, `find-pdf`, `link-pdf --url`, `import-doi --with-pdf`, and a `guide("writes")` listing of every write path (PRs #89, #90). |
+| Retrieval-quality harness and search filters (v0.11.0) | `benchmarks/retrieval.py` scores recall@k and MRR on a private question set and compares runs (S1, PR #98). `search_fulltext` accepts `author`, `title`, `citation_key` and year-range filters (S2, #77 A and B, PR #99). |
+| Live pre-write checks (v0.11.0) | `import-doi`'s duplicate check and `check-pdf` read live through debug-bridge, fall back to a verified copy, and refuse when neither works (M1, #91, PR #97). Conversion run folders got microsecond names after a collision made CI flaky (PR #101). |
 | Issue-driven work through v0.10.0 | Checkpointed conversion, selective index repair, provenance reconversion, `search_within_fulltext`, `lookup_citation_key`, a first-use guide and more. See `CHANGELOG.md`. |
