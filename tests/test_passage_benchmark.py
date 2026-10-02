@@ -206,6 +206,22 @@ class ExperimentIndexTests(unittest.TestCase):
              "uniquepathword": False, "png": False},
         )
 
+    def test_a_directory_with_a_hash_or_percent_sign_is_opened_read_only_at_the_right_path(self):
+        spec = chunking.parse_spec("sentence:40:0")
+        with tempfile.TemporaryDirectory() as tmp:
+            for name in ("scratch#1", "a%41#x"):
+                path = Path(tmp) / name / f"a{chunking.EXPERIMENT_SUFFIX}"
+                summary = chunking.build_experiment_index(self.docs, spec, TOKENIZER, path)
+                chunking.build_experiment_index(self.docs, spec, TOKENIZER, path)  # marker check reopens it
+                con = chunking.open_experiment(summary.path)
+                try:
+                    self.assertGreater(con.execute("SELECT COUNT(*) FROM chunks").fetchone()[0], 0)
+                    with self.assertRaises(Exception):
+                        con.execute("CREATE TABLE x (y)")
+                finally:
+                    con.close()
+            self.assertEqual(sorted(p.name for p in Path(tmp).iterdir()), ["a%41#x", "scratch#1"])
+
     def test_refuses_to_build_inside_a_production_output_root(self):
         spec = chunking.parse_spec("sentence:40:0")
         with tempfile.TemporaryDirectory() as tmp:
@@ -272,6 +288,22 @@ class MetricTests(unittest.TestCase):
         self.assertLess(big.ndcg, small.ndcg)
         self.assertAlmostEqual(small.ndcg, 1.0)
         self.assertLessEqual(big.ndcg, 1.0)
+
+    def test_repeated_overlapping_or_expanded_context_earns_no_new_credit(self):
+        judgments = _judgments(_ev("A", 0, 30), _ev("A", 100, 130))
+        both = _hit("A", 0, 130)
+        single = passages.passage_metrics([both], judgments, None, ideal_n=2).ndcg
+        self.assertAlmostEqual(single, 1 / (1 + 1 / 1.5849625007211562))
+        for hits in (
+            [both, both],  # duplicate
+            [both, _hit("A", 50, 120)],  # overlapping chunk touching the second span
+            [both, _hit("A", 90, 140)],
+        ):
+            self.assertAlmostEqual(passages.passage_metrics(hits, judgments, None, ideal_n=2).ndcg, single)
+        expanded = passages.PassageHit("A", "c-A", (passages.HitSpan(0, 30), passages.HitSpan(100, 130)), 10, 10)
+        self.assertAlmostEqual(passages.passage_metrics([expanded, _hit("A", 100, 130)], judgments, None, ideal_n=2).ndcg, single)
+        # a genuinely new span in a later hit still counts
+        self.assertGreater(passages.passage_metrics([_hit("A", 0, 30), _hit("A", 100, 130)], judgments, None, ideal_n=2).ndcg, single)
 
     def test_a_miss_and_an_empty_list_score_zero(self):
         judgments = _judgments(_ev("A", 0, 10))

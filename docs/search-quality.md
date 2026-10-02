@@ -170,7 +170,8 @@ default 500,1000,2000):
 
 - **paper recall@k and MRR**, with papers ranked by their best passage;
 - **nDCG**: graded, each evidence span credited once, and each passage credits only the
-  highest-grade not-yet-credited span it overlaps, so repeated hits earn nothing and nDCG stays
+  highest-grade span it overlaps that no earlier passage already exposed (every span it
+  overlaps then counts as exposed), so repeated or overlapping context earns nothing and nDCG stays
   within 1. The ideal list holds every judged span (cut at k for top-k), so it does not shrink
   when a configuration returns fewer passages; a passage covering several spans is rewarded by
   spanR/charR, not by nDCG;

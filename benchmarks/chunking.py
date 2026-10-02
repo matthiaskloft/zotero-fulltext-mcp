@@ -34,6 +34,7 @@ from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from zotero_pdf_text.zotero_db import read_only_uri
 from zotero_pdf_text.fts import _chunk_text, chunk_sha256, fts_body_text, image_markup_spans
 
 STRATEGIES = ("chars", "sentence", "structural")
@@ -461,7 +462,7 @@ def assert_safe_experiment_path(path: Path) -> None:
             raise SystemExit("Refusing to build an experimental index inside a production output root.")
     if resolved.exists():
         try:
-            con = sqlite3.connect(f"file:{resolved.as_posix()}?mode=ro", uri=True)
+            con = sqlite3.connect(read_only_uri(resolved, immutable=False), uri=True)
             try:
                 con.execute(f"SELECT 1 FROM {MARKER_TABLE} LIMIT 1")
             finally:
@@ -558,7 +559,7 @@ def open_experiment(path: Path) -> sqlite3.Connection:
     """Read-only connection to an experimental index (never a production one)."""
     if not path.exists():
         raise FileNotFoundError(path)
-    con = sqlite3.connect(f"file:{path.resolve().as_posix()}?mode=ro", uri=True)
+    con = sqlite3.connect(read_only_uri(path.resolve(), immutable=False), uri=True)
     con.row_factory = sqlite3.Row
     return con
 

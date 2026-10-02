@@ -419,19 +419,21 @@ def passage_metrics(
     and a ``1/log2(rank+1)`` discount, so repeated hits on the same evidence earn nothing. The ideal
     list has one hit per evidence span, cut at ``ideal_n`` (default: every evidence span, so the
     ideal does not shrink with the number of hits a configuration returns). A hit credits only the
-    highest-grade uncredited span it overlaps: nDCG stays within 1 and measures passage-level
+    highest-grade span it overlaps that no earlier hit already exposed; every span it
+    overlaps counts as exposed, so repeating context earns nothing: nDCG stays within 1 and measures passage-level
     granularity, while span_recall/char_recall credit every span a hit covers.
     """
     evidence = judgments.evidence
     ideal_n = len(evidence) if ideal_n is None else ideal_n
-    credited: set[int] = set()
+    exposed: set[int] = set()  # evidence already inside an earlier hit
     dcg = 0.0
     for rank, hit in enumerate(hits, start=1):
-        options = [(-s.grade, i) for i, s in enumerate(evidence) if i not in credited and _overlaps(s, hit)]
+        overlapping = {i for i, s in enumerate(evidence) if _overlaps(s, hit)}
+        options = [(-evidence[i].grade, i) for i in overlapping - exposed]
         if options:
             _, i = min(options)
-            credited.add(i)
             dcg += (2 ** evidence[i].grade - 1) / math.log2(rank + 1)
+        exposed |= overlapping  # repeated context earns nothing, even for a span it also covers
     ideal = sorted((s.grade for s in evidence), reverse=True)[:ideal_n]
     idcg = sum((2**g - 1) / math.log2(r + 1) for r, g in enumerate(ideal, start=1))
 
