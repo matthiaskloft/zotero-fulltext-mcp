@@ -48,8 +48,7 @@ The venue register is [`public-corpus-journals.md`](public-corpus-journals.md).
 
 Hierarchical, by web search only, no downloads during selection:
 
-1. **Journal.** Fully open access (not hybrid), well regarded in the field, articles under a
-   verifiable Creative Commons licence or public domain. Prefer journals with stable PDF URLs.
+1. **Journal.** Well regarded in the field, publishing CC BY articles (see licence rules). Prefer journals with stable PDF URLs.
 2. **Article.** Popular (highly cited or widely read) within the journal, published since 2000
    unless chosen as a historical case. Within each field, vary layout across articles:
    two-column vs single-column, table- or equation-heavy, short report vs long article.
@@ -58,11 +57,10 @@ Hierarchical, by web search only, no downloads during selection:
 
 ### Licence rules
 
-- Verify on the article or record page, not the journal's general policy page. Record the
-  licence and version (`CC-BY-4.0`, ...).
-- Flag NC, ND and SA variants in the record; they are acceptable for metadata-only pinning but
-  restrict any derived fixture.
-- Reject items without a verifiable open licence.
+Derived material (extracted text, quoted evidence spans, small fixtures) must be safe to commit to
+this public, MIT-licensed repository. Accepted: CC BY (any version), CC0, public domain. Rejected:
+NC, ND, SA, publisher-specific licences and anything unverifiable. The article's own licence page
+decides. Details and per-journal status are in the venue register.
 
 ## Record format
 
