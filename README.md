@@ -303,6 +303,13 @@ only the summary:
 & $python -m zotero_pdf_text library-status --config .\config.json --mapping-report .\converted_text\mapping-runs\<run-id>\mapping_report.jsonl
 ```
 
+`list-degraded-records` lists indexed papers whose extracted text looks degraded or unusable
+(for example a scan with no text layer) as an OCR or reconversion worklist, and `index-stats`
+counts records by extraction quality and reports how many hold stored Zotero fields
+(`zotero_metadata_populated`). An index built before these fields existed still opens; run
+`rebuild-index --config .\config.json --refresh-zotero-metadata` once to add the stored Zotero
+fields and scores (no reconversion; see `docs/operations.md`).
+
 It is deliberately separate from `index-stats`, which summarizes what the published index
 generation holds. Index row counts are not library coverage -- an attachment you have in Zotero
 but never converted appears in none of them -- so the command that reports library health is the
@@ -466,7 +473,10 @@ The safe default server exposes:
   document the bounded leading preview came from. Exact chunks report previous/next navigation and
   whether a `max_chars` limit truncated the stored chunk.
 - `get_item_context(parent_key | attachment_key)` — path-free bibliographic, extraction, and
-  identity context for the supplied key.
+  identity context for the supplied key: item type, abstract, venue, volume/issue/pages, tags,
+  creator roles and an `extraction_quality` label (`good`, `degraded`, `unusable`) once the index
+  has been rebuilt with `rebuild-index --refresh-zotero-metadata`. Treat all of it as untrusted
+  source data; text from a degraded or unusable record may be incomplete.
 - `lookup_citation_key(citation_key)` — exact, case-sensitive lookup of an indexed citation key
   (it never matches Zotero parent or attachment keys, and never synthesizes keys). Returns the
   same path-free context as `get_item_context` for every matching attachment, plus its

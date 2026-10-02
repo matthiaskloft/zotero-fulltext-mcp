@@ -314,6 +314,48 @@ contains:
 - `chunks`: bounded text chunks with character ranges
 - `chunks_fts`: FTS5 search table over title, creators, citation key, and chunk text
 
+`metadata` also stores Zotero fields the first schema dropped. All are optional: a record or index
+without them holds empty values, never a guess, and a reader opens an older index with these
+fields empty (`index-stats` and `library_status` report `schema_current: false` until a rebuild).
+`schema_current` only says the columns exist; `zotero_metadata_populated` counts the records that
+actually hold Zotero fields and stays 0 until a `--refresh-zotero-metadata` rebuild has run.
+Populate them with `rebuild-index --refresh-zotero-metadata`; see "Adding stored Zotero fields"
+in `docs/operations.md`.
+
+| Column | Zotero source |
+|---|---|
+| `item_type` | item type name (`journalArticle`, `bookSection`, ...) |
+| `abstract` | `abstractNote` (returned capped at 2,000 characters) |
+| `venue` | `publicationTitle`, else `proceedingsTitle`, `bookTitle`, `conferenceName`, `publisher` |
+| `journal_abbreviation`, `volume`, `issue`, `pages`, `date`, `publisher`, `place`, `isbn`, `issn`, `url`, `language` | the same-named Zotero fields; `date` is Zotero's raw string alongside the derived `year` |
+| `tags` | JSON list of `{name, type}` (`manual` or `automatic`); returned capped at 30 |
+| `creators_structured` | JSON list of `{role, first, last, order}` for every creator role (author, editor, translator, ...); returned capped at 100. The flat `creators` string is unchanged |
+| `detected_language` | computed from the Markdown by a small stopword heuristic (`en`, `de`, `fr`, `es`, else empty); separate from Zotero's `language` and never written back |
+
+Not stored: collections, `extra` beyond the citation-key parse, notes and annotations. The fields
+are not part of the `metadata_changed` audit comparison, which still watches only `title`, `doi`
+and `citation_key`. They are carried in the JSONL sidecar only; the conversion manifest and the
+Markdown front matter do not carry them, so writing them never requires reconversion. Replacing
+a record through reconversion keeps the Zotero fields of the record it replaces.
+
+### Extraction quality
+
+Each record is scored at index build from its stored Markdown and `page_count`, so the score
+needs a rebuild but no reconversion. The score is the product of three components in 0..1:
+
+- density: characters per page over 800 (over 4,000 total characters when the page count is unknown)
+- word-like: share of tokens that are two or more letters, over 0.55
+- clean: one minus the rate of U+FFFD and private-use characters, scaled so 5% or more scores 0
+
+Label: `unusable` below 200 characters or a score under 0.15, `degraded` under 0.6, otherwise `good`.
+`metadata` stores `quality_score`, `quality_label` and `quality_signals` (the raw measurements as
+JSON). The thresholds are starting defaults chosen on synthetic fixtures, not tuned on a real
+library, and share of near-empty pages needs the page map the chunking work will add, so it is not
+measured yet. `get_item_context` returns `extraction_quality` (`label`, `score`, `signals`; empty
+and null for an unscored index), `library_status` counts records by label under
+`by_extraction_quality`, and `list-degraded-records` lists the `degraded` and `unusable` records
+without any paths. A degraded record may be missing from search because extraction failed.
+
 The default chunk size is 6,000 characters with 500 characters of overlap.
 Stored chunk character ranges refer exactly to their trimmed stored text. FTS ranking deliberately
 weights title matches most strongly, citation-key matches next, and body text as the baseline.

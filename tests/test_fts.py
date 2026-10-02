@@ -1362,7 +1362,11 @@ class SearchWithinAttachmentTests(unittest.TestCase):
             con = sqlite3.connect(sqlite_db)
             try:
                 con.execute(
-                    "INSERT INTO metadata SELECT 99, zotero_parent_key, 'ATTACH1', title, creators, year, doi,"
+                    "INSERT INTO metadata (record_id, zotero_parent_key, zotero_attachment_key, title,"
+                    " creators, year, doi, citation_key, source_path, markdown_path, markdown_sha256,"
+                    " extraction_tool, char_count, word_count, page_count, classification,"
+                    " identity_status, identity_rule, has_math, source_sha256, indexed_at)"
+                    " SELECT 99, zotero_parent_key, 'ATTACH1', title, creators, year, doi,"
                     " citation_key, source_path, markdown_path, markdown_sha256, extraction_tool, char_count,"
                     " word_count, page_count, classification, identity_status, identity_rule, has_math,"
                     " source_sha256, indexed_at FROM metadata WHERE zotero_attachment_key = 'ATTACH2'"
