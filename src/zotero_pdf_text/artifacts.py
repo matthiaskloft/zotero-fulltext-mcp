@@ -40,6 +40,7 @@ from .zotero_db import read_only_uri
 from .fts import DEFAULT_CHUNK_CHARS, DEFAULT_OVERLAP_CHARS, FtsBuildSummary, build_fts_index
 from .identity import front_matter_fields
 from .indexer import TextIndexRecord, _converted_rows, _record_from_manifest_row, _sha256
+from .zotero_metadata import ZOTERO_METADATA_KEYS
 
 ARTIFACT_SCHEMA_VERSION = 1
 GENERATIONS_DIRNAME = "generations"
@@ -734,7 +735,8 @@ def write_jsonl_replacing_manifest(
                 key = json.loads(line)["zotero_attachment_key"]
                 record = replacements.get(key)
                 if record:
-                    target.write(json.dumps(_record_dict(record), ensure_ascii=False) + "\n")
+                    merged = _carry_zotero_metadata(_record_dict(record), json.loads(line))
+                    target.write(json.dumps(merged, ensure_ascii=False) + "\n")
                 else:
                     target.write(line.rstrip("\n") + "\n")
             for record in additions.values():
@@ -782,7 +784,8 @@ def write_jsonl_applying_repairs(
                 if key in removals:
                     continue
                 if key in replacements:
-                    target.write(json.dumps(_record_dict(replacements[key]), ensure_ascii=False) + "\n")
+                    merged = _carry_zotero_metadata(_record_dict(replacements[key]), record)
+                    target.write(json.dumps(merged, ensure_ascii=False) + "\n")
                 elif key in metadata_updates:
                     record.update(metadata_updates[key])
                     target.write(json.dumps(record, ensure_ascii=False) + "\n")
@@ -817,7 +820,8 @@ def write_jsonl_upserting_record(
                 if line.strip():
                     record = json.loads(line)
                     if isinstance(record, dict) and record.get("zotero_attachment_key") == attachment_key:
-                        handle.write(json.dumps(_record_dict(new_record), ensure_ascii=False) + "\n")
+                        merged = _carry_zotero_metadata(_record_dict(new_record), record)
+                        handle.write(json.dumps(merged, ensure_ascii=False) + "\n")
                         replaced = True
                         continue
                 handle.write(line + "\n")
@@ -851,6 +855,20 @@ def chunking_params_from_current(index_root: Path) -> tuple[int, int]:
 
 def _record_dict(record: TextIndexRecord) -> dict[str, object]:
     return asdict(record)
+
+
+def _carry_zotero_metadata(new: dict[str, object], old: object) -> dict[str, object]:
+    """Keep the Zotero-derived fields of a record that is being replaced.
+
+    A reconversion rebuilds its record from the conversion row, which carries none of them, so
+    without this a replaced record would silently lose its abstract and tags until the next
+    metadata refresh.
+    """
+    if isinstance(old, dict):
+        for key in ZOTERO_METADATA_KEYS:
+            if not new.get(key) and old.get(key):
+                new[key] = old[key]
+    return new
 
 
 def _jsonl_attachment_keys(jsonl_path: Path) -> set[str]:

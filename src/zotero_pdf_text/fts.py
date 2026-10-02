@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Iterable, Literal, TypedDict, cast
 
 from ._atomic import replace_with_retry
+from .quality import detect_language, quality_signals_json, score_extraction
 from .zotero_db import read_only_uri
 
 
@@ -786,7 +787,7 @@ def get_item_context(
             ).fetchall()
     finally:
         con.close()
-    return {"records": [_metadata_dict(row) for row in rows]}
+    return {"records": [{**_metadata_dict(row), **_extended_metadata(row)} for row in rows]}
 
 
 MAX_LOOKUP_PARENT_KEYS = 1000
@@ -846,7 +847,7 @@ def lookup_citation_key(
         con.close()
     records = []
     for row in rows[:limit]:
-        record = _metadata_dict(row)
+        record = {**_metadata_dict(row), **_extended_metadata(row)}
         record["chunk_count"] = int(row["chunk_count"])
         records.append(record)
     return {"records": records, "truncated": len(rows) > limit, "parent_keys": parent_keys}
@@ -911,6 +912,8 @@ class IndexStatistics(TypedDict):
     by_identity_status: dict[str, int]
     by_extraction_tool: dict[str, int]
     by_has_math: dict[bool, int]
+    by_extraction_quality: dict[str, int]
+    schema_current: bool
 
 
 _GROUPED_STATISTIC_COLUMNS: tuple[tuple[str, str], ...] = (
@@ -965,6 +968,17 @@ def index_statistics(
             GROUP BY flag
             """
         ).fetchall()
+        # An index built before extraction quality was scored has no such column. Report its rows
+        # as "unscored" and say the schema is not current, rather than failing the whole summary.
+        columns = {row[1] for row in con.execute("PRAGMA table_info(metadata)").fetchall()}
+        schema_current = set(DERIVED_COLUMNS + ZOTERO_TEXT_COLUMNS + ZOTERO_JSON_COLUMNS) <= columns
+        if "quality_label" in columns:
+            by_quality = {
+                (value or "unscored"): count
+                for value, count in _grouped_counts(con, "quality_label").items()
+            }
+        else:
+            by_quality = {"unscored": int(totals["records"])} if totals["records"] else {}
     finally:
         con.close()
 
@@ -981,7 +995,57 @@ def index_statistics(
         "by_identity_status": grouped["by_identity_status"],
         "by_extraction_tool": grouped["by_extraction_tool"],
         "by_has_math": {bool(row["flag"]): int(row["n"]) for row in has_math_rows},
+        "by_extraction_quality": by_quality,
+        "schema_current": schema_current,
     }
+
+
+def list_extraction_quality(
+    db_path: Path, *, labels: tuple[str, ...] = ("degraded", "unusable"), limit: int | None = None
+) -> list[dict[str, object]]:
+    """List records whose extraction quality is one of `labels`, worst first. Path-free.
+
+    This is the reconversion/OCR worklist. An index without quality scores raises
+    `IndexSchemaUnsupportedError` with the rebuild command, since an empty list would read as
+    "no problems".
+    """
+    con = connect_readonly(db_path)
+    con.row_factory = sqlite3.Row
+    try:
+        columns = {row[1] for row in con.execute("PRAGMA table_info(metadata)").fetchall()}
+        if "quality_label" not in columns:
+            raise IndexSchemaUnsupportedError(
+                f"{db_path} predates extraction-quality scores. Rebuild it with "
+                "'zotero-pdf-text rebuild-index' to compute them."
+            )
+        marks = ",".join("?" for _ in labels)
+        rows = con.execute(
+            f"""
+            SELECT zotero_attachment_key, zotero_parent_key, title, extraction_tool, page_count,
+                   char_count, quality_label, quality_score, quality_signals
+            FROM metadata
+            WHERE quality_label IN ({marks})
+            ORDER BY quality_score, zotero_attachment_key
+            {"LIMIT ?" if limit is not None else ""}
+            """,
+            (*labels, *([limit] if limit is not None else [])),
+        ).fetchall()
+    finally:
+        con.close()
+    return [
+        {
+            "attachment_key": row["zotero_attachment_key"],
+            "parent_key": row["zotero_parent_key"],
+            "title": row["title"],
+            "extraction_tool": row["extraction_tool"],
+            "page_count": row["page_count"],
+            "char_count": int(row["char_count"] or 0),
+            "label": row["quality_label"],
+            "score": row["quality_score"],
+            "signals": _load_signals(row["quality_signals"]),
+        }
+        for row in rows
+    ]
 
 
 def _grouped_counts(con: sqlite3.Connection, column: str) -> dict[str, int]:
@@ -1032,7 +1096,27 @@ def _create_schema(con: sqlite3.Connection) -> None:
             identity_rule TEXT NOT NULL,
             has_math INTEGER NOT NULL DEFAULT 0,
             source_sha256 TEXT NOT NULL DEFAULT '',
-            indexed_at TEXT NOT NULL DEFAULT ''
+            indexed_at TEXT NOT NULL DEFAULT '',
+            item_type TEXT NOT NULL DEFAULT '',
+            abstract TEXT NOT NULL DEFAULT '',
+            venue TEXT NOT NULL DEFAULT '',
+            journal_abbreviation TEXT NOT NULL DEFAULT '',
+            volume TEXT NOT NULL DEFAULT '',
+            issue TEXT NOT NULL DEFAULT '',
+            pages TEXT NOT NULL DEFAULT '',
+            date TEXT NOT NULL DEFAULT '',
+            publisher TEXT NOT NULL DEFAULT '',
+            place TEXT NOT NULL DEFAULT '',
+            isbn TEXT NOT NULL DEFAULT '',
+            issn TEXT NOT NULL DEFAULT '',
+            url TEXT NOT NULL DEFAULT '',
+            language TEXT NOT NULL DEFAULT '',
+            detected_language TEXT NOT NULL DEFAULT '',
+            tags TEXT NOT NULL DEFAULT '[]',
+            creators_structured TEXT NOT NULL DEFAULT '[]',
+            quality_score REAL,
+            quality_label TEXT NOT NULL DEFAULT '',
+            quality_signals TEXT NOT NULL DEFAULT ''
         );
         CREATE INDEX metadata_attachment_key_idx ON metadata(zotero_attachment_key);
         CREATE INDEX metadata_parent_key_idx ON metadata(zotero_parent_key);
@@ -1095,11 +1179,93 @@ def _insert_metadata(con: sqlite3.Connection, record: dict[str, object]) -> int:
             values.append(int(bool(record.get(column, False))))
         else:
             values.append(_string(record.get(column)))
+    # Fields added after the first release are optional keys: a record without them (an older
+    # JSONL, a manifest rebuild) stores empty values, never a guess.
+    for column in ZOTERO_TEXT_COLUMNS:
+        columns.append(column)
+        values.append(_string(record.get(column)))
+    for column in ZOTERO_JSON_COLUMNS:
+        columns.append(column)
+        values.append(_json_list(record.get(column)))
+    record_text = record.get("text", "")
+    record_text = record_text if isinstance(record_text, str) else ""
+    score, label, signals = score_extraction(record_text, cast("str | int | None", record.get("page_count")))
+    columns.extend(DERIVED_COLUMNS)
+    values.extend([detect_language(record_text), score, label, quality_signals_json(signals)])
     cursor = con.execute(
         f"INSERT INTO metadata ({','.join(columns)}) VALUES ({','.join('?' for _ in columns)})",
         values,
     )
     return int(cast(int, cursor.lastrowid))
+
+
+# Zotero-derived fields stored beside the original metadata. Every one is optional for readers:
+# an index built before they existed lacks the columns and opens with these values empty.
+ZOTERO_TEXT_COLUMNS: tuple[str, ...] = (
+    "item_type",
+    "abstract",
+    "venue",
+    "journal_abbreviation",
+    "volume",
+    "issue",
+    "pages",
+    "date",
+    "publisher",
+    "place",
+    "isbn",
+    "issn",
+    "url",
+    "language",
+)
+ZOTERO_JSON_COLUMNS: tuple[str, ...] = ("tags", "creators_structured")
+# Computed at build from the stored Markdown; absent from older indexes.
+DERIVED_COLUMNS: tuple[str, ...] = ("detected_language", "quality_score", "quality_label", "quality_signals")
+
+# Response caps. Abstracts and tags are untrusted library content; bound what one call returns.
+MAX_ABSTRACT_CHARS = 2000
+MAX_TAGS = 30
+MAX_CREATORS = 100
+
+
+def _json_list(value: object) -> str:
+    return json.dumps(value if isinstance(value, list) else [], ensure_ascii=False, separators=(",", ":"))
+
+
+def _load_json_list(value: object, cap: int) -> list[object]:
+    try:
+        loaded = json.loads(value) if isinstance(value, str) and value else []
+    except ValueError:
+        return []
+    return loaded[:cap] if isinstance(loaded, list) else []
+
+
+def _load_signals(value: object) -> dict[str, object]:
+    try:
+        loaded = json.loads(value) if isinstance(value, str) and value else {}
+    except ValueError:
+        return {}
+    return loaded if isinstance(loaded, dict) else {}
+
+
+def _extended_metadata(row: sqlite3.Row) -> dict[str, object]:
+    """Zotero-derived and quality fields of one row, capped; empty when the index predates them."""
+    present = set(row.keys())
+    result: dict[str, object] = {}
+    for column in ZOTERO_TEXT_COLUMNS:
+        result[column] = str(row[column] or "") if column in present else ""
+    result["abstract"] = str(result["abstract"])[:MAX_ABSTRACT_CHARS]
+    result["tags"] = _load_json_list(row["tags"], MAX_TAGS) if "tags" in present else []
+    result["creators_structured"] = (
+        _load_json_list(row["creators_structured"], MAX_CREATORS) if "creators_structured" in present else []
+    )
+    result["detected_language"] = str(row["detected_language"] or "") if "detected_language" in present else ""
+    score = row["quality_score"] if "quality_score" in present else None
+    result["extraction_quality"] = {
+        "label": str(row["quality_label"] or "") if "quality_label" in present else "",
+        "score": float(score) if score is not None else None,
+        "signals": _load_signals(row["quality_signals"]) if "quality_signals" in present else {},
+    }
+    return result
 
 
 # Generated Markdown image references (``![alt](path)``, with an optional ``"title"`` inside the

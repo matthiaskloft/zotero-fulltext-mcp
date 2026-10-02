@@ -7,6 +7,19 @@ All notable changes to this project are documented here. Format loosely follows
 
 ### Added
 
+- Index stores the Zotero fields it used to drop (item type, abstract, venue, volume/issue/pages,
+  date, publisher, place, ISBN/ISSN, URL, language, tags and structured creator roles) and a
+  computed `detected_language`. `rebuild-index`/`update-index --refresh-zotero-metadata` merge
+  them from a read-only copy of the Zotero database into a new generation without reconversion.
+  `get_item_context` and `lookup_citation_key` return them with capped abstract and tag lists.
+  Older indexes still open with the fields empty and `schema_current: false` in `index-stats` and
+  `library_status`. ([#76](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/76))
+- Per-record extraction-quality score and label (`good`, `degraded`, `unusable`) computed at
+  index build from the stored Markdown, returned by `get_item_context`, counted in
+  `index-stats`/`library_status`, and listed by the new read-only `list-degraded-records` command.
+  The server instructions tell clients that degraded text may be incomplete.
+  ([#82](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/82))
+
 - Portable developer test helper and fresh-checkout guide covering prerequisite checks, locked
   host setup, disposable live Zotero tests, public corpus fetching and manual agent environments.
   Test runtimes/caches and diagnostics stay local and ignored; host tests use disposable configs.

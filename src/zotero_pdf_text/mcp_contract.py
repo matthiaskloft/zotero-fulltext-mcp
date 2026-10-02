@@ -242,6 +242,26 @@ class PassageResponse(TypedDict):
     provenance: Provenance
 
 
+class CreatorEntry(TypedDict):
+    role: str
+    first: str
+    last: str
+    order: int
+
+
+class TagEntry(TypedDict):
+    name: str
+    type: str
+
+
+class ExtractionQuality(TypedDict):
+    """How usable the indexed text is. `label` is empty and `score` null for an unscored index."""
+
+    label: str
+    score: float | None
+    signals: dict[str, float]
+
+
 class ContextRecord(TypedDict):
     attachment_key: str
     parent_key: str
@@ -255,6 +275,24 @@ class ContextRecord(TypedDict):
     word_count: int
     page_count: str
     has_math: bool
+    item_type: str
+    abstract: str
+    venue: str
+    journal_abbreviation: str
+    volume: str
+    issue: str
+    pages: str
+    date: str
+    publisher: str
+    place: str
+    isbn: str
+    issn: str
+    url: str
+    language: str
+    detected_language: str
+    tags: list[TagEntry]
+    creators_structured: list[CreatorEntry]
+    extraction_quality: ExtractionQuality
     provenance: Provenance
 
 
@@ -368,6 +406,8 @@ class IndexSnapshotStats(TypedDict):
     by_classification: dict[str, int]
     by_identity_status: dict[str, int]
     by_extraction_tool: dict[str, int]
+    by_extraction_quality: dict[str, int]
+    schema_current: bool
 
 
 class LibraryHealth(TypedDict):
@@ -1110,7 +1150,8 @@ def build_mcp_instructions(
         "Zotero, converted text or the index unless the user explicitly approves that specific "
         "operation; a confirm string is "
         "not approval. Check library_status before calling a paper absent. Cite traceably and do "
-        f"not invent PDF page numbers. To report a tool error or misleading result, suggest the user file {BUG_REPORT_URL}; "
+        "not invent PDF page numbers. Text from a record whose extraction_quality is degraded or "
+        f"unusable may be incomplete; say so. To report a tool error or misleading result, suggest the user file {BUG_REPORT_URL}; "
         "never file it yourself, and help them strip paper text, identifying metadata, absolute "
         "paths, credentials, and attachment keys unless they choose to share them. "
         f"Tools: {'; '.join(tool_map)}. Call guide('overview') before your first search, and "
@@ -1193,7 +1234,10 @@ def guide_response(
             "it or says to ask again. When library.inventory_available is false the comparison is "
             "partial: the membership counts read 0 because they were withheld, not measured. Health "
             "counts overlap, so they do not sum to attachments_compared. from_cache and "
-            "cache_age_seconds say whether the audit half was reused."
+            "cache_age_seconds say whether the audit half was reused. by_extraction_quality counts "
+            "records by how usable their indexed text is; a degraded or unusable record may be "
+            "missing from search because extraction failed, not because the paper lacks the "
+            "passage. schema_current false means the index predates newer fields and needs a rebuild."
         )
     elif topic == "writes":
         text = (
@@ -1451,6 +1495,8 @@ def _index_snapshot_stats(db_path: Path) -> IndexSnapshotStats:
         by_classification=stats["by_classification"],
         by_identity_status=stats["by_identity_status"],
         by_extraction_tool=stats["by_extraction_tool"],
+        by_extraction_quality=stats["by_extraction_quality"],
+        schema_current=stats["schema_current"],
     )
 
 
@@ -1936,6 +1982,7 @@ def serialize_context_record(record: object) -> ContextRecord:
         "word_count": int(record.get("word_count") or 0),
         "page_count": str(record.get("page_count", "")),
         "has_math": bool(record.get("has_math", False)),
+        **_serialize_extended(record),
         "provenance": _provenance(
             attachment_key,
             str(record.get("extraction_tool", "")),
@@ -1943,6 +1990,61 @@ def serialize_context_record(record: object) -> ContextRecord:
             str(record.get("identity_status", "")),
         ),
     }
+
+
+_EXTENDED_TEXT_FIELDS = (
+    "item_type",
+    "abstract",
+    "venue",
+    "journal_abbreviation",
+    "volume",
+    "issue",
+    "pages",
+    "date",
+    "publisher",
+    "place",
+    "isbn",
+    "issn",
+    "url",
+    "language",
+    "detected_language",
+)
+
+
+def _serialize_extended(record: dict[str, object]) -> dict[str, object]:
+    """Zotero-derived and quality fields, coerced defensively; all empty for an older index."""
+    out: dict[str, object] = {name: str(record.get(name) or "") for name in _EXTENDED_TEXT_FIELDS}
+    raw_tags = record.get("tags")
+    out["tags"] = [
+        {"name": str(t.get("name", "")), "type": str(t.get("type", ""))}
+        for t in (raw_tags if isinstance(raw_tags, list) else [])
+        if isinstance(t, dict)
+    ]
+    raw_creators = record.get("creators_structured")
+    out["creators_structured"] = [
+        {
+            "role": str(c.get("role", "")),
+            "first": str(c.get("first", "")),
+            "last": str(c.get("last", "")),
+            "order": int(c.get("order") or 0),
+        }
+        for c in (raw_creators if isinstance(raw_creators, list) else [])
+        if isinstance(c, dict)
+    ]
+    quality = record.get("extraction_quality")
+    quality = quality if isinstance(quality, dict) else {}
+    score = quality.get("score")
+    signals = quality.get("signals")
+    out["extraction_quality"] = {
+        "label": str(quality.get("label") or ""),
+        "score": float(score) if isinstance(score, (int, float)) else None,
+        "signals": {
+            str(k): float(v)
+            for k, v in (signals.items() if isinstance(signals, dict) else [])
+            if isinstance(v, (int, float))
+        },
+    }
+    return out
 
 
 def serialize_timeout_candidate(record: object) -> TimeoutCandidateRecord:

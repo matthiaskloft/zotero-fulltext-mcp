@@ -53,12 +53,14 @@ from .fts import (
     IndexStatistics,
     SearchResult,
     connect_readonly,
+    list_extraction_quality,
     index_statistics,
     get_fulltext,
     search_fts,
 )
 from .ingestion import dry_run_ingest, ingest_approved
 from .zotero_db import SnapshotUnsafeError, SnapshotUnstableError
+from .zotero_metadata import with_zotero_metadata
 from .indexer import load_indexed_keys
 from .library import (
     ALL_STATUSES,
@@ -148,6 +150,21 @@ def _resolve_managed_root(args: argparse.Namespace) -> tuple[Path, Path]:
         config = load_config(config_path)
         output_root = config.output_root
     return output_root, output_root / "index"
+
+
+REFRESH_METADATA_HELP = (
+    "Merge current bibliographic fields (abstract, tags, venue, item type, creator roles, ...) "
+    "from a read-only copy of the Zotero database into the staged records. No reconversion; "
+    "Zotero and PDFs are not modified. Needs a config that resolves the Zotero data directory."
+)
+
+
+def _with_metadata_refresh(args: argparse.Namespace, writer):
+    """Wrap a staging writer so it also merges Zotero fields, when --refresh-zotero-metadata is set."""
+    if not getattr(args, "refresh_zotero_metadata", False):
+        return writer, None
+    config_path = args.config if args.config is not None else resolve_config_path()
+    return with_zotero_metadata(writer, load_config(config_path).zotero_sqlite)
 
 
 def _default_rebuild_source(index_root: Path) -> Path | None:
@@ -324,6 +341,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     rebuild_index.add_argument("--chunk-chars", type=int, default=None, help="Maximum characters per searchable chunk.")
     rebuild_index.add_argument("--overlap-chars", type=int, default=None, help="Characters of overlap between chunks.")
+    rebuild_index.add_argument("--refresh-zotero-metadata", action="store_true", help=REFRESH_METADATA_HELP)
     update_index = subparsers.add_parser(
         "update-index",
         help=(
@@ -332,6 +350,7 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     update_index.add_argument("--config", type=Path, default=None, help="Path to project config JSON. Default: resolved for this machine.")
+    update_index.add_argument("--refresh-zotero-metadata", action="store_true", help=REFRESH_METADATA_HELP)
     update_index.add_argument(
         "--output-root",
         type=Path,
@@ -382,6 +401,23 @@ def build_parser() -> argparse.ArgumentParser:
     fulltext.add_argument("--chunk-index", type=int, default=None, help="Optional chunk index to fetch.")
     fulltext.add_argument("--max-chars", type=int, default=12000, help="Maximum text characters to print.")
     fulltext.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+    degraded = subparsers.add_parser(
+        "list-degraded-records",
+        help="List indexed records whose extracted text looks degraded or unusable (read-only).",
+        description=(
+            "List records whose extraction-quality label is degraded or unusable, worst first. "
+            "Their text may be incomplete or missing, so a search that does not find them is not "
+            "evidence the paper lacks the passage. The list is a worklist for OCR or "
+            "reconversion; this command changes nothing."
+        ),
+    )
+    degraded.add_argument("--db", type=Path, default=DEFAULT_FTS_DB, help="SQLite FTS database path.")
+    degraded.add_argument(
+        "--label", choices=("degraded", "unusable", "all"), default="all",
+        help="Which labels to list (default: both degraded and unusable).",
+    )
+    degraded.add_argument("--limit", type=int, default=None, help="Maximum records to list.")
+    degraded.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
     index_stats = subparsers.add_parser(
         "index-stats",
         aliases=[DEPRECATED_INDEX_STATS_COMMAND],
@@ -1179,6 +1215,7 @@ def main(argv: list[str] | None = None) -> int:
             print("--keep-current requires --manifest.", file=sys.stderr)
             return 2
         kept: int | None = None
+        merge_stats = None
         try:
             with pipeline_write_lock(output_root, command="rebuild-index"):
                 current_for_keep = current_generation_jsonl(index_root) if args.keep_current else None
@@ -1197,6 +1234,7 @@ def main(argv: list[str] | None = None) -> int:
                         )
                         return 2
                     writer = write_jsonl_from_existing(source)
+                writer, merge_stats = _with_metadata_refresh(args, writer)
                 info = stage_and_publish(
                     index_root,
                     writer,
@@ -1214,6 +1252,8 @@ def main(argv: list[str] | None = None) -> int:
         result["generation_id"] = info.generation_id
         if kept is not None:
             result["kept_from_current"] = kept
+        if merge_stats is not None:
+            result["zotero_metadata"] = {"matched": merge_stats.matched, "unmatched": merge_stats.unmatched}
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0
     if args.command == "update-index":
@@ -1240,6 +1280,7 @@ def main(argv: list[str] | None = None) -> int:
                     replaced = 0
                     with args.manifest.open("r", encoding="utf-8-sig", newline="") as handle:
                         skipped = sum(1 for _ in csv.DictReader(handle)) - added
+                writer, merge_stats = _with_metadata_refresh(args, writer)
                 info = stage_and_publish(index_root, writer, command="update-index")
         except PipelineLockedError as exc:
             print(str(exc), file=sys.stderr)
@@ -1253,6 +1294,8 @@ def main(argv: list[str] | None = None) -> int:
         result["added_records"] = added
         result["replaced_records"] = replaced
         result["skipped_records"] = skipped
+        if merge_stats is not None:
+            result["zotero_metadata"] = {"matched": merge_stats.matched, "unmatched": merge_stats.unmatched}
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0
     if args.command == "output-status":
@@ -1361,6 +1404,25 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(fulltext_result.to_dict(), ensure_ascii=False, indent=2))
         else:
             _print_fulltext_result(fulltext_result.to_dict())
+        return 0
+    if args.command == "list-degraded-records":
+        labels = ("degraded", "unusable") if args.label == "all" else (args.label,)
+        try:
+            records = list_extraction_quality(
+                resolve_reader_db_path(args.db), labels=labels, limit=args.limit
+            )
+        except (ArtifactError, IndexSchemaUnsupportedError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        if args.json:
+            print(json.dumps({"records": records}, ensure_ascii=False, indent=2))
+        else:
+            for record in records:
+                print(
+                    f"{record['label']:<9} {record['score']:.3f}  {record['attachment_key']}  "
+                    f"{record['extraction_tool']}  pages={record['page_count'] or '?'}  {record['title']}"
+                )
+            print(f"{len(records)} record(s).")
         return 0
     if args.command in {"index-stats", DEPRECATED_INDEX_STATS_COMMAND}:
         if args.command == DEPRECATED_INDEX_STATS_COMMAND:
@@ -2446,12 +2508,17 @@ def _print_index_statistics(report: IndexStatistics) -> None:
     print(f"Chunks: {report['chunks']}")
     print(f"Total characters: {report['total_chars']}")
     print(f"Total words: {report['total_words']}")
-    for field in ("by_classification", "by_identity_status", "by_extraction_tool"):
+    for field in ("by_classification", "by_identity_status", "by_extraction_tool", "by_extraction_quality"):
         print(field + ":")
         for key, count in sorted(dict(report[field]).items()):
             print(f"- {key}: {count}")
     print("")
     print(str(report["scope_note"]))
+    if not report["schema_current"]:
+        print(
+            "This index predates the stored Zotero fields or extraction-quality scores; run "
+            "'zotero-pdf-text rebuild-index --refresh-zotero-metadata' to add them."
+        )
 
 
 def _print_library_status(status: LibraryStatus) -> None:

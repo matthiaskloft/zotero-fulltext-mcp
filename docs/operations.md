@@ -212,6 +212,29 @@ legacy files are left in place untouched; delete them manually once you've confi
 works. Third-party tools that read the SQLite file directly must follow `current.json` to the
 generation database it names.
 
+### Adding stored Zotero fields and extraction-quality scores
+
+An index built before roadmap step S3 opens normally: the new fields read as empty and
+`library_status` reports `schema_current: false`. To populate them without reconverting anything,
+rebuild once with a Zotero metadata refresh:
+
+```powershell
+& $python -m zotero_pdf_text rebuild-index --config .\config.json --refresh-zotero-metadata
+```
+
+The command copies `zotero.sqlite` through the same verified, non-writing snapshot the audit uses
+and merges item type, abstract, venue, volume/issue/pages, date, publisher, place, ISBN/ISSN, URL,
+language, tags and structured creators into each record by parent key. Zotero, the PDFs and the
+Markdown are not touched; the result is staged and published as a new generation like any other
+rebuild. The summary reports how many records matched a Zotero parent (`zotero_metadata.matched`)
+and how many did not (their stored fields are kept). `update-index` accepts the same flag.
+Extraction-quality scores need no flag: every rebuild recomputes them from the stored Markdown.
+
+Without the flag a rebuild from the current generation copies its JSONL, so stored fields survive.
+A rebuild from a conversion manifest (`--manifest`) carries no Zotero fields; add the flag.
+`list-degraded-records` prints the records labelled `degraded` or `unusable` as an OCR or
+reconversion worklist.
+
 ### Rolling back a bad publish
 
 `current.json` records both `current_generation` and `previous_generation`. To roll back, edit
