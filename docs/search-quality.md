@@ -158,7 +158,8 @@ holds a `current.json` or a `generations` folder, and it replaces only a file it
 The default location is a temporary folder deleted afterwards; `--experiment-dir` keeps them (the
 files are gitignored like every `*.sqlite`). The current generation can be scored alongside with
 `--db` (read-only) and `--passages`; it returns one best chunk per paper, whereas experimental
-indexes rank every chunk.
+indexes rank every chunk. Experimental indexes use production's FTS columns (title, creators,
+body, citation key), BM25 weights and image-markup blanking, so lexical scoring is like-for-like.
 
 ### What is reported
 
@@ -168,8 +169,11 @@ retrieval latency. Then, at equal top-k (`--k`) and at equal returned-token budg
 default 500,1000,2000):
 
 - **paper recall@k and MRR**, with papers ranked by their best passage;
-- **nDCG**: graded, each evidence span credited once to the first passage overlapping it, so
-  repeated hits on the same evidence earn nothing;
+- **nDCG**: graded, each evidence span credited once, and each passage credits only the
+  highest-grade not-yet-credited span it overlaps, so repeated hits earn nothing and nDCG stays
+  within 1. The ideal list holds every judged span (cut at k for top-k), so it does not shrink
+  when a configuration returns fewer passages; a passage covering several spans is rewarded by
+  spanR/charR, not by nDCG;
 - **spanR / charR**: evidence-span recall (a span counts when at least half of it is returned) and
   the share of evidence characters returned; **prec**: the share of returned characters that lie
   inside evidence; **dup**: the share of returned characters already returned by an earlier hit;

@@ -183,6 +183,29 @@ class ExperimentIndexTests(unittest.TestCase):
             finally:
                 con.close()
 
+    def test_fts_uses_production_columns_weights_and_blanks_image_markup(self):
+        docs = {
+            "A": chunking.CorpusDoc(
+                "A", "smith2020", "Body text. ![zebrafigure](/home/you/uniquepathword.png) More body.",
+                "Quokka title", "Wombat Author",
+            )
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            summary = chunking.build_experiment_index(
+                docs, chunking.parse_spec("sentence:40:0"), TOKENIZER, Path(tmp) / f"x{chunking.EXPERIMENT_SUFFIX}"
+            )
+            retriever = passages.ExperimentRetriever(summary)
+            try:
+                found = {q: bool(retriever.retrieve(q, "all_terms", 5)) for q in (
+                    "quokka", "wombat", "smith2020", "zebrafigure", "uniquepathword", "png")}
+            finally:
+                retriever.close()
+        self.assertEqual(
+            found,
+            {"quokka": True, "wombat": True, "smith2020": True, "zebrafigure": True,
+             "uniquepathword": False, "png": False},
+        )
+
     def test_refuses_to_build_inside_a_production_output_root(self):
         spec = chunking.parse_spec("sentence:40:0")
         with tempfile.TemporaryDirectory() as tmp:
@@ -238,6 +261,17 @@ class MetricTests(unittest.TestCase):
         idcg = 7 / 1 + 1 / 1.5849625007211562
         self.assertAlmostEqual(m.ndcg, dcg / idcg, places=6)
         self.assertEqual(m.span_recall, 1.0)
+
+    def test_ndcg_ideal_does_not_shrink_with_the_number_of_hits_returned(self):
+        judgments = _judgments(_ev("A", 0, 30), _ev("A", 100, 130), _ev("A", 200, 230))
+        one_big = [_hit("A", 0, 300)]  # covers all three spans but credits only one
+        three_small = [_hit("A", 0, 30), _hit("A", 100, 130), _hit("A", 200, 230)]
+        big = passages.passage_metrics(one_big, judgments, None)
+        small = passages.passage_metrics(three_small, judgments, None)
+        self.assertEqual(big.span_recall, small.span_recall)
+        self.assertLess(big.ndcg, small.ndcg)
+        self.assertAlmostEqual(small.ndcg, 1.0)
+        self.assertLessEqual(big.ndcg, 1.0)
 
     def test_a_miss_and_an_empty_list_score_zero(self):
         judgments = _judgments(_ev("A", 0, 10))

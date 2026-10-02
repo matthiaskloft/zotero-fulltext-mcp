@@ -1,7 +1,8 @@
 """Chunking strategies and separate experimental indexes for the S1a sweeps (issue #107).
 
 Everything here is benchmark-owned. An *experimental index* is a scratch SQLite file with its own
-small schema (documents, chunks, an FTS5 table, and an ``experiment_meta`` marker). It is never a
+small schema (documents, chunks, an FTS5 table with production's title/creators/text/citation_key
+columns, image markup blanked from the body column like production, and an ``experiment_meta`` marker). It is never a
 generation of the production index: it carries no ``current.json``, is refused inside any directory
 tree that holds one, and an existing file is only replaced when it carries this module's marker.
 The production schema and storage code in ``src/`` are not touched, so a chunk-size or boundary
@@ -33,7 +34,7 @@ from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from zotero_pdf_text.fts import _chunk_text, chunk_sha256
+from zotero_pdf_text.fts import _chunk_text, chunk_sha256, fts_body_text, image_markup_spans
 
 STRATEGIES = ("chars", "sentence", "structural")
 SWEEP_TARGETS = (128, 256, 384, 512, 768)
@@ -357,6 +358,8 @@ class CorpusDoc:
     attachment_key: str
     citation_key: str
     text: str
+    title: str = ""
+    creators: str = ""
 
 
 def load_corpus(path: Path) -> dict[str, CorpusDoc]:
@@ -378,7 +381,10 @@ def load_corpus(path: Path) -> dict[str, CorpusDoc]:
         key = str(record.get("zotero_attachment_key") or "")
         if not key or key in docs:
             raise SystemExit(f"Corpus record #{position} needs a unique zotero_attachment_key.")
-        docs[key] = CorpusDoc(key, str(record.get("citation_key") or ""), record["text"])
+        docs[key] = CorpusDoc(
+            key, str(record.get("citation_key") or ""), record["text"],
+            str(record.get("title") or ""), str(record.get("creators") or ""),
+        )
     return docs
 
 
@@ -489,7 +495,7 @@ def build_experiment_index(
                     start_char INTEGER NOT NULL, end_char INTEGER NOT NULL, tokens INTEGER NOT NULL,
                     chunk_sha256 TEXT NOT NULL, text TEXT NOT NULL);
                 CREATE INDEX chunks_doc_idx ON chunks(doc_id, chunk_index);
-                CREATE VIRTUAL TABLE chunks_fts USING fts5(text, tokenize='unicode61');
+                CREATE VIRTUAL TABLE chunks_fts USING fts5(title, creators, text, citation_key, tokenize='unicode61');
                 """
             )
             over = 0
@@ -499,6 +505,7 @@ def build_experiment_index(
                     "INSERT INTO docs VALUES (?, ?, ?, ?, ?)",
                     (doc_id, doc.attachment_key, doc.citation_key, len(doc.text), chunk_sha256(doc.text)),
                 )
+                image_spans = image_markup_spans(doc.text)
                 for index, (start, end) in enumerate(chunk_document(doc.text, spec, tokenizer)):
                     text = doc.text[start:end]
                     tokens = tokenizer.count(text)
@@ -510,7 +517,11 @@ def build_experiment_index(
                         " VALUES (?, ?, ?, ?, ?, ?, ?)",
                         (doc_id, index, start, end, tokens, chunk_sha256(text), text),
                     )
-                    con.execute("INSERT INTO chunks_fts (rowid, text) VALUES (?, ?)", (cursor.lastrowid, text))
+                    con.execute(
+                        "INSERT INTO chunks_fts (rowid, title, creators, text, citation_key) VALUES (?, ?, ?, ?, ?)",
+                        (cursor.lastrowid, doc.title, doc.creators, fts_body_text(text, start, image_spans),
+                         doc.citation_key),
+                    )
             meta = {
                 "schema_version": SCHEMA_VERSION,
                 "chunking": json.dumps(spec.to_dict()),

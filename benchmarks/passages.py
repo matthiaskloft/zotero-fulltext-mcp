@@ -131,7 +131,7 @@ class ExperimentRetriever:
             SELECT c.doc_id, c.chunk_index, c.start_char, c.end_char, c.tokens, c.chunk_sha256,
                    d.attachment_key, d.citation_key
             FROM chunks_fts f JOIN chunks c ON c.chunk_id = f.rowid JOIN docs d ON d.doc_id = c.doc_id
-            WHERE chunks_fts MATCH ? ORDER BY bm25(chunks_fts), c.chunk_id LIMIT ?
+            WHERE chunks_fts MATCH ? ORDER BY bm25(chunks_fts, 8.0, 1.0, 1.0, 6.0), c.chunk_id LIMIT ?
             """,
             (_match_query(terms, search_mode), limit),
         ).fetchall()
@@ -417,10 +417,13 @@ def passage_metrics(
 
     nDCG credits each evidence span once, to the first hit overlapping it, with gain ``2^grade - 1``
     and a ``1/log2(rank+1)`` discount, so repeated hits on the same evidence earn nothing. The ideal
-    list has one hit per evidence span, cut at ``ideal_n`` (default: the number of hits returned).
+    list has one hit per evidence span, cut at ``ideal_n`` (default: every evidence span, so the
+    ideal does not shrink with the number of hits a configuration returns). A hit credits only the
+    highest-grade uncredited span it overlaps: nDCG stays within 1 and measures passage-level
+    granularity, while span_recall/char_recall credit every span a hit covers.
     """
     evidence = judgments.evidence
-    ideal_n = len(hits) if ideal_n is None else ideal_n
+    ideal_n = len(evidence) if ideal_n is None else ideal_n
     credited: set[int] = set()
     dcg = 0.0
     for rank, hit in enumerate(hits, start=1):
