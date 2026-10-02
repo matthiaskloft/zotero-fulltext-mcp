@@ -42,6 +42,8 @@ Target: about 100 PDFs. Fields were approved by the maintainer.
 
 Non-English papers may also count toward a field when they fit one.
 
+The venue register is [`public-corpus-journals.md`](public-corpus-journals.md).
+
 ## Selection method
 
 Hierarchical, by web search only, no downloads during selection:
