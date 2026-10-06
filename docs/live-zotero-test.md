@@ -67,7 +67,7 @@ started manually. It needs no Zotero account, token secret or private data: a lo
 is generated inside the container. Startup or missing plugins fail the job before pytest, rather
 than silently skipping live tests. JUnit results and the Zotero startup log are uploaded; the
 profile, token and database are not. The regular three-OS offline suite remains outside Docker
-and explicitly excludes `live_zotero` and `live_zotero_container` tests. Extraction, OCR,
+and explicitly excludes `live_zotero`, `live_zotero_container` and `live_zotero_corpus` tests. Extraction, OCR,
 corpus-quality, mock bridge and configuration-guard tests run on the host whenever they do
 not require Zotero. See [workflow-test-corpus.md](workflow-test-corpus.md) for public PDF
 sources, coverage gaps and user stories with testable acceptance criteria.
@@ -90,6 +90,17 @@ docker run --platform linux/amd64 --rm --init --shm-size 256m zotero-live-test n
 
 That run uses a fresh disposable container and performs real DOI imports and PDF downloads.
 It is excluded from the deterministic GitHub job.
+
+The `corpus` mode does the same for every public-corpus entry with a DOI
+([uses 3-5](public-corpus-uses.md)): import, Find Available PDF, and a check that the attachment
+is a readable PDF. It takes long and depends on many publishers, so pass pytest arguments to narrow
+it, for example `-k "plos or jmlr"`. A copy other than the pinned one, or no PDF, is recorded in
+`/work/corpus_acquisition.json` rather than failed; the pinned corpus for quality work still comes
+from `tools/fetch_public_pdf_corpus.py` on the host.
+
+```console
+docker run --platform linux/amd64 --rm --init --shm-size 256m zotero-live-test corpus
+```
 
 ## Host test isolation
 

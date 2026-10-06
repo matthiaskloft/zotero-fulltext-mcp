@@ -80,3 +80,5 @@ Environments: **host** (ordinary test suite, three-OS CI, or opt-in with the loc
 
 Uses 3–5 and 23 make the corpus the input of the Zotero acquisition tests; the fetch tool stays for
 host-side quality work, which should depend on neither Zotero nor the network.
+Uses 3-5 are implemented in `tests/test_live_zotero_corpus.py` (`run.py corpus`, see
+[`live-zotero-test.md`](live-zotero-test.md)).
