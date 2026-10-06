@@ -38,7 +38,8 @@ and exits non-zero. Their `note` says to save the PDF from `url` in a browser as
 `.cache/<id>.pdf`; the next run verifies its checksum.
 The long scan is about 43 MB. Public originals are not included in the Docker build context.
 Later real-paper Zotero tests can copy selected cached files into an isolated container as test
-inputs; they must not mount a private library.
+inputs; they must not mount a private library. Possible corpus-based tests by stage and
+environment are listed in [`public-corpus-uses.md`](public-corpus-uses.md).
 
 ## OCR cases still needed
 
