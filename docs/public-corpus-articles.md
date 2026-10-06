@@ -34,9 +34,8 @@ extractor output.
 
 | | Count |
 | --- | ---: |
-| Journal slots (42 journals × 2) | 84 |
+| Journal slots (41 journals × 2; Materials & Design dropped, see below) | 82 |
 | Filled and pinned | 82 |
-| Open (Materials & Design, see below) | 2 |
 | Extras pinned (languages 6, scans 2, report 1, slides 1, monograph 1) | 11 |
 | New `sources.json` entries | 93 |
 | … of which need a manual browser download ¹ | 26 |
@@ -212,13 +211,12 @@ extractor output.
 | C. R. Mécanique | Marigo, *La mécanique de l’endommagement au secours de la mécanique de la rupture : l’évolution de cette idée en un demi-siècle* (fr) | 2023 | 10.5802/crmeca.156 | CC BY 4.0 | article page | 7 | `crmeca-damage-mechanics` |
 | Zenodo | Bosman et al., *OA Diamond Journals Study. Part 1: Findings* | 2021 | 10.5281/zenodo.4558704 | CC BY 4.0 | record + PDF | 146 | `report-oa-diamond-journals` |
 
-## Open: Materials & Design
+## Dropped: Materials & Design
 
-Both slots are open. ScienceDirect shows an interactive bot challenge, so neither the article
-pages nor the PDFs could be opened, and the repository copies found carry conflicting rights labels
-(Figshare: all rights reserved; NORA: CC BY-NC-ND), although Crossref lists CC BY 4.0. Replacing
-the journal needs the maintainer's decision; Scientific Reports (`reserve`, CC BY per article, PDFs
-reachable through PubMed Central) is the suggested substitute.
+Dropped by the maintainer on 2026-10-06, without a substitute. ScienceDirect shows an interactive
+bot challenge, so neither the article pages nor the PDFs could be opened, and the repository copies
+found carry conflicting rights labels (Figshare: all rights reserved; NORA: CC BY-NC-ND), although
+Crossref lists CC BY 4.0.
 
 ## Replacements
 

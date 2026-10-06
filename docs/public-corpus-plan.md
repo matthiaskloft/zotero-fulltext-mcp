@@ -98,9 +98,9 @@ threshold. Adding it is part of this work.
 
 ## Workflow
 
-1. Candidate journals per field → maintainer review. *Done; Materials & Design unresolved.*
-2. Candidate articles with verified licences → maintainer review. *Done 2026-10-03: 82 of 84
-   journal slots and 11 extras.*
+1. Candidate journals per field → maintainer review. *Done; Materials & Design dropped.*
+2. Candidate articles with verified licences → maintainer review. *Done 2026-10-03: 82 journal
+   slots (41 journals) and 11 extras.*
 3. Host download, SHA-256 pinning, page inspection and quality labels. *Download and pinning done
    (93 entries); page inspection and quality labels pending. Acquisition through live Zotero is
    an opt-in container test (`run.py corpus`); other uses are listed in

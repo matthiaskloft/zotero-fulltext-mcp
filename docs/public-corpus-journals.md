@@ -125,7 +125,7 @@ exposed and the rows below now state. Venues that are not in DOAJ say so.
 | Journal | Role | Licence | Usable | Layout | Verified | Metric |
 | --- | --- | --- | --- | --- | --- | --- |
 | Science and Technology of Advanced Materials | core | CC BY or CC BY-NC (DOAJ: same); IOP-era articles vary (2010 review © NIMS only, 2015 review CC BY 3.0) | CC BY only | T&F, reviews and micrographs | 2026-10-03 | JIF 6.6 (2025) |
-| Materials & Design | core (unresolved) | CC BY, CC BY-NC or CC BY-NC-ND (author choice); DOAJ: same. ScienceDirect blocks page and PDF access, repository copies carry conflicting rights labels | CC BY only | Elsevier two-column, micrographs, units | 2026-10-03 | — |
+| Materials & Design | dropped 2026-10-06 | CC BY, CC BY-NC or CC BY-NC-ND (author choice); DOAJ: same. ScienceDirect blocks page and PDF access, repository copies carry conflicting rights labels | CC BY only | Elsevier two-column, micrographs, units | 2026-10-03 | — |
 | npj Computational Materials | core | CC BY 4.0 or CC BY-NC-ND 4.0 (author choice); DOAJ: same | CC BY only | Nature style, simulation figures | 2026-10-03 | — |
 | IEEE Access | reserve | CC BY 4.0 or CC BY-NC-ND 4.0 (author choice) | CC BY only | IEEE two-column, block diagrams | 2026-10-02 | — |
 | Scientific Reports | reserve | CC BY 4.0 or CC BY-NC-ND 4.0; DOAJ: same. PDFs reachable through PubMed Central | CC BY only | Multidisciplinary | 2026-10-03 | — |
