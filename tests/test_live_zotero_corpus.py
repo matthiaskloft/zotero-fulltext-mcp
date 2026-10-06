@@ -20,6 +20,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+import pymupdf
 import pytest
 
 from test_live_zotero import _check_pdf_until_found, _cli, live as live  # noqa: F401 -- imported pytest fixture
@@ -69,14 +70,27 @@ def test_corpus_doi_imports_with_one_usable_pdf(live: dict[str, Any], source: di
         steps=[{k: s.get(k) for k in ("step", "outcome", "error") if s.get(k)} for s in steps],
     )
 
+    outcome = result["pdf_outcome"]
+    if outcome in ("unknown", "unsettled"):
+        pytest.skip(f"Zotero did not settle the PDF step for {source['doi']} ({outcome})")
+    if outcome == "error":
+        # Only the final download from the pinned URL may fail: that is the publisher refusing it.
+        assert steps and steps[-1].get("step") == "link-pdf --url", f"PDF chain failed before the URL step:\n{text}"
+    else:
+        assert outcome in ("attached", "already_has_pdf", "not_found"), f"unexpected PDF outcome:\n{text}"
+
     after = _check_pdf_until_found(config_path, item_key, attempts=5)
-    if not after.get("found"):
-        assert result["pdf_outcome"] not in ("attached", "already_has_pdf"), after
+    assert after.get("source") == "debug_bridge" and isinstance(after.get("found"), bool), (
+        f"check-pdf did not read Zotero live, so the PDF state is unknown: {after}"
+    )
+    if not after["found"]:
+        assert outcome not in ("attached", "already_has_pdf"), after
         return
     assert len(after["attachments"]) == 1, f"item {item_key} has more than one PDF: {after}"
     linked_root = load_config(config_path).linked_attachments
     files = [p for p in resolve_attachment_paths(after["attachments"][0]["path"], linked_root) if p.is_file()]
     assert files, f"attachment of {item_key} has no file on disk: {after}"
     data = files[0].read_bytes()
-    assert data.startswith(b"%PDF"), f"attachment of {item_key} is not a PDF"
+    with pymupdf.open(stream=data, filetype="pdf") as document:
+        assert document.page_count > 0, f"attachment of {item_key} has no pages"
     result["pdf"] = "pinned" if hashlib.sha256(data).hexdigest() == source["sha256"] else "other_copy"
