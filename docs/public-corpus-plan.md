@@ -102,7 +102,9 @@ threshold. Adding it is part of this work.
 2. Candidate articles with verified licences → maintainer review. *Done 2026-10-03: 82 of 84
    journal slots and 11 extras.*
 3. Host download, SHA-256 pinning, page inspection and quality labels. *Download and pinning done
-   (93 entries); page inspection and quality labels pending.*
+   (93 entries); page inspection and quality labels pending. Acquisition through live Zotero is
+   an opt-in container test (`run.py corpus`); other uses are listed in
+   [`public-corpus-uses.md`](public-corpus-uses.md).*
 4. Opt-in host test comparing scores to labels; threshold margins reported.
 5. Question set and negative-result metric.
 6. Threshold adjustments in `quality.py`, confirmed on a real library.
