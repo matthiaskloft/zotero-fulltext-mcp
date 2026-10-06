@@ -1,13 +1,16 @@
 """Opt-in acquisition of the public corpus through real Zotero (docs/public-corpus-uses.md, uses 3-5).
 
-For every `benchmarks/public_pdfs/sources.json` entry with a DOI: import it, ask Zotero to find a free
-PDF, and check that the attachment is a readable PDF that check-pdf sees. Runs only in the isolated
-container (`run.py corpus`) with network access, behind the same guards as test_live_zotero.py.
+For every `benchmarks/public_pdfs/sources.json` entry with a DOI, run the user's path
+`import-doi --with-pdf --pdf-url <pinned url>`: import, keep a PDF the import already attached,
+otherwise Find Available PDF, otherwise attach from the pinned URL. Then check that the item has
+exactly one PDF and that it is a readable file. Runs only in the isolated container
+(`run.py corpus`) with network access, behind the same guards as test_live_zotero.py.
 
-A different copy than the pinned one, or no PDF found, is recorded rather than failed: Zotero's
-resolvers may pick a PMC copy or manuscript, and publishers block or move files. The run writes
-`corpus_acquisition.json` next to the test config. Pinned corpus bytes for quality work still come
-from tools/fetch_public_pdf_corpus.py on the host.
+Which step supplied the PDF, whether it is the pinned copy, and PDFs not found or refused by a
+publisher are recorded rather than failed: Zotero's resolvers may pick a PMC copy or manuscript,
+and publishers block or move files. An import whose bridge call timed out is skipped, since its
+outcome is unknown. The run writes `corpus_acquisition.json` next to the test config. Pinned corpus
+bytes for quality work still come from tools/fetch_public_pdf_corpus.py on the host.
 """
 
 from __future__ import annotations
@@ -28,10 +31,6 @@ CORPUS = [s for s in json.loads(SOURCES.read_text(encoding="utf-8"))["sources"] 
 RESULTS: dict[str, dict[str, Any]] = {}
 
 
-def _manual(source: dict[str, Any]) -> bool:
-    return "manual" in str(source.get("note", "")).lower()
-
-
 @pytest.fixture(scope="module", autouse=True)
 def report(live: dict[str, Any]):
     yield
@@ -39,32 +38,42 @@ def report(live: dict[str, Any]):
     path.write_text(json.dumps(RESULTS, indent=2) + "\n", encoding="utf-8")
     counts: dict[str, int] = {}
     for result in RESULTS.values():
-        counts[result["pdf"]] = counts.get(result["pdf"], 0) + 1
+        label = f"{result['pdf_outcome']}/{result['pdf']}"
+        counts[label] = counts.get(label, 0) + 1
     print(f"\ncorpus acquisition: {counts}; details in {path}")
 
 
 @pytest.mark.live_zotero_corpus
 @pytest.mark.parametrize("source", CORPUS, ids=[s["id"] for s in CORPUS])
-def test_corpus_doi_imports_and_finds_a_usable_pdf(live: dict[str, Any], source: dict[str, Any]) -> None:
+def test_corpus_doi_imports_with_one_usable_pdf(live: dict[str, Any], source: dict[str, Any]) -> None:
     config_path: Path = live["config_path"]
-    result: dict[str, Any] = {"doi": source["doi"], "manual_download": _manual(source), "pdf": "not_run"}
+    result: dict[str, Any] = {
+        "doi": source["doi"],
+        "publisher_refuses_scripts": "refuses scripted downloads" in str(source.get("note", "")),
+        "pdf_outcome": "not_run", "pdf": "none",
+    }
     RESULTS[source["id"]] = result
 
-    rc, imported, text = _cli(config_path, None, "import-doi", "--doi", source["doi"])
-    assert rc == 0, f"import-doi failed for {source['doi']}:\n{text}"
-    assert imported.get("status") == "imported", imported
+    _, imported, text = _cli(
+        config_path, None, "import-doi", "--doi", source["doi"], "--with-pdf", "--pdf-url", source["url"],
+    )
+    if imported.get("outcome") == "unknown":
+        result["pdf_outcome"] = "import_unknown"
+        pytest.skip(f"import-doi timed out for {source['doi']}; outcome unknown")
+    assert imported.get("status") == "imported", f"import-doi failed for {source['doi']}:\n{text}"
     item_key = str(imported["key"])
-    result.update(item_type=imported.get("item_type"), pdf="not_found")
+    steps = imported.get("steps") or []
+    result.update(
+        item_type=imported.get("item_type"),
+        pdf_outcome=imported.get("pdf_outcome"),
+        steps=[{k: s.get(k) for k in ("step", "outcome", "error") if s.get(k)} for s in steps],
+    )
 
-    rc, found, text = _cli(config_path, None, "find-pdf", "--key", item_key)
-    assert rc == 0, text
-    result["find_outcome"] = found.get("outcome")
-    if found.get("outcome") != "attached":
+    after = _check_pdf_until_found(config_path, item_key, attempts=5)
+    if not after.get("found"):
+        assert result["pdf_outcome"] not in ("attached", "already_has_pdf"), after
         return
-
-    after = _check_pdf_until_found(config_path, item_key)
-    assert after.get("found"), f"check-pdf never saw the PDF attached to {item_key}: {after}"
-    assert len(after["attachments"]) == 1, after
+    assert len(after["attachments"]) == 1, f"item {item_key} has more than one PDF: {after}"
     linked_root = load_config(config_path).linked_attachments
     files = [p for p in resolve_attachment_paths(after["attachments"][0]["path"], linked_root) if p.is_file()]
     assert files, f"attachment of {item_key} has no file on disk: {after}"
