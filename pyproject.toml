@@ -66,6 +66,7 @@ pythonpath = ["src", "benchmarks"]
 testpaths = ["tests"]
 markers = [
   "live_zotero: optional network acquisition test in the isolated Linux container only (docs/live-zotero-test.md)",
+  "live_zotero_corpus: optional public-corpus acquisition through Zotero in the isolated container (docs/public-corpus-uses.md)",
   "live_zotero_container: deterministic tests against real Zotero in the isolated Linux container",
 ]
 

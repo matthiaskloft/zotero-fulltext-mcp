@@ -72,8 +72,8 @@ def configure() -> None:
 
 def main() -> int:
     mode = sys.argv[1] if len(sys.argv) > 1 else "test"
-    if mode not in {"test", "network", "serve"}:
-        raise SystemExit("Usage: run.py [test|network|serve]")
+    if mode not in {"test", "network", "corpus", "serve"}:
+        raise SystemExit("Usage: run.py [test|network|corpus|serve]")
     configure()
     processes: list[subprocess.Popen] = []
 
@@ -111,7 +111,11 @@ def main() -> int:
             raise RuntimeError("Zotero plugins were not ready within 120 seconds; inspect /work/zotero.log")
         if mode == "serve":
             return processes[-1].wait()
-        tests = ["tests/test_live_zotero_container.py"] if mode == "test" else ["tests/test_live_zotero.py", "-m", "live_zotero"]
+        tests = {
+            "test": ["tests/test_live_zotero_container.py"],
+            "network": ["tests/test_live_zotero.py", "-m", "live_zotero"],
+            "corpus": ["tests/test_live_zotero_corpus.py", "-m", "live_zotero_corpus"],
+        }[mode]
         return subprocess.call([sys.executable, "-m", "pytest", *tests, "-v", "-s", "-p", "no:cacheprovider", *sys.argv[2:]])
     finally:
         for process in reversed(processes):
