@@ -27,7 +27,7 @@ from .indexer import (
     _sha256,
     load_indexed_keys,
 )
-from .library import images_dir_for
+from .library import images_dir_for, relative_image_links
 from .lock import PipelineLockedError, pipeline_write_lock
 
 MARKER_TOOL = "marker"
@@ -123,7 +123,7 @@ def reconvert_with_marker(
         # that never had any.
         source_sha256_before = _sha256(source_path)
         _run_marker_extractor(source_path, raw_output_path, staged_images_dir, timeout_seconds)
-        new_text = raw_output_path.read_text(encoding="utf-8")
+        new_text = relative_image_links(raw_output_path.read_text(encoding="utf-8"), markdown_path)
         source_sha256 = _sha256(source_path)
         if source_sha256 != source_sha256_before:
             cleanup_staging()

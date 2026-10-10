@@ -209,7 +209,7 @@ class ConverterTests(unittest.TestCase):
                 convert_verified(config, report, output_dir=run_dir, resume=True, force=True, workers=1)
             self.assertEqual((image_dir / "new.png").read_bytes(), b"new")
             self.assertFalse((image_dir / "old.png").exists())
-            self.assertIn((image_dir / "new.png").as_posix(), markdown.read_text(encoding="utf-8"))
+            self.assertIn("](../images/0001_zotero_PARENT/new.png)", markdown.read_text(encoding="utf-8"))
 
     def test_ordinary_extractor_error_and_timeout_do_not_retry(self):
         for first_error in (
@@ -1083,7 +1083,7 @@ class CanonicalLibraryTests(unittest.TestCase):
         image = self.library / "ATTKEY01" / "images" / "fig.png"
         self.assertEqual(self._manifest(run_dir)[0]["output_path"], str(markdown))
         self.assertEqual(image.read_bytes(), b"png")
-        self.assertIn(image.as_posix(), markdown.read_text(encoding="utf-8"))
+        self.assertIn("](images/fig.png)", markdown.read_text(encoding="utf-8"))
         self.assertEqual(list(run_dir.glob("markdown/*")), [])
         self.assertFalse((run_dir / "images").exists())
         self.assertIn(f"Markdown folder: `{markdown.parent}`", (run_dir / "summary.md").read_text(encoding="utf-8"))
@@ -1223,7 +1223,7 @@ class CanonicalLibraryTests(unittest.TestCase):
 
         self.assertEqual(sorted(path.name for path in images.iterdir()), ["new.png"])
         self.assertEqual([path.name for path in self.library.iterdir()], ["ATTKEY01"])
-        self.assertIn((images / "new.png").as_posix(), markdown.read_text(encoding="utf-8"))
+        self.assertIn("](images/new.png)", markdown.read_text(encoding="utf-8"))
 
     def test_failed_image_restore_keeps_the_previous_images(self):
         from zotero_pdf_text._atomic import replace_with_retry as real_replace

@@ -36,6 +36,7 @@ from zotero_pdf_text.library import (
     audit_library,
     canonical_image_dir,
     images_dir_for,
+    relative_image_links,
     canonical_markdown_path,
     classify_item,
     is_canonical_eligible,
@@ -112,6 +113,23 @@ class CanonicalPathTests(unittest.TestCase):
             self.assertEqual(images_dir_for(markdown), canonical_image_dir(config, "ABCD1234"))
             run_markdown = Path(tmp) / "run" / "markdown" / "0001_paper.md"
             self.assertEqual(images_dir_for(run_markdown), Path(tmp) / "run" / "images" / "0001_paper")
+
+    def test_image_links_are_rewritten_relative_to_the_markdown(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = _config(Path(tmp))
+            markdown = canonical_markdown_path(config, "ABCD1234")
+            text = (
+                r"![](some/cwd/relative/fig1.png) ![alt](C:\other\machine\fig2.png) "
+                "![](marker_bare.jpeg) ![remote](https://example.com/a.png)"
+            )
+            rewritten = relative_image_links(text, markdown)
+            self.assertEqual(
+                rewritten,
+                "![](images/fig1.png) ![alt](images/fig2.png) "
+                "![](images/marker_bare.jpeg) ![remote](https://example.com/a.png)",
+            )
+            run_markdown = Path(tmp) / "run" / "markdown" / "0001_paper.md"
+            self.assertEqual(relative_image_links("![](x/fig.png)", run_markdown), "![](../images/0001_paper/fig.png)")
 
     def test_a_retitle_resolves_to_exactly_the_same_file(self):
         """Equality, not a shared prefix.

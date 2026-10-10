@@ -25,6 +25,7 @@ from .library import (
     canonical_markdown_path,
     images_dir_for,
     is_canonical_eligible,
+    relative_image_links,
     validate_attachment_key,
 )
 from ._atomic import atomic_write_text, replace_with_retry
@@ -670,9 +671,8 @@ def _convert_row(
             # with fallback text while the lower-concurrency retry is pending.
             return _result(row, output_path, "error", fallback_note + "; existing Markdown retained"), None
         markdown = raw_output_path.read_text(encoding="utf-8")
-        if staged_images_root is not None and extraction_tool == PRIMARY_EXTRACTION_TOOL:
-            markdown = markdown.replace(extraction_images_dir.as_posix(), images_dir.as_posix())
-            markdown = markdown.replace(str(extraction_images_dir), str(images_dir))
+        if extraction_tool == PRIMARY_EXTRACTION_TOOL:
+            markdown = relative_image_links(markdown, output_path)
         has_math = _read_math_sidecar(math_sidecar_path)
         if staged_images_root is not None:
             staged_markdown = staged_images_root / output_path.name

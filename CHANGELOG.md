@@ -24,6 +24,13 @@ All notable changes to this project are documented here. Format loosely follows
 - Every index publication writes `library/catalog.md` and `library/catalog.csv`, listing each
   indexed paper by citation key, year, authors and title with a link relative to the catalog, so
   it opens on any machine the output root is synced to, plus a `README.md` explaining the folders.
+
+### Fixed
+
+- Image links in converted Markdown are relative to the Markdown file (`images/fig.png` in the
+  library), so figures display on every machine the output root is synced to. pymupdf4llm wrote
+  them relative to the extractor's working directory and marker-pdf (`reconvert-math`) as a bare
+  file name, so they often pointed nowhere.
 - Index stores the Zotero fields it used to drop (item type, abstract, venue, volume/issue/pages,
   date, publisher, place, ISBN/ISSN, URL, language, tags and structured creator roles) and a
   computed `detected_language`. `rebuild-index`/`update-index --refresh-zotero-metadata` merge

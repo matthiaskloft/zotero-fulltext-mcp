@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import unicodedata
 from collections.abc import Iterator
@@ -117,6 +118,7 @@ IMAGES_DIRNAME = "images"
 
 _ATTACHMENT_KEY_RE = re.compile(r"^[A-Z0-9]{8}$")
 _SLUG_STRIP_RE = re.compile(r"[^a-z0-9]+")
+_IMAGE_LINK_RE = re.compile(r"!\[([^\]]*)\]\(([^)]*)\)")
 
 
 class LibraryAuditError(RuntimeError):
@@ -179,6 +181,25 @@ def images_dir_for(markdown_path: Path) -> Path:
     if markdown_path.parent.name == markdown_path.stem:
         return markdown_path.parent / IMAGES_DIRNAME
     return markdown_path.parent.parent / IMAGES_DIRNAME / markdown_path.stem
+
+
+def relative_image_links(markdown: str, markdown_path: Path) -> str:
+    """Point every image link in `markdown` at its file in `images_dir_for(markdown_path)`.
+
+    Links are written relative to the Markdown file (`images/fig.png` in the library), so they
+    resolve on every machine the output root is synced to. The extractors' own link targets are
+    not usable: pymupdf4llm writes them relative to its working directory and marker-pdf as a bare
+    file name. Only the file name is kept, because the images are always in that one folder.
+    """
+    prefix = Path(os.path.relpath(images_dir_for(markdown_path), markdown_path.parent)).as_posix()
+
+    def rebase(match: re.Match[str]) -> str:
+        name = match.group(2).replace("\\", "/").rsplit("/", 1)[-1]
+        if not name or "://" in match.group(2):
+            return match.group(0)
+        return f"![{match.group(1)}]({prefix}/{name})"
+
+    return _IMAGE_LINK_RE.sub(rebase, markdown)
 
 
 def validate_attachment_key(attachment_key: str) -> str:
