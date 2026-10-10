@@ -133,7 +133,7 @@ class Library:
         return None if pointer is None else pointer["current_generation"]
 
     def only_mapping_run(self) -> Path:
-        (run,) = (self.output_root / "mapping-runs").iterdir()
+        (run,) = (self.output_root / "runs").glob("*_dry-run")
         return run
 
     def registration(self, *flags: str) -> tuple[list[str], set[str]]:
@@ -322,10 +322,10 @@ class AuditAndStatusTests(unittest.TestCase):
             self.assertEqual(statuses, {FIRST.attachment_key: ["current"], SECOND.attachment_key: ["current"]})
             # The index reads each paper from the canonical library, not from a run folder.
             markdown = {item["attachment_key"]: item["evidence"]["indexed_markdown_path"] for item in report["items"]}
-            library_markdown = library.output_root / "library" / "markdown"
+            library_root = library.output_root / "library"
             self.assertEqual(
                 markdown,
-                {key: str(library_markdown / f"{key}.md") for key in (FIRST.attachment_key, SECOND.attachment_key)},
+                {key: str(library_root / key / f"{key}.md") for key in (FIRST.attachment_key, SECOND.attachment_key)},
             )
             self.assertTrue(all(item["evidence"]["canonical_markdown_exists"] for item in report["items"]))
 
@@ -364,7 +364,7 @@ class WholeLibraryRebuildTests(unittest.TestCase):
             library.add(FIRST)
             library.add(SECOND)
             library.convert_new()
-            (run,) = (library.output_root / "conversion-runs" / "verified").iterdir()
+            (run,) = (library.output_root / "runs").glob("*_convert-verified")
             # A whole-library reconversion in which SECOND failed: its manifest converts FIRST only.
             partial = Path(tmp) / "manifest.csv"
             with (run / "manifest.csv").open(encoding="utf-8-sig", newline="") as handle:

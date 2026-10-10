@@ -113,7 +113,6 @@ ELIGIBLE_IDENTITY_STATUSES = frozenset({"verified", "manual_accepted", "fulltext
 
 MAPPING_REPORT_JSONL = "mapping_report.jsonl"
 LIBRARY_DIRNAME = "library"
-MARKDOWN_DIRNAME = "markdown"
 IMAGES_DIRNAME = "images"
 
 _ATTACHMENT_KEY_RE = re.compile(r"^[A-Z0-9]{8}$")
@@ -133,6 +132,16 @@ def canonical_library_root(config: ProjectConfig) -> Path:
     return config.output_root / LIBRARY_DIRNAME
 
 
+def canonical_paper_dir(config: ProjectConfig, attachment_key: str) -> Path:
+    """The folder holding everything converted from attachment `attachment_key`.
+
+    One folder per attachment, named by its key: `library/<key>/<key>.md` beside
+    `library/<key>/images/`, so a paper's text and figures are found, copied and removed together.
+    """
+    key = validate_attachment_key(attachment_key)
+    return canonical_library_root(config) / key
+
+
 def canonical_markdown_path(config: ProjectConfig, attachment_key: str) -> Path:
     """Where attachment `attachment_key`'s converted Markdown lives under the canonical layout.
 
@@ -147,7 +156,7 @@ def canonical_markdown_path(config: ProjectConfig, attachment_key: str) -> Path:
     sidecar mapping if it is ever wanted, not in the path a lookup depends on.
     """
     key = validate_attachment_key(attachment_key)
-    return canonical_library_root(config) / MARKDOWN_DIRNAME / f"{key}.md"
+    return canonical_paper_dir(config, key) / f"{key}.md"
 
 
 def canonical_image_dir(config: ProjectConfig, attachment_key: str) -> Path:
@@ -156,8 +165,20 @@ def canonical_image_dir(config: ProjectConfig, attachment_key: str) -> Path:
     Keyed on the attachment key only -- deliberately *not* derived from the Markdown filename, so
     a title change cannot orphan a whole image directory.
     """
-    key = validate_attachment_key(attachment_key)
-    return canonical_library_root(config) / IMAGES_DIRNAME / key
+    return canonical_paper_dir(config, attachment_key) / IMAGES_DIRNAME
+
+
+def images_dir_for(markdown_path: Path) -> Path:
+    """Where the images extracted alongside converted Markdown `markdown_path` live.
+
+    Two layouts exist: the canonical library keeps each paper in its own folder
+    (`library/<key>/<key>.md` with `library/<key>/images/`), while a run directory keeps numbered
+    files side by side (`<run>/markdown/<stem>.md` with `<run>/images/<stem>/`). A Markdown file
+    named after its own folder is the former.
+    """
+    if markdown_path.parent.name == markdown_path.stem:
+        return markdown_path.parent / IMAGES_DIRNAME
+    return markdown_path.parent.parent / IMAGES_DIRNAME / markdown_path.stem
 
 
 def validate_attachment_key(attachment_key: str) -> str:

@@ -458,7 +458,7 @@ def assert_safe_experiment_path(path: Path) -> None:
     if not resolved.name.endswith(EXPERIMENT_SUFFIX):
         raise SystemExit(f"Experimental index files must be named *{EXPERIMENT_SUFFIX}.")
     for directory in (resolved.parent, *resolved.parent.parents):
-        if (directory / "current.json").exists() or directory.name == "generations":
+        if (directory / "current.json").exists() or directory.name in {"versions", "generations"}:
             raise SystemExit("Refusing to build an experimental index inside a production output root.")
     if resolved.exists():
         try:

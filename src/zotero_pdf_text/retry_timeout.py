@@ -15,6 +15,7 @@ from .artifacts import (
 from .config import ProjectConfig
 from .converter import convert_verified
 from .indexer import _record_from_manifest_row
+from .layout import REVIEW_DIRNAME, new_run_dir
 from .lock import PipelineLockedError, pipeline_write_lock
 from .timeout_candidates import (
     STATUS_PENDING,
@@ -30,11 +31,11 @@ from .timeout_candidates import (
 # multi-day accidental run, even by request.
 MAX_RETRY_TIMEOUT_SECONDS = 86400
 
-CANDIDATES_RELATIVE_PATH = Path("index") / "timeout_candidates.jsonl"
-SKIP_LIST_RELATIVE_PATH = Path("timeout_skip_list.json")
+CANDIDATES_RELATIVE_PATH = Path(REVIEW_DIRNAME) / "timeout_candidates.jsonl"
+SKIP_LIST_RELATIVE_PATH = Path(REVIEW_DIRNAME) / "timeout_skip_list.json"
 
 # Real Zotero keys are always alphanumeric. This attachment_key is interpolated directly into
-# filesystem paths below (output_root / "retry_timeout" / f"{timestamp}_{attachment_key}"), and the
+# filesystem paths below (output_root / "runs" / f"<date>_retry-timeout_{attachment_key}"), and the
 # master timeout_candidates.jsonl file it's looked up from is documented as user-editable -- reject
 # anything else up front rather than letting a corrupted/hand-edited key escape output_root.
 _ATTACHMENT_KEY_PATTERN = re.compile(r"[A-Za-z0-9]+")
@@ -180,13 +181,13 @@ def retry_timeout_candidate(
     }
 
     now = datetime.now().isoformat(timespec="seconds")
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     try:
         with pipeline_write_lock(config.output_root, command="retry-timeout"):
-            mapping_report = config.output_root / "retry_timeout" / f"{timestamp}_{attachment_key}_mapping_report.csv"
+            retry_dir = new_run_dir(config.output_root, "retry-timeout", detail=attachment_key)
+            mapping_report = retry_dir / "mapping_report.csv"
             _write_single_row_mapping_report(mapping_report, row)
-            run_dir = config.output_root / "retry_timeout" / f"{timestamp}_{attachment_key}"
+            run_dir = retry_dir / "conversion"
             index_root = config.output_root / "index"
             current_jsonl = current_generation_jsonl(index_root)
             if current_jsonl is None:

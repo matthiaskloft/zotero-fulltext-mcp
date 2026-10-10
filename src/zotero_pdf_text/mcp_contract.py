@@ -1435,7 +1435,7 @@ def latest_mapping_snapshot(config: ProjectConfig) -> Path | None:
     """
     snapshots = [
         candidate
-        for dirname in ("mapping-runs", "runs")
+        for dirname in ("runs", "mapping-runs")
         for candidate in (config.output_root / dirname).glob("*/" + MAPPING_REPORT_JSONL)
         if candidate.is_file()
     ]
@@ -2171,12 +2171,14 @@ def _reconvert_with_math_ocr(
 
 
 def _list_timeout_candidates(db_path: Path, *, status: object, limit: object) -> ListTimeoutCandidatesResponse:
+    from .layout import review_root
     from .timeout_candidates import CANDIDATE_JSONL_FILENAME
 
     validated_status = _validate_timeout_candidate_status(status)
     validated_limit = _validate_limit(limit)
     status_filter = None if validated_status == "all" else validated_status
-    candidates_jsonl = db_path.parent / CANDIDATE_JSONL_FILENAME
+    # db_path is <output_root>/index/<db>; the review lists sit in <output_root>/review/.
+    candidates_jsonl = review_root(db_path.parent.parent) / CANDIDATE_JSONL_FILENAME
     # Filter on the *effective* status, so a candidate recovered through another workflow no
     # longer shows up as pending work.
     records = list_candidates(candidates_jsonl, status=None)
@@ -2200,12 +2202,13 @@ def _current_index_states(db_path: Path, attachment_keys: list[str]) -> dict[str
 
 
 def _list_orphan_candidates(db_path: Path, *, status: object, limit: object) -> ListOrphanCandidatesResponse:
+    from .layout import review_root
     from .orphan_candidates import CANDIDATE_JSONL_FILENAME
 
     validated_status = _validate_timeout_candidate_status(status)
     validated_limit = _validate_limit(limit)
     status_filter = None if validated_status == "all" else validated_status
-    candidates_jsonl = db_path.parent / CANDIDATE_JSONL_FILENAME
+    candidates_jsonl = review_root(db_path.parent.parent) / CANDIDATE_JSONL_FILENAME
     records = list_orphan_candidate_records(candidates_jsonl, status=status_filter)[:validated_limit]
     return {"candidates": [serialize_orphan_candidate(record) for record in records]}
 
@@ -2462,7 +2465,7 @@ def _validate_attachment_key(value: object) -> str:
         raise PublicMcpError("invalid_attachment_key", "attachment_key must be a non-empty bounded string.")
     stripped = value.strip()
     # Real Zotero keys are always alphanumeric. Retry-timeout interpolates this value directly
-    # into filesystem paths (output_root / "retry_timeout" / f"{timestamp}_{attachment_key}"), so
+    # into filesystem paths (output_root / "runs" / f"<date>_retry-timeout_{attachment_key}"), so
     # this allowlist also closes a path-traversal gap for a corrupted/hand-edited candidate record
     # (the master timeout_candidates.jsonl file is documented as user-editable).
     if not _ATTACHMENT_KEY_PATTERN.fullmatch(stripped):

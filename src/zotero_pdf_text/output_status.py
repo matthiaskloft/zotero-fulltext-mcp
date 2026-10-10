@@ -7,6 +7,15 @@ from collections import Counter
 from pathlib import Path
 
 from .artifacts import read_current_pointer, resolve_generation_dir
+from .layout import review_root, runs_root
+from .library import LIBRARY_DIRNAME
+
+# Folders earlier versions wrote run output to. Reported, never moved: renaming folders inside a
+# synced output root is how converted text gets lost.
+LEGACY_ROOTS = (
+    "mapping-runs", "conversion-runs", "orphan_discovery", "duplicate_attachments", "retry_timeout",
+    "provenance-reconvert", "index-repair", "verified", "samples", "unverified_review",
+)
 
 
 def output_status(output_root: Path, *, list_files: bool = False) -> dict[str, object]:
@@ -61,9 +70,10 @@ def output_status(output_root: Path, *, list_files: bool = False) -> dict[str, o
             previous = {"generation_id": str(previous_id), "error": "previous generation unavailable"}
     return {
         "output_root": str(output_root),
-        "mapping_snapshots": str(output_root / "mapping-runs"),
-        "conversion_runs": [str(output_root / "conversion-runs" / name) for name in ("verified", "samples", "unverified-review", "provenance-reconvert", "index-repair")],
-        "legacy_roots": [str(output_root / name) for name in ("runs", "verified", "samples", "unverified_review") if (output_root / name).exists()],
+        "library": str(output_root / LIBRARY_DIRNAME),
+        "runs": str(runs_root(output_root)),
+        "review": str(review_root(output_root)),
+        "legacy_roots": [str(output_root / name) for name in LEGACY_ROOTS if (output_root / name).exists()],
         "index_pointer": str(index_root / "current.json"),
         "current": current,
         "previous": previous,

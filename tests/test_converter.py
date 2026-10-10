@@ -49,7 +49,8 @@ class ConverterTests(unittest.TestCase):
             config = ProjectConfig(root, root, root, root / "output")
             with patch("zotero_pdf_text.converter.subprocess.run", side_effect=extract):
                 run_dir = convert_verified(config, report, workers=4)
-            self.assertEqual(run_dir.parent, config.output_root / "conversion-runs" / "verified")
+            self.assertEqual(run_dir.parent, config.output_root / "runs")
+            self.assertTrue(run_dir.name.endswith("_convert-verified"))
             with (run_dir / "manifest.csv").open(encoding="utf-8-sig", newline="") as handle:
                 result = next(csv.DictReader(handle))
             self.assertEqual(calls, ["pymupdf4llm.to_markdown", "pymupdf.get_text", "pymupdf4llm.to_markdown"])
@@ -384,8 +385,8 @@ class ConverterTests(unittest.TestCase):
             pdf.write_bytes(b"%PDF")
             _write_mapping_report(report, pdf)
             output_root = root / "output"
-            output_root.mkdir(parents=True, exist_ok=True)
-            (output_root / "timeout_skip_list.json").write_text(
+            (output_root / "review").mkdir(parents=True, exist_ok=True)
+            (output_root / "review" / "timeout_skip_list.json").write_text(
                 json.dumps({"version": 1, "entries": {"ATTACH": {"reason": "test"}}}), encoding="utf-8"
             )
             config = ProjectConfig(root, root, root, output_root)
@@ -417,8 +418,8 @@ class ConverterTests(unittest.TestCase):
             pdf.write_bytes(b"%PDF")
             _write_mapping_report(report, pdf)
             output_root = root / "output"
-            output_root.mkdir(parents=True, exist_ok=True)
-            (output_root / "timeout_skip_list.json").write_text("{not valid json", encoding="utf-8")
+            (output_root / "review").mkdir(parents=True, exist_ok=True)
+            (output_root / "review" / "timeout_skip_list.json").write_text("{not valid json", encoding="utf-8")
             config = ProjectConfig(root, root, root, output_root)
 
             with patch("zotero_pdf_text.converter.subprocess.run", side_effect=_write_raw_markdown):
@@ -502,7 +503,7 @@ class ConverterTests(unittest.TestCase):
             self.assertEqual(run_rows[0]["attempted_timeout_seconds"], "600")
             self.assertEqual(run_rows[0]["suggested_next_timeout_seconds"], "1200")
 
-            master_path = output_root / "index" / "timeout_candidates.jsonl"
+            master_path = output_root / "review" / "timeout_candidates.jsonl"
             master_records = [json.loads(line) for line in master_path.read_text(encoding="utf-8").splitlines()]
             self.assertEqual(len(master_records), 1)
             self.assertEqual(master_records[0]["status"], "pending")
@@ -550,7 +551,7 @@ class ConverterTests(unittest.TestCase):
             with (run_dir / "timeout_candidates.csv").open("r", encoding="utf-8-sig", newline="") as handle:
                 run_rows = list(csv.DictReader(handle))
             self.assertEqual(run_rows, [])
-            self.assertFalse((output_root / "index" / "timeout_candidates.jsonl").exists())
+            self.assertFalse((output_root / "review" / "timeout_candidates.jsonl").exists())
 
     def test_master_timeout_candidates_jsonl_accumulates_occurrence_count_across_runs(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -562,7 +563,7 @@ class ConverterTests(unittest.TestCase):
             output_root = root / "output"
             config = ProjectConfig(root, root, root, output_root)
 
-            master_path = output_root / "index" / "timeout_candidates.jsonl"
+            master_path = output_root / "review" / "timeout_candidates.jsonl"
 
             def read_master():
                 lines = master_path.read_text(encoding="utf-8").splitlines()
@@ -1078,8 +1079,8 @@ class CanonicalLibraryTests(unittest.TestCase):
         with patch("zotero_pdf_text.converter.subprocess.run", side_effect=extract):
             run_dir = convert_verified(self.config, self._report({"zotero_attachment_key": "ATTKEY01"}), workers=1)
 
-        markdown = self.library / "markdown" / "ATTKEY01.md"
-        image = self.library / "images" / "ATTKEY01" / "fig.png"
+        markdown = self.library / "ATTKEY01" / "ATTKEY01.md"
+        image = self.library / "ATTKEY01" / "images" / "fig.png"
         self.assertEqual(self._manifest(run_dir)[0]["output_path"], str(markdown))
         self.assertEqual(image.read_bytes(), b"png")
         self.assertIn(image.as_posix(), markdown.read_text(encoding="utf-8"))
@@ -1103,10 +1104,10 @@ class CanonicalLibraryTests(unittest.TestCase):
         run.assert_not_called()
         self.assertEqual([row["status"] for row in self._manifest(run_dir)], ["error", "error"])
         self.assertIn("same attachment key", self._manifest(run_dir)[0]["error"])
-        self.assertFalse((self.library / "markdown" / "ATTKEY01.md").exists())
+        self.assertFalse((self.library / "ATTKEY01" / "ATTKEY01.md").exists())
 
     def test_library_markdown_from_another_run_is_reextracted_not_reused(self):
-        markdown = self.library / "markdown" / "ATTKEY01.md"
+        markdown = self.library / "ATTKEY01" / "ATTKEY01.md"
         markdown.parent.mkdir(parents=True)
         markdown.write_text("---\n---\n\nOld body", encoding="utf-8")
 
@@ -1130,7 +1131,7 @@ class CanonicalLibraryTests(unittest.TestCase):
         row = self._manifest(run_dir)[0]
         self.assertEqual(row["status"], "converted")
         self.assertEqual(len(row["source_sha256"]), 64)
-        self.assertIn('"output": "../../../library/markdown/ATTKEY01.md"', (run_dir / "conversion_checkpoint.jsonl").read_text(encoding="utf-8"))
+        self.assertIn('"output": "../../../library/ATTKEY01/ATTKEY01.md"', (run_dir / "conversion_checkpoint.jsonl").read_text(encoding="utf-8"))
 
     def test_samples_never_write_to_the_library(self):
         with patch("zotero_pdf_text.converter.subprocess.run", side_effect=_write_raw_markdown):
@@ -1149,7 +1150,7 @@ class CanonicalLibraryTests(unittest.TestCase):
         with patch("zotero_pdf_text.converter.subprocess.run", side_effect=_write_raw_markdown):
             first = convert_verified(self.config, report, workers=1)
         self._publish(first)
-        markdown = self.library / "markdown" / "ATTKEY01.md"
+        markdown = self.library / "ATTKEY01" / "ATTKEY01.md"
         indexed_bytes = markdown.read_bytes()
 
         with patch("zotero_pdf_text.converter.subprocess.run") as run:
@@ -1186,7 +1187,7 @@ class CanonicalLibraryTests(unittest.TestCase):
             run_dir = convert_verified(self.config, self._report({"zotero_attachment_key": "ATTKEY01"}), workers=1)
 
         self.assertEqual(self._manifest(run_dir)[0]["status"], "error")
-        self.assertFalse((self.library / "images" / "ATTKEY01").exists())
+        self.assertFalse((self.library / "ATTKEY01" / "images").exists())
 
     def test_fallback_text_leaves_no_partial_primary_images(self):
         def primary_writes_images_then_times_out(args, **kwargs):
@@ -1201,14 +1202,14 @@ class CanonicalLibraryTests(unittest.TestCase):
             run_dir = convert_verified(self.config, self._report({"zotero_attachment_key": "ATTKEY01"}), workers=1)
 
         self.assertEqual(self._manifest(run_dir)[0]["extraction_tool"], "pymupdf.get_text")
-        self.assertFalse((self.library / "images" / "ATTKEY01").exists())
+        self.assertFalse((self.library / "ATTKEY01" / "images").exists())
 
     def test_forced_reconversion_swaps_library_images_and_leaves_no_staging(self):
-        images = self.library / "images" / "ATTKEY01"
+        images = self.library / "ATTKEY01" / "images"
         images.mkdir(parents=True)
         (images / "old.png").write_bytes(b"old")
-        markdown = self.library / "markdown" / "ATTKEY01.md"
-        markdown.parent.mkdir(parents=True)
+        markdown = self.library / "ATTKEY01" / "ATTKEY01.md"
+        markdown.parent.mkdir(parents=True, exist_ok=True)
         markdown.write_text("---\n---\n\nOld body", encoding="utf-8")
 
         def extract(args, **kwargs):
@@ -1221,17 +1222,17 @@ class CanonicalLibraryTests(unittest.TestCase):
             convert_verified(self.config, self._report({"zotero_attachment_key": "ATTKEY01"}), force=True, workers=1)
 
         self.assertEqual(sorted(path.name for path in images.iterdir()), ["new.png"])
-        self.assertEqual([path.name for path in images.parent.iterdir()], ["ATTKEY01"])
+        self.assertEqual([path.name for path in self.library.iterdir()], ["ATTKEY01"])
         self.assertIn((images / "new.png").as_posix(), markdown.read_text(encoding="utf-8"))
 
     def test_failed_image_restore_keeps_the_previous_images(self):
         from zotero_pdf_text._atomic import replace_with_retry as real_replace
 
-        images = self.library / "images" / "ATTKEY01"
+        images = self.library / "ATTKEY01" / "images"
         images.mkdir(parents=True)
         (images / "old.png").write_bytes(b"old")
-        markdown = self.library / "markdown" / "ATTKEY01.md"
-        markdown.parent.mkdir(parents=True)
+        markdown = self.library / "ATTKEY01" / "ATTKEY01.md"
+        markdown.parent.mkdir(parents=True, exist_ok=True)
         markdown.write_text("Old body", encoding="utf-8")
         calls = []
 
@@ -1253,7 +1254,7 @@ class CanonicalLibraryTests(unittest.TestCase):
         self.assertEqual(row["status"], "error")
         self.assertIn("previous images could not be restored", row["error"])
         self.assertEqual(markdown.read_text(encoding="utf-8"), "Old body")
-        kept = list(self.library.glob("images/.conversion-*/previous-images/old.png"))
+        kept = list(self.library.glob(".conversion-*/previous-images/old.png"))
         self.assertEqual([path.read_bytes() for path in kept], [b"old"])
 
     def test_native_crash_retry_publishes_primary_text_to_the_library(self):
@@ -1270,8 +1271,9 @@ class CanonicalLibraryTests(unittest.TestCase):
 
         row = self._manifest(run_dir)[0]
         self.assertEqual((row["status"], row["extraction_tool"]), ("converted", "pymupdf4llm.to_markdown"))
-        self.assertIn("Primary", (self.library / "markdown" / "ATTKEY01.md").read_text(encoding="utf-8"))
-        self.assertEqual([path.name for path in (self.library / "images").iterdir()], [])
+        self.assertIn("Primary", (self.library / "ATTKEY01" / "ATTKEY01.md").read_text(encoding="utf-8"))
+        self.assertEqual([path.name for path in self.library.iterdir()], ["ATTKEY01"])
+        self.assertFalse((self.library / "ATTKEY01" / "images").exists())
 
     def test_several_workers_write_each_paper_to_its_own_library_file(self):
         keys = [f"ATTKEY0{n}" for n in range(1, 6)]
@@ -1280,9 +1282,9 @@ class CanonicalLibraryTests(unittest.TestCase):
             run_dir = convert_verified(self.config, report, workers=3)
 
         self.assertEqual({row["status"] for row in self._manifest(run_dir)}, {"converted"})
-        self.assertEqual(sorted(path.stem for path in (self.library / "markdown").glob("*.md")), keys)
+        self.assertEqual(sorted(path.stem for path in self.library.glob("*/*.md")), keys)
         for key in keys:
-            text = (self.library / "markdown" / f"{key}.md").read_text(encoding="utf-8")
+            text = (self.library / key / f"{key}.md").read_text(encoding="utf-8")
             self.assertIn(f'zotero_attachment_key: "{key}"', text)
 
 
@@ -1316,11 +1318,11 @@ class CanonicalLibraryTests(unittest.TestCase):
         self.assertFalse(self.library.exists())
 
     def _library_paper_with_old_images(self) -> tuple[Path, Path]:
-        images = self.library / "images" / "ATTKEY01"
+        images = self.library / "ATTKEY01" / "images"
         images.mkdir(parents=True)
         (images / "old.png").write_bytes(b"old")
-        markdown = self.library / "markdown" / "ATTKEY01.md"
-        markdown.parent.mkdir(parents=True)
+        markdown = self.library / "ATTKEY01" / "ATTKEY01.md"
+        markdown.parent.mkdir(parents=True, exist_ok=True)
         markdown.write_text("Old body", encoding="utf-8")
         return markdown, images
 
@@ -1345,11 +1347,12 @@ class CanonicalLibraryTests(unittest.TestCase):
 
         self.assertEqual(markdown.read_text(encoding="utf-8"), "Old body")
         self.assertEqual([path.name for path in images.iterdir()], ["old.png"])
-        self.assertEqual([path.name for path in images.parent.iterdir()], ["ATTKEY01"])
+        self.assertEqual([path.name for path in self.library.iterdir()], ["ATTKEY01"])
 
     def _staging(self, *, staged_markdown: bool, backup: bool = False, marker: bool = False) -> Path:
-        staging = self.library / "images" / ".conversion-crashed"
+        staging = self.library / ".conversion-crashed"
         staging.mkdir(parents=True)
+        (staging / "images-target").write_text("ATTKEY01/images", encoding="utf-8")
         if staged_markdown:
             (staging / "ATTKEY01.md").write_text("New body", encoding="utf-8")
         if backup:
@@ -1364,9 +1367,9 @@ class CanonicalLibraryTests(unittest.TestCase):
             convert_verified(self.config, self._report({"zotero_attachment_key": "ATTKEY02"}), workers=1)
 
     def test_a_hard_exit_before_publishing_is_undone_by_the_next_run(self):
-        images = self.library / "images" / "ATTKEY01"
+        images = self.library / "ATTKEY01" / "images"
         staging = self._staging(staged_markdown=True, backup=True)
-        images.mkdir()
+        images.mkdir(parents=True)
         (images / "new.png").write_bytes(b"new")
 
         self._convert_another_paper()
@@ -1375,9 +1378,9 @@ class CanonicalLibraryTests(unittest.TestCase):
         self.assertFalse(staging.exists())
 
     def test_a_hard_exit_for_a_paper_without_previous_images_removes_the_new_ones(self):
-        images = self.library / "images" / "ATTKEY01"
+        images = self.library / "ATTKEY01" / "images"
         staging = self._staging(staged_markdown=True, marker=True)
-        images.mkdir()
+        images.mkdir(parents=True)
         (images / "new.png").write_bytes(b"new")
 
         self._convert_another_paper()
@@ -1386,9 +1389,9 @@ class CanonicalLibraryTests(unittest.TestCase):
         self.assertFalse(staging.exists())
 
     def test_a_hard_exit_before_moving_anything_keeps_the_original_images(self):
-        images = self.library / "images" / "ATTKEY01"
+        images = self.library / "ATTKEY01" / "images"
         staging = self._staging(staged_markdown=True)
-        images.mkdir()
+        images.mkdir(parents=True)
         (images / "old.png").write_bytes(b"old")
 
         self._convert_another_paper()
@@ -1397,9 +1400,9 @@ class CanonicalLibraryTests(unittest.TestCase):
         self.assertFalse(staging.exists())
 
     def test_a_hard_exit_after_publishing_only_drops_the_obsolete_backup(self):
-        images = self.library / "images" / "ATTKEY01"
+        images = self.library / "ATTKEY01" / "images"
         staging = self._staging(staged_markdown=False, backup=True)
-        images.mkdir()
+        images.mkdir(parents=True)
         (images / "new.png").write_bytes(b"new")
 
         self._convert_another_paper()

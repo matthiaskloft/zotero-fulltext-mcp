@@ -27,6 +27,7 @@ from .indexer import (
     _sha256,
     load_indexed_keys,
 )
+from .library import images_dir_for
 from .lock import PipelineLockedError, pipeline_write_lock
 
 MARKER_TOOL = "marker"
@@ -96,7 +97,7 @@ def reconvert_with_marker(
             source_path=str(source_path),
         )
 
-    images_dir = markdown_path.parent.parent / "images" / markdown_path.stem
+    images_dir = images_dir_for(markdown_path)
     images_root = images_dir.parent
     images_root_was_present = images_root.exists()
     images_root.mkdir(parents=True, exist_ok=True)

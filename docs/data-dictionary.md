@@ -103,7 +103,7 @@ together, not `status` alone, to find rows that lost structure/images to the fal
 Every row whose primary extractor genuinely timed out (not crashed — see `PrimaryExtractorTimeoutError`
 in `converter.py`) is recorded as a "timeout candidate": once per run in `timeout_candidates.csv`/
 `.jsonl` next to that run's `manifest.csv`, and merged into a persistent master file at
-`<output_root>/index/timeout_candidates.jsonl`, deduped by `zotero_attachment_key` with a `status`
+`<output_root>/review/timeout_candidates.jsonl`, deduped by `zotero_attachment_key` with a `status`
 of `pending`, `skipped`, or `resolved` and an `occurrence_count` that increments on repeat timeouts.
 A later automatic conversion run never reopens a `skipped`/`resolved` entry — only the commands
 below change status.
@@ -114,7 +114,7 @@ Use `retry-timeout` to resolve a pending candidate, either permanently:
 & $python -m zotero_pdf_text retry-timeout --config .\config.json --key <attachment_key> --skip --reason "confirmed to exceed even the scaled timeout cap"
 ```
 
-which records the decision in `<output_root>/timeout_skip_list.json` (not hardcoded in source, so
+which records the decision in `<output_root>/review/timeout_skip_list.json` (not hardcoded in source, so
 no code change/PR is needed) — future conversions of that attachment go straight to the plain-text
 fallback. Or retry with more headroom:
 
@@ -194,8 +194,8 @@ trivially high `fuzz.partial_ratio` score against almost any academic PDF's text
 one or two common words, regardless of the specific threshold chosen.
 
 Findings are written once per run in `orphan_candidates.csv`/`.jsonl` next to that run's own output
-folder (`<output_root>/orphan_discovery/<timestamp>`), and merged into a persistent master file at
-`<output_root>/index/orphan_candidates.jsonl`, deduped by the pair (`orphan_sha256`,
+folder (`<output_root>/runs/<date>_<time>_find-orphan-parents`), and merged into a persistent master file at
+`<output_root>/review/orphan_candidates.jsonl`, deduped by the pair (`orphan_sha256`,
 `candidate_parent_key`) with a `status` of `pending`, `skipped`, or `resolved` and an
 `occurrence_count` that increments on repeat discovery. A later automatic run never reopens a
 `skipped`/`resolved` entry. Each record carries the orphan's `orphan_sha256`/`orphan_safe_folder_id`
@@ -244,7 +244,7 @@ narrower than the fuzzy/near-identical-text matching explored manually for this 
 the only case safe to resolve without a human looking at it.
 
 `duplicate_groups.csv`/`.jsonl` (resolved) and `ambiguous_duplicate_groups.csv`/`.jsonl` are written
-per-run under `<output_root>/duplicate_attachments/<timestamp>`, alongside `duplicate_trash_plan.jsonl`
+per-run under `<output_root>/runs/<date>_<time>_find-duplicate-attachments`, alongside `duplicate_trash_plan.jsonl`
 -- a `trash_item` write plan (same schema as `zotero-write plan`'s output) covering every resolved
 group's "drop" attachments, with `approval_status="pending"`. This command never calls Zotero itself;
 running the plan through `zotero-write approve`/`validate --require-approved`/`apply --approve` is
@@ -255,10 +255,10 @@ Cleanup" and "Approval-Gated Zotero Writes" sections).
 
 Under `<output_root>/index/`, the managed layout consists of:
 
-- `generations/<generation-id>/` — one immutable, complete publication of the derived index:
+- `versions/<generation-id>/` (one folder per index version) — one immutable, complete publication of the derived index:
   `index.jsonl` (the JSONL sidecar), `index.sqlite` (the FTS database), and
   `artifact_manifest.json`. Generation IDs match `YYYYMMDDTHHMMSSZ-<8 hex>`; anything else is
-  rejected on read, and resolved directories are containment-checked beneath `generations/`.
+  rejected on read, and resolved directories are containment-checked beneath `versions/`.
 - `current.json` — the single atomically replaced publication pointer:
   `schema_version` (currently 1), `current_generation`, `previous_generation` (retained for
   rollback, `null` on the first publish), and `published_at` (UTC ISO-8601). It stores only
@@ -563,7 +563,7 @@ Two counts sit outside the status vocabulary and explain it:
 
 `plan-provenance-reconvert` writes `plan.json` (and `plan.csv`, one row per record with `bucket`,
 `attachment_key`, `ordinal`, `reason`, `title`, `source_path`, `source_bytes`, `page_count`) to
-`<output_root>/provenance-reconvert/<plan-id>/`. It describes published records whose
+`<output_root>/runs/<plan-id>/`. It describes published records whose
 `source_sha256` is empty; records that already carry a hash are not in it.
 
 Top-level fields of `plan.json`:
@@ -573,7 +573,7 @@ Top-level fields of `plan.json`:
   name) and UTC creation time.
 - `mapping_report`, `generation_id`: the snapshot and the published generation the plan was built from.
 - `inventory_available`, `inventory_error`: whether Zotero's database could be read, and why not.
-- `run_dir`: `<output_root>/conversion-runs/provenance-reconvert/<plan-id>`, where
+- `run_dir`: `<output_root>/runs/<plan-id>/conversion`, where
   `apply-provenance-reconvert` converts.
 - `source_provenance_unknown`: number of rows; equals `library_status.source_provenance_unknown`
   for the same generation.
@@ -607,7 +607,7 @@ invocation's selection only.
 
 `plan-index-repair` writes `plan.json` (and `plan.csv`, one row per attachment with `group`,
 `attachment_key`, `reason_code`, `statuses` (`;`-separated), `removable`, `ordinal`, `reason`,
-`title`, `source_path`) to `<output_root>/index-repair/<plan-id>/`. It holds one row per
+`title`, `source_path`) to `<output_root>/runs/<plan-id>/`. It holds one row per
 *indexed* attachment that `audit-library` reports with any status other than `current`, computed
 with the audit's own rules, so a row's `statuses` are exactly the audit's for the same inputs.
 
@@ -620,7 +620,7 @@ Top-level fields of `plan.json`:
   audit mode (`--full`) the plan was built from.
 - `inventory_available`, `inventory_error`: whether Zotero's database could be read, and why not.
   When it could not, every row is `review`/`membership_unchecked`.
-- `run_dir`: `<output_root>/conversion-runs/index-repair/<plan-id>`, where reconvert rows are converted.
+- `run_dir`: `<output_root>/runs/<plan-id>/conversion`, where reconvert rows are converted.
 - `counts`: rows per group (`safe`, `reconvert`, `review`). Groups are exclusive.
 - `removable`: number of `orphaned_index` review rows `apply-index-repair --remove-keys` may drop.
 - `diagnostics`: per group, `count` and `by_reason` (`{reason_code: {count, examples}}`), where

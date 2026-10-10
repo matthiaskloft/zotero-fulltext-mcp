@@ -19,7 +19,14 @@ from typing import Callable
 
 from .config import ProjectConfig
 from .indexer import load_indexed_keys
-from .library import canonical_image_dir, canonical_markdown_path, is_canonical_eligible, validate_attachment_key
+from .layout import new_run_dir, review_root
+from .library import (
+    canonical_library_root,
+    canonical_markdown_path,
+    images_dir_for,
+    is_canonical_eligible,
+    validate_attachment_key,
+)
 from ._atomic import atomic_write_text, replace_with_retry
 from .artifacts import ArtifactError, current_generation_jsonl
 from .checkpoint import ConversionCheckpoint, body_sha256, classify_entry
@@ -58,6 +65,9 @@ SKIP_LIST_FILENAME = "timeout_skip_list.json"
 # replacement, and the marker saying there were none.
 SWAP_BACKUP_DIRNAME = "previous-images"
 SWAP_NO_PREVIOUS_IMAGES = "no-previous-images"
+# Names the images directory a staged replacement swaps, relative to its staging root, so
+# recovery after a hard exit puts images back where they belong in either output layout.
+SWAP_TARGET_FILENAME = "images-target"
 NATIVE_CRASH_EXIT_STATUS = 0xC000070A
 
 
@@ -115,8 +125,7 @@ def convert_sample(
     if not mapping_report.exists():
         raise FileNotFoundError(mapping_report)
 
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-    run_dir = output_dir or config.output_root / "conversion-runs" / "samples" / timestamp
+    run_dir = output_dir or new_run_dir(config.output_root, "convert-sample")
     return _convert_verified_rows(
         mapping_report,
         run_dir,
@@ -154,8 +163,7 @@ def convert_verified(
     if not mapping_report.exists():
         raise FileNotFoundError(mapping_report)
 
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-    run_dir = output_dir or config.output_root / "conversion-runs" / "verified" / timestamp
+    run_dir = output_dir or new_run_dir(config.output_root, "convert-verified")
     return _convert_mapping_rows(
         mapping_report,
         run_dir,
@@ -190,8 +198,7 @@ def convert_unverified(
     if not mapping_report.exists():
         raise FileNotFoundError(mapping_report)
 
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-    run_dir = output_dir or config.output_root / "conversion-runs" / "unverified-review" / timestamp
+    run_dir = output_dir or new_run_dir(config.output_root, "verify-unverified")
     classifications = {"mapped_unverified"}
     if include_possible_mismatch:
         classifications.add("possible_mismatch")
@@ -288,7 +295,7 @@ def _convert_mapping_rows(
     """Convert the selected rows of ``mapping_report``, recording the run in ``run_dir``.
 
     With ``library``, every canonical-eligible row writes its Markdown and images straight to the
-    canonical library (``library/markdown/<key>.md``, ``library/images/<key>/``) and the run
+    canonical library (``library/<key>/<key>.md``, ``library/<key>/images/``) and the run
     directory keeps only the manifest, checkpoint and summary. Nothing is copied or moved there
     later, so a whole-library conversion writes each file once. Rows that are not eligible, and
     every row without ``library``, keep their numbered output inside ``run_dir``.
@@ -326,8 +333,8 @@ def _convert_mapping_rows(
     for target in targets.values():
         if target is not None:
             target[0].parent.mkdir(parents=True, exist_ok=True)
-    for staged_images_root in {target[1] for target in targets.values() if target is not None}:
-        _recover_interrupted_swaps(staged_images_root)
+    for staging_root in {target[1] for target in targets.values() if target is not None}:
+        _recover_interrupted_swaps(staging_root)
     indexed = _indexed_library_records(output_root, targets) if library is not None else {}
 
     def convert(item: tuple[int, dict[str, str]]) -> tuple[ConversionResult, TimeoutCandidate | None]:
@@ -412,7 +419,7 @@ def _convert_mapping_rows(
         reused=_count_reused(results, checkpoint),
     )
     write_run_candidates(run_dir, candidates)
-    append_master_candidates(output_root / "index" / "timeout_candidates.jsonl", candidates)
+    append_master_candidates(review_root(output_root) / "timeout_candidates.jsonl", candidates)
     return run_dir
 
 
@@ -526,8 +533,8 @@ def _output_targets(
     images_root: Path,
     library: ProjectConfig | None,
 ) -> dict[int, tuple[Path, Path, bool] | None]:
-    """Per row number: its Markdown path, its images root, and whether unrecorded Markdown already
-    at that path may be reused as ``skipped_existing``.
+    """Per row number: its Markdown path, the root its image replacements are staged under, and
+    whether unrecorded Markdown already at that path may be reused as ``skipped_existing``.
 
     Canonical rows never reuse unrecorded Markdown: the library file is shared by every run, so
     without an entry in this run's checkpoint nothing says which extraction wrote it, and it is
@@ -545,7 +552,7 @@ def _output_targets(
         if library is not None and raw_key and key_counts[raw_key] > 1:
             targets[number] = None
         elif library is not None and key:
-            targets[number] = (canonical_markdown_path(library, key), canonical_image_dir(library, key).parent, False)
+            targets[number] = (canonical_markdown_path(library, key), canonical_library_root(library), False)
         else:
             targets[number] = (markdown_dir / f"{number:04d}_{_output_stem(row)}.md", images_root, True)
     return targets
@@ -564,7 +571,7 @@ def _canonical_key(row: dict[str, str], library: ProjectConfig | None) -> str:
 def _convert_row(
     row: dict[str, str],
     output_path: Path,
-    images_root: Path,
+    staging_root: Path,
     timeout_seconds: int,
     *,
     force: bool,
@@ -576,7 +583,7 @@ def _convert_row(
 ) -> tuple[ConversionResult, TimeoutCandidate | None]:
     source_path = Path(row["source_path"])
     raw_output_path = output_path.with_name(f"{output_path.stem}.raw.tmp")
-    images_dir = images_root / output_path.stem
+    images_dir = images_dir_for(output_path)
     staged_images_root: Path | None = None
     extraction_images_dir = images_dir
     math_sidecar_path = raw_output_path.with_suffix(".math.json")
@@ -619,8 +626,11 @@ def _convert_row(
                 None,
             )
         if force and output_path.exists():
-            images_root.mkdir(parents=True, exist_ok=True)
-            staged_images_root = Path(tempfile.mkdtemp(prefix=".conversion-", dir=images_root))
+            staging_root.mkdir(parents=True, exist_ok=True)
+            staged_images_root = Path(tempfile.mkdtemp(prefix=".conversion-", dir=staging_root))
+            (staged_images_root / SWAP_TARGET_FILENAME).write_text(
+                images_dir.relative_to(staging_root).as_posix(), encoding="utf-8"
+            )
             extraction_images_dir = staged_images_root / output_path.stem
         else:
             # No Markdown exists at output_path, so nothing references images_dir; anything in
@@ -851,22 +861,28 @@ def _undo_image_swap(staging: Path, images_dir: Path) -> None:
         shutil.rmtree(images_dir)
 
 
-def _recover_interrupted_swaps(images_root: Path) -> None:
-    """Finish what a hard exit left of staged replacements under ``images_root``.
+def _recover_interrupted_swaps(staging_root: Path) -> None:
+    """Finish what a hard exit left of staged replacements under ``staging_root``.
 
     A staging directory that still holds its staged Markdown never published it, so the old
     Markdown is current and gets its images back. One without staged Markdown either published
-    (the moved-aside images are obsolete) or stopped before touching ``images_root``; either way
+    (the moved-aside images are obsolete) or stopped before touching the images; either way
     only the staging directory itself is left to remove. Best effort: a staging directory that
     cannot be recovered is kept and reported, never deleted.
     """
-    for staging in sorted(images_root.glob(".conversion-*")):
+    for staging in sorted(staging_root.glob(".conversion-*")):
         if not staging.is_dir():
             continue
         try:
             staged_markdown = [path for path in staging.glob("*.md") if path.is_file()]
             if len(staged_markdown) == 1:
-                _undo_image_swap(staging, images_root / staged_markdown[0].stem)
+                target = staging / SWAP_TARGET_FILENAME
+                images_dir = (
+                    staging_root / target.read_text(encoding="utf-8").strip()
+                    if target.is_file()
+                    else staging_root / staged_markdown[0].stem
+                )
+                _undo_image_swap(staging, images_dir)
             elif staged_markdown:
                 raise OSError("more than one staged Markdown file")
             shutil.rmtree(staging)
@@ -1052,7 +1068,7 @@ def _load_persisted_skip_keys(output_root: Path) -> frozenset[str]:
     requiring a source change. Best-effort like the drawing-density scan: a missing or corrupt
     file just means no skip entries, not a conversion failure.
     """
-    skip_list_path = output_root / SKIP_LIST_FILENAME
+    skip_list_path = review_root(output_root) / SKIP_LIST_FILENAME
     try:
         data = json.loads(skip_list_path.read_text(encoding="utf-8"))
         return frozenset(data.get("entries", {}).keys())

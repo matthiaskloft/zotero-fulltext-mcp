@@ -35,6 +35,7 @@ from zotero_pdf_text.library import (
     LibraryAuditError,
     audit_library,
     canonical_image_dir,
+    images_dir_for,
     canonical_markdown_path,
     classify_item,
     is_canonical_eligible,
@@ -92,17 +93,25 @@ class CanonicalPathTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             config = _config(Path(tmp))
             path = canonical_markdown_path(config, "ABCD1234")
-            self.assertEqual(path.parent, config.output_root / "library" / "markdown")
+            self.assertEqual(path.parent, config.output_root / "library" / "ABCD1234")
             self.assertEqual(path.name, "ABCD1234.md")
 
     def test_image_dir_ignores_title_so_a_retitle_cannot_orphan_images(self):
         with tempfile.TemporaryDirectory() as tmp:
             config = _config(Path(tmp))
             first = canonical_image_dir(config, "ABCD1234")
-            self.assertEqual(first, config.output_root / "library" / "images" / "ABCD1234")
+            self.assertEqual(first, config.output_root / "library" / "ABCD1234" / "images")
             # The image directory is derived from the key alone, never from the Markdown
             # filename, so renaming the item leaves the images exactly where they were.
             self.assertEqual(canonical_image_dir(config, "ABCD1234"), first)
+
+    def test_images_sit_beside_their_markdown_in_either_layout(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = _config(Path(tmp))
+            markdown = canonical_markdown_path(config, "ABCD1234")
+            self.assertEqual(images_dir_for(markdown), canonical_image_dir(config, "ABCD1234"))
+            run_markdown = Path(tmp) / "run" / "markdown" / "0001_paper.md"
+            self.assertEqual(images_dir_for(run_markdown), Path(tmp) / "run" / "images" / "0001_paper")
 
     def test_a_retitle_resolves_to_exactly_the_same_file(self):
         """Equality, not a shared prefix.

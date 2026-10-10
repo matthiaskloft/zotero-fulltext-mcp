@@ -68,7 +68,7 @@ def _seed_candidate(
         conversion_status="converted",
         detected_at=detected_at or datetime.now().isoformat(timespec="seconds"),
     )
-    append_master_candidates(output_root / "index" / "timeout_candidates.jsonl", [candidate])
+    append_master_candidates(output_root / "review" / "timeout_candidates.jsonl", [candidate])
 
 
 def _write_raw_markdown(args, **kwargs):
@@ -89,9 +89,9 @@ class SkipTimeoutCandidateTests(unittest.TestCase):
 
             self.assertTrue(result.ok)
             self.assertEqual(result.new_status, "skipped")
-            skip_list = json.loads((output_root / "timeout_skip_list.json").read_text(encoding="utf-8"))
+            skip_list = json.loads((output_root / "review" / "timeout_skip_list.json").read_text(encoding="utf-8"))
             self.assertEqual(skip_list["entries"]["ATTACH"]["reason"], "too slow")
-            candidate = find_candidate(output_root / "index" / "timeout_candidates.jsonl", "ATTACH")
+            candidate = find_candidate(output_root / "review" / "timeout_candidates.jsonl", "ATTACH")
             self.assertEqual(candidate["status"], "skipped")
 
     def test_skip_unknown_key_returns_error_result(self):
@@ -139,7 +139,7 @@ class RetryTimeoutCandidateTests(unittest.TestCase):
             self.assertEqual(len(records), 1)
             self.assertEqual(records[0]["zotero_attachment_key"], "ATTACH")
             self.assertTrue(resolve_reader_db_path(output_root / "index" / "zotero_text_index.sqlite").exists())
-            candidate = find_candidate(output_root / "index" / "timeout_candidates.jsonl", "ATTACH")
+            candidate = find_candidate(output_root / "review" / "timeout_candidates.jsonl", "ATTACH")
             self.assertEqual(candidate["status"], "resolved")
             self.assertEqual(candidate["resolved_via"], "retry")
 
@@ -207,7 +207,7 @@ class RetryTimeoutCandidateTests(unittest.TestCase):
             self.assertFalse(result.ok)
             # No successor generation was published.
             self.assertEqual(current_generation_jsonl(output_root / "index"), jsonl_before)
-            candidate = find_candidate(output_root / "index" / "timeout_candidates.jsonl", "ATTACH")
+            candidate = find_candidate(output_root / "review" / "timeout_candidates.jsonl", "ATTACH")
             self.assertEqual(candidate["status"], "pending")
             self.assertEqual(candidate["occurrence_count"], 2)  # bumped by the nested convert_verified call
 
@@ -383,7 +383,7 @@ class RetryTimeoutCandidateTests(unittest.TestCase):
             run.assert_not_called()
             self.assertFalse(result.ok)
             self.assertIn("rebuild-index", result.error)
-            candidate = find_candidate(output_root / "index" / "timeout_candidates.jsonl", "ATTACH")
+            candidate = find_candidate(output_root / "review" / "timeout_candidates.jsonl", "ATTACH")
             self.assertEqual(candidate["status"], "pending")
 
     def test_multiplier_scales_the_last_attempted_timeout(self):
@@ -424,8 +424,8 @@ class LibraryRetryTests(unittest.TestCase):
         self.pdf.write_bytes(b"%PDF")
         _seed_candidate(self.output_root, self.pdf, attachment_key="ATTKEY01")
         self.config = ProjectConfig(self.root, self.root, self.root, self.output_root)
-        self.markdown = self.output_root / "library" / "markdown" / "ATTKEY01.md"
-        self.images = self.output_root / "library" / "images" / "ATTKEY01"
+        self.markdown = self.output_root / "library" / "ATTKEY01" / "ATTKEY01.md"
+        self.images = self.output_root / "library" / "ATTKEY01" / "images"
         self.markdown.parent.mkdir(parents=True)
         self.markdown.write_text("---\n---\n\nFallback body\n", encoding="utf-8", newline="\n")
         self.images.mkdir(parents=True)
@@ -443,7 +443,7 @@ class LibraryRetryTests(unittest.TestCase):
             result = retry_timeout_candidate("ATTKEY01", config=self.config)
 
         self.assertTrue(result.ok, result.error)
-        self.assertTrue(Path(result.markdown_path).is_relative_to(self.output_root / "retry_timeout"))
+        self.assertTrue(Path(result.markdown_path).is_relative_to(self.output_root / "runs"))
         records = [json.loads(line) for line in current_generation_jsonl(self.output_root / "index").read_text(encoding="utf-8").splitlines() if line]
         self.assertEqual([record["markdown_path"] for record in records], [result.markdown_path])
         self._library_untouched()
@@ -566,7 +566,7 @@ class CurrentIndexStateTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             output_root, pdf, config = self._setup(root)
-            candidates_jsonl = output_root / "index" / "timeout_candidates.jsonl"
+            candidates_jsonl = output_root / "review" / "timeout_candidates.jsonl"
             history_before = candidates_jsonl.read_text(encoding="utf-8")
 
             # An ordinary conversion run (not retry-timeout) publishes primary-extractor text.

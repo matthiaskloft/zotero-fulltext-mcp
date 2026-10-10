@@ -28,7 +28,7 @@ as primary library records.
 2. `convert-verified` converts `mapped_verified` PDFs to Markdown with YAML
    front matter.
 3. `rebuild-index` reads a conversion manifest (or snapshots an existing JSONL sidecar) and
-   stages a complete **index generation** under `<output_root>/index/generations/<id>/`: the
+   stages a complete **index generation** under `<output_root>/index/versions/<id>/`: the
    JSONL sidecar (metadata, paths, checksums, conversion metadata, full text), a SQLite FTS5
    database with chunked searchable text, and an artifact manifest with checksums and build
    parameters. The generation is validated (checksums, `PRAGMA integrity_check`, record/chunk

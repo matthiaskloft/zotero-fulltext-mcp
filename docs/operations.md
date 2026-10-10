@@ -45,13 +45,13 @@ connector endpoint is unavailable.
 ```
 
 The mapper reads a copied Zotero database and writes reports under
-`converted_text\mapping-runs\<timestamp>`.
+`converted_text\runs\<date>_<time>_dry-run`.
 
 ## Conversion
 
 `convert-verified` (and `convert-new`) write each verified paper to the canonical library:
-Markdown to `library\markdown\<attachment-key>.md`, images to
-`library\images\<attachment-key>\`. The run folder under `conversion-runs\verified\` holds the
+one folder per attachment, with Markdown at `library\<attachment-key>\<attachment-key>.md` and
+images in `library\<attachment-key>\images\`. The run folder `runs\<date>_<time>_convert-verified\` holds the
 manifest, checkpoint and summary. A row whose identity is not verified, and every row of
 `convert-sample` and `verify-unverified`, still writes into its run folder.
 
@@ -84,8 +84,8 @@ Checkpoint* section for the exact rules.
 ```powershell
 & $python -m zotero_pdf_text convert-verified `
   --config .\config.json `
-  --mapping-report $data\mapping-runs\20260602_145352\mapping_report.csv `
-  --output-dir $data\conversion-runs\verified\20260601_032323 `
+  --mapping-report $data\runs\2026-06-02_145352_dry-run\mapping_report.csv `
+  --output-dir $data\runs\2026-06-01_032323_convert-verified `
   --resume
 ```
 
@@ -104,24 +104,32 @@ after extraction succeeds:
 ```powershell
 & $python -m zotero_pdf_text convert-verified `
   --config .\config.json `
-  --mapping-report $data\mapping-runs\20260602_145352\mapping_report.csv `
-  --output-dir $data\conversion-runs\verified\20260601_032323 `
+  --mapping-report $data\runs\2026-06-02_145352_dry-run\mapping_report.csv `
+  --output-dir $data\runs\2026-06-01_032323_convert-verified `
   --resume `
   --force
 ```
 
 ## Managed Index Generations
 
-The output root has several roles: `library/markdown/<attachment-key>.md` and
-`library/images/<attachment-key>/` hold the one current copy of each paper converted by
-`convert-verified` or `convert-new`, so the index reads those papers from a path that never
-changes; `mapping-runs/` holds mapping snapshots;
-`conversion-runs/verified/`, `conversion-runs/samples/`,
-`conversion-runs/unverified-review/`, `conversion-runs/provenance-reconvert/` and
-`conversion-runs/index-repair/` hold conversion runs (with their Markdown, except for papers
-written to `library/`); `provenance-reconvert/`
-and `index-repair/` hold provenance reconversion and index repair plans; and
-`index/generations/` holds published search indexes. A published index can refer to
+The output root has four folders, and every publication rewrites a `README.md` at its top that
+explains them:
+
+- `library/<attachment-key>/`, holding `<attachment-key>.md` and `images/`, is the one current
+  copy of each paper converted by `convert-verified` or `convert-new`, so the index reads those
+  papers from a path that never changes. `library/catalog.md` (clickable) and
+  `library/catalog.csv` (spreadsheet) list every indexed paper by citation key, year, authors and
+  title, with links relative to the catalog, so they open the right file on any machine the
+  folder is synced to.
+- `index/` holds the search index: `current.json` names the live folder in `index/versions/`.
+- `runs/` holds one folder per command run, named `<date>_<time>_<command>` (for example
+  `2026-10-10_141500_dry-run`): mapping snapshots, conversion manifests, and the Markdown of
+  papers not written to `library/`. A repair plan and its conversion share one folder,
+  `runs/<plan-id>/` with the conversion in `conversion/`.
+- `review/` holds the lists waiting for a decision: `timeout_candidates.jsonl`,
+  `orphan_candidates.jsonl` and `timeout_skip_list.json`.
+
+A published index can refer to
 Markdown in several conversion runs. To find the folders that actually supply the
 current and previous indexes, run:
 
@@ -165,7 +173,7 @@ records were kept as `kept_from_current`:
 
 ```powershell
 & $python -m zotero_pdf_text rebuild-index --config .\config.json `
-  --manifest $data\conversion-runs\verified\<run-id>\manifest.csv --keep-current
+  --manifest $data\runs\<date>_<time>_convert-verified\manifest.csv --keep-current
 ```
 
 For every subsequent manifest (new items, promoted `apply-verification` rows, etc.), use
@@ -262,7 +270,7 @@ extraction.
    ```powershell
    & $python -m zotero_pdf_text plan-provenance-reconvert `
      --config .\config.json `
-     --mapping-report $data\mapping-runs\<run-id>\mapping_report.jsonl
+     --mapping-report $data\runs\<date>_<time>_dry-run\mapping_report.jsonl
    ```
 
    It writes `$data\provenance-reconvert\<plan-id>\plan.json` and `plan.csv` and prints one
@@ -297,7 +305,7 @@ extraction.
    `zotero_changed` if Zotero no longer lists the attachment, files it under another parent, or
    links it to a different or unresolvable PDF; it checks this again after conversion, before
    publishing. If the inventory cannot be read, nothing is converted or published. The remaining rows are converted with the ordinary converter into
-   `$data\conversion-runs\provenance-reconvert\<plan-id>\`, with the usual conversion
+   `$data\runs\<plan-id>\conversion\`, with the usual conversion
    checkpoint, and each Markdown file is numbered by its plan position so every batch shares
    that directory without collisions. The run directory belongs to one plan: the first apply
    writes `provenance_plan.json` into it, and another plan (or a copy of this plan elsewhere)
@@ -313,7 +321,7 @@ extraction.
    checkpointed extractions instead of repeating them. Afterwards `library-status` no longer
    counts the published records as provenance-unknown.
 
-Do not delete `conversion-runs\provenance-reconvert\<plan-id>\` after applying: the published
+Do not delete `runs\<plan-id>\conversion\` after applying: the published
 index now points at the Markdown in it. `output-status` lists it like any other conversion run.
 
 ## Index Repair
@@ -329,7 +337,7 @@ in place and carries every other record over verbatim.
    ```powershell
    & $python -m zotero_pdf_text plan-index-repair `
      --config .\config.json `
-     --mapping-report $data\mapping-runs\<run-id>\mapping_report.jsonl
+     --mapping-report $data\runs\<date>_<time>_dry-run\mapping_report.jsonl
    ```
 
    Add `--full` to re-hash every source PDF, as `audit-library --full` does. The plan is written
@@ -364,7 +372,7 @@ in place and carries every other record over verbatim.
    exist), and a fresh read of Zotero (a different parent, linked PDF, or title/DOI/citation
    key than the row would publish is `zotero_changed`). If Zotero's database cannot be read,
    nothing is applied. Reconvert rows are converted with the ordinary, checkpointed converter
-   into `$data\conversion-runs\index-repair\<plan-id>\` and judged by the same validation as
+   into `$data\runs\<plan-id>\conversion\` and judged by the same validation as
    `update-index --replace-existing`; after conversion Zotero is read again and every row's PDF
    and citation metadata re-checked, so nothing stale is published.
    All accepted repairs are published together as one new generation; everything else is kept
@@ -386,7 +394,7 @@ stays current and fully usable, and nothing is lost: run the same command again 
 reconversions are reused from the run directory's checkpoint). After a successful apply,
 rerunning it reports every row `already_resolved` and publishes nothing, and a new
 `audit-library` run reports the repaired attachments `current`. As with provenance
-reconversion, do not delete `conversion-runs\index-repair\<plan-id>\` after reconverting: the
+reconversion, do not delete `runs\<plan-id>\conversion\` after reconverting: the
 index points at the Markdown in it.
 
 ## Unverified PDF Review
@@ -399,7 +407,7 @@ agent batches.
 ```powershell
 & $python -m zotero_pdf_text verify-unverified `
   --config .\config.json `
-  --mapping-report $data\mapping-runs\20260602_145352\mapping_report.csv
+  --mapping-report $data\runs\2026-06-02_145352_dry-run\mapping_report.csv
 ```
 
 Before converting, this command checks the sidecar full-text index (default
@@ -413,7 +421,7 @@ signals alone and has no memory of past promotions. This check is fail-open, sam
 conversion failure.
 
 Outputs are written under
-`converted_text\conversion-runs\unverified-review\<timestamp>`:
+`converted_text\runs\<date>_<time>_verify-unverified`:
 
 - `markdown\`: quarantine Markdown for candidate PDFs.
 - `manifest.csv`: conversion manifest for the reviewed candidates.
@@ -427,8 +435,8 @@ Resume a review folder without reconverting existing Markdown:
 ```powershell
 & $python -m zotero_pdf_text verify-unverified `
   --config .\config.json `
-  --mapping-report $data\mapping-runs\20260602_145352\mapping_report.csv `
-  --output-dir $data\conversion-runs\unverified-review\<timestamp> `
+  --mapping-report $data\runs\2026-06-02_145352_dry-run\mapping_report.csv `
+  --output-dir $data\runs\<date>_<time>_verify-unverified `
   --resume
 ```
 
@@ -440,8 +448,8 @@ prepended copy of the entire existing library.
 
 ```powershell
 & $python -m zotero_pdf_text apply-verification `
-  --review $data\conversion-runs\unverified-review\<timestamp>\review_merged.jsonl `
-  --output-manifest $data\conversion-runs\unverified-review\<timestamp>\promoted_manifest.csv `
+  --review $data\runs\<date>_<time>_verify-unverified\review_merged.jsonl `
+  --output-manifest $data\runs\<date>_<time>_verify-unverified\promoted_manifest.csv `
   --min-confidence 0.92
 ```
 
@@ -460,13 +468,13 @@ values before picking a threshold rather than reusing 0.92 by default.
 Every conversion command (`convert-verified`, `convert-sample`, `verify-unverified`, etc.) records
 a "timeout candidate" whenever the primary extractor (`pymupdf4llm.to_markdown`) genuinely times
 out on a PDF, whether or not the plain-text fallback then succeeds. Candidates accumulate in a
-persistent master file at `$data\index\timeout_candidates.jsonl`, deduped by
+persistent master file at `$data\review\timeout_candidates.jsonl`, deduped by
 `zotero_attachment_key` with a `status` of `pending`, `skipped`, or `resolved` and an
 `occurrence_count` that increments on repeat timeouts. A later automatic conversion run never
 reopens a `skipped`/`resolved` entry.
 
 There is no dedicated CLI command to list pending candidates — read
-`$data\index\timeout_candidates.jsonl` directly (filter for `"status": "pending"`), or use the
+`$data\review\timeout_candidates.jsonl` directly (filter for `"status": "pending"`), or use the
 always-on MCP tool `list_timeout_candidates`, or check `timeout_candidates.csv` next to any
 individual run's `manifest.csv` for that run's candidates only. The JSONL records the historical
 timeout attempt; the MCP tool also reports what the current index holds (`current_index_state`)
@@ -486,7 +494,7 @@ code change needed):
   --reason "confirmed to exceed even the scaled timeout cap"
 ```
 
-This records the decision in `$data\timeout_skip_list.json`; future conversions of that attachment
+This records the decision in `$data\review\timeout_skip_list.json`; future conversions of that attachment
 go straight to the plain-text fallback. Or retry with a longer budget:
 
 ```powershell
@@ -525,7 +533,7 @@ whose recorded path no longer resolves to a real file on disk):
 ```powershell
 & $python -m zotero_pdf_text find-orphan-parents `
   --config .\config.json `
-  --mapping-report $data\mapping-runs\20260602_145352\mapping_report.csv
+  --mapping-report $data\runs\2026-06-02_145352_dry-run\mapping_report.csv
 ```
 
 Only `high`-confidence pairings are reported (`classify_identity` itself considers the match
@@ -535,12 +543,12 @@ title from an edited volume's individual chapter entries ("Citations", "Index", 
 trivially high fuzzy title match against almost any PDF's text even though `classify_identity`
 never verifies it.
 
-Outputs are written under `converted_text\orphan_discovery\<timestamp>`:
+Outputs are written under `converted_text\runs\<date>_<time>_find-orphan-parents`:
 
 - `orphan_candidates.csv` / `.jsonl`: this run's plausible (orphan PDF, candidate parent) pairings.
 
 Findings are also merged into a persistent, deduped master file at
-`converted_text\index\orphan_candidates.jsonl` (see `docs/data-dictionary.md`'s "Orphan Candidates"
+`converted_text\review\orphan_candidates.jsonl` (see `docs/data-dictionary.md`'s "Orphan Candidates"
 section for the full schema and dedup key). Review a `pending` entry's `confidence_tier`,
 `title_score`, `author_evidence`, `year_evidence`, and `observed_dois`, then resolve it:
 
@@ -573,7 +581,7 @@ not a missing case.
 ```powershell
 & $python -m zotero_pdf_text find-duplicate-attachments `
   --config .\config.json `
-  --mapping-report $data\mapping-runs\20260602_145352\mapping_report.csv
+  --mapping-report $data\runs\2026-06-02_145352_dry-run\mapping_report.csv
 ```
 
 Within a group of attachments sharing the same parent and file hash, the group is auto-resolved
@@ -587,7 +595,7 @@ wrong file to keep. A group with zero or multiple candidates without any suffix 
 suffixed name doesn't actually extend the unsuffixed one, is written to
 `ambiguous_duplicate_groups.csv`/`.jsonl` instead.
 
-Outputs are written under `converted_text\duplicate_attachments\<timestamp>`:
+Outputs are written under `converted_text\runs\<date>_<time>_find-duplicate-attachments`:
 
 - `duplicate_groups.csv` / `.jsonl`: resolved groups (parent key, citation key, sha256, which
   attachment is kept, which are proposed for removal).
@@ -599,11 +607,11 @@ This command never touches Zotero. Nothing is removed until you run the plan thr
 approval-gated write workflow:
 
 ```powershell
-& $python -m zotero_pdf_text zotero-write validate --plan $data\duplicate_attachments\<run>\duplicate_trash_plan.jsonl
-& $python -m zotero_pdf_text zotero-write approve --plan $data\duplicate_attachments\<run>\duplicate_trash_plan.jsonl --rows 1-77
-& $python -m zotero_pdf_text zotero-write validate --plan $data\duplicate_attachments\<run>\duplicate_trash_plan.jsonl --require-approved
-& $python -m zotero_pdf_text zotero-write apply --plan $data\duplicate_attachments\<run>\duplicate_trash_plan.jsonl `
-  --approve --out-script $data\duplicate_attachments\<run>\trash.js
+& $python -m zotero_pdf_text zotero-write validate --plan $data\runs\<date>_<time>_find-duplicate-attachments\duplicate_trash_plan.jsonl
+& $python -m zotero_pdf_text zotero-write approve --plan $data\runs\<date>_<time>_find-duplicate-attachments\duplicate_trash_plan.jsonl --rows 1-77
+& $python -m zotero_pdf_text zotero-write validate --plan $data\runs\<date>_<time>_find-duplicate-attachments\duplicate_trash_plan.jsonl --require-approved
+& $python -m zotero_pdf_text zotero-write apply --plan $data\runs\<date>_<time>_find-duplicate-attachments\duplicate_trash_plan.jsonl `
+  --approve --out-script $data\runs\<date>_<time>_find-duplicate-attachments\trash.js
 ```
 
 See "Approval-Gated Zotero Writes" below for what `apply` actually does (generates/runs a Zotero
@@ -679,7 +687,7 @@ of `zotero.sqlite` rather than the live file):
 ```powershell
 & $python -m zotero_pdf_text audit-library `
   --config .\config.json `
-  --mapping-report $data\mapping-runs\<run-id>\mapping_report.jsonl
+  --mapping-report $data\runs\<date>_<time>_dry-run\mapping_report.jsonl
 ```
 
 The audit consumes an existing `dry-run` snapshot, so produce one first if none is current. Add
@@ -705,7 +713,7 @@ status means.
 ```powershell
 & $python -m zotero_pdf_text library-status `
   --config .\config.json `
-  --mapping-report $data\mapping-runs\<run-id>\mapping_report.jsonl
+  --mapping-report $data\runs\<date>_<time>_dry-run\mapping_report.jsonl
 ```
 
 It takes the same `--config`, `--mapping-report` and `--full` arguments and costs the same, since
