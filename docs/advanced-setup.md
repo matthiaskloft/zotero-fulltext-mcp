@@ -138,7 +138,7 @@ if an installation is left incomplete.
 
 For editable installs, `git pull` alone does not update installed package metadata. Sync or
 reinstall after pulling; `check-setup` reports an `install_version` warning when it detects
-that the installed version differs from the checkout. For reproducible contributor setup,
+that the installed version differs from the checkout. For reproducible local development and testing,
 use the locked environment in [Developer test setup](dev-test-setup.md).
 
 ## Cross-platform notes

@@ -1,5 +1,15 @@
 # Contributing
 
+Public contributions are welcome as **issues**: bug reports, installation feedback, feature
+requests and documentation suggestions. Implementation is maintained by the maintainer;
+pull requests are accepted only from invited collaborators. Please open an issue instead of
+sending an unsolicited pull request. See the [contribution policy](../CONTRIBUTING.md), including
+privacy requirements and the private reporting route for security problems.
+
+The development instructions below are for the maintainer, invited collaborators, and anyone
+running tests locally to reproduce a problem for an issue. Running local tests does not require
+an invitation.
+
 Use a checkout and the locked environment rather than the README's tagged user install:
 
 ```bash
