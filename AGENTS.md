@@ -90,7 +90,7 @@ after changing `pyproject.toml` dependencies; commit the updated lockfile in the
 
 1. Update `CHANGELOG.md`: move relevant `[Unreleased]` entries under a new `## [X.Y.Z] - YYYY-MM-DD`
    heading, and add the corresponding link reference at the bottom of the file.
-2. Bump `version` in `pyproject.toml` to match.
+2. Bump `version` in `pyproject.toml` and `CITATION.cff` to match, and update the citation date.
 3. Update the pinned install tag in `README.md` (the `git+https://…@vX.Y.Z` line). README
    tells users to install a pinned tag rather than `HEAD`, so that pin is part of the release
    artifact — leaving it stale points every new installer at the previous version.
@@ -98,8 +98,11 @@ after changing `pyproject.toml` dependencies; commit the updated lockfile in the
 5. Run the live Zotero test against the test profile (`pytest -m live_zotero`, see
    `docs/live-zotero-test.md`). If the Zotero bridge code in `bibtex.py` changed since the last
    release, run it with `ZOTERO_LIVE_RECORD=1` and commit the re-recorded, reviewed fixtures.
-6. Once merged to `master` and CI is green, tag the release and push the tag:
-   `git tag vX.Y.Z && git push origin vX.Y.Z`.
+6. Once merged to `master` and CI is green, tag the merged release commit and push the tag:
+   `git tag vX.Y.Z <merged-commit>` then `git push origin vX.Y.Z`. The release workflow reruns
+   CI/live tests, validates the built distributions, and waits for the `pypi` environment approval
+   before publishing to PyPI and creating the GitHub release. Set up the Trusted Publishers and
+   rehearse on TestPyPI first; see `docs/releasing.md`.
 7. Anyone not actively developing this project should install a pinned tag rather than `HEAD` —
    see README's install section for the exact command.
 

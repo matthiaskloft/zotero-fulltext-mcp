@@ -11,6 +11,13 @@ All notable changes to this project are documented here. Format loosely follows
 
 - Update the locked PyJWT dependency from 2.13.0 to 2.14.0.
   ([#104](https://github.com/matthiaskloft/zotero-fulltext-mcp/pull/104))
+- Require PyJWT 2.14.0 or newer with the `mcp` extra, including ordinary pip installs.
+
+### Added
+
+- Tag-triggered PyPI Trusted Publishing and GitHub releases, gated by three-OS tests,
+  real-Zotero integration tests, distribution inspection and clean wheel-install checks.
+  A manual TestPyPI rehearsal and publisher setup guide support first publication.
 
 ## [0.12.0] - 2026-10-12
 

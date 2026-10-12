@@ -111,6 +111,12 @@ Substitute the latest tag from the
 [releases page](https://github.com/matthiaskloft/zotero-fulltext-mcp/releases). This installs a
 normal (non-editable) copy — fine unless you intend to modify the source.
 
+PyPI publication is being set up. Once the version is available there, the equivalent
+install is `python -m pip install "zotero-fulltext-mcp[mcp]==0.12.1"`.
+Until then, use the tagged Git install above. Maintainers: see
+[Publishing releases](docs/releasing.md) for Trusted Publisher setup, the TestPyPI rehearsal,
+and the tag-triggered release workflow.
+
 If you're contributing to this project (or want an editable install you can point `git pull` at),
 clone the repo instead:
 
