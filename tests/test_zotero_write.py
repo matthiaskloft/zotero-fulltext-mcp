@@ -348,6 +348,8 @@ class ZoteroWriteTests(unittest.TestCase):
         self.assertIn("Zotero.ItemFields.isValidForType(fieldID, item.itemTypeID)", script)
         self.assertIn('new Set(["itemType", "authors", "metadata_strategy", "publicationTitle"])', script)
         self.assertIn("item.setCreators(creators)", script)
+        self.assertIn('value === "" || value == null', script)
+        self.assertIn("getFieldIDFromTypeAndBase", script)
 
     def test_infer_item_type_from_doi(self):
         from zotero_pdf_text.zotero_write import _infer_item_type

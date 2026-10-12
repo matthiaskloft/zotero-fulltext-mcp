@@ -399,11 +399,14 @@ function applyMetadata(item, metadata) {{
     item.setField(field, value || "");
   }};
   for (const [field, value] of Object.entries(metadata)) {{
-    if (METADATA_NON_FIELDS.has(field)) continue;
+    if (METADATA_NON_FIELDS.has(field) || value === "" || value == null) continue;
     setIfValid(field, value);
   }}
   if (metadata.publicationTitle) {{
-    setIfValid(VENUE_FIELDS[typeName] || "publicationTitle", metadata.publicationTitle);
+    const baseID = Zotero.ItemFields.getID("publicationTitle");
+    const mappedID = Zotero.ItemFields.getFieldIDFromTypeAndBase(item.itemTypeID, baseID);
+    const venueField = VENUE_FIELDS[typeName] || (mappedID ? Zotero.ItemFields.getName(mappedID) : "publicationTitle");
+    setIfValid(venueField, metadata.publicationTitle);
   }}
   const creators = splitCreators(metadata.authors);
   if (creators.length) {{
