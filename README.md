@@ -98,13 +98,13 @@ floating `HEAD` — a tag is a known-good, CI-verified snapshot; `HEAD` on `mast
 mid-change:
 
 ```powershell
-C:\Users\you\.venvs\zotero_fulltext_mcp\Scripts\python.exe -m pip install "zotero-fulltext-mcp[mcp] @ git+https://github.com/matthiaskloft/zotero-fulltext-mcp.git@v0.12.0"
+C:\Users\you\.venvs\zotero_fulltext_mcp\Scripts\python.exe -m pip install "zotero-fulltext-mcp[mcp] @ git+https://github.com/matthiaskloft/zotero-fulltext-mcp.git@v0.12.1"
 ```
 
 macOS/Linux:
 
 ```bash
-~/.venvs/zotero_fulltext_mcp/bin/python -m pip install 'zotero-fulltext-mcp[mcp] @ git+https://github.com/matthiaskloft/zotero-fulltext-mcp.git@v0.12.0'
+~/.venvs/zotero_fulltext_mcp/bin/python -m pip install 'zotero-fulltext-mcp[mcp] @ git+https://github.com/matthiaskloft/zotero-fulltext-mcp.git@v0.12.1'
 ```
 
 Substitute the latest tag from the
