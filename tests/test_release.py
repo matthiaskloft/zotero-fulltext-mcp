@@ -72,6 +72,20 @@ def test_mismatched_lock_version_rejected(release_root: Path) -> None:
         release_notes(release_root, current_ref(release_root), "push")
 
 
+@pytest.mark.parametrize("example_index", [0, 1])
+def test_one_stale_install_example_rejected(release_root: Path, example_index: int) -> None:
+    readme = release_root / "README.md"
+    project = tomllib.loads((release_root / "pyproject.toml").read_text(encoding="utf-8"))["project"]
+    install_ref = f"git+{project['urls']['Homepage']}.git@v{project['version']}"
+    examples = readme.read_text(encoding="utf-8").split(install_ref)
+    assert len(examples) == 3
+    refs = [install_ref, install_ref]
+    refs[example_index] = install_ref.replace(f"@v{project['version']}", "@v0.0.0")
+    readme.write_text(examples[0] + refs[0] + examples[1] + refs[1] + examples[2], encoding="utf-8")
+    with pytest.raises(ValueError, match="Every README Git install tag"):
+        release_notes(release_root, current_ref(release_root), "push")
+
+
 def current_ref(root: Path) -> str:
     project = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))["project"]
     return f"refs/tags/v{project['version']}"

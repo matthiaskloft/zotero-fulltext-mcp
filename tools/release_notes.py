@@ -29,8 +29,11 @@ def release_notes(root: Path, ref: str, event: str) -> str:
         raise ValueError("Lockfile version must match package version")
     if f"version: {version}\n" not in (root / "CITATION.cff").read_text(encoding="utf-8"):
         raise ValueError("Citation version must match package version")
-    if f"@v{version}" not in (root / "README.md").read_text(encoding="utf-8"):
-        raise ValueError("README install tag must match package version")
+    readme = (root / "README.md").read_text(encoding="utf-8")
+    git_url = f"git+{project['urls']['Homepage'].rstrip('/')}.git"
+    install_refs = re.findall(re.escape(git_url) + r"""@([^\s'"`]+)""", readme)
+    if not install_refs or any(ref != f"v{version}" for ref in install_refs):
+        raise ValueError("Every README Git install tag must match package version")
     changelog = (root / "CHANGELOG.md").read_text(encoding="utf-8")
     match = re.search(
         rf"(?ms)^## \[{re.escape(version)}\] - \d{{4}}-\d{{2}}-\d{{2}}\n(.*?)(?=^## \[|\Z)",
