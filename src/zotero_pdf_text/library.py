@@ -36,7 +36,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TypedDict
-from urllib.parse import quote, unquote
+from urllib.parse import quote
 
 from .artifacts import (
     GENERATION_JSONL_FILENAME,
@@ -200,7 +200,7 @@ def relative_image_links(markdown: str, markdown_path: Path) -> str:
 
     def rebase(match: re.Match[str]) -> str:
         target = match.group(2)
-        name = unquote(target.replace("\\", "/").rsplit("/", 1)[-1])
+        name = target.replace("\\", "/").rsplit("/", 1)[-1]  # a raw file name: "%20" in it is literal
         if not name or "://" in target:
             return match.group(0)
         # Percent-encoded, so spaces and brackets in the name still make a valid link.

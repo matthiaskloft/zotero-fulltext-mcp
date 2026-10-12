@@ -23,6 +23,7 @@ from zotero_pdf_text.artifacts import (
     resolve_generation_dir,
     resolve_reader_db_path,
     resolve_reader_generation,
+    stage_and_publish,
     stage_generation,
     validate_generation,
     write_jsonl_appending_manifest,
@@ -181,6 +182,26 @@ class StagePublishResolveTests(unittest.TestCase):
             self.assertEqual(
                 current_generation_jsonl(index_root), info.directory / GENERATION_JSONL_FILENAME
             )
+
+    def test_a_root_published_before_the_versions_rename_still_republishes(self):
+        """`current.json` written by an earlier version names a folder under `generations/`."""
+        with tempfile.TemporaryDirectory() as tmp:
+            index_root = Path(tmp) / "index"
+            index_root.mkdir()
+            old = _stage_from_records(index_root, [_record("A1", "Cultural consensus theory.")])
+            publish_generation(index_root, old.generation_id)
+            (index_root / "versions").rename(index_root / "generations")
+
+            self.assertEqual(resolve_generation_dir(index_root, old.generation_id).parent.name, "generations")
+            source = index_root / "source.jsonl"
+            _write_source_jsonl(source, [_record("A2", "Item response theory.")])
+            new = stage_and_publish(index_root, write_jsonl_from_existing(source), command="rebuild-index")
+
+            self.assertEqual(new.directory.parent, index_root / "versions")
+            self.assertTrue((index_root / "generations" / old.generation_id).is_dir())
+            pointer = read_current_pointer(index_root)
+            self.assertEqual(pointer["previous_generation"], old.generation_id)
+            self.assertEqual(len(search_fts(resolve_reader_db_path(index_root / "x.sqlite"), "response", limit=5)), 1)
 
     def test_resolve_reader_generation_reports_the_pointer_it_read(self):
         """The generation identity is read from current.json, never inferred or defaulted.

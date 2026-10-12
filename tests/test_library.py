@@ -132,6 +132,11 @@ class CanonicalPathTests(unittest.TestCase):
                 relative_image_links("![](C:/x/Smith (2020) - T.pdf-0-1.png) after", markdown),
                 "![](images/Smith%20%282020%29%20-%20T.pdf-0-1.png) after",
             )
+            # Extractors write raw file names, so "%20" is part of the name and gets encoded.
+            self.assertEqual(
+                relative_image_links("![](x/Paper%20Title.pdf-0001-03.png)", markdown),
+                "![](images/Paper%2520Title.pdf-0001-03.png)",
+            )
             ocr_sibling = markdown.with_name("ABCD1234.ocr.md")
             self.assertEqual(images_dir_for(ocr_sibling), canonical_image_dir(config, "ABCD1234"))
             run_markdown = Path(tmp) / "run" / "markdown" / "0001_paper.md"

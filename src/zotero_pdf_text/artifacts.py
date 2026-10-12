@@ -46,6 +46,7 @@ from .zotero_metadata import ZOTERO_METADATA_KEYS
 
 ARTIFACT_SCHEMA_VERSION = 1
 GENERATIONS_DIRNAME = "versions"
+LEGACY_GENERATIONS_DIRNAME = "generations"
 CURRENT_POINTER_FILENAME = "current.json"
 JOURNAL_FILENAME = "publish_journal.json"
 GENERATION_JSONL_FILENAME = "index.jsonl"
@@ -133,8 +134,14 @@ def resolve_generation_dir(index_root: Path, generation_id: str) -> Path:
             f"'{generation_id}' is not a valid index generation ID; refusing to resolve it. "
             "If current.json was edited or corrupted, re-publish with 'zotero-pdf-text rebuild-index'."
         )
-    generations_dir = (index_root / GENERATIONS_DIRNAME).resolve()
-    candidate = index_root / GENERATIONS_DIRNAME / generation_id
+    dirname = GENERATIONS_DIRNAME
+    if not (index_root / dirname / generation_id).exists() and (index_root / LEGACY_GENERATIONS_DIRNAME / generation_id).exists():
+        # Published before the folder was renamed. Read in place, never moved: a pointer into
+        # the old folder keeps working, so the next publication can inherit its settings and
+        # write the new version under versions/.
+        dirname = LEGACY_GENERATIONS_DIRNAME
+    generations_dir = (index_root / dirname).resolve()
+    candidate = index_root / dirname / generation_id
     if candidate.resolve().parent != generations_dir:
         raise CurrentPointerError(
             f"Generation '{generation_id}' resolves outside the managed generations directory; "
