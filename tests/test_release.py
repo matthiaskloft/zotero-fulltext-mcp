@@ -1,13 +1,25 @@
 """Publication guards must reject a mismatched identity or private artifact contents."""
 
 from pathlib import Path
+import importlib.util
 import shutil
 import tomllib
 
 import pytest
 
-from tools.check_distribution import check_members
-from tools.release_notes import ROOT, release_notes
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def load_tool(name: str):
+    spec = importlib.util.spec_from_file_location(name, ROOT / "tools" / f"{name}.py")
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+check_members = load_tool("check_distribution").check_members
+release_notes = load_tool("release_notes").release_notes
 
 
 @pytest.fixture

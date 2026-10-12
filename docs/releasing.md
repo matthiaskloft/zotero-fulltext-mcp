@@ -110,6 +110,7 @@ build under the same version or move a published tag. Existing GitHub releases a
 | Trusted Publishing authentication fails | Check the index account's publisher owner, repository, `release.yml` filename and environment. Verify that the project name is available or belongs to that account. Fix the registration, then rerun the failed upload job if no files were accepted. |
 | Index rejects an existing version/file | Check which files were accepted before retrying. Do not enable blanket skip-existing behavior to conceal differing artifacts; resolve partial uploads or use a new version. |
 | PyPI succeeds but GitHub release creation fails | Use `gh run rerun RUN_ID --failed` to retry failed jobs only. The successful PyPI job must not be rerun. Alternatively create the GitHub release manually with the same tag, notes and published artifacts. |
+| A GitHub release draft already exists | The workflow fails rather than treating the draft as a completed release. Inspect the draft's tag, notes and assets; finish uploading the checked distributions and publish it manually. An interrupted asset upload may have left only some files attached. Do not repeat the successful PyPI upload. |
 
 Build artifacts are named `release-distributions` and `release-notes` on the workflow run.
 Real-Zotero diagnostics are in `live-zotero-results`. Keep these available when investigating

@@ -129,7 +129,11 @@ jobs:
           GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+          if release_draft=$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft); then
+            if [ "$release_draft" = "true" ]; then
+              echo "An existing draft is incomplete; recover its notes/assets and publish it manually. See docs/releasing.md."
+              exit 1
+            fi
             echo "GitHub release already exists; leaving it unchanged."
           else
             gh release create "$RELEASE_TAG" dist/* --verify-tag --title "$RELEASE_TAG" --notes-file release-notes.md
