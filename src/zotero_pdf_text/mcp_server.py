@@ -172,13 +172,13 @@ def _load_server_config(path: Path):
 def _validate_startup_database(db_path: Path) -> None:
     # Resolve the managed current generation via the pointer next to db_path -- the only way an
     # index is located. Tool requests re-resolve per call, so a generation published while the
-    # server runs is picked up without a restart.
+    # server runs is picked up without a restart. A missing index is therefore not fatal: the
+    # server starts and each tool call answers `database_unavailable` with the remediation, which
+    # a client can show, instead of an opaque closed connection.
     try:
         resolved = resolve_reader_db_path(db_path)
-    except ManagedIndexMissingError as exc:
-        raise SystemExit(
-            _startup_error("database_unavailable", "The selected local full-text index is unavailable.")
-        ) from exc
+    except ManagedIndexMissingError:
+        return
     except ArtifactError as exc:
         raise SystemExit(
             _startup_error(

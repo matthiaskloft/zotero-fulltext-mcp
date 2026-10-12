@@ -1752,7 +1752,11 @@ def _resolve_request_db(db_path: Path) -> Path:
     except ManagedIndexMissingError:
         # No pointer means no index is published here at all -- the same client-facing
         # condition as a missing database file, so reuse that stable code.
-        raise PublicMcpError("database_unavailable", "The local full-text index is unavailable.") from None
+        raise PublicMcpError(
+            "database_unavailable",
+            "No local full-text index is published. Convert the library, then build the index "
+            "with the CLI's rebuild-index command; the server picks it up without a restart.",
+        ) from None
     except ArtifactError:
         raise PublicMcpError(
             "index_pointer_invalid",

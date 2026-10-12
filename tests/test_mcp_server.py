@@ -1030,14 +1030,18 @@ class McpServerTests(unittest.TestCase):
             create.assert_called_once()
             self.assertIs(run_stdio.call_args.args[0], fake_server)
 
-    def test_missing_database_is_a_path_free_structured_startup_error(self):
+    def test_missing_index_still_starts_and_tools_explain_the_remedy(self):
         with tempfile.TemporaryDirectory() as tmp:
             missing = Path(tmp) / "private-missing.sqlite"
-            with self.assertRaises(SystemExit) as raised:
-                main(["--db", str(missing)])
-            error = json.loads(str(raised.exception))
-            self.assertEqual(error["error"]["code"], "database_unavailable")
-            self.assertNotIn(str(missing), str(raised.exception))
+            with patch("zotero_pdf_text.mcp_server._run_stdio") as run_stdio:
+                self.assertEqual(main(["--db", str(missing)]), 0)
+            run_stdio.assert_called_once()
+            server = create_server(missing, mcp_factory=FakeFastMCP)
+            with self.assertRaises(PublicMcpError) as unavailable:
+                server.tools["search_fulltext"]("anything")
+            self.assertEqual(unavailable.exception.code, "database_unavailable")
+            self.assertIn("rebuild-index", unavailable.exception.message)
+            self.assertNotIn(str(missing), unavailable.exception.message)
 
 
 class TimeoutCandidateMcpTests(unittest.TestCase):
