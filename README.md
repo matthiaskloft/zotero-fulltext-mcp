@@ -106,8 +106,8 @@ python=~/.venvs/zotero_fulltext_mcp/bin/python
 ```
 
 Use a published tag from the [releases page](https://github.com/matthiaskloft/zotero-fulltext-mcp/releases).
-The examples pin the version documented by this checkout. For contributing and reproducible
-installs with `uv`, see [Developer setup](docs/dev-test-setup.md).
+The examples pin the version documented by this checkout. For reproducible installs and local
+testing with `uv`, see [Developer setup](docs/dev-test-setup.md).
 
 ## Configure
 
@@ -228,7 +228,8 @@ you can pair it with a separate Zotero metadata MCP server; that is optional for
 - [Operations](docs/operations.md) — CLI commands, resume, audits, repairs, and experimental image OCR.
 - [MCP tool reference](docs/mcp-tools.md) — tool contracts and agent guidance.
 - [Architecture](docs/architecture.md) and [data dictionary](docs/data-dictionary.md) — pipeline design and schemas.
-- [Contributing](docs/contributing.md) — development, test workflows, privacy checks, and repository history.
+- [Contribution policy](CONTRIBUTING.md) — issues welcome; pull requests by invitation only.
+- [Developer guide](docs/contributing.md) — development, test workflows, privacy checks, and repository history.
 - [Releasing](docs/releasing.md) — maintainer release procedure.
 
 For problems, use the
