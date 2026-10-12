@@ -14,6 +14,12 @@ The pipeline is read-only with respect to Zotero: it never writes to your live `
 except through the optional, approval-gated `zotero-write` workflow. Everything else reads
 Zotero's data and writes only to a separate `converted_text` output folder that you control.
 
+> **Status: in active development (0.x).** Releases before 1.0 may make breaking changes to the
+> output folder layout, the index format, CLI commands and MCP tools. Some changes need a fresh
+> conversion of your library. Install a pinned release tag (see [Install](#install)) and read
+> [CHANGELOG.md](CHANGELOG.md) before upgrading. Your Zotero library itself is never affected,
+> because everything in `converted_text` can be rebuilt from it.
+
 ## First use: from install to cited evidence
 
 What you need first: Python 3.11+, a Zotero library whose PDFs are **linked** attachments
