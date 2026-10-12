@@ -5,6 +5,8 @@ All notable changes to this project are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-10-12
+
 ### Changed
 
 - Output root reorganized into four self-explaining folders. There is no migration: an output
@@ -1046,7 +1048,8 @@ author's own machine.
 
 Initial import of the Zotero full-text conversion pipeline, CLI, and MCP server. Not tagged.
 
-[Unreleased]: https://github.com/matthiaskloft/zotero-fulltext-mcp/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/matthiaskloft/zotero-fulltext-mcp/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.12.0
 [0.11.0]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.11.0
 [0.10.0]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.10.0
 [0.9.0]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.9.0
