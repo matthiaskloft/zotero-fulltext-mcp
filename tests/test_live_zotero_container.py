@@ -149,3 +149,63 @@ def test_manual_agent_harness_reads_live_state_and_refuses_nonempty_baseline(liv
     assert state["items"][0]["attachments"][0]["pages"] == 1
     with pytest.raises(RuntimeError, match="already present"):
         harness.main(["prepare"])
+
+
+def test_update_metadata_script_in_real_zotero(live: dict, seeded: list[dict]) -> None:
+    """The generated update_metadata script keeps blank fields, validates per type and keeps editors."""
+    from zotero_pdf_text.ingestion import ImportCandidate
+    from zotero_pdf_text.zotero_write import WritePlanRecord, generate_zotero_javascript
+
+    setup = """
+const made = {};
+for (const [name, type] of [["conference", "conferencePaper"], ["book", "book"]]) {
+    const item = new Zotero.Item(type);
+    item.setField('title', 'Update fixture ' + name);
+    item.setField('date', '2019-05-06');
+    item.setCreators([
+        {firstName: 'Old', lastName: 'Author', creatorType: 'author'},
+        {firstName: 'Ed', lastName: 'Itor', creatorType: 'editor'},
+    ]);
+    await item.saveTx();
+    made[name] = item.key;
+}
+return made;
+"""
+    made = execute_javascript(setup, timeout=30)
+    assert made.ok, made.error
+    keys = made.result
+    try:
+        records = [
+            WritePlanRecord(
+                operation="update_metadata", approval_status="approved", risk_level="medium",
+                candidate=ImportCandidate(title="Updated title", authors="Smith, John", venue="Fixture Venue"),
+                dedupe={"action": "update_existing"}, target={"zotero_parent_key": key},
+            )
+            for key in keys.values()
+        ]
+        applied = execute_javascript(generate_zotero_javascript(records), timeout=60)
+        assert applied.ok, applied.error
+        assert "ERROR" not in applied.result, applied.result
+        read = execute_javascript(
+            "const out = {}; for (const k of KEYS) { const i = await Zotero.Items.getByLibraryAndKeyAsync("
+            "Zotero.Libraries.userLibraryID, k); out[k] = {type: Zotero.ItemTypes.getName(i.itemTypeID), "
+            "title: i.getField('title'), date: i.getField('date'), "
+            "venue: i.getField('proceedingsTitle') || i.getField('publisher'), "
+            "creators: i.getCreators().map(c => c.creatorTypeID && Zotero.CreatorTypes.getName(c.creatorTypeID) + ':' + c.lastName)}; } return out;"
+            .replace("KEYS", json.dumps(list(keys.values()))),
+            timeout=30,
+        )
+        assert read.ok, read.error
+        for key in keys.values():
+            state = read.result[key]
+            assert state["title"] == "Updated title", state
+            assert state["date"].startswith("2019-05-06"), state
+            assert state["venue"] == "Fixture Venue", state
+            assert state["creators"] == ["author:Smith", "editor:Itor"], state
+    finally:
+        execute_javascript(
+            "for (const k of KEYS) { const i = await Zotero.Items.getByLibraryAndKeyAsync("
+            "Zotero.Libraries.userLibraryID, k); if (i) await i.eraseTx(); }"
+            .replace("KEYS", json.dumps(list(keys.values()))),
+            timeout=30,
+        )
