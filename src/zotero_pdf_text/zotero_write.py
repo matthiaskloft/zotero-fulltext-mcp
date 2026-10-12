@@ -390,10 +390,11 @@ const VENUE_FIELDS = {{ book: "publisher", bookSection: "bookTitle" }};
 
 function applyMetadata(item, metadata) {{
   const typeName = Zotero.ItemTypes.getName(item.itemTypeID);
+  const label = item.key || metadata.title || "(new item)";
   const setIfValid = (field, value) => {{
     const fieldID = Zotero.ItemFields.getID(field);
     if (!fieldID || !Zotero.ItemFields.isValidForType(fieldID, item.itemTypeID)) {{
-      results.push(`WARN field "${{field}}" is not valid for item type ${{typeName}}; skipped`);
+      results.push(`WARN ${{label}}: field "${{field}}" is not valid for item type ${{typeName}}; skipped`);
       return;
     }}
     item.setField(field, value || "");
@@ -410,7 +411,8 @@ function applyMetadata(item, metadata) {{
   }}
   const creators = splitCreators(metadata.authors);
   if (creators.length) {{
-    item.setCreators(creators);
+    const kept = item.getCreators().filter((creator) => Zotero.CreatorTypes.getName(creator.creatorTypeID) !== "author");
+    item.setCreators([...creators, ...kept]);
   }}
 }}
 
