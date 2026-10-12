@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/matthiaskloft/zotero-fulltext-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/matthiaskloft/zotero-fulltext-mcp/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/matthiaskloft/zotero-fulltext-mcp?display_name=tag)](https://github.com/matthiaskloft/zotero-fulltext-mcp/releases)
+[![PyPI](https://img.shields.io/pypi/v/zotero-fulltext-mcp)](https://pypi.org/project/zotero-fulltext-mcp/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ![zotero-fulltext-mcp: local full-text search for a Zotero library](docs/assets/zotero-fulltext-mcp-social-preview.svg)
