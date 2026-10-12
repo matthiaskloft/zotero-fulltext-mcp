@@ -5,6 +5,12 @@ All notable changes to this project are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Changed
+
+- The MCP server now starts when no index is published yet; tool calls answer
+  `database_unavailable` with the remediation instead of the client seeing only a closed
+  connection. ([#131](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/131))
+
 ## [0.12.1] - 2026-10-12
 
 ### Changed

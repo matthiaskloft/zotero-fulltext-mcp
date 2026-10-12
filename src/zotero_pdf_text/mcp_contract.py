@@ -1752,7 +1752,11 @@ def _resolve_request_db(db_path: Path) -> Path:
     except ManagedIndexMissingError:
         # No pointer means no index is published here at all -- the same client-facing
         # condition as a missing database file, so reuse that stable code.
-        raise PublicMcpError("database_unavailable", "The local full-text index is unavailable.") from None
+        raise PublicMcpError(
+            "database_unavailable",
+            "No local full-text index is published. Convert the library, then build the index "
+            "with the CLI's rebuild-index command; the server picks it up without a restart.",
+        ) from None
     except ArtifactError:
         raise PublicMcpError(
             "index_pointer_invalid",
@@ -1787,12 +1791,8 @@ def _validate_reconvert_setup(config: ProjectConfig | None, db_path: Path) -> No
             "database_config_mismatch",
             "Math reconversion requires the selected database to be the index governed by the project config.",
         )
-    if _managed_sidecar_jsonl(config) is None:
-        raise PublicMcpError(
-            "sidecar_index_unavailable",
-            "Math reconversion publishes managed index generations and requires one to exist. "
-            "Run the CLI's rebuild-index command once to migrate the index, then restart.",
-        )
+    # A published generation is required per call, not here, so the server can start before the
+    # first index is built (#131).
     if not marker_dependency_available():
         raise PublicMcpError(
             "marker_dependency_missing",
@@ -1818,12 +1818,7 @@ def _validate_retry_timeout_setup(config: ProjectConfig | None, db_path: Path) -
             "database_config_mismatch",
             "Timeout skip/retry requires the selected database to be the index governed by the project config.",
         )
-    if _managed_sidecar_jsonl(config) is None:
-        raise PublicMcpError(
-            "sidecar_index_unavailable",
-            "A successful timeout retry publishes a managed index generation and requires one to "
-            "exist. Run the CLI's rebuild-index command once to migrate the index, then restart.",
-        )
+    # A published generation is required per call, not here (#131).
     # Deliberately no marker_dependency_available() check: retry-timeout reconverts with
     # pymupdf4llm/pymupdf, the same extractors as ordinary conversion, not marker-pdf.
 
@@ -2227,6 +2222,7 @@ def _skip_timeout_extraction(
     if config is None:
         raise PublicMcpError("config_required", "Timeout skip requires an explicit valid project config.")
     validate_config(config)
+    _require_timeout_sidecar(config)
     from .retry_timeout import skip_timeout_candidate
 
     result = skip_timeout_candidate(attachment_key, config=config, reason=validated_reason)
@@ -2256,6 +2252,7 @@ def _retry_timeout_extraction(
     validated_multiplier = _validate_optional_multiplier(multiplier)
     if validated_timeout_seconds is not None and validated_multiplier is not None:
         raise PublicMcpError("invalid_input", "Supply at most one of timeout_seconds and multiplier.")
+    _require_timeout_sidecar(config)
     limiter.acquire()
     from .retry_timeout import retry_timeout_candidate
 
@@ -2270,6 +2267,15 @@ def _retry_timeout_extraction(
             raise PublicMcpError("timeout_candidate_not_found", "No recorded timeout candidate matches that attachment key.")
         raise PublicMcpError("retry_failed", "Reconverting this attachment did not complete successfully.")
     return _serialize_retry_timeout_result(result)
+
+
+def _require_timeout_sidecar(config: ProjectConfig) -> None:
+    if _managed_sidecar_jsonl(config) is None:
+        raise PublicMcpError(
+            "sidecar_index_unavailable",
+            "Timeout skip/retry updates managed index generations and requires one to exist. "
+            "Run the CLI's rebuild-index command once to build the index.",
+        )
 
 
 def _serialize_retry_timeout_result(result: Any) -> RetryTimeoutResponse:
