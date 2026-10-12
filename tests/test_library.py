@@ -35,6 +35,8 @@ from zotero_pdf_text.library import (
     LibraryAuditError,
     audit_library,
     canonical_image_dir,
+    images_dir_for,
+    relative_image_links,
     canonical_markdown_path,
     classify_item,
     is_canonical_eligible,
@@ -92,17 +94,53 @@ class CanonicalPathTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             config = _config(Path(tmp))
             path = canonical_markdown_path(config, "ABCD1234")
-            self.assertEqual(path.parent, config.output_root / "library" / "markdown")
+            self.assertEqual(path.parent, config.output_root / "library" / "ABCD1234")
             self.assertEqual(path.name, "ABCD1234.md")
 
     def test_image_dir_ignores_title_so_a_retitle_cannot_orphan_images(self):
         with tempfile.TemporaryDirectory() as tmp:
             config = _config(Path(tmp))
             first = canonical_image_dir(config, "ABCD1234")
-            self.assertEqual(first, config.output_root / "library" / "images" / "ABCD1234")
+            self.assertEqual(first, config.output_root / "library" / "ABCD1234" / "images")
             # The image directory is derived from the key alone, never from the Markdown
             # filename, so renaming the item leaves the images exactly where they were.
             self.assertEqual(canonical_image_dir(config, "ABCD1234"), first)
+
+    def test_images_sit_beside_their_markdown_in_either_layout(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = _config(Path(tmp))
+            markdown = canonical_markdown_path(config, "ABCD1234")
+            self.assertEqual(images_dir_for(markdown), canonical_image_dir(config, "ABCD1234"))
+            run_markdown = Path(tmp) / "run" / "markdown" / "0001_paper.md"
+            self.assertEqual(images_dir_for(run_markdown), Path(tmp) / "run" / "images" / "0001_paper")
+
+    def test_image_links_are_rewritten_relative_to_the_markdown(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = _config(Path(tmp))
+            markdown = canonical_markdown_path(config, "ABCD1234")
+            text = (
+                r"![](some/cwd/relative/fig1.png) ![alt](C:\other\machine\fig2.png) "
+                "![](marker_bare.jpeg) ![remote](https://example.com/a.png)"
+            )
+            rewritten = relative_image_links(text, markdown)
+            self.assertEqual(
+                rewritten,
+                "![](images/fig1.png) ![alt](images/fig2.png) "
+                "![](images/marker_bare.jpeg) ![remote](https://example.com/a.png)",
+            )
+            self.assertEqual(
+                relative_image_links("![](C:/x/Smith (2020) - T.pdf-0-1.png) after", markdown),
+                "![](images/Smith%20%282020%29%20-%20T.pdf-0-1.png) after",
+            )
+            # Extractors write raw file names, so "%20" is part of the name and gets encoded.
+            self.assertEqual(
+                relative_image_links("![](x/Paper%20Title.pdf-0001-03.png)", markdown),
+                "![](images/Paper%2520Title.pdf-0001-03.png)",
+            )
+            ocr_sibling = markdown.with_name("ABCD1234.ocr.md")
+            self.assertEqual(images_dir_for(ocr_sibling), canonical_image_dir(config, "ABCD1234"))
+            run_markdown = Path(tmp) / "run" / "markdown" / "0001_paper.md"
+            self.assertEqual(relative_image_links("![](x/fig.png)", run_markdown), "![](../images/0001_paper/fig.png)")
 
     def test_a_retitle_resolves_to_exactly_the_same_file(self):
         """Equality, not a shared prefix.

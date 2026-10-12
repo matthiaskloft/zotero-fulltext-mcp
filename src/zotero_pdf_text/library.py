@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import unicodedata
 from collections.abc import Iterator
@@ -35,6 +36,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TypedDict
+from urllib.parse import quote
 
 from .artifacts import (
     GENERATION_JSONL_FILENAME,
@@ -113,11 +115,15 @@ ELIGIBLE_IDENTITY_STATUSES = frozenset({"verified", "manual_accepted", "fulltext
 
 MAPPING_REPORT_JSONL = "mapping_report.jsonl"
 LIBRARY_DIRNAME = "library"
-MARKDOWN_DIRNAME = "markdown"
 IMAGES_DIRNAME = "images"
 
 _ATTACHMENT_KEY_RE = re.compile(r"^[A-Z0-9]{8}$")
 _SLUG_STRIP_RE = re.compile(r"[^a-z0-9]+")
+# The target runs to the image extension, not the first ")": extracted image names repeat the PDF's
+# file name, which often holds brackets ("Smith (2020) - Title.pdf-0-1.png").
+_IMAGE_LINK_RE = re.compile(
+    r"!\[([^\]\n]*)\]\(([^\n]*?\.(?:png|jpe?g|gif|webp|bmp|tiff?))\)", re.IGNORECASE
+)
 
 
 class LibraryAuditError(RuntimeError):
@@ -131,6 +137,16 @@ class LibraryAuditError(RuntimeError):
 
 def canonical_library_root(config: ProjectConfig) -> Path:
     return config.output_root / LIBRARY_DIRNAME
+
+
+def canonical_paper_dir(config: ProjectConfig, attachment_key: str) -> Path:
+    """The folder holding everything converted from attachment `attachment_key`.
+
+    One folder per attachment, named by its key: `library/<key>/<key>.md` beside
+    `library/<key>/images/`, so a paper's text and figures are found, copied and removed together.
+    """
+    key = validate_attachment_key(attachment_key)
+    return canonical_library_root(config) / key
 
 
 def canonical_markdown_path(config: ProjectConfig, attachment_key: str) -> Path:
@@ -147,7 +163,7 @@ def canonical_markdown_path(config: ProjectConfig, attachment_key: str) -> Path:
     sidecar mapping if it is ever wanted, not in the path a lookup depends on.
     """
     key = validate_attachment_key(attachment_key)
-    return canonical_library_root(config) / MARKDOWN_DIRNAME / f"{key}.md"
+    return canonical_paper_dir(config, key) / f"{key}.md"
 
 
 def canonical_image_dir(config: ProjectConfig, attachment_key: str) -> Path:
@@ -156,8 +172,41 @@ def canonical_image_dir(config: ProjectConfig, attachment_key: str) -> Path:
     Keyed on the attachment key only -- deliberately *not* derived from the Markdown filename, so
     a title change cannot orphan a whole image directory.
     """
-    key = validate_attachment_key(attachment_key)
-    return canonical_library_root(config) / IMAGES_DIRNAME / key
+    return canonical_paper_dir(config, attachment_key) / IMAGES_DIRNAME
+
+
+def images_dir_for(markdown_path: Path) -> Path:
+    """Where the images extracted alongside converted Markdown `markdown_path` live.
+
+    Two layouts exist: the canonical library keeps each paper in its own folder
+    (`library/<key>/<key>.md` with `library/<key>/images/`), while a run directory keeps numbered
+    files side by side (`<run>/markdown/<stem>.md` with `<run>/images/<stem>/`). A Markdown file
+    named after its own folder is the former; so is an enriched sibling such as `<key>.ocr.md`.
+    """
+    if markdown_path.parent.name == markdown_path.name.split(".", 1)[0]:
+        return markdown_path.parent / IMAGES_DIRNAME
+    return markdown_path.parent.parent / IMAGES_DIRNAME / markdown_path.stem
+
+
+def relative_image_links(markdown: str, markdown_path: Path) -> str:
+    """Point every image link in `markdown` at its file in `images_dir_for(markdown_path)`.
+
+    Links are written relative to the Markdown file (`images/fig.png` in the library), so they
+    resolve on every machine the output root is synced to. The extractors' own link targets are
+    not usable: pymupdf4llm writes them relative to its working directory and marker-pdf as a bare
+    file name. Only the file name is kept, because the images are always in that one folder.
+    """
+    prefix = Path(os.path.relpath(images_dir_for(markdown_path), markdown_path.parent)).as_posix()
+
+    def rebase(match: re.Match[str]) -> str:
+        target = match.group(2)
+        name = target.replace("\\", "/").rsplit("/", 1)[-1]  # a raw file name: "%20" in it is literal
+        if not name or "://" in target:
+            return match.group(0)
+        # Percent-encoded, so spaces and brackets in the name still make a valid link.
+        return f"![{match.group(1)}]({prefix}/{quote(name)})"
+
+    return _IMAGE_LINK_RE.sub(rebase, markdown)
 
 
 def validate_attachment_key(attachment_key: str) -> str:

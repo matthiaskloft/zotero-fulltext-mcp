@@ -230,7 +230,7 @@ class ExperimentIndexTests(unittest.TestCase):
             (root / "index" / "current.json").write_text("{}", encoding="utf-8")
             with self.assertRaises(SystemExit):
                 chunking.build_experiment_index(self.docs, spec, TOKENIZER, root / "index" / f"a{chunking.EXPERIMENT_SUFFIX}")
-            generations = Path(tmp) / "generations" / "g1"
+            generations = Path(tmp) / "versions" / "g1"
             with self.assertRaises(SystemExit):
                 chunking.build_experiment_index(self.docs, spec, TOKENIZER, generations / f"a{chunking.EXPERIMENT_SUFFIX}")
 

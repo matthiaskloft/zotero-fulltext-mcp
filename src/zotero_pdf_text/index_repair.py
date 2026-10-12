@@ -53,6 +53,7 @@ from .artifacts import (
 from .config import ProjectConfig
 from .converter import convert_planned_rows
 from .indexer import TextIndexRecord, _record_from_manifest_row, _sha256
+from .layout import run_name, runs_root
 from .library import (
     ALL_STATUSES,
     METADATA_KEYS,
@@ -103,7 +104,6 @@ PLAN_VERSION = 1
 PLAN_FILENAME = "plan.json"
 PLAN_CSV_FILENAME = "plan.csv"
 APPLY_LOG_FILENAME = "apply_log.jsonl"
-PLANS_DIRNAME = "index-repair"
 ORDINAL_FIELD = "plan_ordinal"
 COMMAND = "apply-index-repair"
 # Bounded diagnostics: the plan summary names at most this many example keys per reason. The
@@ -310,7 +310,7 @@ def build_plan(
     """Group every indexed attachment with an audit finding. Reads only; writes nothing."""
     root = index_root if index_root is not None else config.output_root / "index"
     # Timestamp for readability, random suffix so two plans can never share a run directory.
-    plan_id = plan_id or f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{secrets.token_hex(4)}"
+    plan_id = plan_id or run_name("index-repair", detail=secrets.token_hex(4))
     mapping_rows = load_mapping_snapshot(mapping_report)
     generation_id, _published_at, index_rows = load_index_records(root)
     inventory: dict[str, AttachmentRecord] = {}
@@ -364,7 +364,7 @@ def build_plan(
         full_audit=full_audit,
         inventory_available=inventory_available,
         inventory_error=inventory_error,
-        run_dir=str(config.output_root / "conversion-runs" / PLANS_DIRNAME / plan_id),
+        run_dir=str(runs_root(config.output_root) / plan_id / "conversion"),
         rows=tuple(rows),
         not_indexed={status: not_indexed[status] for status in ALL_STATUSES if not_indexed[status]},
     )
@@ -563,7 +563,7 @@ def write_plan(plan: RepairPlan, plan_dir: Path) -> Path:
 
 
 def default_plan_dir(config: ProjectConfig, plan_id: str) -> Path:
-    return config.output_root / PLANS_DIRNAME / plan_id
+    return runs_root(config.output_root) / plan_id
 
 
 def load_plan(path: Path) -> tuple[RepairPlan, Path]:

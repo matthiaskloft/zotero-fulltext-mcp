@@ -65,7 +65,7 @@ def test_importer_can_acquire_pdf_automatically(evidence):
 def test_snapshot_uses_published_generation_when_nominal_database_does_not_exist(tmp_path, monkeypatch):
     monkeypatch.setattr(harness, "guarded_config", lambda: SimpleNamespace(output_root=tmp_path))
     monkeypatch.setattr(harness, "execute_javascript", lambda script: SimpleNamespace(ok=True, result=[]))
-    published = tmp_path / "index/generations/example/index.sqlite"
+    published = tmp_path / "index/versions/example/index.sqlite"
     monkeypatch.setattr(harness, "resolve_reader_db_path", lambda nominal: published)
     def search(db, **kwargs):
         assert db == published

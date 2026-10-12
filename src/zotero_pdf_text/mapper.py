@@ -13,6 +13,7 @@ from pathlib import Path
 
 from .config import ProjectConfig
 from .identity import classify_identity, normalize_doi, normalize_text, resolve_attachment_paths, safe_folder_id
+from .layout import new_run_dir
 from .pdf_probe import extract_early_text
 from .zotero_db import AttachmentRecord, load_attachment_records, snapshot_database
 
@@ -71,11 +72,7 @@ class MappingRow:
 
 
 def run_dry_run(config: ProjectConfig) -> Path:
-    # Microseconds, because two runs in the same second (convert-new right after a dry-run)
-    # would otherwise collide on exist_ok=False.
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-    run_dir = config.output_root / "mapping-runs" / timestamp
-    run_dir.mkdir(parents=True, exist_ok=False)
+    run_dir = new_run_dir(config.output_root, "dry-run")
     with _run_log(run_dir / "run.log"):
         logger.info("Starting dry-run mapper")
         logger.info("Linked attachments: %s", config.linked_attachments)

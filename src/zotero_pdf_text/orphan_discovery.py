@@ -8,6 +8,7 @@ from pathlib import Path
 
 from .config import ProjectConfig
 from .identity import IdentityEvidence, classify_identity
+from .layout import REVIEW_DIRNAME, new_run_dir
 from .lock import PipelineLockedError, pipeline_write_lock
 from .orphan_candidates import (
     CONFIDENCE_HIGH,
@@ -22,7 +23,7 @@ from .orphan_candidates import (
 from .pdf_probe import extract_early_text
 from .zotero_db import ParentCandidateRecord, load_items_without_pdf_attachment
 
-CANDIDATES_RELATIVE_PATH = Path("index") / "orphan_candidates.jsonl"
+CANDIDATES_RELATIVE_PATH = Path(REVIEW_DIRNAME) / "orphan_candidates.jsonl"
 
 # Reported matches are built directly on top of classify_identity's own "verified" status (DOI
 # exact match, or a strong title match corroborated by an author/year hit) -- not a second scoring
@@ -58,8 +59,7 @@ def run_orphan_discovery(
     reported (see the module-level comment above). Never opens the Zotero SQLite database for
     anything but reads, never converts PDFs to Markdown, and never writes to Zotero.
     """
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_dir = output_dir or (config.output_root / "orphan_discovery" / timestamp)
+    run_dir = output_dir or new_run_dir(config.output_root, "find-orphan-parents")
     run_dir.mkdir(parents=True, exist_ok=True)
 
     orphan_rows = _load_orphan_rows(mapping_report_path)

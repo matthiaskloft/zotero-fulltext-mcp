@@ -483,7 +483,7 @@ class ManagedPublicationTests(unittest.TestCase):
             self.assertEqual(refreshed["item_type"], "journalArticle")
             index_db = (
                 index_root
-                / "generations"
+                / "versions"
                 / str(read_current_pointer(index_root)["current_generation"])
                 / GENERATION_DB_FILENAME
             )
@@ -499,7 +499,7 @@ class ManagedPublicationTests(unittest.TestCase):
             replacement = TextIndexRecord(
                 **{k: v for k, v in _record("A1", "ARTICLE1").items() if k in TextIndexRecord.__dataclass_fields__}
             )
-            current = index_root / "generations" / str(read_current_pointer(index_root)["current_generation"])
+            current = index_root / "versions" / str(read_current_pointer(index_root)["current_generation"])
             stage_and_publish(
                 index_root,
                 write_jsonl_upserting_record(current / "index.jsonl", "A1", replacement),

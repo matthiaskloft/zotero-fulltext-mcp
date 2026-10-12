@@ -38,7 +38,7 @@ def _symlinks_available(tmp: Path) -> bool:
 
 class GenerationIdContainmentTests(unittest.TestCase):
     def test_traversal_and_separator_ids_are_refused(self):
-        """Every spelling that could escape `generations/` is rejected before any file is opened."""
+        """Every spelling that could escape `versions/` is rejected before any file is opened."""
         hostile = [
             "../../evil",
             "..",
@@ -106,10 +106,10 @@ class GenerationIdContainmentTests(unittest.TestCase):
                 resolve_generation_dir(index_root, generation_id)
 
     def test_symlinked_generations_directory_is_a_documented_boundary(self):
-        """Replacing `generations/` itself with a symlink is NOT caught, by construction.
+        """Replacing `versions/` itself with a symlink is NOT caught, by construction.
 
-        The check compares a candidate's resolved parent against the resolved `generations/`, so
-        redirecting `generations/` redirects both sides equally and they still match. That is a
+        The check compares a candidate's resolved parent against the resolved `versions/`, so
+        redirecting `versions/` redirects both sides equally and they still match. That is a
         real limit of this layer, and pinning it here keeps it a known boundary rather than an
         assumed guarantee: anyone who can replace a directory inside `output_root` already has
         write access to the derived tree, which no path check can compensate for.

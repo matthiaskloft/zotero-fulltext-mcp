@@ -14,6 +14,12 @@ The pipeline is read-only with respect to Zotero: it never writes to your live `
 except through the optional, approval-gated `zotero-write` workflow. Everything else reads
 Zotero's data and writes only to a separate `converted_text` output folder that you control.
 
+> **Status: in active development (0.x).** Releases before 1.0 may make breaking changes to the
+> output folder layout, the index format, CLI commands and MCP tools. Some changes need a fresh
+> conversion of your library. Install a pinned release tag (see [Install](#install)) and read
+> [CHANGELOG.md](CHANGELOG.md) before upgrading. Your Zotero library itself is never affected,
+> because everything in `converted_text` can be rebuilt from it.
+
 ## First use: from install to cited evidence
 
 What you need first: Python 3.11+, a Zotero library whose PDFs are **linked** attachments
@@ -275,9 +281,11 @@ Search uses `all_terms` by default. Pass `--search-mode any_terms` for a broader
 given. Invalid input prints a message to stderr and exits with status 2.
 
 To see where the Markdown used by the published index actually lives, run
-`output-status --config .\config.json`. New runs use `mapping-runs/` for mapping
-snapshots and `conversion-runs/{verified,samples,unverified-review,provenance-reconvert,index-repair}/` for converted
-files. It groups active files by conversion folder and
+`output-status --config .\config.json`. The output root has four folders, explained in the
+`README.md` written there: `library/` (one folder per paper, plus `catalog.md`/`catalog.csv` to
+find a paper by author, year or title), `index/` (the search index), `runs/` (one folder per
+command run, named `<date>_<time>_<command>`) and `review/` (lists waiting for your decision).
+It groups active files by conversion folder and
 also shows the previous index generation's folders. Add `--list-files` for individual
 paths or `--json` for a machine-readable report. This is read-only: older conversion
 runs remain on disk and are not necessarily referenced by either index generation.
@@ -285,7 +293,7 @@ runs remain on disk and are not necessarily referenced by either index generatio
 Check whether the index still matches the library:
 
 ```powershell
-& $python -m zotero_pdf_text audit-library --config .\config.json --mapping-report .\converted_text\mapping-runs\<run-id>\mapping_report.jsonl
+& $python -m zotero_pdf_text audit-library --config .\config.json --mapping-report .\converted_text\runs\<date>_<time>_dry-run\mapping_report.jsonl
 ```
 
 `audit-library` is read-only — it moves, renames and rewrites nothing, and it never opens your
@@ -300,7 +308,7 @@ For counts without the per-item listing, `library-status` runs the same comparis
 only the summary:
 
 ```powershell
-& $python -m zotero_pdf_text library-status --config .\config.json --mapping-report .\converted_text\mapping-runs\<run-id>\mapping_report.jsonl
+& $python -m zotero_pdf_text library-status --config .\config.json --mapping-report .\converted_text\runs\<date>_<time>_dry-run\mapping_report.jsonl
 ```
 
 `list-degraded-records` lists indexed papers whose extracted text looks degraded or unusable
@@ -329,8 +337,8 @@ text extracted from whatever the file was back then. The only repair is to recon
 attachments, which is a two-step, opt-in migration:
 
 ```powershell
-& $python -m zotero_pdf_text plan-provenance-reconvert --config .\config.json --mapping-report .\converted_text\mapping-runs\<run-id>\mapping_report.jsonl
-& $python -m zotero_pdf_text apply-provenance-reconvert --config .\config.json --plan .\converted_text\provenance-reconvert\<plan-id> --limit 200
+& $python -m zotero_pdf_text plan-provenance-reconvert --config .\config.json --mapping-report .\converted_text\runs\<date>_<time>_dry-run\mapping_report.jsonl
+& $python -m zotero_pdf_text apply-provenance-reconvert --config .\config.json --plan .\converted_text\runs\<plan-id> --limit 200
 ```
 
 The plan is read-only: it sorts every provenance-unknown record into `eligible`, `missing_pdf`,
@@ -345,8 +353,8 @@ To resolve other audit findings without rebuilding the index from one run (which
 records converted in other runs), plan and apply selective repairs:
 
 ```powershell
-& $python -m zotero_pdf_text plan-index-repair --config .\config.json --mapping-report .\converted_text\mapping-runs\<run-id>\mapping_report.jsonl
-& $python -m zotero_pdf_text apply-index-repair --config .\config.json --plan .\converted_text\index-repair\<plan-id> --group safe
+& $python -m zotero_pdf_text plan-index-repair --config .\config.json --mapping-report .\converted_text\runs\<date>_<time>_dry-run\mapping_report.jsonl
+& $python -m zotero_pdf_text apply-index-repair --config .\config.json --plan .\converted_text\runs\<plan-id> --group safe
 ```
 
 The plan is read-only and sorts every indexed attachment with a finding into `safe` (Zotero's

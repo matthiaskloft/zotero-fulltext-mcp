@@ -169,7 +169,7 @@ class ConversionCheckpoint:
 
     def relative(self, output_path: Path) -> str:
         # os.path.relpath, not Path.relative_to: canonical library Markdown lives outside the run
-        # directory (as ``../../../library/markdown/<key>.md``), and still moves with the tree.
+        # directory (as ``../../../library/<key>/<key>.md``), and still moves with the tree.
         # Resolved first, so a drive alias for one of the two paths cannot put them on different
         # drives; a path genuinely on another drive has no relative form and is kept absolute.
         try:

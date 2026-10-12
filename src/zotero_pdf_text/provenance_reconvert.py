@@ -46,6 +46,7 @@ from .artifacts import (
 )
 from .config import ProjectConfig
 from .converter import convert_planned_rows
+from .layout import run_name, runs_root
 from .library import (
     ELIGIBLE_CLASSIFICATION,
     ItemObservation,
@@ -65,7 +66,6 @@ APPLY_LOG_FILENAME = "apply_log.jsonl"
 # Written into a run directory by the first apply of a plan. A run directory holds Markdown the
 # published index may reference, so it belongs to exactly one plan and is never reused by another.
 RUN_CLAIM_FILENAME = "provenance_plan.json"
-PLANS_DIRNAME = "provenance-reconvert"
 ORDINAL_FIELD = "plan_ordinal"
 COMMAND = "apply-provenance-reconvert"
 
@@ -262,7 +262,7 @@ def build_plan(
     root = index_root if index_root is not None else config.output_root / "index"
     # Timestamp for readability, random suffix so two plans made in the same second can never
     # share a run directory.
-    plan_id = plan_id or f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{secrets.token_hex(4)}"
+    plan_id = plan_id or run_name("provenance-reconvert", detail=secrets.token_hex(4))
     mapping_rows = load_mapping_snapshot(mapping_report)
     generation_id, _published_at, index_rows = load_index_records(root)
     inventory: dict[str, AttachmentRecord] = {}
@@ -332,7 +332,7 @@ def build_plan(
         generation_id=generation_id,
         inventory_available=inventory_available,
         inventory_error=inventory_error,
-        run_dir=str(config.output_root / "conversion-runs" / PLANS_DIRNAME / plan_id),
+        run_dir=str(runs_root(config.output_root) / plan_id / "conversion"),
         rows=tuple(rows),
     )
 
@@ -428,7 +428,7 @@ def write_plan(plan: ProvenancePlan, plan_dir: Path) -> Path:
 
 
 def default_plan_dir(config: ProjectConfig, plan_id: str) -> Path:
-    return config.output_root / PLANS_DIRNAME / plan_id
+    return runs_root(config.output_root) / plan_id
 
 
 def load_plan(path: Path) -> tuple[ProvenancePlan, Path]:

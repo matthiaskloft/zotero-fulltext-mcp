@@ -181,7 +181,7 @@ class RunOrphanDiscoveryTests(unittest.TestCase):
             self.assertEqual(records[0]["candidate_parent_key"], "PARENT1")
             self.assertEqual(records[0]["confidence_tier"], "high")
 
-            master_path = config.output_root / "index" / "orphan_candidates.jsonl"
+            master_path = config.output_root / "review" / "orphan_candidates.jsonl"
             master_records = [json.loads(line) for line in master_path.read_text(encoding="utf-8").splitlines()]
             self.assertEqual(len(master_records), 1)
             self.assertEqual(master_records[0]["status"], "pending")
@@ -223,7 +223,7 @@ class RunOrphanDiscoveryTests(unittest.TestCase):
                 run_dir = run_orphan_discovery(config, mapping_report)
 
             self.assertEqual((run_dir / "orphan_candidates.jsonl").read_text(encoding="utf-8"), "")
-            self.assertFalse((config.output_root / "index" / "orphan_candidates.jsonl").exists())
+            self.assertFalse((config.output_root / "review" / "orphan_candidates.jsonl").exists())
 
 
 class ResolutionHelperTests(unittest.TestCase):

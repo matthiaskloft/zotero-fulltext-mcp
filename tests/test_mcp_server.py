@@ -1406,7 +1406,7 @@ def _seed_timeout_candidate(
         conversion_status=conversion_status,
         detected_at=datetime.now().isoformat(timespec="seconds"),
     )
-    master_path = output_root / "index" / "timeout_candidates.jsonl"
+    master_path = output_root / "review" / "timeout_candidates.jsonl"
     append_master_candidates(master_path, [candidate])
     if status != "pending":
         from zotero_pdf_text.timeout_candidates import mark_status
@@ -1446,7 +1446,7 @@ def _seed_orphan_candidate(
         identity_rule="title_author_or_year",
         detected_at=datetime.now().isoformat(timespec="seconds"),
     )
-    master_path = output_root / "index" / "orphan_candidates.jsonl"
+    master_path = output_root / "review" / "orphan_candidates.jsonl"
     append_master_candidates_orphan(master_path, [candidate])
     if status != "pending":
         from zotero_pdf_text.orphan_candidates import mark_status as mark_orphan_status

@@ -39,6 +39,7 @@ from .converter import _with_front_matter
 from .fts import get_item_context
 from .identity import MARKDOWN_IMAGE_RE, front_matter_fields, strip_front_matter
 from .indexer import TextIndexRecord, _sha256, load_indexed_keys
+from .library import images_dir_for
 from .lock import PipelineLockedError, pipeline_write_lock
 
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
@@ -659,7 +660,7 @@ def ocr_images_for_attachment(
     enriched_path = enriched_path_for(source_path, suffix)
     # Images are derived from the original's stem and shared by both files; never from the
     # enriched stem, which has no images directory of its own.
-    images_dir = source_path.parent.parent / "images" / source_path.stem
+    images_dir = images_dir_for(source_path)
 
     if enriched_path != source_path and enriched_path.exists() and not force and not dry_run:
         return ImageOcrResult(

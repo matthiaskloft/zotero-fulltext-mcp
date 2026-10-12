@@ -313,7 +313,7 @@ def build_parser() -> argparse.ArgumentParser:
         "rebuild-index",
         help=(
             "Build and atomically publish a complete managed index generation (JSONL + SQLite FTS) "
-            "under <output_root>/index/generations/. Also the one-time migration command from the "
+            "under <output_root>/index/versions/. Also the one-time migration command from the "
             "legacy standalone zotero_text_index.jsonl/.sqlite layout."
         ),
     )
@@ -503,7 +503,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--output-dir",
         type=Path,
         default=None,
-        help="Directory for the new plan. Default: <output_root>/provenance-reconvert/<timestamp>/.",
+        help="Directory for the new plan. Default: <output_root>/runs/<date>_<time>_provenance-reconvert_<id>/.",
     )
     plan_provenance.add_argument("--json", action="store_true", help="Print the plan summary as JSON.")
     apply_provenance = subparsers.add_parser(
@@ -557,7 +557,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--output-dir",
         type=Path,
         default=None,
-        help="Directory for the new plan. Default: <output_root>/index-repair/<plan id>/.",
+        help="Directory for the new plan. Default: <output_root>/runs/<date>_<time>_index-repair_<id>/.",
     )
     plan_repair.add_argument("--full", action="store_true", help="Re-hash every source PDF, as audit-library --full does. Slow.")
     plan_repair.add_argument("--json", action="store_true", help="Print the plan summary as JSON.")
@@ -1319,10 +1319,9 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(report, ensure_ascii=False, indent=2))
         else:
             print(f"Output root: {report['output_root']}")
-            print(f"Mapping snapshots: {report['mapping_snapshots']}")
-            print("Conversion run roots:")
-            for path in cast("list[str]", report["conversion_runs"]):
-                print(f"  {path}")
+            print(f"Converted papers: {report['library']}")
+            print(f"Command runs: {report['runs']}")
+            print(f"Waiting for review: {report['review']}")
             if report["legacy_roots"]:
                 print("Older run roots (kept in place):")
                 for path in cast("list[str]", report["legacy_roots"]):

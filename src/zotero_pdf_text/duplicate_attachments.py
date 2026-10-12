@@ -4,11 +4,11 @@ import csv
 import json
 import re
 from dataclasses import asdict, dataclass
-from datetime import datetime
 from pathlib import Path
 
 from .config import ProjectConfig
 from .ingestion import ImportCandidate
+from .layout import new_run_dir
 from .zotero_write import WritePlanRecord, write_plan
 
 RESOLVED_CSV_FILENAME = "duplicate_groups.csv"
@@ -245,8 +245,7 @@ def run_duplicate_discovery(
     Never touches Zotero. The generated `duplicate_trash_plan.jsonl` feeds into the same
     `zotero-write validate` / `approve` / `apply --approve` gate as any other write plan.
     """
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_dir = output_dir or (config.output_root / "duplicate_attachments" / timestamp)
+    run_dir = output_dir or new_run_dir(config.output_root, "find-duplicate-attachments")
     run_dir.mkdir(parents=True, exist_ok=True)
 
     result = find_byte_identical_duplicates(mapping_report_path)

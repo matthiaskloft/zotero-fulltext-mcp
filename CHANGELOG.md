@@ -5,8 +5,32 @@ All notable changes to this project are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Changed
+
+- Output root reorganized into four self-explaining folders. There is no migration: an output
+  root written by an earlier version needs a fresh `dry-run`, `convert-verified` and
+  `rebuild-index` (old folders are reported by `output-status` and never moved).
+  - `library/<key>/<key>.md` with images in `library/<key>/images/` (was `library/markdown/<key>.md`
+    and `library/images/<key>/`).
+  - `index/versions/` (was `index/generations/`).
+  - `runs/<date>_<time>_<command>/` for every command run (was `mapping-runs/`,
+    `conversion-runs/*/`, `orphan_discovery/`, `duplicate_attachments/`, `retry_timeout/`). Repair
+    plans and their conversion share `runs/<plan-id>/`.
+  - `review/` for `timeout_candidates.jsonl`, `orphan_candidates.jsonl` and
+    `timeout_skip_list.json` (were in `index/` and the output root).
+
 ### Added
 
+- Every index publication writes `library/catalog.md` and `library/catalog.csv`, listing each
+  indexed paper by citation key, year, authors and title with a link relative to the catalog, so
+  it opens on any machine the output root is synced to, plus a `README.md` explaining the folders.
+
+### Fixed
+
+- Image links in converted Markdown are relative to the Markdown file (`images/fig.png` in the
+  library), so figures display on every machine the output root is synced to. pymupdf4llm wrote
+  them relative to the extractor's working directory and marker-pdf (`reconvert-math`) as a bare
+  file name, so they often pointed nowhere.
 - Index stores the Zotero fields it used to drop (item type, abstract, venue, volume/issue/pages,
   date, publisher, place, ISBN/ISSN, URL, language, tags and structured creator roles) and a
   computed `detected_language`. `rebuild-index`/`update-index --refresh-zotero-metadata` merge

@@ -1,7 +1,7 @@
 """Transactional derived-index artifacts: immutable generations plus an atomic pointer.
 
 Derived full-text output (the JSONL sidecar and its SQLite FTS database) is published as an
-immutable *generation* directory under ``<index_root>/generations/<generation-id>/`` containing
+immutable *generation* directory under ``<index_root>/versions/<generation-id>/`` containing
 ``index.jsonl``, ``index.sqlite``, and an ``artifact_manifest.json`` with checksums and build
 parameters. ``<index_root>/current.json`` is the sole publication pointer: it names exactly one
 validated generation (plus the prior one retained for rollback) and is only ever replaced
@@ -9,7 +9,7 @@ atomically. Readers resolve the pointer and open that generation's SQLite databa
 interrupted build therefore can never take the previously published index offline.
 
 The pointer stores only a strictly validated relative generation ID, never a filesystem path, and
-every reader containment-checks the resolved directory beneath ``generations/`` before opening
+every reader containment-checks the resolved directory beneath ``versions/`` before opening
 SQLite. Writers record a small publish journal immediately before swapping the pointer so an
 interruption between "generation validated" and "pointer replaced" is recovered deterministically
 by the next writer run (readers never attempt recovery).
@@ -30,12 +30,14 @@ import re
 import secrets
 import shutil
 import sqlite3
+import sys
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, cast
 
 from ._atomic import replace_with_retry
+from .catalog import write_output_guides
 from .zotero_db import read_only_uri
 from .fts import DEFAULT_CHUNK_CHARS, DEFAULT_OVERLAP_CHARS, FtsBuildSummary, build_fts_index
 from .identity import front_matter_fields
@@ -43,7 +45,8 @@ from .indexer import TextIndexRecord, _converted_rows, _record_from_manifest_row
 from .zotero_metadata import ZOTERO_METADATA_KEYS
 
 ARTIFACT_SCHEMA_VERSION = 1
-GENERATIONS_DIRNAME = "generations"
+GENERATIONS_DIRNAME = "versions"
+LEGACY_GENERATIONS_DIRNAME = "generations"
 CURRENT_POINTER_FILENAME = "current.json"
 JOURNAL_FILENAME = "publish_journal.json"
 GENERATION_JSONL_FILENAME = "index.jsonl"
@@ -114,7 +117,7 @@ def is_valid_generation_id(generation_id: object) -> bool:
 
 
 def resolve_generation_dir(index_root: Path, generation_id: str) -> Path:
-    """Validate a generation ID and containment-check its directory beneath generations/.
+    """Validate a generation ID and containment-check its directory beneath versions/.
 
     The strict ID pattern already excludes separators and traversal, but the resolved-parent
     check below keeps holding even if the pattern is ever loosened, and it also rejects a
@@ -131,8 +134,14 @@ def resolve_generation_dir(index_root: Path, generation_id: str) -> Path:
             f"'{generation_id}' is not a valid index generation ID; refusing to resolve it. "
             "If current.json was edited or corrupted, re-publish with 'zotero-pdf-text rebuild-index'."
         )
-    generations_dir = (index_root / GENERATIONS_DIRNAME).resolve()
-    candidate = index_root / GENERATIONS_DIRNAME / generation_id
+    dirname = GENERATIONS_DIRNAME
+    if not (index_root / dirname / generation_id).exists() and (index_root / LEGACY_GENERATIONS_DIRNAME / generation_id).exists():
+        # Published before the folder was renamed. Read in place, never moved: a pointer into
+        # the old folder keeps working, so the next publication can inherit its settings and
+        # write the new version under versions/.
+        dirname = LEGACY_GENERATIONS_DIRNAME
+    generations_dir = (index_root / dirname).resolve()
+    candidate = index_root / dirname / generation_id
     if candidate.resolve().parent != generations_dir:
         raise CurrentPointerError(
             f"Generation '{generation_id}' resolves outside the managed generations directory; "
@@ -504,6 +513,12 @@ def stage_and_publish(
         index_root, write_jsonl, command=command, chunk_chars=chunk_chars, overlap_chars=overlap_chars
     )
     publish_generation(index_root, info.generation_id)
+    # Best effort: the catalog and README are conveniences derived from what was just published,
+    # and failing to refresh them must never turn a successful publication into an error.
+    try:
+        write_output_guides(index_root.parent, info.jsonl_path)
+    except (OSError, ValueError) as exc:
+        print(f"warning: could not refresh library catalog: {type(exc).__name__}: {exc}", file=sys.stderr)
     return info
 
 

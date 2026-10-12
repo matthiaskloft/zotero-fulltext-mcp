@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -21,7 +22,7 @@ def test_output_status_groups_active_markdown_by_folder(tmp_path: Path, capsys):
     first.write_text("a", encoding="utf-8")
     second.write_text("b", encoding="utf-8")
     for generation_id, paths in ((current_id, [first, second]), (previous_id, [first])):
-        generation = index_root / "generations" / generation_id
+        generation = index_root / "versions" / generation_id
         generation.mkdir(parents=True)
         (generation / "index.jsonl").write_text(
             "".join(json.dumps({"markdown_path": str(path)}) + "\n" for path in paths), encoding="utf-8"
@@ -42,16 +43,17 @@ def test_output_status_groups_active_markdown_by_folder(tmp_path: Path, capsys):
     assert payload["current"]["generation_id"] == current_id
 
 
-def test_latest_mapping_snapshot_accepts_new_and_old_names(tmp_path: Path):
+def test_latest_mapping_snapshot_is_the_newest_dry_run(tmp_path: Path):
     root = tmp_path / "output"
     config = ProjectConfig(tmp_path, tmp_path, tmp_path, root)
-    old = root / "runs" / "old" / "mapping_report.jsonl"
+    old = root / "runs" / "2026-10-01_090000_dry-run" / "mapping_report.jsonl"
     old.parent.mkdir(parents=True)
     old.write_text("", encoding="utf-8")
     assert latest_mapping_snapshot(config) == old
-    new = root / "mapping-runs" / "new" / "mapping_report.jsonl"
+    new = root / "runs" / "2026-10-02_090000_dry-run" / "mapping_report.jsonl"
     new.parent.mkdir(parents=True)
     new.write_text("", encoding="utf-8")
+    os.utime(new, (old.stat().st_mtime + 10, old.stat().st_mtime + 10))
     assert latest_mapping_snapshot(config) == new
 
 
@@ -60,7 +62,7 @@ def test_missing_previous_generation_does_not_hide_current(tmp_path: Path):
     index_root = root / "index"
     current_id = "20260925T120000Z-1234abcd"
     previous_id = "20260924T120000Z-1234abcd"
-    generation = index_root / "generations" / current_id
+    generation = index_root / "versions" / current_id
     generation.mkdir(parents=True)
     (generation / "index.jsonl").write_text("", encoding="utf-8")
     (index_root / "current.json").write_text(
@@ -76,7 +78,7 @@ def test_invalid_record_names_generation_and_line(tmp_path: Path):
     root = tmp_path / "output"
     index_root = root / "index"
     generation_id = "20260925T120000Z-1234abcd"
-    generation = index_root / "generations" / generation_id
+    generation = index_root / "versions" / generation_id
     generation.mkdir(parents=True)
     (generation / "index.jsonl").write_text('{"markdown_path":"paper.md"}\n{}\n', encoding="utf-8")
     (index_root / "current.json").write_text(json.dumps({"current_generation": generation_id}), encoding="utf-8")

@@ -167,8 +167,8 @@ before recovery runs. The result is correct; only the conversion time is spent t
 ([#94](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/94)).
 
 **Package 3, steps 1 and 2: canonical library layout.** Done in reduced form, without migration.
-`convert-verified` and `convert-new` write straight to `library/markdown/<key>.md` and
-`library/images/<key>/`, and the index records those paths. The trigger was real: on the
+`convert-verified` and `convert-new` write straight to `library/<key>/<key>.md` and
+`library/<key>/images/`, and the index records those paths. The trigger was real: on the
 reference library a hand-made folder rename inside a synced output folder cut every indexed paper
 off from its Markdown, and the whole library is being reconverted. A reconversion fills the new
 layout directly, so `migrate-library-layout` (step 5) and its rename-heavy copy are not needed and
