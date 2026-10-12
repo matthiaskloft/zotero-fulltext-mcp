@@ -895,17 +895,23 @@ class McpServerTests(unittest.TestCase):
                     )
             self.assertEqual(missing_marker.exception.code, "marker_dependency_missing")
 
-            # Removing the managed pointer makes the sidecar unavailable: the opt-in mutation
-            # capabilities require a managed generation, not the legacy JSONL.
+            # Without a managed pointer the opt-in mutation tools still register (#131), but each
+            # call requires a managed generation, not the legacy JSONL.
             (config.output_root / "index" / "current.json").unlink()
-            with self.assertRaises(PublicMcpError) as missing_sidecar:
-                create_server(
+            with patch("zotero_pdf_text.mcp_contract.marker_dependency_available", return_value=True):
+                server = create_server(
                     sqlite_path,
                     config=config,
                     enable_reconvert=True,
+                    enable_retry_timeout=True,
                     mcp_factory=FakeFastMCP,
                 )
-            self.assertEqual(missing_sidecar.exception.code, "sidecar_index_unavailable")
+            for call in (
+                lambda: server.tools["reconvert_with_math_ocr"]("ABCD1234", confirm="reconvert"),
+                lambda: server.tools["retry_timeout_extraction"]("ABCD1234", confirm="retry_timeout"),
+                lambda: server.tools["skip_timeout_extraction"]("ABCD1234", reason="r", confirm="skip_timeout"),
+            ):
+                _assert_tool_error(self, call, "sidecar_index_unavailable")
 
     def test_enable_reconvert_without_explicit_config_is_a_startup_error(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -933,6 +939,23 @@ class McpServerTests(unittest.TestCase):
             self.assertIs(run_stdio.call_args.args[0], fake_server)
             self.assertTrue(factory.call_args.kwargs["enable_reconvert"])
             self.assertEqual(factory.call_args.kwargs["config"], config)
+
+    def test_write_tools_start_against_an_empty_output_root(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, _, config = _build_index(Path(tmp))
+            empty = ProjectConfig(config.zotero_root, config.zotero_data_directory, config.linked_attachments, root / "empty-output")
+            empty.output_root.mkdir()
+            config_path = root / "config.json"
+            _write_config(config_path, empty)
+            with (
+                patch("zotero_pdf_text.mcp_contract.marker_dependency_available", return_value=True),
+                patch("zotero_pdf_text.mcp_server._run_stdio") as run_stdio,
+            ):
+                self.assertEqual(
+                    main(["--config", str(config_path), "--enable-reconvert", "--enable-retry-timeout"]),
+                    0,
+                )
+            run_stdio.assert_called_once()
 
     def test_enable_reconvert_rejects_database_config_mismatch_at_startup(self):
         with tempfile.TemporaryDirectory() as tmp:
