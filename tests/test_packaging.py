@@ -46,3 +46,5 @@ def test_legacy_requirements_mcp_range_matches_authoritative_metadata() -> None:
 
     assert re.fullmatch(r"mcp>=\d+(?:\.\d+)*,<\d+", mcp_requirement)
     assert mcp_requirement in requirements
+    assert "PyJWT>=2.14.0" in project["optional-dependencies"]["mcp"]
+    assert "PyJWT>=2.14.0" in requirements

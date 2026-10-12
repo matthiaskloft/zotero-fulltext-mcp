@@ -1,6 +1,7 @@
 name: CI
 
 on:
+  workflow_call:
   push:
     branches: [master]
   pull_request:
@@ -43,3 +44,9 @@ jobs:
 
       - name: Build wheel and sdist
         run: uv build
+
+      - name: Check distribution metadata
+        run: uv tool run twine check --strict dist/*
+
+      - name: Verify built distributions and clean pip install
+        run: uv run python tools/check_distribution.py
