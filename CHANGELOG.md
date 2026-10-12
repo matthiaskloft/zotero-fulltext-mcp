@@ -5,6 +5,13 @@ All notable changes to this project are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.12.1] - 2026-10-12
+
+### Changed
+
+- Update the locked PyJWT dependency from 2.13.0 to 2.14.0.
+  ([#104](https://github.com/matthiaskloft/zotero-fulltext-mcp/pull/104))
+
 ## [0.12.0] - 2026-10-12
 
 ### Changed
@@ -1048,7 +1055,8 @@ author's own machine.
 
 Initial import of the Zotero full-text conversion pipeline, CLI, and MCP server. Not tagged.
 
-[Unreleased]: https://github.com/matthiaskloft/zotero-fulltext-mcp/compare/v0.12.0...HEAD
+[Unreleased]: https://github.com/matthiaskloft/zotero-fulltext-mcp/compare/v0.12.1...HEAD
+[0.12.1]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.12.1
 [0.12.0]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.12.0
 [0.11.0]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.11.0
 [0.10.0]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.10.0
