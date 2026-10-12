@@ -295,9 +295,50 @@ class ZoteroWriteTests(unittest.TestCase):
 
         self.assertIn("Zotero.Attachments.addAvailablePDF", script)
         self.assertIn("createItemsFromIdentifier", script)
-        self.assertIn("identifier lookup unavailable", script)
+        self.assertIn("Zotero.Translate.Search", script)
+        self.assertIn("Zotero.Utilities.Internal.createItemsFromIdentifier is not available", script)
+        self.assertIn("falling back to supplied metadata", script)
         self.assertIn("ZotMoov may move/rename", script)
         self.assertNotIn("OS.File.move", script)
+
+    def test_generate_javascript_splits_last_first_creators_and_infers_book(self):
+        record = WritePlanRecord(
+            operation="create_item",
+            approval_status="approved",
+            risk_level="medium",
+            candidate=_candidate(doi="10.1007/978-1-4613-8643-8", title="Book", authors="Devroye, Luc"),
+            dedupe={"action": "add_candidate"},
+            metadata_strategy="zotero_identifier",
+        )
+
+        script = generate_zotero_javascript([record])
+
+        self.assertIn('"itemType": "book"', script)
+        self.assertIn('name.indexOf(",")', script)
+        self.assertIn("split(/\\s+/)", script)
+
+    def test_generate_javascript_warns_on_comma_separated_author_list(self):
+        record = WritePlanRecord(
+            operation="create_item",
+            approval_status="approved",
+            risk_level="medium",
+            candidate=_candidate(title="Paper", authors="Smith, John, Doe, Jane"),
+            dedupe={"action": "add_candidate"},
+        )
+
+        script = generate_zotero_javascript([record])
+
+        self.assertIn("looks like a comma-separated list", script)
+        self.assertIn("Separate authors with semicolons", script)
+
+    def test_infer_item_type_from_doi(self):
+        from zotero_pdf_text.zotero_write import _infer_item_type
+
+        self.assertEqual(_infer_item_type("10.1007/978-1-4613-8643-8"), "book")
+        self.assertEqual(_infer_item_type("10.1007/9781461386438"), "book")
+        self.assertEqual(_infer_item_type("10.1007/978-3-319-12345-6_7"), "bookSection")
+        self.assertEqual(_infer_item_type("10.1007/s11336-003-1141-x"), "journalArticle")
+        self.assertEqual(_infer_item_type(""), "journalArticle")
 
     def test_cli_zotero_write_status_smoke(self):
         with tempfile.TemporaryDirectory() as tmp:
