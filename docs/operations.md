@@ -877,6 +877,9 @@ for newly linked verified PDFs in one step.)
 
 ## Image OCR For Equations, Tables And Figures
 
+**Experimental and not yet supported for routine library use.** `ocr-images` is packaged,
+but its configuration and output conventions may change. It runs only when explicitly invoked.
+
 `pymupdf4llm` extracts vector-drawn display equations, tables and figures into their own PNGs
 and leaves an opaque `![](…png)` placeholder in the Markdown, so that content never reaches the
 text index. `ocr-images` reads those already-extracted crops with a locally served OCR model and
@@ -932,18 +935,18 @@ cloud folder), every command that writes under it (`convert-sample`, `convert-ve
 `convert-new`, `verify-unverified`, `apply-verification`, `rebuild-index`, `update-index`,
 `reconvert-math`/`reconvert_with_math_ocr`, `retry-timeout`, `ocr-images`, `find-orphan-parents`,
 `orphan-candidate`, `apply-provenance-reconvert`, `apply-index-repair`) takes the same lock file
-(`config.output_root\.pipeline.lock`) before starting and releases it on exit, so two machines
-(or two commands on the same machine) can never rebuild the same index files at once — the
-same corruption class as syncing a live Zotero database. The lock is acquired with an atomic
-exclusive create, so two local processes can no longer race past each other's check. Explicit
+(`config.output_root\.pipeline.lock`) before starting and releases it on exit. The lock is
+acquired with an atomic exclusive create, so two local processes cannot race past each
+other's check. It does not guarantee exclusion across asynchronously synced machines. Explicit
 output paths supplied to config-managed commands are containment-checked against `output_root`
 before locking, since a write target outside that tree would silently escape the lock's
 protection.
 
 Cloud-sync folders do not provide distributed transactions: lock-file propagation can lag, so
 nominate **one designated writer machine** for a synced output tree and run write commands only
-there. Readers (the MCP server, search) are safe on any machine — the atomic pointer means they
-only ever see complete generations.
+there. Let sync finish before searching on another machine: a sync service may transfer
+`current.json` before the generation files it references. Atomic publication protects readers
+on the writer's filesystem; it does not make a multi-file cloud transfer atomic.
 
 If a command refuses to start with a message naming another host, pid, and start time, check that
 the other machine isn't actually mid-run before doing anything. A stale or corrupt lock is never
