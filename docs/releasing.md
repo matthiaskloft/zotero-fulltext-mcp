@@ -16,7 +16,10 @@ it does not rebuild them.
 
 1. Create GitHub environments named `pypi` and `testpypi` under repository Settings →
    Environments. Require a reviewer for `pypi` and restrict production deployments to
-   version tags. Allow `master` for `testpypi`.
+   `v*` **tags**, not branches named `v*`. Allow only the `master` **branch** for `testpypi`.
+   These environments are already configured in this repository; check their settings when
+   changing maintainers or copying this workflow elsewhere. The owner can approve their own
+   production run, so a solo maintainer can still publish after explicitly reviewing it.
 2. Sign in to [PyPI](https://pypi.org/manage/account/publishing/) and register a pending
    Trusted Publisher (or add a publisher to the existing project if you own it):
    - Project: `zotero-fulltext-mcp`
@@ -30,6 +33,40 @@ it does not rebuild them.
 4. Once the workflow PR is merged, run `Release` manually from `master` to rehearse the
    current version on TestPyPI. This runs all checks and uploads only to TestPyPI;
    it does not create a tag or GitHub release. Do not run from a release tag.
+
+The publisher values must match exactly. The workflow filename is `release.yml`, not its
+full repository path; the account/environment registrations are separate for each index.
+No PyPI credentials are needed for build/test jobs.
+
+## First-publication rehearsal
+
+Authenticate GitHub CLI for the repository, then dispatch the merged workflow:
+
+```console
+gh workflow run release.yml --ref master -f destination=testpypi
+gh run list --workflow release.yml --limit 5
+```
+
+Use `gh run watch RUN_ID` or open that run in GitHub Actions. `validate`, `ci`, `live-zotero`,
+`build` and `testpypi` must succeed. `pypi` and `github-release` are skipped for a rehearsal.
+Confirm the expected version's wheel and source archive appear on TestPyPI.
+
+To test the uploaded wheel, use a fresh virtual environment. Download the package itself
+from TestPyPI without dependencies, then install that local wheel with dependencies from
+normal PyPI. This avoids mixing dependency resolution between two indexes:
+
+```console
+python -m pip download --no-deps --only-binary=:all: --index-url https://test.pypi.org/simple/ --dest test-results/testpypi-wheel "zotero-fulltext-mcp==X.Y.Z"
+python -m pip install "test-results/testpypi-wheel/zotero_fulltext_mcp-X.Y.Z-py3-none-any.whl[mcp]"
+python -m pip check
+zotero-pdf-text --help
+zotero-fulltext-mcp --help
+```
+
+Replace `X.Y.Z` with the prepared package version. Run the installed commands outside the
+source checkout; they should print help without requiring a Zotero config. The first rehearsal
+must succeed before the production tag is pushed. Repeating an upload with different bytes
+under the same version is refused: prepare a new version if an uploaded artifact needs fixing.
 
 Trusted Publishing uses short-lived OIDC credentials. No API token belongs in repository
 secrets. Only the isolated upload jobs have `id-token: write`; they do not check out code
@@ -49,11 +86,35 @@ does not support required reviewers, resolve the production approval policy befo
    upload, the workflow creates the GitHub release from that version's changelog and attaches
    the wheel and sdist. No second workflow is triggered by the release.
 
+In GitHub Actions, open the release run, select **Review deployments**, select `pypi`, and
+approve it. All checks must have passed before this gate appears. After the run completes,
+verify the version on PyPI and the GitHub release's tag, notes and attached distributions.
+Test a fresh `python -m pip install "zotero-fulltext-mcp[mcp]==X.Y.Z"`, followed by
+`python -m pip check` and both commands' `--help` outside the checkout. After the first
+successful production publication, update README's installation guidance to make PyPI the
+primary install path, while retaining tagged Git installation for users who need it.
+
 TestPyPI is an optional rehearsal, not a dependency of every production release. Version
 uploads cannot be replaced on either index; use a new version for changed artifacts. If PyPI
 has accepted an upload but GitHub release creation fails, rerun only the failed GitHub release
 job, or create it manually using the same tag, artifacts and notes. Do not re-upload a changed
 build under the same version or move a published tag. Existing GitHub releases are preserved.
+
+## Failure recovery
+
+| Failure | Action |
+| --- | --- |
+| `validate` rejects the tag or metadata | Fix the release PR and prepare a correctly matching new tag; do not move a published tag. Manual rehearsals must use `master`. |
+| CI, live Zotero, metadata or wheel-install checks fail | Inspect that job's logs. Fix and review the cause before publishing; upload jobs remain blocked. |
+| Production waits for approval | Approve the `pypi` environment deployment after reviewing the checks. A queued approval is not a failed upload. |
+| Trusted Publishing authentication fails | Check the index account's publisher owner, repository, `release.yml` filename and environment. Verify that the project name is available or belongs to that account. Fix the registration, then rerun the failed upload job if no files were accepted. |
+| Index rejects an existing version/file | Check which files were accepted before retrying. Do not enable blanket skip-existing behavior to conceal differing artifacts; resolve partial uploads or use a new version. |
+| PyPI succeeds but GitHub release creation fails | Use `gh run rerun RUN_ID --failed` to retry failed jobs only. The successful PyPI job must not be rerun. Alternatively create the GitHub release manually with the same tag, notes and published artifacts. |
+
+Build artifacts are named `release-distributions` and `release-notes` on the workflow run.
+Real-Zotero diagnostics are in `live-zotero-results`. Keep these available when investigating
+failures. Do not merge unrelated fixes or replace artifacts while an existing release run is
+waiting for approval; cancel that run and prepare another reviewed version if the release changes.
 
 Until the first PyPI upload succeeds, use README's tagged Git install. After publication,
 users can install `python -m pip install "zotero-fulltext-mcp[mcp]==X.Y.Z"`. Pip does not
