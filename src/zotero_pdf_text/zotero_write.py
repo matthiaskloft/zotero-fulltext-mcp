@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -364,6 +365,18 @@ function splitCreators(authors) {{
     .map((part) => part.trim())
     .filter((part) => part.length > 0)
     .map((name) => {{
+      const comma = name.indexOf(",");
+      if (name.indexOf(",", comma + 1) >= 0) {{
+        results.push(`WARN author entry "${{name}}" contains several commas; it looks like a comma-separated list. Separate authors with semicolons`);
+      }}
+      if (comma >= 0) {{
+        const lastName = name.slice(0, comma).trim();
+        const firstName = name.slice(comma + 1).trim();
+        if (lastName && firstName) {{
+          return {{ creatorType: "author", firstName, lastName }};
+        }}
+        return {{ creatorType: "author", lastName: lastName || firstName, fieldMode: 1 }};
+      }}
       const bits = name.split(/\\s+/);
       if (bits.length === 1) {{
         return {{ creatorType: "author", lastName: bits[0], fieldMode: 1 }};
@@ -401,14 +414,17 @@ async function createItem(metadata) {{
     if (imported) {{
       return {{ item: imported, created: true, message: `CREATED item ${{imported.key}} from Zotero identifier lookup` }};
     }}
-    results.push(`WARN identifier lookup unavailable or failed for ${{metadata.DOI}}; falling back to supplied metadata`);
+    results.push(`WARN identifier lookup returned no item for ${{metadata.DOI}} (${{identifierLookupNote}}); falling back to supplied metadata`);
   }}
   const item = new Zotero.Item(metadata.itemType || "journalArticle");
   item.libraryID = libraryID;
   item.setField("title", metadata.title || "");
   item.setField("DOI", metadata.DOI || "");
   item.setField("date", metadata.date || "");
-  item.setField("publicationTitle", metadata.publicationTitle || "");
+  if (metadata.publicationTitle) {{
+    const venueField = {{ book: "publisher", bookSection: "bookTitle" }}[metadata.itemType] || "publicationTitle";
+    item.setField(venueField, metadata.publicationTitle);
+  }}
   item.setField("url", metadata.url || "");
   for (const creator of splitCreators(metadata.authors)) {{
     item.setCreator(item.numCreators(), creator);
@@ -417,19 +433,49 @@ async function createItem(metadata) {{
   return {{ item, created: true, message: `CREATED item ${{item.key}}` }};
 }}
 
+let identifierLookupNote = "no lookup attempted";
+
 async function createItemFromIdentifier(identifier) {{
+  const notes = [];
+  if (typeof Zotero.Translate !== "undefined" && typeof Zotero.Translate.Search === "function") {{
+    try {{
+      const search = new Zotero.Translate.Search();
+      search.setIdentifier({{ DOI: identifier }});
+      const translators = await search.getTranslators();
+      if (translators && translators.length) {{
+        search.setTranslator(translators);
+        const created = await search.translate({{ libraryID, saveAttachments: false }});
+        const items = Array.isArray(created) ? created : [created];
+        const found = items.find((item) => item && !item.isAttachment()) || null;
+        if (found) return found;
+        notes.push("Zotero.Translate.Search returned no item");
+      }} else {{
+        notes.push("Zotero.Translate.Search found no translator");
+      }}
+    }} catch (error) {{
+      results.push(`ERROR identifier lookup for ${{identifier}}: ${{error && error.message ? error.message : error}}`);
+      notes.push("Zotero.Translate.Search failed");
+    }}
+  }} else {{
+    notes.push("Zotero.Translate.Search is not available");
+  }}
   const internal = Zotero.Utilities && Zotero.Utilities.Internal;
-  if (!internal || typeof internal.createItemsFromIdentifier !== "function") {{
-    return null;
+  if (internal && typeof internal.createItemsFromIdentifier === "function") {{
+    try {{
+      const created = await internal.createItemsFromIdentifier(identifier);
+      const items = Array.isArray(created) ? created : [created];
+      const found = items.find((item) => item && !item.isAttachment()) || null;
+      if (found) return found;
+      notes.push("Zotero.Utilities.Internal.createItemsFromIdentifier returned no item");
+    }} catch (error) {{
+      results.push(`ERROR identifier lookup for ${{identifier}}: ${{error && error.message ? error.message : error}}`);
+      notes.push("Zotero.Utilities.Internal.createItemsFromIdentifier failed");
+    }}
+  }} else {{
+    notes.push("Zotero.Utilities.Internal.createItemsFromIdentifier is not available");
   }}
-  try {{
-    const created = await internal.createItemsFromIdentifier(identifier);
-    const items = Array.isArray(created) ? created : [created];
-    return items.find((item) => item && !item.isAttachment()) || null;
-  }} catch (error) {{
-    results.push(`ERROR identifier lookup for ${{identifier}}: ${{error && error.message ? error.message : error}}`);
-    return null;
-  }}
+  identifierLookupNote = notes.join("; ");
+  return null;
 }}
 
 async function linkPdf(parent, spec) {{
@@ -656,10 +702,18 @@ def _pdf_management_note(candidate: ImportCandidate, pdf_strategy: str) -> str:
     return "No PDF handling requested."
 
 
+def _infer_item_type(doi: str) -> str:
+    """Book DOIs carry an ISBN-prefixed suffix (e.g. 10.1007/978-1-4613-8643-8)."""
+    suffix = (doi or "").strip().split("/", 1)[-1]
+    if re.match(r"97[89]-?\d", suffix):
+        return "bookSection" if re.search(r"_\d+$", suffix) else "book"
+    return "journalArticle"
+
+
 def _js_spec(record: WritePlanRecord) -> dict[str, Any]:
     candidate = record.candidate
     metadata = {
-        "itemType": "journalArticle",
+        "itemType": _infer_item_type(candidate.doi),
         "title": candidate.title,
         "DOI": candidate.doi,
         "date": candidate.year,
