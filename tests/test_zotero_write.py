@@ -331,6 +331,24 @@ class ZoteroWriteTests(unittest.TestCase):
         self.assertIn("looks like a comma-separated list", script)
         self.assertIn("Separate authors with semicolons", script)
 
+    def test_generate_javascript_update_metadata_uses_validated_fields_and_creators(self):
+        record = WritePlanRecord(
+            operation="update_metadata",
+            approval_status="approved",
+            risk_level="medium",
+            candidate=_candidate(title="Paper", authors="Smith, John"),
+            dedupe={"action": "update_existing"},
+            target={"zotero_parent_key": "ABCD1234"},
+        )
+
+        script = generate_zotero_javascript([record])
+
+        self.assertIn("applyMetadata(item, op.metadata)", script)
+        self.assertNotIn("item.setField(field, value || \"\")", script.split("applyMetadata(item, op.metadata)")[1].split("saveTx")[0])
+        self.assertIn("Zotero.ItemFields.isValidForType(fieldID, item.itemTypeID)", script)
+        self.assertIn('new Set(["itemType", "authors", "metadata_strategy", "publicationTitle"])', script)
+        self.assertIn("item.setCreators(creators)", script)
+
     def test_infer_item_type_from_doi(self):
         from zotero_pdf_text.zotero_write import _infer_item_type
 
