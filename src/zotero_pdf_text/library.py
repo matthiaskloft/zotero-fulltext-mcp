@@ -36,6 +36,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TypedDict
+from urllib.parse import quote, unquote
 
 from .artifacts import (
     GENERATION_JSONL_FILENAME,
@@ -118,7 +119,11 @@ IMAGES_DIRNAME = "images"
 
 _ATTACHMENT_KEY_RE = re.compile(r"^[A-Z0-9]{8}$")
 _SLUG_STRIP_RE = re.compile(r"[^a-z0-9]+")
-_IMAGE_LINK_RE = re.compile(r"!\[([^\]]*)\]\(([^)]*)\)")
+# The target runs to the image extension, not the first ")": extracted image names repeat the PDF's
+# file name, which often holds brackets ("Smith (2020) - Title.pdf-0-1.png").
+_IMAGE_LINK_RE = re.compile(
+    r"!\[([^\]\n]*)\]\(([^\n]*?\.(?:png|jpe?g|gif|webp|bmp|tiff?))\)", re.IGNORECASE
+)
 
 
 class LibraryAuditError(RuntimeError):
@@ -176,9 +181,9 @@ def images_dir_for(markdown_path: Path) -> Path:
     Two layouts exist: the canonical library keeps each paper in its own folder
     (`library/<key>/<key>.md` with `library/<key>/images/`), while a run directory keeps numbered
     files side by side (`<run>/markdown/<stem>.md` with `<run>/images/<stem>/`). A Markdown file
-    named after its own folder is the former.
+    named after its own folder is the former; so is an enriched sibling such as `<key>.ocr.md`.
     """
-    if markdown_path.parent.name == markdown_path.stem:
+    if markdown_path.parent.name == markdown_path.name.split(".", 1)[0]:
         return markdown_path.parent / IMAGES_DIRNAME
     return markdown_path.parent.parent / IMAGES_DIRNAME / markdown_path.stem
 
@@ -194,10 +199,12 @@ def relative_image_links(markdown: str, markdown_path: Path) -> str:
     prefix = Path(os.path.relpath(images_dir_for(markdown_path), markdown_path.parent)).as_posix()
 
     def rebase(match: re.Match[str]) -> str:
-        name = match.group(2).replace("\\", "/").rsplit("/", 1)[-1]
-        if not name or "://" in match.group(2):
+        target = match.group(2)
+        name = unquote(target.replace("\\", "/").rsplit("/", 1)[-1])
+        if not name or "://" in target:
             return match.group(0)
-        return f"![{match.group(1)}]({prefix}/{name})"
+        # Percent-encoded, so spaces and brackets in the name still make a valid link.
+        return f"![{match.group(1)}]({prefix}/{quote(name)})"
 
     return _IMAGE_LINK_RE.sub(rebase, markdown)
 

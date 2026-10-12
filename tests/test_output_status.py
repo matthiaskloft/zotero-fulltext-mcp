@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -42,16 +43,17 @@ def test_output_status_groups_active_markdown_by_folder(tmp_path: Path, capsys):
     assert payload["current"]["generation_id"] == current_id
 
 
-def test_latest_mapping_snapshot_accepts_new_and_old_names(tmp_path: Path):
+def test_latest_mapping_snapshot_is_the_newest_dry_run(tmp_path: Path):
     root = tmp_path / "output"
     config = ProjectConfig(tmp_path, tmp_path, tmp_path, root)
-    old = root / "runs" / "old" / "mapping_report.jsonl"
+    old = root / "runs" / "2026-10-01_090000_dry-run" / "mapping_report.jsonl"
     old.parent.mkdir(parents=True)
     old.write_text("", encoding="utf-8")
     assert latest_mapping_snapshot(config) == old
-    new = root / "mapping-runs" / "new" / "mapping_report.jsonl"
+    new = root / "runs" / "2026-10-02_090000_dry-run" / "mapping_report.jsonl"
     new.parent.mkdir(parents=True)
     new.write_text("", encoding="utf-8")
+    os.utime(new, (old.stat().st_mtime + 10, old.stat().st_mtime + 10))
     assert latest_mapping_snapshot(config) == new
 
 

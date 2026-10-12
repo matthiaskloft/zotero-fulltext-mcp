@@ -2,6 +2,7 @@ import csv
 import hashlib
 import itertools
 import json
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -1349,10 +1350,13 @@ class CanonicalLibraryTests(unittest.TestCase):
         self.assertEqual([path.name for path in images.iterdir()], ["old.png"])
         self.assertEqual([path.name for path in self.library.iterdir()], ["ATTKEY01"])
 
-    def _staging(self, *, staged_markdown: bool, backup: bool = False, marker: bool = False) -> Path:
+    def _staging(
+        self, *, staged_markdown: bool, backup: bool = False, marker: bool = False, target: str | None = "ATTKEY01/images"
+    ) -> Path:
         staging = self.library / ".conversion-crashed"
         staging.mkdir(parents=True)
-        (staging / "images-target").write_text("ATTKEY01/images", encoding="utf-8")
+        if target is not None:
+            (staging / "images-target").write_text(target, encoding="utf-8")
         if staged_markdown:
             (staging / "ATTKEY01.md").write_text("New body", encoding="utf-8")
         if backup:
@@ -1365,6 +1369,21 @@ class CanonicalLibraryTests(unittest.TestCase):
     def _convert_another_paper(self) -> None:
         with patch("zotero_pdf_text.converter.subprocess.run", side_effect=_write_raw_markdown):
             convert_verified(self.config, self._report({"zotero_attachment_key": "ATTKEY02"}), workers=1)
+
+    def test_recovery_never_guesses_a_target_under_the_library(self):
+        for target in (None, "", "ATTKEY01", "../outside/images"):
+            with self.subTest(target=target):
+                paper = self.library / "ATTKEY01"
+                (paper / "images").mkdir(parents=True)
+                (paper / "ATTKEY01.md").write_text("Old body", encoding="utf-8")
+                staging = self._staging(staged_markdown=True, marker=True, target=target)
+
+                self._convert_another_paper()
+
+                self.assertEqual((paper / "ATTKEY01.md").read_text(encoding="utf-8"), "Old body")
+                self.assertTrue((paper / "images").is_dir())
+                self.assertTrue(staging.exists())
+                shutil.rmtree(self.library)
 
     def test_a_hard_exit_before_publishing_is_undone_by_the_next_run(self):
         images = self.library / "ATTKEY01" / "images"

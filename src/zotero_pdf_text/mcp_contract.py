@@ -34,6 +34,7 @@ from .artifacts import (
 )
 from .bibtex import DEFAULT_BBT_ENDPOINT, DEFAULT_BBT_TRANSLATOR, BibtexExport, export_bibtex_entries
 from .config import ProjectConfig, validate_config
+from .layout import runs_root
 from .library import MAPPING_REPORT_JSONL, library_status as _library_status_data
 from .fts import (
     ChunkNotFoundError,
@@ -1435,8 +1436,7 @@ def latest_mapping_snapshot(config: ProjectConfig) -> Path | None:
     """
     snapshots = [
         candidate
-        for dirname in ("runs", "mapping-runs")
-        for candidate in (config.output_root / dirname).glob("*/" + MAPPING_REPORT_JSONL)
+        for candidate in runs_root(config.output_root).glob("*/" + MAPPING_REPORT_JSONL)
         if candidate.is_file()
     ]
     if not snapshots:

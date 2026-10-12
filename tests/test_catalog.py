@@ -22,8 +22,8 @@ def test_run_names_lead_with_the_date_and_name_the_command():
 
 def test_a_second_run_in_the_same_second_gets_its_own_folder(tmp_path):
     first = new_run_dir(tmp_path, "dry-run")
-    first.mkdir(parents=True)
     second = new_run_dir(tmp_path, "dry-run")
+    assert first.is_dir() and second.is_dir()
     assert second != first
     assert second.parent == tmp_path / "runs"
 
@@ -72,3 +72,14 @@ def test_unchanged_catalog_is_not_rewritten(tmp_path):
     write_output_guides(output_root, index)
 
     assert catalog.stat().st_mtime_ns == before
+
+
+def test_a_link_on_another_drive_is_listed_without_a_dead_link(tmp_path):
+    output_root = tmp_path / "out"
+    index = _write_index(
+        tmp_path / "index.jsonl",
+        {"zotero_attachment_key": "AAAA1111", "title": "Elsewhere", "markdown_path": "Q:/nowhere/AAAA1111.md"},
+    )
+    write_output_guides(output_root, index)
+    markdown = (output_root / "library" / "catalog.md").read_text(encoding="utf-8")
+    assert "| Elsewhere |" in markdown

@@ -113,7 +113,9 @@ def _render_markdown(rows: list[dict[str, str]]) -> str:
     ]
     for row in rows:
         title = _cell(row["title"]) or row["attachment_key"]
-        link = f"[{title}]({quote(row['file'])})" if row["file"] else title
+        # An absolute fallback (another drive) is no portable link; show the title alone.
+        relative = row["file"] and not Path(row["file"]).is_absolute() and ":" not in row["file"]
+        link = f"[{title}]({quote(row['file'])})" if relative else title
         lines.append(f"| {_cell(row['citation_key'])} | {_cell(row['year'])} | {_cell(row['creators'])} | {link} |")
     return "\n".join(lines) + "\n"
 

@@ -73,7 +73,6 @@ class MappingRow:
 
 def run_dry_run(config: ProjectConfig) -> Path:
     run_dir = new_run_dir(config.output_root, "dry-run")
-    run_dir.mkdir(parents=True, exist_ok=False)
     with _run_log(run_dir / "run.log"):
         logger.info("Starting dry-run mapper")
         logger.info("Linked attachments: %s", config.linked_attachments)

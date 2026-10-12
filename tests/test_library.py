@@ -128,6 +128,12 @@ class CanonicalPathTests(unittest.TestCase):
                 "![](images/fig1.png) ![alt](images/fig2.png) "
                 "![](images/marker_bare.jpeg) ![remote](https://example.com/a.png)",
             )
+            self.assertEqual(
+                relative_image_links("![](C:/x/Smith (2020) - T.pdf-0-1.png) after", markdown),
+                "![](images/Smith%20%282020%29%20-%20T.pdf-0-1.png) after",
+            )
+            ocr_sibling = markdown.with_name("ABCD1234.ocr.md")
+            self.assertEqual(images_dir_for(ocr_sibling), canonical_image_dir(config, "ABCD1234"))
             run_markdown = Path(tmp) / "run" / "markdown" / "0001_paper.md"
             self.assertEqual(relative_image_links("![](x/fig.png)", run_markdown), "![](../images/0001_paper/fig.png)")
 

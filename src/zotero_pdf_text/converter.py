@@ -21,6 +21,7 @@ from .config import ProjectConfig
 from .indexer import load_indexed_keys
 from .layout import new_run_dir, review_root
 from .library import (
+    IMAGES_DIRNAME,
     canonical_library_root,
     canonical_markdown_path,
     images_dir_for,
@@ -629,9 +630,7 @@ def _convert_row(
         if force and output_path.exists():
             staging_root.mkdir(parents=True, exist_ok=True)
             staged_images_root = Path(tempfile.mkdtemp(prefix=".conversion-", dir=staging_root))
-            (staged_images_root / SWAP_TARGET_FILENAME).write_text(
-                images_dir.relative_to(staging_root).as_posix(), encoding="utf-8"
-            )
+            atomic_write_text(staged_images_root / SWAP_TARGET_FILENAME, images_dir.relative_to(staging_root).as_posix())
             extraction_images_dir = staged_images_root / output_path.stem
         else:
             # No Markdown exists at output_path, so nothing references images_dir; anything in
@@ -876,13 +875,7 @@ def _recover_interrupted_swaps(staging_root: Path) -> None:
         try:
             staged_markdown = [path for path in staging.glob("*.md") if path.is_file()]
             if len(staged_markdown) == 1:
-                target = staging / SWAP_TARGET_FILENAME
-                images_dir = (
-                    staging_root / target.read_text(encoding="utf-8").strip()
-                    if target.is_file()
-                    else staging_root / staged_markdown[0].stem
-                )
-                _undo_image_swap(staging, images_dir)
+                _undo_image_swap(staging, _swap_target(staging, staging_root, staged_markdown[0].stem))
             elif staged_markdown:
                 raise OSError("more than one staged Markdown file")
             shutil.rmtree(staging)
@@ -892,6 +885,32 @@ def _recover_interrupted_swaps(staging_root: Path) -> None:
                 file=sys.stderr,
                 flush=True,
             )
+
+
+def _swap_target(staging: Path, staging_root: Path, stem: str) -> Path:
+    """The images directory a staged replacement swaps, or OSError when it cannot be trusted.
+
+    Recovery deletes and replaces this directory, so it must sit strictly inside `staging_root` in
+    one of the two layouts: `library/<key>/images` or `<run>/images/<stem>`. A staging directory without a target file predates it and only ever existed
+    in the run layout (`<run>/images/<stem>`); under the library such a guess would name a whole
+    paper folder, so it is refused and the staging directory is kept.
+    """
+    target_file = staging / SWAP_TARGET_FILENAME
+    if target_file.is_file():
+        relative = target_file.read_text(encoding="utf-8").strip()
+        candidate = staging_root / relative
+        root = staging_root.resolve()
+        resolved = candidate.resolve()
+        if staging_root.name == IMAGES_DIRNAME:
+            layout_ok = candidate.parent == staging_root  # <run>/images/<stem>
+        else:
+            layout_ok = candidate.name == IMAGES_DIRNAME and candidate.parent.parent == staging_root  # library/<key>/images
+        if relative and layout_ok and resolved != root and resolved.is_relative_to(root):
+            return candidate
+        raise OSError(f"untrusted swap target {relative!r}")
+    if staging_root.name == IMAGES_DIRNAME:
+        return staging_root / stem
+    raise OSError("no swap target recorded")
 
 
 def _indexed_library_records(

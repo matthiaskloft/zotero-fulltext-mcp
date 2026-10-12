@@ -34,14 +34,18 @@ def run_name(command: str, *, detail: str = "", now: datetime | None = None) -> 
 
 
 def new_run_dir(output_root: Path, command: str, *, detail: str = "") -> Path:
-    """A run folder path no earlier run has used. Not created here.
+    """Create and return a run folder no other run uses.
 
-    A second run of the same command within the same second gets ``-2``, ``-3``, ... rather than
-    sharing a folder with the first.
+    Created here, with ``exist_ok=False``, so two commands started in the same second cannot both
+    claim one name: the second gets ``-2``, ``-3``, ...
     """
     base = runs_root(output_root) / run_name(command, detail=detail)
+    base.parent.mkdir(parents=True, exist_ok=True)
     candidate, number = base, 2
-    while candidate.exists():
-        candidate = base.with_name(f"{base.name}-{number}")
-        number += 1
-    return candidate
+    while True:
+        try:
+            candidate.mkdir()
+            return candidate
+        except FileExistsError:
+            candidate = base.with_name(f"{base.name}-{number}")
+            number += 1
