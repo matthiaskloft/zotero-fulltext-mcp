@@ -349,7 +349,7 @@ class ZoteroWriteTests(unittest.TestCase):
         self.assertNotIn("item.setField(field, value || \"\")", script.split("applyMetadata(item, op.metadata)")[1].split("saveTx")[0])
         self.assertIn("Zotero.ItemFields.isValidForType(fieldID, item.itemTypeID)", script)
         self.assertIn('new Set(["itemType", "authors", "metadata_strategy", "publicationTitle"])', script)
-        self.assertIn("item.setCreators([...creators, ...kept])", script)
+        self.assertIn("item.setCreators([...creators.map", script)
         self.assertIn('value === "" || value == null', script)
         self.assertIn("getFieldIDFromTypeAndBase", script)
 
@@ -359,7 +359,7 @@ class ZoteroWriteTests(unittest.TestCase):
             operation="update_metadata",
             approval_status="approved",
             risk_level="medium",
-            candidate=_candidate(title="Paper", doi="", authors="Smith, John", venue="Proc. X"),
+            candidate=_candidate(title="Paper", doi="10.1/x", authors="Smith, John", venue="Proc. X"),
             dedupe={"action": "update_existing"},
             target={"zotero_parent_key": "ABCD1234"},
         )
@@ -378,7 +378,7 @@ globalThis.Zotero = {
   Libraries: { userLibraryID: 1 },
   Items: { getByLibraryAndKeyAsync: async () => item },
   ItemTypes: { getName: () => "conferencePaper" },
-  CreatorTypes: { getName: (id) => (id === 1 ? "author" : "editor") },
+  CreatorTypes: { getName: (id) => (id === 1 ? "author" : "editor"), getPrimaryIDForType: () => 1 },
   ItemFields: {
     getID: (n) => n,
     isValidForType: (id) => valid.has(id),
@@ -398,6 +398,7 @@ run().then((out) => console.log(JSON.stringify({ calls, out })));
         self.assertIn(["setField", "title", "Paper"], calls)
         self.assertIn(["setField", "proceedingsTitle", "Proc. X"], calls)
         self.assertFalse([c for c in calls if c[0] == "setField" and c[1] in {"DOI", "url", "itemType"}])
+        self.assertIn('WARN ABCD1234: field "DOI" is not valid for item type conferencePaper; skipped', data["out"])
         self.assertIn(["setCreators", ["Smith", "Itor"]], calls)
         self.assertIn("UPDATED ABCD1234", data["out"])
 

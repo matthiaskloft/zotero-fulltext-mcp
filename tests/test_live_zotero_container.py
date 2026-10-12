@@ -209,3 +209,48 @@ return made;
             .replace("KEYS", json.dumps(list(keys.values()))),
             timeout=30,
         )
+
+
+def test_update_metadata_uses_primary_creator_type_in_real_zotero(live: dict, seeded: list[dict]) -> None:
+    """On a type whose primary creator is not `author`, an update must not duplicate it."""
+    from zotero_pdf_text.ingestion import ImportCandidate
+    from zotero_pdf_text.zotero_write import WritePlanRecord, generate_zotero_javascript
+
+    made = execute_javascript(
+        """
+const item = new Zotero.Item('computerProgram');
+item.setField('title', 'Primary creator fixture');
+item.setCreators([
+    {firstName: 'Old', lastName: 'Programmer', creatorType: 'programmer'},
+    {firstName: 'Con', lastName: 'Tributor', creatorType: 'contributor'},
+]);
+await item.saveTx();
+return item.key;
+""",
+        timeout=30,
+    )
+    assert made.ok, made.error
+    key = made.result
+    try:
+        record = WritePlanRecord(
+            operation="update_metadata", approval_status="approved", risk_level="medium",
+            candidate=ImportCandidate(title="Primary creator fixture", authors="Smith, John"),
+            dedupe={"action": "update_existing"}, target={"zotero_parent_key": key},
+        )
+        applied = execute_javascript(generate_zotero_javascript([record]), timeout=60)
+        assert applied.ok, applied.error
+        assert "ERROR" not in applied.result, applied.result
+        read = execute_javascript(
+            "const i = await Zotero.Items.getByLibraryAndKeyAsync(Zotero.Libraries.userLibraryID, KEY);"
+            "return i.getCreators().map(c => Zotero.CreatorTypes.getName(c.creatorTypeID) + ':' + c.lastName);"
+            .replace("KEY", json.dumps(key)),
+            timeout=30,
+        )
+        assert read.ok, read.error
+        assert read.result == ["programmer:Smith", "contributor:Tributor"], read.result
+    finally:
+        execute_javascript(
+            "const i = await Zotero.Items.getByLibraryAndKeyAsync(Zotero.Libraries.userLibraryID, KEY);"
+            "if (i) await i.eraseTx();".replace("KEY", json.dumps(key)),
+            timeout=30,
+        )

@@ -411,8 +411,10 @@ function applyMetadata(item, metadata) {{
   }}
   const creators = splitCreators(metadata.authors);
   if (creators.length) {{
-    const kept = item.getCreators().filter((creator) => Zotero.CreatorTypes.getName(creator.creatorTypeID) !== "author");
-    item.setCreators([...creators, ...kept]);
+    const primaryID = Zotero.CreatorTypes.getPrimaryIDForType(item.itemTypeID);
+    const primaryName = Zotero.CreatorTypes.getName(primaryID);
+    const kept = item.getCreators().filter((creator) => creator.creatorTypeID !== primaryID);
+    item.setCreators([...creators.map((creator) => ({{ ...creator, creatorType: primaryName }})), ...kept]);
   }}
 }}
 
