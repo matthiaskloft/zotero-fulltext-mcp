@@ -10,13 +10,15 @@
   folder (Dropbox, Nextcloud, OneDrive, etc.).** `zotero.sqlite` is a live,
   actively-written database; syncing it as a plain file has been observed to
   produce sync-conflict corruption.
-- `zotero_linked_attachments` is the source of truth for linked PDF files.
-  These are plain, write-once files — safe to keep in a cloud-synced folder if
-  you work from more than one machine.
+- `linked_attachments` is the source of truth for linked PDF files.
+  These can be kept in a separate cloud-synced folder. Configure Zotero's Linked
+  Attachment Base Directory on each machine and let sync finish before accessing files.
+  Zotero's own file sync does not transfer linked PDFs.
 - Converted Markdown and sidecar indexes are derived artifacts for LLM access.
-  If shared across machines as a single index, writes should be serialized by
-  a `.pipeline.lock` file (see `docs/operations.md`) so two machines never
-  rebuild them at the same moment.
+  If shared across machines as a single output tree, designate one writer machine
+  and let sync finish before reading on another. The `.pipeline.lock` prevents
+  concurrent local writers, but cloud propagation cannot enforce a distributed lock;
+  see [Multi-Machine Write Lock](operations.md#multi-machine-write-lock).
 
 Generated Markdown and SQLite indexes can be rebuilt. They should not be treated
 as primary library records.
