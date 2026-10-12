@@ -1,4 +1,6 @@
 import json
+import shutil
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -330,6 +332,75 @@ class ZoteroWriteTests(unittest.TestCase):
 
         self.assertIn("looks like a comma-separated list", script)
         self.assertIn("Separate authors with semicolons", script)
+
+    def test_generate_javascript_update_metadata_uses_validated_fields_and_creators(self):
+        record = WritePlanRecord(
+            operation="update_metadata",
+            approval_status="approved",
+            risk_level="medium",
+            candidate=_candidate(title="Paper", authors="Smith, John"),
+            dedupe={"action": "update_existing"},
+            target={"zotero_parent_key": "ABCD1234"},
+        )
+
+        script = generate_zotero_javascript([record])
+
+        self.assertIn("applyMetadata(item, op.metadata)", script)
+        self.assertNotIn("item.setField(field, value || \"\")", script.split("applyMetadata(item, op.metadata)")[1].split("saveTx")[0])
+        self.assertIn("Zotero.ItemFields.isValidForType(fieldID, item.itemTypeID)", script)
+        self.assertIn('new Set(["itemType", "authors", "metadata_strategy", "publicationTitle"])', script)
+        self.assertIn("item.setCreators([...creators.map", script)
+        self.assertIn('value === "" || value == null', script)
+        self.assertIn("getFieldIDFromTypeAndBase", script)
+
+    @unittest.skipUnless(shutil.which("node"), "node is required")
+    def test_update_metadata_script_behaviour_with_fake_zotero(self):
+        record = WritePlanRecord(
+            operation="update_metadata",
+            approval_status="approved",
+            risk_level="medium",
+            candidate=_candidate(title="Paper", doi="10.1/x", authors="Smith, John", venue="Proc. X"),
+            dedupe={"action": "update_existing"},
+            target={"zotero_parent_key": "ABCD1234"},
+        )
+        script = generate_zotero_javascript([record])
+        harness = """
+const calls = [];
+const valid = new Set(["title", "date", "proceedingsTitle"]);
+const item = {
+  key: "ABCD1234", itemTypeID: 7,
+  setField: (f, v) => calls.push(["setField", f, v]),
+  getCreators: () => [{ creatorTypeID: 1, firstName: "Old", lastName: "Author" }, { creatorTypeID: 2, firstName: "Ed", lastName: "Itor" }],
+  setCreators: (c) => calls.push(["setCreators", c.map((x) => x.lastName)]),
+  saveTx: async () => calls.push(["save"]),
+};
+globalThis.Zotero = {
+  Libraries: { userLibraryID: 1 },
+  Items: { getByLibraryAndKeyAsync: async () => item },
+  ItemTypes: { getName: () => "conferencePaper" },
+  CreatorTypes: { getName: (id) => (id === 1 ? "author" : "editor"), getPrimaryIDForType: () => 1 },
+  ItemFields: {
+    getID: (n) => n,
+    isValidForType: (id) => valid.has(id),
+    getFieldIDFromTypeAndBase: () => "proceedingsTitle",
+    getName: (id) => id,
+  },
+};
+const run = new (Object.getPrototypeOf(async function () {}).constructor)(SCRIPT);
+run().then((out) => console.log(JSON.stringify({ calls, out })));
+"""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "h.js"
+            path.write_text("const SCRIPT = " + json.dumps(script) + ";" + chr(10) + harness, encoding="utf-8")
+            proc = subprocess.run(["node", str(path)], capture_output=True, text=True, check=True)
+        data = json.loads(proc.stdout)
+        calls = data["calls"]
+        self.assertIn(["setField", "title", "Paper"], calls)
+        self.assertIn(["setField", "proceedingsTitle", "Proc. X"], calls)
+        self.assertFalse([c for c in calls if c[0] == "setField" and c[1] in {"DOI", "url", "itemType"}])
+        self.assertIn('WARN ABCD1234: field "DOI" is not valid for item type conferencePaper; skipped', data["out"])
+        self.assertIn(["setCreators", ["Smith", "Itor"]], calls)
+        self.assertIn("UPDATED ABCD1234", data["out"])
 
     def test_infer_item_type_from_doi(self):
         from zotero_pdf_text.zotero_write import _infer_item_type

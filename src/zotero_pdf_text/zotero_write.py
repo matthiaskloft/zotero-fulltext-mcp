@@ -385,6 +385,39 @@ function splitCreators(authors) {{
     }});
 }}
 
+const METADATA_NON_FIELDS = new Set(["itemType", "authors", "metadata_strategy", "publicationTitle"]);
+const VENUE_FIELDS = {{ book: "publisher", bookSection: "bookTitle" }};
+
+function applyMetadata(item, metadata) {{
+  const typeName = Zotero.ItemTypes.getName(item.itemTypeID);
+  const label = item.key || metadata.title || "(new item)";
+  const setIfValid = (field, value) => {{
+    const fieldID = Zotero.ItemFields.getID(field);
+    if (!fieldID || !Zotero.ItemFields.isValidForType(fieldID, item.itemTypeID)) {{
+      results.push(`WARN ${{label}}: field "${{field}}" is not valid for item type ${{typeName}}; skipped`);
+      return;
+    }}
+    item.setField(field, value || "");
+  }};
+  for (const [field, value] of Object.entries(metadata)) {{
+    if (METADATA_NON_FIELDS.has(field) || value === "" || value == null) continue;
+    setIfValid(field, value);
+  }}
+  if (metadata.publicationTitle) {{
+    const baseID = Zotero.ItemFields.getID("publicationTitle");
+    const mappedID = Zotero.ItemFields.getFieldIDFromTypeAndBase(item.itemTypeID, baseID);
+    const venueField = VENUE_FIELDS[typeName] || (mappedID ? Zotero.ItemFields.getName(mappedID) : "publicationTitle");
+    setIfValid(venueField, metadata.publicationTitle);
+  }}
+  const creators = splitCreators(metadata.authors);
+  if (creators.length) {{
+    const primaryID = Zotero.CreatorTypes.getPrimaryIDForType(item.itemTypeID);
+    const primaryName = Zotero.CreatorTypes.getName(primaryID);
+    const kept = item.getCreators().filter((creator) => creator.creatorTypeID !== primaryID);
+    item.setCreators([...creators.map((creator) => ({{ ...creator, creatorType: primaryName }})), ...kept]);
+  }}
+}}
+
 async function findItemByKey(key) {{
   if (!key) return null;
   return await Zotero.Items.getByLibraryAndKeyAsync(libraryID, key);
@@ -418,17 +451,7 @@ async function createItem(metadata) {{
   }}
   const item = new Zotero.Item(metadata.itemType || "journalArticle");
   item.libraryID = libraryID;
-  item.setField("title", metadata.title || "");
-  item.setField("DOI", metadata.DOI || "");
-  item.setField("date", metadata.date || "");
-  if (metadata.publicationTitle) {{
-    const venueField = {{ book: "publisher", bookSection: "bookTitle" }}[metadata.itemType] || "publicationTitle";
-    item.setField(venueField, metadata.publicationTitle);
-  }}
-  item.setField("url", metadata.url || "");
-  for (const creator of splitCreators(metadata.authors)) {{
-    item.setCreator(item.numCreators(), creator);
-  }}
+  applyMetadata(item, metadata);
   await item.saveTx();
   return {{ item, created: true, message: `CREATED item ${{item.key}}` }};
 }}
@@ -557,9 +580,7 @@ for (const op of operations) {{
         results.push(`MISSING item ${{op.target.zotero_parent_key}} for update`);
         continue;
       }}
-      for (const [field, value] of Object.entries(op.metadata)) {{
-        item.setField(field, value || "");
-      }}
+      applyMetadata(item, op.metadata);
       await item.saveTx();
       results.push(`UPDATED ${{item.key}}`);
       continue;
