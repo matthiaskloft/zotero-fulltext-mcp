@@ -105,6 +105,9 @@ class ImageLinkParsingTests(unittest.TestCase):
             ["images/a.png", "images/b c.png", "images/f(1).png"],
         )
 
+    def test_omits_scheme_and_home_relative_links(self):
+        self.assertEqual(image_link_targets("![](file:/home/you/x.png) ![](data:x.png) ![](~/x.png) ![](images/y.png)"), ["images/y.png"])
+
     def test_omits_formats_the_tool_cannot_serve(self):
         self.assertEqual(image_link_targets("![](images/a.bmp) ![](images/b.tiff) ![](images/c.png)"), ["images/c.png"])
 
@@ -132,6 +135,9 @@ class ImageLinkParsingTests(unittest.TestCase):
             "images/a.svg",
             "images/a.bmp",
             "https://example.com/a.png",
+            "file:/home/you/a.png",
+            "data:a.png",
+            "~/a.png",
         ):
             with self.subTest(link=link), self.assertRaises(ValueError):
                 extracted_image_name(link)
@@ -201,6 +207,42 @@ class LocateImagesDirTests(unittest.TestCase):
                 locate_images_dir(elsewhere / "runs" / "r1" / "markdown" / "0001_paper.md", attachment_key="OTHER123", output_root=output_root),
                 run,
             )
+
+    def test_re_roots_paths_recorded_on_windows(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            output_root = Path(tmp) / "synced"
+            canonical = output_root / "library" / "ATTACH1" / "images"
+            run = output_root / "runs" / "r1" / "images" / "0001_paper"
+            canonical.mkdir(parents=True)
+            run.mkdir(parents=True)
+            self.assertEqual(
+                locate_images_dir(
+                    Path(r"C:\Users\you\out\library\ATTACH1\ATTACH1.md"), attachment_key="ATTACH1", output_root=output_root
+                ),
+                canonical,
+            )
+            self.assertEqual(
+                locate_images_dir(
+                    Path(r"C:\Users\you\out\runs\r1\markdown\0001_paper.md"), attachment_key="OTHER123", output_root=output_root
+                ),
+                run,
+            )
+
+    def test_an_uninspectable_recorded_location_falls_through_to_the_output_root(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            output_root = Path(tmp) / "synced"
+            canonical = output_root / "library" / "ATTACH1" / "images"
+            canonical.mkdir(parents=True)
+            stored = Path(tmp) / "private" / "library" / "ATTACH1" / "ATTACH1.md"
+            real_is_dir = Path.is_dir
+
+            def is_dir(path: Path) -> bool:
+                if "private" in path.parts:
+                    raise PermissionError(13, "Permission denied")
+                return real_is_dir(path)
+
+            with patch.object(Path, "is_dir", is_dir):
+                self.assertEqual(locate_images_dir(stored, attachment_key="ATTACH1", output_root=output_root), canonical)
 
     def test_a_bare_images_folder_is_not_taken_for_a_moved_paper(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -34,8 +34,8 @@ import unicodedata
 from collections.abc import Iterator
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
-from pathlib import Path
-from typing import TypedDict
+from pathlib import Path, PurePath, PureWindowsPath
+from typing import TypedDict, TypeVar
 from urllib.parse import quote, unquote
 
 from .artifacts import (
@@ -126,6 +126,9 @@ _IMAGE_LINK_RE = re.compile(
 )
 
 
+PurePathT = TypeVar("PurePathT", bound=PurePath)
+
+
 class LibraryAuditError(RuntimeError):
     """Raised when an audit cannot be performed at all (bad snapshot, unreadable index)."""
 
@@ -187,7 +190,7 @@ def canonical_image_dir(config: ProjectConfig, attachment_key: str) -> Path:
     return canonical_paper_dir(config, attachment_key) / IMAGES_DIRNAME
 
 
-def images_dir_for(markdown_path: Path) -> Path:
+def images_dir_for(markdown_path: PurePathT) -> PurePathT:
     """Where the images extracted alongside converted Markdown `markdown_path` live.
 
     Two layouts exist: the canonical library keeps each paper in its own folder
@@ -226,6 +229,9 @@ _IMAGE_FORMATS = {".png": "png", ".jpg": "jpeg", ".jpeg": "jpeg", ".gif": "gif",
 # A stored path that no longer exists is re-rooted under the output root by its tail; one bare
 # segment ("images") would match whichever paper's folder happened to be first, so it never counts.
 _MIN_REROOT_TAIL_PARTS = 2
+# A scheme (`file:`, `data:`, `https:`) is two or more characters; one letter is a Windows drive.
+_URL_SCHEME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]+:")
+_WINDOWS_ANCHOR_RE = re.compile(r"^(?:[A-Za-z]:|\\\\)")
 
 
 def _image_bytes_match(data: bytes, image_format: str) -> bool:
@@ -276,7 +282,15 @@ def _strip_link_title(destination: str) -> str:
 
 
 def _is_absolute_link(target: str) -> bool:
-    return target.startswith(("/", "\\")) or bool(re.match(r"^[A-Za-z]:", target))
+    return target.startswith(("/", "\\")) or bool(_WINDOWS_ANCHOR_RE.match(target))
+
+
+def _is_dir(path: Path) -> bool:
+    """`Path.is_dir`, but a directory that cannot be inspected (permissions, name length) is absent."""
+    try:
+        return path.is_dir()
+    except (OSError, ValueError):
+        return False
 
 
 def extracted_image_name(link: str) -> str:
@@ -287,7 +301,7 @@ def extracted_image_name(link: str) -> str:
     carries; a name that is still a separator or dot segment once decoded is refused.
     """
     target = _strip_link_title(link or "")
-    if not target or "://" in target or "\x00" in target:
+    if not target or "\x00" in target or target.startswith("~") or _URL_SCHEME_RE.match(target):
         raise ValueError("Not a local image link.")
     name = unquote(target.replace("\\", "/").rsplit("/", 1)[-1])
     if not name or name in {".", ".."} or any(char in name for char in "/\\\x00"):
@@ -306,9 +320,13 @@ def locate_images_dir(markdown_path: Path, *, attachment_key: str, output_root: 
     finally the longest tail of the stored directory that exists under `output_root`, as
     `image_ocr.resolve_under_output_root` does for Markdown.
     """
-    stored = images_dir_for(markdown_path)
-    if stored.is_dir():
-        return stored
+    # A path recorded on Windows is one opaque segment to POSIX pathlib, so its parts (needed for
+    # re-rooting) are read with Windows rules wherever it is opened.
+    windows_recorded = os.name != "nt" and bool(_WINDOWS_ANCHOR_RE.match(str(markdown_path)))
+    recorded: PurePath = PureWindowsPath(str(markdown_path)) if windows_recorded else markdown_path
+    stored = images_dir_for(recorded)
+    if not windows_recorded and _is_dir(Path(stored)):
+        return Path(stored)
     if output_root is None:
         return None
     try:
@@ -317,13 +335,13 @@ def locate_images_dir(markdown_path: Path, *, attachment_key: str, output_root: 
         key = ""
     if key:
         canonical = output_root / LIBRARY_DIRNAME / key / IMAGES_DIRNAME
-        if canonical.is_dir():
+        if _is_dir(canonical):
             return canonical
     parts = stored.parts
     # Skip index 0: on Windows that is the drive anchor, which never appears mid-tree.
     for start in range(1, len(parts) - _MIN_REROOT_TAIL_PARTS + 1):
         candidate = output_root.joinpath(*parts[start:])
-        if candidate.is_dir():
+        if _is_dir(candidate):
             return candidate
     return None
 
