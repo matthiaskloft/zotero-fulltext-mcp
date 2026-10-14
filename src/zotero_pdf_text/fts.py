@@ -33,6 +33,8 @@ SEARCH_MODES = frozenset({"all_terms", "any_terms", "phrase"})
 _CHUNK_ADVANCE_CHARS_ESTIMATE = max(DEFAULT_CHUNK_CHARS - DEFAULT_OVERLAP_CHARS, 1)
 _MAX_CHUNK_FETCH_ITERATIONS = 6
 DEFAULT_CONTEXT_RECORD_LIMIT = 50
+# Longer than any real image path; bounds the per-request link scan (see image_destination_spans).
+MAX_IMAGE_DESTINATION_CHARS = 1024
 
 
 @dataclass(frozen=True)
@@ -729,6 +731,27 @@ def get_fulltext(
     )
 
 
+def get_markdown_path(db_path: Path, *, attachment_key: str) -> str:
+    """Return the indexed converted-Markdown path for one attachment, for server-side use only.
+
+    The path is local and never belongs in a public response; callers resolve sidecar files (the
+    extracted images) against it and return their content instead.
+    """
+    if not attachment_key:
+        raise ValueError("attachment_key is required")
+    con = connect_readonly(db_path)
+    try:
+        row = con.execute(
+            "SELECT markdown_path FROM metadata WHERE zotero_attachment_key = ?",
+            (attachment_key,),
+        ).fetchone()
+    finally:
+        con.close()
+    if row is None:
+        raise KeyError(f"No record found for attachment key {attachment_key}")
+    return str(row[0] or "")
+
+
 def _fetch_covering_chunks(con: sqlite3.Connection, record_id: int, max_chars: int) -> list[sqlite3.Row]:
     """Fetch just enough leading chunks (in order) to cover max_chars characters of text.
 
@@ -1283,29 +1306,44 @@ def _extended_metadata(row: sqlite3.Row) -> dict[str, object]:
 # the paper title must not read as body-text evidence, and an absolute image path must not surface
 # in a snippet. The alt text stays searchable, and the `chunks` table keeps the original Markdown,
 # so passage retrieval and chunk_sha256 are unchanged.
-def _image_destination_end(text: str, open_paren: int) -> int | None:
+def _image_destination_end(text: str, open_paren: int, max_chars: int | None = None) -> int | None:
     """Return the index just past the ``)`` closing an image destination opened at ``open_paren``.
 
     Destinations may hold balanced parentheses (``OneDrive (Work)/fig.png``), be wrapped in
     ``<...>``, and carry an optional quoted title, so the first ``)`` is not necessarily the end.
-    Returns None when the destination is unterminated on its line.
+    As in CommonMark, the title may start on the next line and a quoted title may continue across
+    lines, but a blank line always ends the reference. Returns None when the destination is
+    unterminated, or longer than ``max_chars`` when that bound is given.
     """
+    n = len(text) if max_chars is None else min(len(text), open_paren + 1 + max_chars)
     i = open_paren + 1
-    n = len(text)
     while i < n and text[i] in " \t":
         i += 1
     if i < n and text[i] == "<":
-        close = text.find(">", i + 1)
+        close = text.find(">", i + 1, n)
         if close == -1 or "\n" in text[i:close]:
             return None
         i = close + 1
     depth = 0
     quote: str | None = None
+    title_line_break = False
     while i < n:
         char = text[i]
         if char == "\n":
-            return None
-        if quote is not None:
+            following = i + 1
+            while following < n and text[following] in " \t":
+                following += 1
+            if following >= n or text[following] == "\n":
+                return None
+            if quote is None:
+                # Only the whitespace before a title may break the line, and only once.
+                if title_line_break or text[following] not in "\"'":
+                    return None
+                title_line_break = True
+                quote = text[following]
+                i = following + 1
+                continue
+        elif quote is not None:
             if char == quote:
                 quote = None
         elif char == "\\" and i + 1 < n:
@@ -1329,22 +1367,44 @@ def image_markup_spans(text: str) -> list[tuple[int, int]]:
     still blanked in every chunk that holds part of it.
     """
     spans: list[tuple[int, int]] = []
+    for start, alt_end, end in _image_references(text):
+        spans.append((start, start + 2))
+        spans.append((alt_end, end))
+    return spans
+
+
+def image_destination_spans(text: str) -> list[tuple[int, int]]:
+    """Character spans of each image's destination, between its ``(`` and closing ``)``.
+
+    Read per request, so destinations are bounded by MAX_IMAGE_DESTINATION_CHARS: a line of
+    unterminated references then costs linear rather than quadratic time.
+    """
+    return [
+        (alt_end + 2, end - 1)
+        for _, alt_end, end in _image_references(text, max_destination_chars=MAX_IMAGE_DESTINATION_CHARS)
+    ]
+
+
+def _image_references(text: str, *, max_destination_chars: int | None = None) -> Iterable[tuple[int, int, int]]:
+    """Yield ``(start of "![", index of "]", index past ")")`` for each complete image reference.
+
+    A failed reference resumes the search at its ``]``: every ``![`` before it would find the same
+    ``]`` and destination, and fail the same way.
+    """
     pos = 0
     while (start := text.find("![", pos)) != -1:
         alt_end = text.find("]", start + 2)
         if alt_end == -1:
             break
         if not text.startswith("(", alt_end + 1):
-            pos = start + 2
+            pos = alt_end
             continue
-        end = _image_destination_end(text, alt_end + 1)
+        end = _image_destination_end(text, alt_end + 1, max_destination_chars)
         if end is None:
-            pos = start + 2
+            pos = alt_end
             continue
-        spans.append((start, start + 2))
-        spans.append((alt_end, end))
+        yield start, alt_end, end
         pos = end
-    return spans
 
 
 def fts_body_text(text: str, start: int, spans: list[tuple[int, int]]) -> str:

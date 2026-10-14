@@ -95,7 +95,7 @@ Windows (PowerShell):
 $venv = "$env:USERPROFILE\.venvs\zotero_fulltext_mcp"
 py -3.11 -m venv $venv
 $python = "$venv\Scripts\python.exe"
-& $python -m pip install "zotero-fulltext-mcp[mcp] @ git+https://github.com/matthiaskloft/zotero-fulltext-mcp.git@v0.12.2"
+& $python -m pip install "zotero-fulltext-mcp[mcp] @ git+https://github.com/matthiaskloft/zotero-fulltext-mcp.git@v0.13.0"
 ```
 
 macOS/Linux:
@@ -103,7 +103,7 @@ macOS/Linux:
 ```bash
 python3 -m venv ~/.venvs/zotero_fulltext_mcp
 python=~/.venvs/zotero_fulltext_mcp/bin/python
-"$python" -m pip install 'zotero-fulltext-mcp[mcp] @ git+https://github.com/matthiaskloft/zotero-fulltext-mcp.git@v0.12.2'
+"$python" -m pip install 'zotero-fulltext-mcp[mcp] @ git+https://github.com/matthiaskloft/zotero-fulltext-mcp.git@v0.13.0'
 ```
 
 Use a published tag from the [releases page](https://github.com/matthiaskloft/zotero-fulltext-mcp/releases).
@@ -196,7 +196,8 @@ Try asking your assistant:
 - “Export the BibTeX entries for the papers we used.”
 
 Read the retrieved passages before relying on an answer. PDF extraction can lose equations
-or misread scanned pages. Search covers the **converted index**, so a missing hit does not
+or misread scanned pages; equations that converted as images stay viewable through
+`get_passage_image`. Search covers the **converted index**, so a missing hit does not
 prove a paper is absent from Zotero. Ask the assistant to check `library_status` when coverage
 or freshness matters. The [MCP tool reference](docs/mcp-tools.md) explains retrieval,
 source locators, citation handling, and guidance for agents.

@@ -42,7 +42,26 @@ The safe default server exposes:
   whether that text was re-divided under it; passing both is valid, and the chunk hash then decides
   while the document hash is not compared. Without `chunk_index`, `content_sha256` verifies the
   document the bounded leading preview came from. Exact chunks report previous/next navigation and
-  whether a `max_chars` limit truncated the stored chunk.
+  whether a `max_chars` limit truncated the stored chunk. `image_links` lists the passage's image
+  links that `get_passage_image` can serve (PNG, JPEG, GIF, WebP), once each in order of first
+  appearance. Relative links are listed as written; an absolute link left by an older conversion is
+  reduced to `images/<name>`, so the list never carries a local path. Remote links, unsupported
+  formats and a link cut through by `max_chars` are left out.
+- `get_passage_image(attachment_key, image_link)` — returns one image a passage links to as MCP
+  image content, with structured metadata (`attachment_key`, `image_link`, `mime_type`,
+  `byte_count`, `content_trust: "untrusted_source"`). Equations, figures and tables that the
+  extractor rendered as images exist only in these files, so an agent should view them before
+  concluding that content is missing from a passage or asking for a math reconversion. The
+  response never contains a local path: only the link's file name is resolved, inside that
+  attachment's own extracted-images directory (an image file that is a symlink leading out of it
+  is refused; the directory itself is used wherever it resolves), and the file's leading bytes
+  must match its PNG/JPEG/GIF/WebP suffix. When the index's recorded location does not exist on
+  this machine (an output tree that was synced or moved), the directory is looked up under the
+  output root instead: the config's `output_root`, or the folder above the index directory when
+  the server runs without `--config`. Errors: `invalid_image_link` (not a local image file name),
+  `image_not_found`, `images_unavailable` (the attachment's images directory is not on this
+  machine; the equation is not known to be missing), `image_too_large` (over the response limit),
+  `attachment_not_found`.
 - `get_item_context(parent_key | attachment_key)` — path-free bibliographic, extraction, and
   identity context for the supplied key: item type, abstract, venue, volume/issue/pages, tags,
   creator roles and an `extraction_quality` label (`good`, `degraded`, `unusable`) once the index
