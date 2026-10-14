@@ -5,6 +5,8 @@ All notable changes to this project are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-10-14
+
 ### Added
 
 - `get_fulltext_chunk` passages now list their `images/...` links in `image_links`, and the new
@@ -1087,7 +1089,8 @@ author's own machine.
 
 Initial import of the Zotero full-text conversion pipeline, CLI, and MCP server. Not tagged.
 
-[Unreleased]: https://github.com/matthiaskloft/zotero-fulltext-mcp/compare/v0.12.2...HEAD
+[Unreleased]: https://github.com/matthiaskloft/zotero-fulltext-mcp/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.13.0
 [0.12.2]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.12.2
 [0.12.1]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.12.1
 [0.12.0]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.12.0
