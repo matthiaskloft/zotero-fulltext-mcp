@@ -266,6 +266,43 @@ class LocateImagesDirTests(unittest.TestCase):
             with patch.object(Path, "is_dir", is_dir):
                 self.assertEqual(locate_images_dir(stored, attachment_key="ATTACH1", output_root=output_root), canonical)
 
+    def test_an_enriched_file_uses_its_originals_images(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            run = Path(tmp) / "out" / "runs" / "r1"
+            run_images = run / "images" / "0001_paper"
+            canonical = Path(tmp) / "out" / "library" / "ATTACH1" / "images"
+            run_images.mkdir(parents=True)
+            canonical.mkdir(parents=True)
+            for stem, suffix in (("0001_paper_ocr_eq", "_ocr_eq"), ("0001_paper.enriched", ".enriched")):
+                with self.subTest(suffix=suffix):
+                    self.assertEqual(
+                        locate_images_dir(run / "markdown" / f"{stem}.md", attachment_key="ATTACH1", output_root=None, enriched_suffix=suffix),
+                        run_images,
+                    )
+            self.assertEqual(
+                locate_images_dir(canonical.parent / "ATTACH1_ocr_eq.md", attachment_key="ATTACH1", output_root=None, enriched_suffix="_ocr_eq"),
+                canonical,
+            )
+            # Moved: the enriched run file is re-rooted to its original's images, not the canonical folder.
+            elsewhere = Path(tmp) / "other-machine" / "out" / "runs" / "r1" / "markdown" / "0001_paper_ocr_eq.md"
+            self.assertEqual(
+                locate_images_dir(elsewhere, attachment_key="ATTACH1", output_root=Path(tmp) / "out", enriched_suffix="_ocr_eq"),
+                run_images,
+            )
+
+    def test_a_moved_run_prefers_the_recorded_conversion_over_the_canonical_folder(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            output_root = Path(tmp) / "synced"
+            canonical = output_root / "library" / "ATTACH01" / "images"
+            run = output_root / "runs" / "r1" / "images" / "0001_paper"
+            canonical.mkdir(parents=True)
+            run.mkdir(parents=True)
+            stored = Path(tmp) / "other" / "runs" / "r1" / "markdown" / "0001_paper.md"
+            self.assertEqual(locate_images_dir(stored, attachment_key="ATTACH01", output_root=output_root), run)
+            # The canonical folder is only the fallback when the recorded conversion is not found.
+            shutil.rmtree(run)
+            self.assertEqual(locate_images_dir(stored, attachment_key="ATTACH01", output_root=output_root), canonical)
+
     def test_a_bare_images_folder_is_not_taken_for_a_moved_paper(self):
         with tempfile.TemporaryDirectory() as tmp:
             output_root = Path(tmp) / "synced"
@@ -345,6 +382,29 @@ class PassageImageToolTests(unittest.TestCase):
                     passage = server.tools["get_fulltext_chunk"]("ATTACH1", chunk_index=0)
                     result = server.tools["get_passage_image"]("ATTACH1", passage["image_links"][0])
                     self.assertEqual(base64.b64decode(result.content[0].data), PNG)
+
+    def test_serves_the_original_images_of_an_ocr_enriched_run_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _build_image_index(root)
+            run = root / "output" / "runs" / "r1"
+            (run / "images" / "0001_paper").mkdir(parents=True)
+            (run / "images" / "0001_paper" / "figure-2.png").write_bytes(PNG)
+            (run / "markdown").mkdir()
+            enriched = run / "markdown" / "0001_paper_ocr_eq.md"
+            enriched.write_text(TEXT, encoding="utf-8")
+            shutil.rmtree(root / "output" / "library")
+            index_root = root / "output" / "index"
+            jsonl_path = index_root / "zotero_text_index.jsonl"
+            record = json.loads(jsonl_path.read_text(encoding="utf-8"))
+            record["markdown_path"] = str(enriched)
+            jsonl_path.write_text(json.dumps(record) + "\n", encoding="utf-8")
+            stage_and_publish(index_root, write_jsonl_from_existing(jsonl_path), command="test")
+            server = create_server(index_root / "zotero_text_index.sqlite", mcp_factory=FakeFastMCP)
+
+            result = server.tools["get_passage_image"]("ATTACH1", "images/figure-2.png")
+
+            self.assertEqual(base64.b64decode(result.content[0].data), PNG)
 
     def test_missing_images_directory_is_reported_as_unavailable_not_missing(self):
         with tempfile.TemporaryDirectory() as tmp:

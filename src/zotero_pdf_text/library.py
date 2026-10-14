@@ -311,39 +311,43 @@ def extracted_image_name(link: str) -> str:
     return name
 
 
-def locate_images_dir(markdown_path: Path, *, attachment_key: str, output_root: Path | None) -> Path | None:
+def locate_images_dir(
+    markdown_path: Path, *, attachment_key: str, output_root: Path | None, enriched_suffix: str = ""
+) -> Path | None:
     """Find the images directory for indexed Markdown `markdown_path` on this machine, or None.
 
-    The index stores absolute paths written by the machine that converted the paper, so an output
-    tree that was synced or moved keeps its text (that lives in the index) while those paths stop
-    resolving. Then the canonical folder for `attachment_key` under `output_root` is tried, and
-    finally the longest tail of the stored directory that exists under `output_root`, as
-    `image_ocr.resolve_under_output_root` does for Markdown.
+    Image OCR may have pointed the index at an enriched sibling (`<stem><enriched_suffix>.md`),
+    which shares the original's images, so the original stem is recovered first, as
+    `image_ocr` does. The index stores absolute paths written by the machine that converted the
+    paper, so an output tree that was synced or moved keeps its text (that lives in the index)
+    while those paths stop resolving. Then the recorded directory is re-rooted under `output_root`
+    by its longest existing tail, as `image_ocr.resolve_under_output_root` does for Markdown, so
+    the images of the conversion the passage came from are preferred. The canonical folder for
+    `attachment_key` is the last resort, since it may hold a different conversion.
     """
     # A path recorded on Windows is one opaque segment to POSIX pathlib, so its parts (needed for
     # re-rooting) are read with Windows rules wherever it is opened.
     windows_recorded = os.name != "nt" and bool(_WINDOWS_ANCHOR_RE.match(str(markdown_path)))
     recorded: PurePath = PureWindowsPath(str(markdown_path)) if windows_recorded else markdown_path
+    if enriched_suffix and recorded.stem.endswith(enriched_suffix) and recorded.stem != enriched_suffix:
+        recorded = recorded.with_name(recorded.stem[: -len(enriched_suffix)] + recorded.suffix)
     stored = images_dir_for(recorded)
     if not windows_recorded and _is_dir(Path(stored)):
         return Path(stored)
     if output_root is None:
         return None
-    try:
-        key = validate_attachment_key(attachment_key)
-    except ValueError:
-        key = ""
-    if key:
-        canonical = output_root / LIBRARY_DIRNAME / key / IMAGES_DIRNAME
-        if _is_dir(canonical):
-            return canonical
     parts = stored.parts
     # Skip index 0: on Windows that is the drive anchor, which never appears mid-tree.
     for start in range(1, len(parts) - _MIN_REROOT_TAIL_PARTS + 1):
         candidate = output_root.joinpath(*parts[start:])
         if _is_dir(candidate):
             return candidate
-    return None
+    try:
+        key = validate_attachment_key(attachment_key)
+    except ValueError:
+        return None
+    canonical = output_root / LIBRARY_DIRNAME / key / IMAGES_DIRNAME
+    return canonical if _is_dir(canonical) else None
 
 
 def read_extracted_image(images_dir: Path, link: str, *, max_bytes: int) -> tuple[bytes, str]:

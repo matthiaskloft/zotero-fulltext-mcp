@@ -55,10 +55,12 @@ The safe default server exposes:
   response never contains a local path: only the link's file name is resolved, inside that
   attachment's own extracted-images directory (an image file that is a symlink leading out of it
   is refused; the directory itself is used wherever it resolves), and the file's leading bytes
-  must match its PNG/JPEG/GIF/WebP suffix. When the index's recorded location does not exist on
-  this machine (an output tree that was synced or moved), the directory is looked up under the
-  output root instead: the config's `output_root`, or the folder above the index directory when
-  the server runs without `--config`. Errors: `invalid_image_link` (not a local image file name),
+  must match its PNG/JPEG/GIF/WebP suffix. An index entry that image OCR pointed at an enriched
+  sibling (`<stem><enriched_suffix>.md`) uses its original's images. When the index's recorded
+  location does not exist on this machine (an output tree that was synced or moved), the recorded
+  directory is re-rooted under the output root (the config's `output_root`, or the folder above the
+  index directory when the server runs without `--config`), so the images of the conversion the
+  passage came from are preferred; the canonical `library/<key>/images` folder is the last resort. Errors: `invalid_image_link` (not a local image file name),
   `image_not_found`, `images_unavailable` (the attachment's images directory is not on this
   machine; the equation is not known to be missing), `image_too_large` (over the response limit),
   `attachment_not_found`.

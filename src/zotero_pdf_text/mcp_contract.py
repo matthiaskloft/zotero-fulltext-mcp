@@ -34,7 +34,7 @@ from .artifacts import (
     resolve_reader_generation,
 )
 from .bibtex import DEFAULT_BBT_ENDPOINT, DEFAULT_BBT_TRANSLATOR, BibtexExport, export_bibtex_entries
-from .config import ProjectConfig, validate_config
+from .config import ImageOcrSettings, ProjectConfig, validate_config
 from .layout import runs_root
 from .library import (
     MAPPING_REPORT_JSONL,
@@ -897,6 +897,7 @@ def create_server(
                     # The index sits at <output_root>/index/, which is where a synced or moved tree
                     # is re-rooted from when the server runs without a config.
                     output_root=config.output_root if config is not None else Path(db_path).parent.parent,
+                    enriched_suffix=(config.image_ocr if config is not None else ImageOcrSettings()).enriched_suffix,
                 )
                 if markdown_path
                 else None
