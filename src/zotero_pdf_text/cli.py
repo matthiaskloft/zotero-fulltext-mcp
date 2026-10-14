@@ -36,6 +36,7 @@ from .artifacts import (
     ArtifactError,
     ManagedIndexMissingError,
     current_generation_jsonl,
+    recover_pending_publication,
     resolve_reader_db_path,
     resolve_reader_generation,
     stage_and_publish,
@@ -1861,6 +1862,12 @@ def main(argv: list[str] | None = None) -> int:
         index_root = config.output_root / "index"
         try:
             with pipeline_write_lock(config.output_root, command="convert-new"):
+                # Finish or roll back an interrupted publication before deciding what is new.
+                # Otherwise the items that publication already converted read as missing from
+                # the old generation and are converted a second time.
+                recovered = recover_pending_publication(index_root)
+                if recovered is not None:
+                    print(f"Recovered: {recovered}")
                 current_jsonl = current_generation_jsonl(index_root)
                 legacy_jsonl = index_root / "zotero_text_index.jsonl"
                 if current_jsonl is None and legacy_jsonl.is_file():

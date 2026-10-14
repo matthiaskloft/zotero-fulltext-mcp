@@ -161,9 +161,9 @@ an index, and searches on very common terms that still take seconds.
 **Package 5, step 3: end-to-end fixture tests.** Done, except the migration case, which waits on
 Package 3. `tests/test_end_to_end.py` runs `convert-new` and `rebuild-index` on synthetic PDFs and
 queries a real server process started as `install-mcp` registers it. It covers recovery from a
-publication interrupted before the pointer swap, and audit/status output. One finding: after such
-a crash, `convert-new` converts the interrupted run's new items again, because it picks new items
-before recovery runs. The result is correct; only the conversion time is spent twice
+publication interrupted before the pointer swap, and audit/status output. Its one finding, that
+`convert-new` converted an interrupted run's items again because it picked new items before
+recovery ran, is fixed: recovery now runs first
 ([#94](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/94)).
 
 **Package 3, steps 1 and 2: canonical library layout.** Done in reduced form, without migration.

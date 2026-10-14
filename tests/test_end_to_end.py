@@ -291,16 +291,16 @@ class InterruptedPublicationTests(unittest.TestCase):
             self.assertEqual(_keys(old), [FIRST.attachment_key])
             self.assertEqual(_keys(new), [])
 
+            conversion_runs = set((library.output_root / "runs").glob("*_convert-verified*"))
             library.convert_new()
 
-            # Recovery published the interrupted generation before this run published its own, so
-            # it is now the previous generation; without recovery that would be first_generation.
-            # convert-new still converts the second paper again, because it decides what is new
-            # from the generation that was current before recovery ran.
+            # Recovery runs before convert-new decides what is new, so the interrupted
+            # generation becomes current and nothing is converted or published a second time.
             self.assertFalse((library.index_root / artifacts.JOURNAL_FILENAME).exists())
+            self.assertEqual(set((library.output_root / "runs").glob("*_convert-verified*")), conversion_runs)
             pointer = artifacts.read_current_pointer(library.index_root)
-            self.assertEqual(pointer["previous_generation"], interrupted_generation)
-            self.assertNotIn(pointer["current_generation"], {first_generation, interrupted_generation})
+            self.assertEqual(pointer["current_generation"], interrupted_generation)
+            self.assertEqual(pointer["previous_generation"], first_generation)
             _, (old, new) = _call_server(server_command, [_search("zebrafinch"), _search("quokka")])
             self.assertEqual(_keys(old), [FIRST.attachment_key])
             self.assertEqual(_keys(new), [SECOND.attachment_key])
@@ -364,7 +364,7 @@ class WholeLibraryRebuildTests(unittest.TestCase):
             library.add(FIRST)
             library.add(SECOND)
             library.convert_new()
-            (run,) = (library.output_root / "runs").glob("*_convert-verified")
+            (run,) = (library.output_root / "runs").glob("*_convert-verified*")
             # A whole-library reconversion in which SECOND failed: its manifest converts FIRST only.
             partial = Path(tmp) / "manifest.csv"
             with (run / "manifest.csv").open(encoding="utf-8-sig", newline="") as handle:
