@@ -39,9 +39,12 @@ from .layout import runs_root
 from .library import (
     MAPPING_REPORT_JSONL,
     ExtractedImageNotFoundError,
+    ExtractedImagesUnavailableError,
+    ExtractedImageTooLargeError,
     extracted_image_name,
     image_link_targets,
     library_status as _library_status_data,
+    locate_images_dir,
     read_extracted_image,
 )
 from .fts import (
@@ -887,12 +890,22 @@ def create_server(
             validated_key = _validate_attachment_key(attachment_key)
             link = _validate_image_link(image_link)
             markdown_path = get_markdown_path(_resolve_request_db(db_path), attachment_key=validated_key)
-            if not markdown_path:
-                raise ExtractedImageNotFoundError(link)
+            images_dir = (
+                locate_images_dir(
+                    Path(markdown_path),
+                    attachment_key=validated_key,
+                    # The index sits at <output_root>/index/, which is where a synced or moved tree
+                    # is re-rooted from when the server runs without a config.
+                    output_root=config.output_root if config is not None else Path(db_path).parent.parent,
+                )
+                if markdown_path
+                else None
+            )
+            if images_dir is None:
+                raise ExtractedImagesUnavailableError(validated_key)
             try:
-                data, image_format = read_extracted_image(Path(markdown_path), link, max_bytes=MAX_IMAGE_BYTES)
-            except ValueError:
-                # The link was validated above, so the only ValueError left is the size bound.
+                data, image_format = read_extracted_image(images_dir, link, max_bytes=MAX_IMAGE_BYTES)
+            except ExtractedImageTooLargeError:
                 raise PublicMcpError("image_too_large", "That image exceeds the MCP response limit.") from None
             metadata: PassageImageResponse = {
                 "attachment_key": validated_key,
@@ -2397,6 +2410,13 @@ def _public_call(operation: Callable[[], Any], *, integration: bool = False) -> 
             "That locator's converted text has been replaced since the locator was issued, so its "
             "offsets no longer address the cited passage. Search again to obtain a current locator. "
             f"(cited {exc.expected[:12]}, current {exc.actual[:12] or 'none'})",
+        ) from None
+    except ExtractedImagesUnavailableError:
+        raise PublicMcpError(
+            "images_unavailable",
+            "This attachment's extracted images are not available where this server runs: the "
+            "converted output may have moved or still be syncing. The equation is not known to be "
+            "missing; say the image could not be opened.",
         ) from None
     except ExtractedImageNotFoundError:
         raise PublicMcpError(

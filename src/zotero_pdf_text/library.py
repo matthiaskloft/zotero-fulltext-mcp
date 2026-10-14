@@ -134,6 +134,14 @@ class ExtractedImageNotFoundError(LookupError):
     """Raised when an image link names no readable image beside an attachment's converted text."""
 
 
+class ExtractedImagesUnavailableError(LookupError):
+    """Raised when an attachment's images directory cannot be found on this machine at all."""
+
+
+class ExtractedImageTooLargeError(ValueError):
+    """Raised when an extracted image exceeds the size a caller can return."""
+
+
 # --------------------------------------------------------------------------------------
 # Canonical path derivation (report-only)
 # --------------------------------------------------------------------------------------
@@ -213,29 +221,62 @@ def relative_image_links(markdown: str, markdown_path: Path) -> str:
     return _IMAGE_LINK_RE.sub(rebase, markdown)
 
 
-# Image formats an MCP client can display, keyed by suffix, with the signature that proves the
-# bytes are what the suffix claims.
-_IMAGE_FORMATS = {
-    ".png": ("png", (b"\x89PNG\r\n\x1a\n",)),
-    ".jpg": ("jpeg", (b"\xff\xd8\xff",)),
-    ".jpeg": ("jpeg", (b"\xff\xd8\xff",)),
-    ".gif": ("gif", (b"GIF87a", b"GIF89a")),
-    ".webp": ("webp", (b"RIFF",)),
-}
+# Image formats an MCP client can display, keyed by suffix.
+_IMAGE_FORMATS = {".png": "png", ".jpg": "jpeg", ".jpeg": "jpeg", ".gif": "gif", ".webp": "webp"}
+# A stored path that no longer exists is re-rooted under the output root by its tail; one bare
+# segment ("images") would match whichever paper's folder happened to be first, so it never counts.
+_MIN_REROOT_TAIL_PARTS = 2
+
+
+def _image_bytes_match(data: bytes, image_format: str) -> bool:
+    """Whether `data` starts with the signature of `image_format`, so only real images are served."""
+    if image_format == "png":
+        return data.startswith(b"\x89PNG\r\n\x1a\n")
+    if image_format == "jpeg":
+        return data.startswith(b"\xff\xd8\xff")
+    if image_format == "gif":
+        return data.startswith((b"GIF87a", b"GIF89a"))
+    # RIFF is a container shared with WAV and AVI; the form type names the payload.
+    return data.startswith(b"RIFF") and data[8:12] == b"WEBP"
 
 
 def image_link_targets(markdown: str) -> list[str]:
-    """Return the local image link targets in `markdown`, in order of first appearance.
+    """Return the servable image links in `markdown`, once each, in order of first appearance.
 
-    These are the links `relative_image_links` writes (`images/<name>`), so they carry no local
-    path; remote links are left out because there is no extracted file behind them.
+    Destinations are parsed like the index parses them (balanced parentheses, `<...>`, an optional
+    title), so adjacent links never merge. Remote links and formats `read_extracted_image` cannot
+    serve are left out, since the caller could do nothing with them. A relative link is kept as
+    written, so it can be found in the passage; an absolute one, which a legacy index may still
+    hold, is reduced to `images/<name>` so this list never repeats a machine's local path.
     """
+    from .fts import image_destination_spans
+
     targets: list[str] = []
-    for match in _IMAGE_LINK_RE.finditer(markdown):
-        target = match.group(2).strip()
-        if target and "://" not in target and target not in targets:
+    for start, end in image_destination_spans(markdown):
+        target = _strip_link_title(markdown[start:end])
+        try:
+            name = extracted_image_name(target)
+        except ValueError:
+            continue
+        if _is_absolute_link(target):
+            target = f"{IMAGES_DIRNAME}/{quote(name)}"
+        if target not in targets:
             targets.append(target)
     return targets
+
+
+def _strip_link_title(destination: str) -> str:
+    """Drop the angle brackets and optional quoted title from a Markdown link destination."""
+    target = destination.strip()
+    if target.startswith("<"):
+        close = target.find(">")
+        return target[1:close].strip() if close != -1 else target
+    match = re.match(r"^(\S+)\s+[\"'].*[\"']$", target, re.DOTALL)
+    return match.group(1) if match else target
+
+
+def _is_absolute_link(target: str) -> bool:
+    return target.startswith(("/", "\\")) or bool(re.match(r"^[A-Za-z]:", target))
 
 
 def extracted_image_name(link: str) -> str:
@@ -245,9 +286,7 @@ def extracted_image_name(link: str) -> str:
     link can only name a file in the attachment's own images directory whatever directory part it
     carries; a name that is still a separator or dot segment once decoded is refused.
     """
-    target = (link or "").strip()
-    if target.startswith("<") and target.endswith(">"):
-        target = target[1:-1].strip()
+    target = _strip_link_title(link or "")
     if not target or "://" in target or "\x00" in target:
         raise ValueError("Not a local image link.")
     name = unquote(target.replace("\\", "/").rsplit("/", 1)[-1])
@@ -258,28 +297,61 @@ def extracted_image_name(link: str) -> str:
     return name
 
 
-def read_extracted_image(markdown_path: Path, link: str, *, max_bytes: int) -> tuple[bytes, str]:
-    """Read the image an `images/...` link in `markdown_path`'s converted text points at.
+def locate_images_dir(markdown_path: Path, *, attachment_key: str, output_root: Path | None) -> Path | None:
+    """Find the images directory for indexed Markdown `markdown_path` on this machine, or None.
+
+    The index stores absolute paths written by the machine that converted the paper, so an output
+    tree that was synced or moved keeps its text (that lives in the index) while those paths stop
+    resolving. Then the canonical folder for `attachment_key` under `output_root` is tried, and
+    finally the longest tail of the stored directory that exists under `output_root`, as
+    `image_ocr.resolve_under_output_root` does for Markdown.
+    """
+    stored = images_dir_for(markdown_path)
+    if stored.is_dir():
+        return stored
+    if output_root is None:
+        return None
+    try:
+        key = validate_attachment_key(attachment_key)
+    except ValueError:
+        key = ""
+    if key:
+        canonical = output_root / LIBRARY_DIRNAME / key / IMAGES_DIRNAME
+        if canonical.is_dir():
+            return canonical
+    parts = stored.parts
+    # Skip index 0: on Windows that is the drive anchor, which never appears mid-tree.
+    for start in range(1, len(parts) - _MIN_REROOT_TAIL_PARTS + 1):
+        candidate = output_root.joinpath(*parts[start:])
+        if candidate.is_dir():
+            return candidate
+    return None
+
+
+def read_extracted_image(images_dir: Path, link: str, *, max_bytes: int) -> tuple[bytes, str]:
+    """Read the image an image link names from `images_dir`.
 
     Returns the bytes and their format (`png`, `jpeg`, ...). The file must resolve to a direct
-    child of `images_dir_for(markdown_path)` -- a symlink pointing elsewhere is refused -- and its
-    leading bytes must match its suffix, so only extracted images are ever read.
+    child of `images_dir` -- a symlinked file pointing elsewhere is refused -- and its leading
+    bytes must match its suffix, so only extracted images are ever read.
     """
     name = extracted_image_name(link)
-    images_dir = images_dir_for(markdown_path)
     try:
         resolved = (images_dir / name).resolve(strict=True)
         root = images_dir.resolve(strict=True)
-    except (OSError, RuntimeError):
+    except (OSError, RuntimeError, ValueError):
         raise ExtractedImageNotFoundError(name) from None
     if resolved.parent != root or not resolved.is_file():
         raise ExtractedImageNotFoundError(name)
-    image_format, signatures = _IMAGE_FORMATS[Path(name).suffix.lower()]
-    with resolved.open("rb") as handle:
-        data = handle.read(max_bytes + 1)
+    image_format = _IMAGE_FORMATS[Path(name).suffix.lower()]
+    try:
+        with resolved.open("rb") as handle:
+            data = handle.read(max_bytes + 1)
+    except OSError:
+        raise ExtractedImageNotFoundError(name) from None
     if len(data) > max_bytes:
-        raise ValueError("Image exceeds the size limit.")
-    if not data.startswith(signatures):
+        raise ExtractedImageTooLargeError(name)
+    if not _image_bytes_match(data, image_format):
         raise ExtractedImageNotFoundError(name)
     return data, image_format
 

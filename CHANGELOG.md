@@ -11,6 +11,9 @@ All notable changes to this project are documented here. Format loosely follows
   read-only `get_passage_image` tool returns a linked image (often an equation that converted as
   an image) as MCP image content without exposing local paths. `guide('citing')` tells agents to
   view these images before calling an equation missing or requesting a math reconversion.
+  Images are found under the output root when the index's recorded paths come from another
+  machine. Codex registrations list their enabled tools explicitly, so re-run `install-mcp` to
+  make `get_passage_image` available there.
   ([#141](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/141))
 
 ## [0.12.2] - 2026-10-13

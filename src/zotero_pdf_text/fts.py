@@ -1350,6 +1350,19 @@ def image_markup_spans(text: str) -> list[tuple[int, int]]:
     still blanked in every chunk that holds part of it.
     """
     spans: list[tuple[int, int]] = []
+    for start, alt_end, end in _image_references(text):
+        spans.append((start, start + 2))
+        spans.append((alt_end, end))
+    return spans
+
+
+def image_destination_spans(text: str) -> list[tuple[int, int]]:
+    """Character spans of each image's destination, between its ``(`` and closing ``)``."""
+    return [(alt_end + 2, end - 1) for _, alt_end, end in _image_references(text)]
+
+
+def _image_references(text: str) -> Iterable[tuple[int, int, int]]:
+    """Yield ``(start of "![", index of "]", index past ")")`` for each complete image reference."""
     pos = 0
     while (start := text.find("![", pos)) != -1:
         alt_end = text.find("]", start + 2)
@@ -1362,10 +1375,8 @@ def image_markup_spans(text: str) -> list[tuple[int, int]]:
         if end is None:
             pos = start + 2
             continue
-        spans.append((start, start + 2))
-        spans.append((alt_end, end))
+        yield start, alt_end, end
         pos = end
-    return spans
 
 
 def fts_body_text(text: str, start: int, spans: list[tuple[int, int]]) -> str:
