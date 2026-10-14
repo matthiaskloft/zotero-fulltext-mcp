@@ -57,7 +57,7 @@ year-range filters on search. The completed work is listed under "History" at th
 adds portable developer-test tooling, a pinned public PDF corpus, a disposable real-Zotero
 container and a manual independent-agent acquisition workflow (see `CHANGELOG.md`, Unreleased).
 
-There are three tracks of remaining work. They mostly don't depend on each other. The exceptions are
+There are four tracks of remaining work. They mostly don't depend on each other. The exceptions are
 noted in each table's "Needs" column.
 
 ## Track 1: Search and retrieval (active)
@@ -214,6 +214,20 @@ that M1 has landed.
 
 Out of scope for this project: live Zotero browsing of collections, tags and notes. That belongs to
 the companion Zotero MCP server (see `AGENTS.md`).
+
+## Track 4: Zotero 10 adoption
+
+Zotero 10 (2026) added local API writes, synced full-text content, accent- and CJK-aware search,
+and annotation search conditions. These items adopt what is useful and keep us compatible. The risk
+column is about Zotero and the converted library, as in Track 3.
+
+| Step | What it does | Issues | Risk | Needs | Why here |
+|------|--------------|--------|------|-------|----------|
+| **Z1** | Support matrix (Zotero 7 + 10, plugins, OS), runtime version detection, and versioned fixture and live tests. Verifies our SQLite reads and local-server calls against Zotero 10. | [#137](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/137) | none | — | Every other Z step needs a tested Zotero 10 baseline, and silent breakage on v10 is the most immediate risk. |
+| **Z2** | Explore Zotero's synced full-text content as a fallback and cross-check text source for missing, failed or timed-out attachments. Exploration only; ends in a recommendation. | [#136](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/136) | none | Z1 | Read-only research that produces evidence for a later decision. |
+| **Z3** | Search normalization: NFKC and typographic folding (H₂O, ligatures, curly quotes) and CJK matching, for parity with Zotero 10 search. | [#138](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/138) | contained | — | Changes the FTS schema and needs an index rebuild. If possible, bundle it with Track 1's single re-chunk (S4) to avoid a second rebuild. |
+| **Z4** | Expose the user's Zotero annotations (highlights, notes, colours) as searchable read-only evidence, linked to converted chunks. | [#139](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/139) | contained | Z1, S4 | Links annotations to chunks, so it comes after the re-chunk (same reason as M4). Unlike general note browsing (out of scope, below), this treats annotations as passage-level evidence. |
+| **Z5** | Move Zotero writes from debug-bridge to the Zotero 10 local API, then deprecate debug-bridge if nothing still needs it. | [#135](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/135) | contained | Z1, M1 | Changes shipped write paths, so it needs the version baseline first. It should land before M3 so the MCP write workflow is built on the local API. |
 
 ## History
 
