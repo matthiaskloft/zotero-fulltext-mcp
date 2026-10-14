@@ -16,6 +16,12 @@ All notable changes to this project are documented here. Format loosely follows
   make `get_passage_image` available there.
   ([#141](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/141))
 
+### Changed
+
+- Image references whose title starts on the next line (`![](images/a.png` then `"Eq. 1")`)
+  are now recognized, so after the next `rebuild-index` their link text is also kept out of
+  search snippets.
+
 ## [0.12.2] - 2026-10-13
 
 ### Changed

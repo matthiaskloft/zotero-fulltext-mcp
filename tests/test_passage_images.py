@@ -20,7 +20,7 @@ from unittest.mock import patch
 
 from zotero_pdf_text.artifacts import stage_and_publish, write_jsonl_from_existing
 from zotero_pdf_text.config import ProjectConfig
-from zotero_pdf_text.fts import build_fts_index
+from zotero_pdf_text.fts import MAX_IMAGE_DESTINATION_CHARS, build_fts_index, image_markup_spans
 from zotero_pdf_text.library import (
     ExtractedImageNotFoundError,
     ExtractedImageTooLargeError,
@@ -107,6 +107,28 @@ class ImageLinkParsingTests(unittest.TestCase):
 
     def test_omits_scheme_and_home_relative_links(self):
         self.assertEqual(image_link_targets("![](file:/home/you/x.png) ![](data:x.png) ![](~/x.png) ![](images/y.png)"), ["images/y.png"])
+
+    def test_a_title_may_start_on_the_next_line_but_a_blank_line_ends_the_link(self):
+        self.assertEqual(
+            image_link_targets('![](images/a.png\n  "Eq. 1") ![](images/b.png "two\nlines")'),
+            ["images/a.png", "images/b.png"],
+        )
+        self.assertEqual(image_link_targets('![](images/a.png\n\n"t")'), [])
+        self.assertEqual(image_link_targets("![](images/a.png\nnext paragraph)"), [])
+        self.assertEqual(image_link_targets('![](images/a.png "t\n\nx")'), [])
+
+    def test_request_time_scan_is_bounded_but_index_time_blanking_is_not(self):
+        long_link = "images/" + "a" * MAX_IMAGE_DESTINATION_CHARS + ".png"
+        markdown = f"![]({long_link})"
+        self.assertEqual(image_link_targets(markdown), [])
+        # The index still blanks it, so a long absolute path never surfaces in a snippet.
+        self.assertEqual(image_markup_spans(markdown), [(0, 2), (2, len(markdown))])
+
+    def test_unterminated_references_resume_after_their_bracket(self):
+        self.assertEqual(image_link_targets("![a ![b](images/x.png) ![](images/y.png"), ["images/x.png"])
+        # Each unterminated reference absorbs the rest of the line; only the last one closes.
+        self.assertEqual(image_link_targets("![](x " * 50 + "![](images/z.png)"), ["images/z.png"])
+        self.assertEqual(image_link_targets("![](x \n![](images/z.png)"), ["images/z.png"])
 
     def test_omits_formats_the_tool_cannot_serve(self):
         self.assertEqual(image_link_targets("![](images/a.bmp) ![](images/b.tiff) ![](images/c.png)"), ["images/c.png"])
