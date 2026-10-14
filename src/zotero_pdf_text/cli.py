@@ -1259,7 +1259,7 @@ def main(argv: list[str] | None = None) -> int:
         except PipelineLockedError as exc:
             print(str(exc), file=sys.stderr)
             return 2
-        except (ArtifactError, FileNotFoundError, ValueError) + REFRESH_ERRORS as exc:
+        except (ArtifactError, OSError, ValueError) + REFRESH_ERRORS as exc:
             print(str(exc), file=sys.stderr)
             return 2
         result = info.summary.to_dict()
