@@ -9,6 +9,7 @@ from typing import Any, cast
 
 from .artifacts import (
     current_generation_jsonl,
+    recover_pending_publication,
     stage_and_publish,
     write_jsonl_upserting_record,
 )
@@ -189,6 +190,9 @@ def retry_timeout_candidate(
             _write_single_row_mapping_report(mapping_report, row)
             run_dir = retry_dir / "conversion"
             index_root = config.output_root / "index"
+            # Recover before reading: a successor built from the pre-recovery generation would
+            # drop the interrupted publication's records.
+            recover_pending_publication(index_root)
             current_jsonl = current_generation_jsonl(index_root)
             if current_jsonl is None:
                 return _error_result(

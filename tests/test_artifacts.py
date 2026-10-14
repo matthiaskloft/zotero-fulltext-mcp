@@ -13,6 +13,7 @@ from zotero_pdf_text.artifacts import (
     GenerationValidationError,
     IndexPaths,
     ManagedIndexMissingError,
+    StalePublicationBaseError,
     chunking_params_from_current,
     current_generation_jsonl,
     is_valid_generation_id,
@@ -532,6 +533,87 @@ class RecoveryTests(unittest.TestCase):
             self.assertEqual(
                 read_current_pointer(index_root)["current_generation"], second.generation_id
             )
+
+
+class StagePublishAfterRecoveryTests(unittest.TestCase):
+    def _interrupted(self, index_root: Path):
+        first = _stage_from_records(index_root, [_record("A1", "Original body text.")])
+        publish_generation(index_root, first.generation_id)
+        second = _stage_from_records(
+            index_root, [_record("A1", "Original body text."), _record("B2", "Added body text.")]
+        )
+        IndexPaths(index_root).journal_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "state": "publishing",
+                    "generation_id": second.generation_id,
+                    "previous_pointer": read_current_pointer(index_root),
+                    "started_at": "2026-07-17T00:00:00+00:00",
+                }
+            ),
+            encoding="utf-8",
+        )
+        return first, second
+
+    def test_refuses_to_publish_a_successor_built_before_recovery(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            index_root = Path(tmp)
+            first, second = self._interrupted(index_root)
+            # The caller reads the current generation without recovering first.
+            stale_jsonl = current_generation_jsonl(index_root)
+            self.assertEqual(stale_jsonl, first.directory / GENERATION_JSONL_FILENAME)
+
+            with self.assertRaisesRegex(StalePublicationBaseError, "re-run"):
+                stage_and_publish(index_root, write_jsonl_from_existing(stale_jsonl), command="test")
+
+            # Recovery still published the interrupted generation, and nothing replaced it.
+            pointer = read_current_pointer(index_root)
+            self.assertEqual(pointer["current_generation"], second.generation_id)
+            self.assertEqual(pointer["previous_generation"], first.generation_id)
+            self.assertEqual(
+                {path.name for path in IndexPaths(index_root).generations_dir.iterdir()},
+                {first.generation_id, second.generation_id},
+            )
+
+    def test_publishes_when_the_caller_recovered_before_reading(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            index_root = Path(tmp)
+            _first, second = self._interrupted(index_root)
+            recover_pending_publication(index_root)
+            current_jsonl = current_generation_jsonl(index_root)
+
+            info = stage_and_publish(index_root, write_jsonl_from_existing(current_jsonl), command="test")
+
+            pointer = read_current_pointer(index_root)
+            self.assertEqual(pointer["current_generation"], info.generation_id)
+            self.assertEqual(pointer["previous_generation"], second.generation_id)
+            self.assertEqual(info.summary.records, 2)
+
+    def test_publishes_when_recovery_only_cleaned_up_an_already_swapped_journal(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            index_root = Path(tmp)
+            info = _stage_from_records(index_root, [_record("A1", "Body text.")])
+            publish_generation(index_root, info.generation_id)
+            IndexPaths(index_root).journal_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "state": "publishing",
+                        "generation_id": info.generation_id,
+                        "previous_pointer": None,
+                        "started_at": "2026-07-17T00:00:00+00:00",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            current_jsonl = current_generation_jsonl(index_root)
+
+            successor = stage_and_publish(
+                index_root, write_jsonl_from_existing(current_jsonl), command="test"
+            )
+
+            self.assertEqual(read_current_pointer(index_root)["current_generation"], successor.generation_id)
 
 
 class StagingWriterTests(unittest.TestCase):

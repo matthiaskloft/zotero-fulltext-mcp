@@ -30,6 +30,7 @@ from ._ollama_client import OllamaError, generate, probe
 from .artifacts import (
     ArtifactError,
     current_generation_jsonl,
+    recover_pending_publication,
     resolve_reader_db_path,
     stage_and_publish,
     write_jsonl_upserting_record,
@@ -937,6 +938,9 @@ def _commit(
     staged_path = target_path.with_name(f".{target_path.name}.image-ocr-{os.getpid()}")
     with pipeline_write_lock(lock_root, command="ocr-images"):
         # Re-resolve under the lock: another writer may have published a generation while OCR ran.
+        # Recover first, or the successor built from this JSONL drops the records of an
+        # interrupted publication.
+        recover_pending_publication(index_root)
         jsonl_path = current_generation_jsonl(index_root)
         if jsonl_path is None or attachment_key not in load_indexed_keys(jsonl_path):
             raise StaleMarkdownError(

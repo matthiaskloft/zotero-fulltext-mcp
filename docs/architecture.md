@@ -39,8 +39,10 @@ as primary library records.
    publishes a successor generation from the current one plus a smaller manifest's new rows,
    skipping attachment keys already indexed; `convert-new` runs dry-run, conversion, and this
    update step together for new items. A publish journal makes an interrupted publication
-   recoverable by the next writer run; readers never observe a partially updated index because
-   they resolve the pointer per request and open exactly one complete generation.
+   recoverable by the next writer run, which recovers before it reads the current generation
+   (`stage_and_publish` refuses to publish a successor read before its own recovery); readers
+   never observe a partially updated index because they resolve the pointer per request and
+   open exactly one complete generation.
 4. LLM tools use Zotero MCP for live Zotero metadata and the full-text sidecar
    for bounded text retrieval.
 5. Better BibTeX supplies authoritative BibTeX/BibLaTeX entries by

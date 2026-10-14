@@ -260,6 +260,19 @@ class ConvertIndexServeTests(unittest.TestCase):
             self.assertEqual(_keys(search), [FIRST.attachment_key])
 
 
+def _crash_convert_new_before_pointer_swap(test: unittest.TestCase, library: Library) -> None:
+    real_write = artifacts._atomic_write_json
+
+    def crash_on_pointer_swap(path: Path, payload: dict) -> None:
+        if path.name == "current.json":
+            raise OSError("simulated crash before the pointer swap")
+        real_write(path, payload)
+
+    with patch.object(artifacts, "_atomic_write_json", crash_on_pointer_swap):
+        with test.assertRaisesRegex(OSError, "simulated crash"):
+            library.convert_new()
+
+
 @unittest.skipUnless(HAS_MCP, "requires the optional MCP extra")
 class InterruptedPublicationTests(unittest.TestCase):
     def test_a_crash_before_the_pointer_swap_keeps_serving_and_the_next_run_recovers(self):
@@ -270,16 +283,7 @@ class InterruptedPublicationTests(unittest.TestCase):
             first_generation = library.current_generation()
             library.add(SECOND)
 
-            real_write = artifacts._atomic_write_json
-
-            def crash_on_pointer_swap(path: Path, payload: dict) -> None:
-                if path.name == "current.json":
-                    raise OSError("simulated crash before the pointer swap")
-                real_write(path, payload)
-
-            with patch.object(artifacts, "_atomic_write_json", crash_on_pointer_swap):
-                with self.assertRaisesRegex(OSError, "simulated crash"):
-                    library.convert_new()
+            _crash_convert_new_before_pointer_swap(self, library)
 
             # The staged generation and the journal are left behind, but readers still see the
             # previous generation.
@@ -304,6 +308,41 @@ class InterruptedPublicationTests(unittest.TestCase):
             _, (old, new) = _call_server(server_command, [_search("zebrafinch"), _search("quokka")])
             self.assertEqual(_keys(old), [FIRST.attachment_key])
             self.assertEqual(_keys(new), [SECOND.attachment_key])
+
+
+class IndexWritersAfterAnInterruptedPublicationTests(unittest.TestCase):
+    def test_the_next_index_writer_keeps_the_interrupted_publications_records(self):
+        # Each of these reads the current generation to build its successor. Reading it before
+        # recovery published the interrupted generation would drop SECOND from the index.
+        commands = {
+            "update-index": lambda manifest: ("update-index", "--manifest", str(manifest)),
+            "rebuild-index": lambda manifest: ("rebuild-index",),
+            "rebuild-index --keep-current": lambda manifest: (
+                "rebuild-index", "--manifest", str(manifest), "--keep-current"
+            ),
+        }
+        for name, arguments in commands.items():
+            with self.subTest(command=name), tempfile.TemporaryDirectory() as tmp:
+                library = Library(Path(tmp))
+                library.add(FIRST)
+                library.convert_new()
+                (first_run,) = (library.output_root / "runs").glob("*_convert-verified*")
+                library.add(SECOND)
+                _crash_convert_new_before_pointer_swap(self, library)
+                interrupted_generation = json.loads(
+                    (library.index_root / artifacts.JOURNAL_FILENAME).read_text(encoding="utf-8")
+                )["generation_id"]
+
+                code, output = library.cli(*arguments(first_run / "manifest.csv"))
+
+                self.assertEqual(code, 0, output)
+                self.assertIn("Recovered: completed interrupted publication", output)
+                pointer = artifacts.read_current_pointer(library.index_root)
+                self.assertEqual(pointer["previous_generation"], interrupted_generation)
+                self.assertEqual(
+                    load_indexed_keys(artifacts.current_generation_jsonl(library.index_root)),
+                    {FIRST.attachment_key, SECOND.attachment_key},
+                )
 
 
 class AuditAndStatusTests(unittest.TestCase):
