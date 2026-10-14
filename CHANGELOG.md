@@ -10,7 +10,8 @@ All notable changes to this project are documented here. Format loosely follows
 - After a publication was interrupted before the `current.json` pointer swap, the next
   `convert-new` converted that run's items a second time, because it chose new items before
   recovering the interrupted publication. It now recovers first, so those items count as indexed
-  and are not converted again.
+  and are not converted again. This also stops `convert-new` from building on the previous
+  generation and dropping the records of an interrupted `update-index` or reconversion.
   ([#94](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/94))
 
 ## [0.13.0] - 2026-10-14
