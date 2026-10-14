@@ -36,7 +36,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TypedDict
-from urllib.parse import quote
+from urllib.parse import quote, unquote
 
 from .artifacts import (
     GENERATION_JSONL_FILENAME,
@@ -130,6 +130,10 @@ class LibraryAuditError(RuntimeError):
     """Raised when an audit cannot be performed at all (bad snapshot, unreadable index)."""
 
 
+class ExtractedImageNotFoundError(LookupError):
+    """Raised when an image link names no readable image beside an attachment's converted text."""
+
+
 # --------------------------------------------------------------------------------------
 # Canonical path derivation (report-only)
 # --------------------------------------------------------------------------------------
@@ -207,6 +211,77 @@ def relative_image_links(markdown: str, markdown_path: Path) -> str:
         return f"![{match.group(1)}]({prefix}/{quote(name)})"
 
     return _IMAGE_LINK_RE.sub(rebase, markdown)
+
+
+# Image formats an MCP client can display, keyed by suffix, with the signature that proves the
+# bytes are what the suffix claims.
+_IMAGE_FORMATS = {
+    ".png": ("png", (b"\x89PNG\r\n\x1a\n",)),
+    ".jpg": ("jpeg", (b"\xff\xd8\xff",)),
+    ".jpeg": ("jpeg", (b"\xff\xd8\xff",)),
+    ".gif": ("gif", (b"GIF87a", b"GIF89a")),
+    ".webp": ("webp", (b"RIFF",)),
+}
+
+
+def image_link_targets(markdown: str) -> list[str]:
+    """Return the local image link targets in `markdown`, in order of first appearance.
+
+    These are the links `relative_image_links` writes (`images/<name>`), so they carry no local
+    path; remote links are left out because there is no extracted file behind them.
+    """
+    targets: list[str] = []
+    for match in _IMAGE_LINK_RE.finditer(markdown):
+        target = match.group(2).strip()
+        if target and "://" not in target and target not in targets:
+            targets.append(target)
+    return targets
+
+
+def extracted_image_name(link: str) -> str:
+    """Reduce an image link to the file name it names in the images directory, or raise ValueError.
+
+    Only the file name is kept, as `relative_image_links` does when it writes the links, so a
+    link can only name a file in the attachment's own images directory whatever directory part it
+    carries; a name that is still a separator or dot segment once decoded is refused.
+    """
+    target = (link or "").strip()
+    if target.startswith("<") and target.endswith(">"):
+        target = target[1:-1].strip()
+    if not target or "://" in target or "\x00" in target:
+        raise ValueError("Not a local image link.")
+    name = unquote(target.replace("\\", "/").rsplit("/", 1)[-1])
+    if not name or name in {".", ".."} or any(char in name for char in "/\\\x00"):
+        raise ValueError("Not a local image link.")
+    if Path(name).suffix.lower() not in _IMAGE_FORMATS:
+        raise ValueError("Not a supported image format.")
+    return name
+
+
+def read_extracted_image(markdown_path: Path, link: str, *, max_bytes: int) -> tuple[bytes, str]:
+    """Read the image an `images/...` link in `markdown_path`'s converted text points at.
+
+    Returns the bytes and their format (`png`, `jpeg`, ...). The file must resolve to a direct
+    child of `images_dir_for(markdown_path)` -- a symlink pointing elsewhere is refused -- and its
+    leading bytes must match its suffix, so only extracted images are ever read.
+    """
+    name = extracted_image_name(link)
+    images_dir = images_dir_for(markdown_path)
+    try:
+        resolved = (images_dir / name).resolve(strict=True)
+        root = images_dir.resolve(strict=True)
+    except (OSError, RuntimeError):
+        raise ExtractedImageNotFoundError(name) from None
+    if resolved.parent != root or not resolved.is_file():
+        raise ExtractedImageNotFoundError(name)
+    image_format, signatures = _IMAGE_FORMATS[Path(name).suffix.lower()]
+    with resolved.open("rb") as handle:
+        data = handle.read(max_bytes + 1)
+    if len(data) > max_bytes:
+        raise ValueError("Image exceeds the size limit.")
+    if not data.startswith(signatures):
+        raise ExtractedImageNotFoundError(name)
+    return data, image_format
 
 
 def validate_attachment_key(attachment_key: str) -> str:

@@ -729,6 +729,27 @@ def get_fulltext(
     )
 
 
+def get_markdown_path(db_path: Path, *, attachment_key: str) -> str:
+    """Return the indexed converted-Markdown path for one attachment, for server-side use only.
+
+    The path is local and never belongs in a public response; callers resolve sidecar files (the
+    extracted images) against it and return their content instead.
+    """
+    if not attachment_key:
+        raise ValueError("attachment_key is required")
+    con = connect_readonly(db_path)
+    try:
+        row = con.execute(
+            "SELECT markdown_path FROM metadata WHERE zotero_attachment_key = ?",
+            (attachment_key,),
+        ).fetchone()
+    finally:
+        con.close()
+    if row is None:
+        raise KeyError(f"No record found for attachment key {attachment_key}")
+    return str(row[0] or "")
+
+
 def _fetch_covering_chunks(con: sqlite3.Connection, record_id: int, max_chars: int) -> list[sqlite3.Row]:
     """Fetch just enough leading chunks (in order) to cover max_chars characters of text.
 

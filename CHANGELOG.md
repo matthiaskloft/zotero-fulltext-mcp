@@ -5,6 +5,14 @@ All notable changes to this project are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Added
+
+- `get_fulltext_chunk` passages now list their `images/...` links in `image_links`, and the new
+  read-only `get_passage_image` tool returns a linked image (often an equation that converted as
+  an image) as MCP image content without exposing local paths. `guide('citing')` tells agents to
+  view these images before calling an equation missing or requesting a math reconversion.
+  ([#141](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/141))
+
 ## [0.12.2] - 2026-10-13
 
 ### Changed

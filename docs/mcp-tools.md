@@ -42,7 +42,19 @@ The safe default server exposes:
   whether that text was re-divided under it; passing both is valid, and the chunk hash then decides
   while the document hash is not compared. Without `chunk_index`, `content_sha256` verifies the
   document the bounded leading preview came from. Exact chunks report previous/next navigation and
-  whether a `max_chars` limit truncated the stored chunk.
+  whether a `max_chars` limit truncated the stored chunk. `image_links` lists the passage's local
+  image links (`images/...`, relative to the converted Markdown, in order of first appearance);
+  remote links are left out.
+- `get_passage_image(attachment_key, image_link)` — returns one image a passage links to as MCP
+  image content, with structured metadata (`attachment_key`, `image_link`, `mime_type`,
+  `byte_count`, `content_trust: "untrusted_source"`). Equations, figures and tables that the
+  extractor rendered as images exist only in these files, so an agent should view them before
+  concluding that content is missing from a passage or asking for a math reconversion. The
+  response never contains a local path: only the link's file name is resolved, inside that
+  attachment's own extracted-images directory (a symlink leading out of it is refused), and the
+  file's leading bytes must match its PNG/JPEG/GIF/WebP suffix. Errors: `invalid_image_link`
+  (not a local image file name), `image_not_found`, `image_too_large` (over the response
+  limit), `attachment_not_found`.
 - `get_item_context(parent_key | attachment_key)` — path-free bibliographic, extraction, and
   identity context for the supplied key: item type, abstract, venue, volume/issue/pages, tags,
   creator roles and an `extraction_quality` label (`good`, `degraded`, `unusable`) once the index

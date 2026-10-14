@@ -196,7 +196,8 @@ Try asking your assistant:
 - “Export the BibTeX entries for the papers we used.”
 
 Read the retrieved passages before relying on an answer. PDF extraction can lose equations
-or misread scanned pages. Search covers the **converted index**, so a missing hit does not
+or misread scanned pages; equations that converted as images stay viewable through
+`get_passage_image`. Search covers the **converted index**, so a missing hit does not
 prove a paper is absent from Zotero. Ask the assistant to check `library_status` when coverage
 or freshness matters. The [MCP tool reference](docs/mcp-tools.md) explains retrieval,
 source locators, citation handling, and guidance for agents.
