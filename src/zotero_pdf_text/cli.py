@@ -1229,6 +1229,9 @@ def main(argv: list[str] | None = None) -> int:
         merge_stats = None
         try:
             with pipeline_write_lock(output_root, command="rebuild-index"):
+                # Recover before reading the current generation (--keep-current and the default
+                # source both do), or the successor drops an interrupted publication's records.
+                _report_recovery(recover_pending_publication(index_root))
                 current_for_keep = current_generation_jsonl(index_root) if args.keep_current else None
                 if current_for_keep is not None:
                     writer, kept = write_jsonl_from_manifest_keeping_current(args.manifest, current_for_keep)
@@ -1256,7 +1259,7 @@ def main(argv: list[str] | None = None) -> int:
         except PipelineLockedError as exc:
             print(str(exc), file=sys.stderr)
             return 2
-        except (ArtifactError, FileNotFoundError, ValueError) + REFRESH_ERRORS as exc:
+        except (ArtifactError, OSError, ValueError) + REFRESH_ERRORS as exc:
             print(str(exc), file=sys.stderr)
             return 2
         result = info.summary.to_dict()
@@ -1275,6 +1278,7 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         try:
             with pipeline_write_lock(output_root, command="update-index"):
+                _report_recovery(recover_pending_publication(index_root))
                 current_jsonl = current_generation_jsonl(index_root)
                 if current_jsonl is None:
                     print(
@@ -1865,9 +1869,7 @@ def main(argv: list[str] | None = None) -> int:
                 # Finish or roll back an interrupted publication before deciding what is new.
                 # Otherwise the items that publication already converted read as missing from
                 # the old generation and are converted a second time.
-                recovered = recover_pending_publication(index_root)
-                if recovered is not None:
-                    print(f"Recovered: {recovered}")
+                _report_recovery(recover_pending_publication(index_root))
                 current_jsonl = current_generation_jsonl(index_root)
                 legacy_jsonl = index_root / "zotero_text_index.jsonl"
                 if current_jsonl is None and legacy_jsonl.is_file():
@@ -2917,6 +2919,12 @@ def _print_setup_check_results(results: list[SetupCheckResult]) -> None:
     for result in results:
         status = "OK" if result.ok else ("FAIL" if result.required else "WARN")
         print(f"[{status}] {result.name}: {result.detail}")
+
+
+def _report_recovery(recovered: str | None) -> None:
+    # stderr, so commands whose stdout is a JSON summary stay parseable.
+    if recovered is not None:
+        print(f"Recovered: {recovered}", file=sys.stderr)
 
 
 def _filter_new_mapping_rows(mapping_report: Path, indexed_keys: set[str]) -> list[dict[str, str]]:

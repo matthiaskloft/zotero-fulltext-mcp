@@ -206,7 +206,9 @@ without the flag, `update-index` remains add-only and reports zero replacements.
 If either command (or the machine) dies mid-publication, the next write command recovers
 deterministically from the publish journal: it either completes the interrupted publication of
 the already-validated generation or rolls it back, and readers meanwhile keep resolving the
-previous complete generation. Nothing needs manual recovery.
+previous complete generation. It does so before reading the current index, so its own result
+builds on the recovered generation; `rebuild-index`, `update-index` and `convert-new` print
+`Recovered: ...` to stderr when they acted. Nothing needs manual recovery.
 
 ### One-time migration from the legacy layout
 

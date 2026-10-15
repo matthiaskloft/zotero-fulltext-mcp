@@ -75,6 +75,10 @@ class ManagedIndexMissingError(ArtifactError):
     """No current.json exists next to the requested database path: no index is published here."""
 
 
+class StalePublicationBaseError(ArtifactError):
+    """Recovery published an interrupted generation after the caller had read the previous one."""
+
+
 @dataclass(frozen=True)
 class IndexPaths:
     """Resolved locations of the managed layout beneath one index root."""
@@ -432,6 +436,14 @@ def _post_commit_cleanup(paths: IndexPaths, keep: set[object]) -> None:
         _sweep_unreferenced_generations(paths, keep=keep)
 
 
+def _current_generation_id(index_root: Path) -> object:
+    try:
+        pointer = read_current_pointer(index_root)
+    except CurrentPointerError:
+        return None
+    return None if pointer is None else pointer.get("current_generation")
+
+
 def recover_pending_publication(index_root: Path) -> str | None:
     """Deterministically finish or roll back an interrupted publication; writers only.
 
@@ -502,9 +514,21 @@ def stage_and_publish(
     This is the single write path every publishing command goes through. Chunking parameters
     default to the current generation's recorded values so successor generations preserve the
     chunking the library was deliberately built with. Callers must hold the pipeline write lock
-    for the tree containing ``index_root``.
+    for the tree containing ``index_root``, and must call recover_pending_publication before
+    reading the current generation to build ``write_jsonl``; if recovery here has to publish an
+    interrupted generation, this raises StalePublicationBaseError instead of publishing a
+    successor that drops its records.
     """
-    recover_pending_publication(index_root)
+    generation_before = _current_generation_id(index_root)
+    recovered = recover_pending_publication(index_root)
+    if recovered is not None and _current_generation_id(index_root) != generation_before:
+        # The caller built ``write_jsonl`` from the generation that was current before this
+        # recovery, so publishing it would silently drop the records the interrupted publication
+        # added. Writers must call recover_pending_publication before reading the index.
+        raise StalePublicationBaseError(
+            f"Before publishing, {recovered}, but '{command}' had already read the previous "
+            "generation. Nothing from this run was published; re-run the command."
+        )
     if chunk_chars is None or overlap_chars is None:
         default_chunk, default_overlap = chunking_params_from_current(index_root)
         chunk_chars = default_chunk if chunk_chars is None else chunk_chars
