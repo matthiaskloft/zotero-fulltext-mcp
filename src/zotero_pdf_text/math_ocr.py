@@ -15,6 +15,7 @@ from ._atomic import replace_with_retry
 from .artifacts import (
     ArtifactError,
     current_generation_jsonl,
+    recover_pending_publication,
     resolve_reader_db_path,
     stage_and_publish,
     write_jsonl_upserting_record,
@@ -196,6 +197,9 @@ def reconvert_with_marker(
             # Re-resolve under the lock: another writer may have published a new generation
             # while marker-pdf was extracting.
             try:
+                # Recover first, or the successor built from this JSONL drops the records of an
+                # interrupted publication.
+                recover_pending_publication(index_root)
                 jsonl_path = current_generation_jsonl(index_root)
             except ArtifactError as exc:
                 return _error_result(

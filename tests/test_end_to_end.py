@@ -260,6 +260,19 @@ class ConvertIndexServeTests(unittest.TestCase):
             self.assertEqual(_keys(search), [FIRST.attachment_key])
 
 
+def _crash_convert_new_before_pointer_swap(test: unittest.TestCase, library: Library) -> None:
+    real_write = artifacts._atomic_write_json
+
+    def crash_on_pointer_swap(path: Path, payload: dict) -> None:
+        if path.name == "current.json":
+            raise OSError("simulated crash before the pointer swap")
+        real_write(path, payload)
+
+    with patch.object(artifacts, "_atomic_write_json", crash_on_pointer_swap):
+        with test.assertRaisesRegex(OSError, "simulated crash"):
+            library.convert_new()
+
+
 @unittest.skipUnless(HAS_MCP, "requires the optional MCP extra")
 class InterruptedPublicationTests(unittest.TestCase):
     def test_a_crash_before_the_pointer_swap_keeps_serving_and_the_next_run_recovers(self):
@@ -270,16 +283,7 @@ class InterruptedPublicationTests(unittest.TestCase):
             first_generation = library.current_generation()
             library.add(SECOND)
 
-            real_write = artifacts._atomic_write_json
-
-            def crash_on_pointer_swap(path: Path, payload: dict) -> None:
-                if path.name == "current.json":
-                    raise OSError("simulated crash before the pointer swap")
-                real_write(path, payload)
-
-            with patch.object(artifacts, "_atomic_write_json", crash_on_pointer_swap):
-                with self.assertRaisesRegex(OSError, "simulated crash"):
-                    library.convert_new()
+            _crash_convert_new_before_pointer_swap(self, library)
 
             # The staged generation and the journal are left behind, but readers still see the
             # previous generation.
@@ -291,19 +295,54 @@ class InterruptedPublicationTests(unittest.TestCase):
             self.assertEqual(_keys(old), [FIRST.attachment_key])
             self.assertEqual(_keys(new), [])
 
+            conversion_runs = set((library.output_root / "runs").glob("*_convert-verified*"))
             library.convert_new()
 
-            # Recovery published the interrupted generation before this run published its own, so
-            # it is now the previous generation; without recovery that would be first_generation.
-            # convert-new still converts the second paper again, because it decides what is new
-            # from the generation that was current before recovery ran.
+            # Recovery runs before convert-new decides what is new, so the interrupted
+            # generation becomes current and nothing is converted or published a second time.
             self.assertFalse((library.index_root / artifacts.JOURNAL_FILENAME).exists())
+            self.assertEqual(set((library.output_root / "runs").glob("*_convert-verified*")), conversion_runs)
             pointer = artifacts.read_current_pointer(library.index_root)
-            self.assertEqual(pointer["previous_generation"], interrupted_generation)
-            self.assertNotIn(pointer["current_generation"], {first_generation, interrupted_generation})
+            self.assertEqual(pointer["current_generation"], interrupted_generation)
+            self.assertEqual(pointer["previous_generation"], first_generation)
             _, (old, new) = _call_server(server_command, [_search("zebrafinch"), _search("quokka")])
             self.assertEqual(_keys(old), [FIRST.attachment_key])
             self.assertEqual(_keys(new), [SECOND.attachment_key])
+
+
+class IndexWritersAfterAnInterruptedPublicationTests(unittest.TestCase):
+    def test_the_next_index_writer_keeps_the_interrupted_publications_records(self):
+        # Each of these reads the current generation to build its successor. Reading it before
+        # recovery published the interrupted generation would drop SECOND from the index.
+        commands = {
+            "update-index": lambda manifest: ("update-index", "--manifest", str(manifest)),
+            "rebuild-index": lambda manifest: ("rebuild-index",),
+            "rebuild-index --keep-current": lambda manifest: (
+                "rebuild-index", "--manifest", str(manifest), "--keep-current"
+            ),
+        }
+        for name, arguments in commands.items():
+            with self.subTest(command=name), tempfile.TemporaryDirectory() as tmp:
+                library = Library(Path(tmp))
+                library.add(FIRST)
+                library.convert_new()
+                (first_run,) = (library.output_root / "runs").glob("*_convert-verified*")
+                library.add(SECOND)
+                _crash_convert_new_before_pointer_swap(self, library)
+                interrupted_generation = json.loads(
+                    (library.index_root / artifacts.JOURNAL_FILENAME).read_text(encoding="utf-8")
+                )["generation_id"]
+
+                code, output = library.cli(*arguments(first_run / "manifest.csv"))
+
+                self.assertEqual(code, 0, output)
+                self.assertIn("Recovered: completed interrupted publication", output)
+                pointer = artifacts.read_current_pointer(library.index_root)
+                self.assertEqual(pointer["previous_generation"], interrupted_generation)
+                self.assertEqual(
+                    load_indexed_keys(artifacts.current_generation_jsonl(library.index_root)),
+                    {FIRST.attachment_key, SECOND.attachment_key},
+                )
 
 
 class AuditAndStatusTests(unittest.TestCase):
@@ -364,7 +403,7 @@ class WholeLibraryRebuildTests(unittest.TestCase):
             library.add(FIRST)
             library.add(SECOND)
             library.convert_new()
-            (run,) = (library.output_root / "runs").glob("*_convert-verified")
+            (run,) = (library.output_root / "runs").glob("*_convert-verified*")
             # A whole-library reconversion in which SECOND failed: its manifest converts FIRST only.
             partial = Path(tmp) / "manifest.csv"
             with (run / "manifest.csv").open(encoding="utf-8-sig", newline="") as handle:

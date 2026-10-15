@@ -5,6 +5,22 @@ All notable changes to this project are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Fixed
+
+- After a publication was interrupted before the `current.json` pointer swap, the next
+  `convert-new` converted that run's items a second time, because it chose new items before
+  recovering the interrupted publication. It now recovers first, so those items count as indexed
+  and are not converted again. This also stops `convert-new` from building on the previous
+  generation and dropping the records of an interrupted `update-index` or reconversion.
+  ([#94](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/94))
+- The same crash could silently drop that run's records from the index when the next command
+  was `update-index`, `rebuild-index` (with or without `--keep-current`), `retry-timeout`,
+  `reconvert-math` or `ocr-images`: each read the previous generation, then completed the
+  interrupted publication, then published a successor built from what it had read. They now
+  recover before reading, and `stage_and_publish` refuses to publish a successor that was read
+  before its own recovery step, asking for a re-run instead.
+  ([#143](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/143))
+
 ## [0.13.0] - 2026-10-14
 
 ### Added
