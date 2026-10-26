@@ -1109,6 +1109,7 @@ def create_server(
             it never closes Zotero and writes nothing to Zotero, converted text or the index.
             Waits up to wait_seconds for Zotero's local connector to answer; connector_ok false
             with running true usually means Zotero is still starting, so call again.
+            Zotero does not need to be closed for convert-new, dry-run or library_status.
             """
             return _public_call(lambda: _start_zotero(wait_seconds, zotero_exe=zotero_exe))
 
