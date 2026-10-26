@@ -5,6 +5,8 @@ All notable changes to this project are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-10-26
+
 ### Added
 
 - Opt-in `start_zotero` MCP tool (`--enable-zotero-launch`, plus `--zotero-exe PATH` for a
@@ -1127,7 +1129,8 @@ author's own machine.
 
 Initial import of the Zotero full-text conversion pipeline, CLI, and MCP server. Not tagged.
 
-[Unreleased]: https://github.com/matthiaskloft/zotero-fulltext-mcp/compare/v0.13.1...HEAD
+[Unreleased]: https://github.com/matthiaskloft/zotero-fulltext-mcp/compare/v0.14.0...HEAD
+[0.14.0]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.14.0
 [0.13.1]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.13.1
 [0.13.0]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.13.0
 [0.12.2]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.12.2
