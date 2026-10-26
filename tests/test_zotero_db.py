@@ -395,6 +395,13 @@ class UncheckpointedWalTests(unittest.TestCase):
                 finally:
                     con.close()
                 self.assertEqual(rows, [("attachments:new.pdf",)])
+                # A read-only reader of the copy must not need (and so create) sidecars.
+                ro = sqlite3.connect(read_only_uri(snapshot, immutable=False), uri=True)
+                try:
+                    self.assertEqual(ro.execute("PRAGMA journal_mode").fetchone()[0], "delete")
+                finally:
+                    ro.close()
+                self.assertEqual({p.name for p in run_dir.iterdir()}, {"zotero.sqlite"})
                 self.assertEqual({p.name for p in Path(tmp).iterdir()}, before)
             finally:
                 writer.close()

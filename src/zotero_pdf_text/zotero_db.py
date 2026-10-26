@@ -287,12 +287,18 @@ def copy_committed_database(source: Path, destination: Path) -> Path:
     that needs no sidecars and nothing is ever opened next to the live database. Raises what
     `snapshot_for_reading` raises when no consistent copy can be taken.
     """
-    destination.unlink(missing_ok=True)
+    # Sidecars too: a stale `-wal` left by an earlier run beside the same path must not be
+    # replayed onto the fresh copy.
+    for suffix in ("", "-wal", "-shm", "-journal"):
+        Path(f"{destination}{suffix}").unlink(missing_ok=True)
     with snapshot_for_reading(source) as snapshot:
         with contextlib.closing(sqlite3.connect(snapshot)) as src, contextlib.closing(
             sqlite3.connect(destination)
         ) as dst:
             src.backup(dst)
+            # The backup copies Zotero's WAL journal mode with page 1. Rollback mode is what
+            # makes the copy one file: a later `mode=ro` reader then creates no `-wal`/`-shm`.
+            dst.execute("PRAGMA journal_mode=DELETE")
     return destination
 
 
