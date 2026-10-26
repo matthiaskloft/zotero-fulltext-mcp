@@ -1133,7 +1133,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "dry-run":
         config = load_config(args.config)
         validate_config(config)
-        run_dir = run_dry_run(config)
+        try:
+            run_dir = run_dry_run(config)
+        except (SnapshotUnsafeError, SnapshotUnstableError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
         print(f"Dry-run complete: {run_dir}")
         return 0
     if args.command == "convert-sample":
@@ -1663,7 +1667,11 @@ def main(argv: list[str] | None = None) -> int:
         if args.write_command == "plan":
             config = load_config(args.config)
             validate_config(config)
-            build_write_plan(args.input, config.zotero_sqlite, args.output)
+            try:
+                build_write_plan(args.input, config.zotero_sqlite, args.output)
+            except (SnapshotUnsafeError, SnapshotUnstableError) as exc:
+                print(str(exc), file=sys.stderr)
+                return 2
             print(json.dumps(write_plan_status(args.output), ensure_ascii=False, indent=2))
             print(f"Write plan created: {args.output}")
             print(
@@ -1916,7 +1924,7 @@ def main(argv: list[str] | None = None) -> int:
                 else:
                     writer, _new_count = write_jsonl_appending_manifest(current_jsonl, new_manifest)
                 info = stage_and_publish(index_root, writer, command="convert-new")
-        except PipelineLockedError as exc:
+        except (PipelineLockedError, SnapshotUnsafeError, SnapshotUnstableError) as exc:
             print(str(exc), file=sys.stderr)
             return 2
         except ArtifactError as exc:
@@ -1989,7 +1997,7 @@ def main(argv: list[str] | None = None) -> int:
                     output_dir=args.output_dir,
                     limit=args.limit,
                 )
-        except PipelineLockedError as exc:
+        except (PipelineLockedError, SnapshotUnsafeError, SnapshotUnstableError) as exc:
             print(str(exc), file=sys.stderr)
             return 2
         print(f"Orphan-parent discovery complete: {run_dir}")

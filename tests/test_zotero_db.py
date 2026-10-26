@@ -13,6 +13,7 @@ from zotero_pdf_text.zotero_db import (
     match_doi_rows,
     load_items_without_pdf_attachment,
     read_only_uri,
+    snapshot_database,
 )
 
 
@@ -353,6 +354,79 @@ class WalVisibilityTests(unittest.TestCase):
                 self.assertEqual([a["key"] for a in result["attachments"]], ["PDFKEY01"])
                 created = {p.name for p in Path(tmp).rglob("*")} - before
                 self.assertEqual(created, set(), f"reading created files: {created}")
+            finally:
+                writer.close()
+
+
+class UncheckpointedWalTests(unittest.TestCase):
+    """The mapper and orphan discovery must see attachments Zotero has not checkpointed yet (#150).
+
+    Copying only the main file dropped them, so convert-new reported fresh PDFs as orphans or
+    matched them to another item by metadata.
+    """
+
+    def _wal_writer(self, db: Path, schema: str) -> sqlite3.Connection:
+        writer = sqlite3.connect(db)
+        writer.execute("PRAGMA journal_mode=WAL")
+        writer.executescript(schema)
+        writer.commit()
+        writer.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        writer.execute("PRAGMA wal_autocheckpoint=0")
+        return writer
+
+    def test_snapshot_database_includes_rows_still_in_the_wal(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / "zotero.sqlite"
+            run_dir = Path(tmp) / "run"
+            run_dir.mkdir()
+            writer = self._wal_writer(db, "CREATE TABLE itemAttachments (itemID INTEGER PRIMARY KEY, path TEXT);")
+            try:
+                writer.execute("INSERT INTO itemAttachments VALUES (1, 'attachments:new.pdf')")
+                writer.commit()
+                self.assertGreater(Path(f"{db}-wal").stat().st_size, 0, "fixture left nothing in the WAL")
+                before = {p.name for p in Path(tmp).iterdir()}
+
+                snapshot = snapshot_database(db, run_dir)
+
+                self.assertEqual({p.name for p in run_dir.iterdir()}, {"zotero.sqlite"})
+                con = sqlite3.connect(snapshot)
+                try:
+                    rows = con.execute("SELECT path FROM itemAttachments").fetchall()
+                finally:
+                    con.close()
+                self.assertEqual(rows, [("attachments:new.pdf",)])
+                # A read-only reader of the copy must not need (and so create) sidecars.
+                ro = sqlite3.connect(read_only_uri(snapshot, immutable=False), uri=True)
+                try:
+                    self.assertEqual(ro.execute("PRAGMA journal_mode").fetchone()[0], "delete")
+                finally:
+                    ro.close()
+                self.assertEqual({p.name for p in run_dir.iterdir()}, {"zotero.sqlite"})
+                self.assertEqual({p.name for p in Path(tmp).iterdir()}, before)
+            finally:
+                writer.close()
+
+    def test_items_without_pdf_attachment_include_items_still_in_the_wal(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db = LoadItemsWithoutPdfAttachmentTests()._make_db(root)
+            linked_attachments = root / "linked"
+            linked_attachments.mkdir()
+            writer = self._wal_writer(db, "")
+            try:
+                writer.executescript(
+                    """
+                    INSERT INTO itemDataValues VALUES (99, 'Added While Zotero Runs');
+                    INSERT INTO items VALUES (99, 'WALITEM01', 1);
+                    INSERT INTO itemData VALUES (99, 1, 99);
+                    """
+                )
+                writer.commit()
+                self.assertGreater(Path(f"{db}-wal").stat().st_size, 0, "fixture left nothing in the WAL")
+
+                records = load_items_without_pdf_attachment(db, linked_attachments)
+
+                self.assertIn("WALITEM01", {record.parent_key for record in records})
             finally:
                 writer.close()
 
