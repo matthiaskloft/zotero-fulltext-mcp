@@ -106,6 +106,7 @@ if TYPE_CHECKING:
     MultiplierInput = object
     ReasonInput = object
     GuideTopicInput = object
+    WaitSecondsInput = object
 
 
 MAX_SEARCH_RESULTS = 20
