@@ -5,6 +5,19 @@ All notable changes to this project are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Fixed
+
+- `convert-new` and `dry-run` missed PDF attachments that Zotero had committed but not yet
+  checkpointed from its `-wal`: the mapper copied only the main `zotero.sqlite`, so a PDF attached
+  while Zotero was running was reported as `orphan_pdf`, or matched to an unrelated item by the
+  filename-metadata fallback. The mapper snapshot now goes through the same hash-verified copy of
+  the database and its `-wal`/`-journal` as the pre-write checks, consolidated into a single file
+  in the run directory. `find-orphan-parents` (candidate-parent discovery) and `zotero-write plan`
+  read the same way, so they too see items added since the last checkpoint. When Zotero keeps
+  writing while the copy is taken, these commands now stop with a message instead of reading an
+  inconsistent copy.
+  ([#150](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/150))
+
 ## [0.13.1] - 2026-10-15
 
 ### Fixed

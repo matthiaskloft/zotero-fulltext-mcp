@@ -253,6 +253,28 @@ class VerifyUnverifiedCliTests(unittest.TestCase):
             self.assertEqual(captured["index_jsonl"], root / "custom_index.jsonl")
 
 
+class SnapshotErrorCliTests(unittest.TestCase):
+    """A Zotero database that will not hold still is a reported error, not a traceback (#150)."""
+
+    def test_dry_run_reports_an_unstable_snapshot(self):
+        from zotero_pdf_text.config import ProjectConfig
+        from zotero_pdf_text.zotero_db import SnapshotUnstableError
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            errors = io.StringIO()
+            with patch("zotero_pdf_text.cli.load_config") as mock_load_config, patch(
+                "zotero_pdf_text.cli.validate_config"
+            ), patch(
+                "zotero_pdf_text.cli.run_dry_run", side_effect=SnapshotUnstableError("kept changing")
+            ), redirect_stderr(errors):
+                mock_load_config.return_value = ProjectConfig(root, root, root, root / "output")
+                exit_code = main(["dry-run"])
+
+            self.assertEqual(exit_code, 2)
+            self.assertIn("kept changing", errors.getvalue())
+
+
 class FindOrphanParentsCliTests(unittest.TestCase):
     def test_parser_defaults(self):
         args = build_parser().parse_args(["find-orphan-parents", "--mapping-report", "report.csv"])
