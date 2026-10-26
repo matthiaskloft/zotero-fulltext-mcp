@@ -185,13 +185,19 @@ def load_items_without_pdf_attachment(
     (moved/renamed/deleted outside Zotero's own management) -- `had_stale_attachment` distinguishes
     the two cases on the returned record. These are the only items an orphan PDF could plausibly
     belong to, so orphan-candidate discovery scores against this set rather than the whole library.
-    Opens the database in immutable read-only mode so Zotero's WAL write locks are bypassed; items
-    committed after the last WAL checkpoint may not appear. (`check_pdf_attachment` and
-    `find_item_by_doi` no longer do this: they read a verified copy, because a stale "none" there
-    can cause a duplicate write. This read-only discovery has not been moved yet.)
+    Reads a verified throwaway copy (`snapshot_for_reading`), so items still in the WAL -- added
+    while Zotero is running -- are included and nothing is created next to the live database.
+    Raises `SnapshotUnstableError` or `SnapshotUnsafeError` when no consistent copy can be taken.
     """
-    uri = read_only_uri(zotero_sqlite, immutable=True)
-    con = sqlite3.connect(uri, uri=True)
+    with snapshot_for_reading(zotero_sqlite) as snapshot:
+        with contextlib.closing(sqlite3.connect(snapshot)) as con:
+            return _load_items_without_pdf_attachment(con, linked_attachments)
+
+
+def _load_items_without_pdf_attachment(
+    con: sqlite3.Connection,
+    linked_attachments: Path,
+) -> list[ParentCandidateRecord]:
     con.row_factory = sqlite3.Row
     cur = con.cursor()
     all_items = cur.execute(
@@ -236,7 +242,6 @@ def load_items_without_pdf_attachment(
     item_ids = sorted({int(row["item_id"]) for row in qualifying_rows})
     fields = _load_fields(cur, item_ids)
     creators = _load_creators(cur, item_ids)
-    con.close()
 
     records: list[ParentCandidateRecord] = []
     for row in qualifying_rows:
@@ -267,8 +272,27 @@ def load_items_without_pdf_attachment(
 
 
 def snapshot_database(source: Path, run_dir: Path) -> Path:
-    destination = run_dir / "zotero.sqlite"
-    shutil.copy2(source, destination)
+    """Keep a self-contained copy of the database's committed state as `run_dir/zotero.sqlite`."""
+    return copy_committed_database(source, run_dir / "zotero.sqlite")
+
+
+def copy_committed_database(source: Path, destination: Path) -> Path:
+    """Write the committed state of `source`, WAL included, to the single file `destination`.
+
+    Copying only the main file misses every transaction Zotero has committed since its last WAL
+    checkpoint -- attachments added while Zotero is running -- so a mapper reading such a copy
+    reports them as orphans or matches their PDFs to the wrong item by metadata. This reads
+    through `snapshot_for_reading` (verified copy of the main file plus `-wal`/`-journal`) and
+    then uses SQLite's backup API on that private copy, so the result is one consolidated file
+    that needs no sidecars and nothing is ever opened next to the live database. Raises what
+    `snapshot_for_reading` raises when no consistent copy can be taken.
+    """
+    destination.unlink(missing_ok=True)
+    with snapshot_for_reading(source) as snapshot:
+        with contextlib.closing(sqlite3.connect(snapshot)) as src, contextlib.closing(
+            sqlite3.connect(destination)
+        ) as dst:
+            src.backup(dst)
     return destination
 
 

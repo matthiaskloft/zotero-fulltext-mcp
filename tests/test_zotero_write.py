@@ -1,4 +1,5 @@
 import json
+import sqlite3
 import shutil
 import subprocess
 import tempfile
@@ -45,7 +46,7 @@ class ZoteroWriteTests(unittest.TestCase):
             )
             output = root / "write_plan.jsonl"
             db = root / "zotero.sqlite"
-            db.write_bytes(b"snapshot")
+            sqlite3.connect(db).close()
 
             with patch("zotero_pdf_text.zotero_write.load_existing_items", return_value=[]):
                 records = build_write_plan(candidates, db, output)
@@ -75,7 +76,7 @@ class ZoteroWriteTests(unittest.TestCase):
                 ExistingItem("PARENT2", "Ambiguous Paper", "", "2023", ""),
             ]
             db = root / "zotero.sqlite"
-            db.write_bytes(b"snapshot")
+            sqlite3.connect(db).close()
 
             with patch("zotero_pdf_text.zotero_write.load_existing_items", return_value=existing):
                 records = build_write_plan(candidates, db, root / "write_plan.jsonl")
@@ -101,7 +102,7 @@ class ZoteroWriteTests(unittest.TestCase):
                 encoding="utf-8",
             )
             db = root / "zotero.sqlite"
-            db.write_bytes(b"snapshot")
+            sqlite3.connect(db).close()
 
             with patch("zotero_pdf_text.zotero_write.load_existing_items", return_value=[]):
                 records = build_write_plan(candidates, db, root / "write_plan.jsonl")
@@ -127,7 +128,7 @@ class ZoteroWriteTests(unittest.TestCase):
                 encoding="utf-8",
             )
             db = root / "zotero.sqlite"
-            db.write_bytes(b"snapshot")
+            sqlite3.connect(db).close()
 
             with patch("zotero_pdf_text.zotero_write.load_existing_items", return_value=[]):
                 records = build_write_plan(candidates, db, root / "write_plan.jsonl")

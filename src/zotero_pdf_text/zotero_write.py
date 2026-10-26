@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import re
-import shutil
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
@@ -10,6 +9,7 @@ from typing import Any
 from .bibtex import DEFAULT_DEBUG_BRIDGE_ENDPOINT, execute_javascript
 from .identity import normalize_text
 from .ingestion import ImportCandidate, dedupe_candidates, load_candidates, load_existing_items
+from .zotero_db import copy_committed_database
 
 
 WRITE_OPERATIONS = {
@@ -79,7 +79,7 @@ def build_write_plan(candidates_path: Path, zotero_sqlite: Path, output: Path) -
     candidates = load_candidates(candidates_path)
     output.parent.mkdir(parents=True, exist_ok=True)
     db_snapshot = output.with_name(output.stem + "_zotero.sqlite")
-    shutil.copy2(zotero_sqlite, db_snapshot)
+    copy_committed_database(zotero_sqlite, db_snapshot)
     existing = load_existing_items(db_snapshot)
     decisions = dedupe_candidates(candidates, existing)
     records: list[WritePlanRecord] = []
