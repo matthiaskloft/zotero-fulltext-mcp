@@ -768,8 +768,8 @@ Run the MCP server with an explicit database when only offline full-text retriev
 ```
 
 This mode does not require a Zotero config. It exposes only bounded, read-only search, passage
-retrieval, and item context. Zotero process launch remains the explicit `ensure-zotero` CLI
-command.
+retrieval, and item context. Zotero process launch is the explicit `ensure-zotero` CLI command,
+or the opt-in `start_zotero` MCP tool (`--enable-zotero-launch`).
 
 Better BibTeX export is off by default. Enable it only for a local installation:
 

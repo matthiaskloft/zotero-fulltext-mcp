@@ -5,6 +5,7 @@ import importlib.util
 import itertools
 import json
 import re
+import subprocess
 import tempfile
 import time
 import unittest
@@ -39,6 +40,7 @@ from zotero_pdf_text.mcp_contract import (
 )
 from zotero_pdf_text.library import library_status as library_status_data
 from zotero_pdf_text.mcp_server import main
+from zotero_pdf_text.runtime import ensure_zotero_running
 from zotero_pdf_text.orphan_candidates import append_master_candidates as append_master_candidates_orphan
 from zotero_pdf_text.timeout_candidates import TimeoutCandidate, append_master_candidates
 
@@ -1335,35 +1337,100 @@ class StartZoteroToolTests(unittest.TestCase):
             )
             self.assertIn(ZOTERO_LAUNCH_MCP_TOOL_NAME, server.instructions)
 
-    def test_launches_with_the_configured_executable(self):
+    def test_does_not_launch_when_the_connector_already_answers(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            server = self._server(Path(tmp) / "zotero")
+            with patch("zotero_pdf_text.mcp_contract.probe_zotero_connector", return_value=(True, "ok")), patch(
+                "zotero_pdf_text.mcp_contract.ensure_zotero_running"
+            ) as ensure:
+                response = server.tools[ZOTERO_LAUNCH_MCP_TOOL_NAME]()
+
+            ensure.assert_not_called()
+            self.assertEqual(response, {"running": True, "launched": False, "connector_ok": True, "troubleshooting": []})
+
+    def test_launches_and_waits_for_the_connector_not_just_the_process(self):
+        from zotero_pdf_text.mcp_contract import _start_zotero
+
+        with tempfile.TemporaryDirectory() as tmp:
+            exe = Path(tmp) / "zotero"
+            exe.write_bytes(b"")
+            state = {"running": False, "probes_after_launch": 0}
+
+            def fake_run(args, **kwargs):
+                code = 0 if state["running"] else 1
+                return subprocess.CompletedProcess(args, code, stdout="zotero.exe 1" if state["running"] else "", stderr="")
+
+            def fake_popen(args):
+                self.assertEqual(args, [str(exe)])
+                state["running"] = True
+
+            def probe():
+                # The connector answers only on the third look after the process appears, so a
+                # caller that stops at "process running" reports connector_ok false.
+                if not state["running"]:
+                    return False, "refused"
+                state["probes_after_launch"] += 1
+                return state["probes_after_launch"] >= 3, "ok"
+
+            def launch(**kwargs):
+                return ensure_zotero_running(run_process=fake_run, popen=fake_popen, **kwargs)
+
+            with patch("zotero_pdf_text.mcp_contract.is_zotero_running", return_value=False), patch(
+                "zotero_pdf_text.runtime.time.sleep"
+            ):
+                response = _start_zotero(10, zotero_exe=exe, connector_probe=probe, launch=launch)
+
+            self.assertEqual(response, {"running": True, "launched": True, "connector_ok": True, "troubleshooting": []})
+
+    def test_running_without_a_connector_says_to_wait_and_never_names_the_path(self):
+        from zotero_pdf_text.mcp_contract import _start_zotero
         from zotero_pdf_text.runtime import ZoteroRuntimeStatus
 
         with tempfile.TemporaryDirectory() as tmp:
             exe = Path(tmp) / "zotero"
             exe.write_bytes(b"")
-            server = self._server(exe)
-            status = ZoteroRuntimeStatus(str(exe), True, True, True, "ok", [])
-            with patch("zotero_pdf_text.mcp_contract.ensure_zotero_running", return_value=status) as ensure:
-                response = server.tools[ZOTERO_LAUNCH_MCP_TOOL_NAME](5)
-
-            self.assertEqual(
-                response, {"running": True, "launched": True, "connector_ok": True, "troubleshooting": []}
+            leaky = ZoteroRuntimeStatus(str(exe), True, True, False, "refused", [f"Zotero executable was not found: {exe}"])
+            response = _start_zotero(
+                0, zotero_exe=exe, connector_probe=lambda: (False, "refused"), launch=lambda **_: leaky
             )
-            self.assertEqual(ensure.call_args.kwargs, {"zotero_exe": exe, "wait_seconds": 5})
+
+            self.assertTrue(response["running"])
+            self.assertFalse(response["connector_ok"])
+            self.assertIn("longer wait_seconds", response["troubleshooting"][0])
+            assert_no_local_path(self, response, Path(tmp))
+
+    def test_a_launch_that_cannot_start_is_reported_without_its_path(self):
+        from zotero_pdf_text.mcp_contract import _start_zotero
+
+        def refuse(**_):
+            raise PermissionError("not executable")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            exe = Path(tmp) / "zotero"
+            exe.write_bytes(b"")
+            response = _start_zotero(5, zotero_exe=exe, connector_probe=lambda: (False, "refused"), launch=refuse)
+
+            self.assertFalse(response["running"])
+            self.assertIn("--zotero-exe", response["troubleshooting"][0])
             assert_no_local_path(self, response, Path(tmp))
 
     def test_missing_executable_is_reported_without_its_path(self):
         with tempfile.TemporaryDirectory() as tmp:
             server = self._server(Path(tmp) / "missing" / "zotero")
-            with patch("zotero_pdf_text.mcp_contract.is_zotero_running", return_value=False), patch(
-                "zotero_pdf_text.mcp_contract.ensure_zotero_running"
-            ) as ensure:
+            with patch("zotero_pdf_text.mcp_contract.probe_zotero_connector", return_value=(False, "refused")), patch(
+                "zotero_pdf_text.mcp_contract.is_zotero_running", return_value=False
+            ), patch("zotero_pdf_text.mcp_contract.ensure_zotero_running") as ensure:
                 response = server.tools[ZOTERO_LAUNCH_MCP_TOOL_NAME]()
 
             ensure.assert_not_called()
             self.assertFalse(response["running"])
             self.assertIn("--zotero-exe", response["troubleshooting"][0])
             assert_no_local_path(self, response, Path(tmp))
+
+    def test_server_requires_the_launch_flag_for_zotero_exe(self):
+        with self.assertRaises(SystemExit) as raised:
+            main(["--db", "unused.sqlite", "--zotero-exe", "zotero"])
+        self.assertIn("invalid_zotero_exe", str(raised.exception.code))
 
     def test_rejects_out_of_range_wait(self):
         with tempfile.TemporaryDirectory() as tmp:

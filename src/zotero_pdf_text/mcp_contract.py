@@ -36,7 +36,13 @@ from .artifacts import (
 from .bibtex import DEFAULT_BBT_ENDPOINT, DEFAULT_BBT_TRANSLATOR, BibtexExport, export_bibtex_entries
 from .config import ImageOcrSettings, ProjectConfig, validate_config
 from .layout import runs_root
-from .runtime import DEFAULT_ZOTERO_EXE, ensure_zotero_running, is_zotero_running
+from .runtime import (
+    DEFAULT_ZOTERO_EXE,
+    ZoteroRuntimeStatus,
+    ensure_zotero_running,
+    is_zotero_running,
+    probe_zotero_connector,
+)
 from .library import (
     MAPPING_REPORT_JSONL,
     ExtractedImageNotFoundError,
@@ -2321,7 +2327,18 @@ def _reconvert_with_math_ocr(
     }
 
 
-def _start_zotero(wait_seconds: object, *, zotero_exe: Path) -> ZoteroLaunchResponse:
+def _start_zotero(
+    wait_seconds: object,
+    *,
+    zotero_exe: Path,
+    connector_probe: Callable[[], tuple[bool, str]] | None = None,
+    launch: Callable[..., ZoteroRuntimeStatus] | None = None,
+) -> ZoteroLaunchResponse:
+    """Open Zotero if needed and wait for its connector; troubleshooting never names a path.
+
+    The runtime's own troubleshooting lines are not passed through: one names the executable
+    path, and others are Windows-specific or suggest killing processes.
+    """
     if (
         isinstance(wait_seconds, bool)
         or not isinstance(wait_seconds, int)
@@ -2331,23 +2348,40 @@ def _start_zotero(wait_seconds: object, *, zotero_exe: Path) -> ZoteroLaunchResp
             "invalid_wait_seconds",
             f"wait_seconds must be an integer from 0 to {MAX_ZOTERO_LAUNCH_WAIT_SECONDS}.",
         )
-    if not zotero_exe.exists() and not is_zotero_running():
-        # The runtime's own message names the executable path, which this surface never returns.
-        return ZoteroLaunchResponse(
-            running=False,
-            launched=False,
-            connector_ok=False,
-            troubleshooting=[
-                "The Zotero executable was not found where this server looks for it. The user can "
-                "re-register the server with install-mcp --zotero-exe pointing at their Zotero."
-            ],
+    connector_probe = connector_probe or probe_zotero_connector
+    launch = launch or ensure_zotero_running
+    # A connector that answers is Zotero running, whatever the process list says.
+    if connector_probe()[0]:
+        return ZoteroLaunchResponse(running=True, launched=False, connector_ok=True, troubleshooting=[])
+    not_found = (
+        "The Zotero executable was not found or could not be started where this server looks for "
+        "it. The user can re-register the server with install-mcp --zotero-exe pointing at their "
+        "Zotero."
+    )
+    if not zotero_exe.is_file() and not is_zotero_running():
+        return ZoteroLaunchResponse(running=False, launched=False, connector_ok=False, troubleshooting=[not_found])
+    try:
+        status = launch(
+            zotero_exe=zotero_exe,
+            wait_seconds=wait_seconds,
+            require_connector=True,
+            connector_probe=connector_probe,
         )
-    status = ensure_zotero_running(zotero_exe=zotero_exe, wait_seconds=wait_seconds)
+    except OSError:
+        return ZoteroLaunchResponse(running=False, launched=False, connector_ok=False, troubleshooting=[not_found])
+    troubleshooting: list[str] = []
+    if not status.running:
+        troubleshooting.append(not_found if not zotero_exe.is_file() else "Zotero did not start before the wait ended.")
+    elif not status.connector_ok:
+        troubleshooting.append(
+            "Zotero is running but its local connector has not answered yet; it may still be "
+            "starting. Call again with a longer wait_seconds."
+        )
     return ZoteroLaunchResponse(
         running=status.running,
         launched=status.launched,
         connector_ok=status.connector_ok,
-        troubleshooting=list(status.troubleshooting),
+        troubleshooting=troubleshooting,
     )
 
 

@@ -157,8 +157,8 @@ Optional tools:
   `--enable-retry-timeout`). Only a successful result overwrites the sidecar index entry; the
   originally converted Markdown file is never overwritten. Blocking, can be CPU-heavy, rate-limited,
   never writes Zotero.
-- `start_zotero(wait_seconds=15)` — open the Zotero desktop app if it is not running and wait up to
-  `wait_seconds` (0–60) for its local connector (available only with `--enable-zotero-launch`;
+- `start_zotero(wait_seconds=15)` — open the Zotero desktop app if its local connector does not
+  answer, detached from the server, and wait up to `wait_seconds` (0–60) for the connector (available only with `--enable-zotero-launch`;
   `--zotero-exe PATH` overrides the default executable location). Returns `running`, `launched`,
   `connector_ok` and `troubleshooting`, never the executable path. It never closes Zotero and
   writes nothing to Zotero, converted text or the index; enabling it at registration is the
