@@ -42,6 +42,17 @@ def main(argv: list[str] | None = None) -> int:
         help="Expose timeout skip/retry decisions; requires an explicit valid --config governing --db.",
     )
     parser.add_argument(
+        "--enable-zotero-launch",
+        action="store_true",
+        help="Expose start_zotero, which opens the Zotero desktop app when it is not running.",
+    )
+    parser.add_argument(
+        "--zotero-exe",
+        type=Path,
+        default=None,
+        help="Zotero executable for start_zotero; requires --enable-zotero-launch.",
+    )
+    parser.add_argument(
         "--bibtex-endpoint",
         default=None,
         help="Credential-free HTTP endpoint on Zotero's local Better BibTeX port; requires --enable-bibtex.",
@@ -74,6 +85,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.bibtex_endpoint is not None and not args.enable_bibtex:
         raise SystemExit(_startup_error("invalid_bibtex_endpoint", "--bibtex-endpoint requires --enable-bibtex."))
+    if args.zotero_exe is not None and not args.enable_zotero_launch:
+        raise SystemExit(_startup_error("invalid_zotero_exe", "--zotero-exe requires --enable-zotero-launch."))
     _validate_startup_database(db_path)
     with _private_protocol_stdout() as protocol:
         return _serve(db_path, config, args, protocol)
@@ -87,6 +100,8 @@ def _serve(db_path: Path, config, args: argparse.Namespace, protocol) -> int:
             enable_bibtex=args.enable_bibtex,
             enable_reconvert=args.enable_reconvert,
             enable_retry_timeout=args.enable_retry_timeout,
+            enable_zotero_launch=args.enable_zotero_launch,
+            **({"zotero_exe": args.zotero_exe} if args.zotero_exe else {}),
             **({"bibtex_endpoint": args.bibtex_endpoint} if args.bibtex_endpoint else {}),
         )
     except PublicMcpError as exc:

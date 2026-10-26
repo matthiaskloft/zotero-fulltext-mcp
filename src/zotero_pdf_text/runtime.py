@@ -63,8 +63,36 @@ def is_zotero_running(
         )
         return process_name.casefold() in (result.stdout or "").casefold()
 
-    result = run_process(["pgrep", "-f", process_name], capture_output=True, text=True, check=False)
+    # `-x` matches the process name exactly. `-f` matched any command line containing "zotero",
+    # which includes this project's own `zotero-fulltext-mcp` server, so a server asking whether
+    # Zotero runs always heard yes and never launched it.
+    result = run_process(["pgrep", "-x", process_name], capture_output=True, text=True, check=False)
     return result.returncode == 0
+
+
+def launch_detached(args: list[str]) -> subprocess.Popen[bytes]:
+    """Start a desktop app that outlives the caller and shares none of its stdio.
+
+    Zotero launched from the MCP server would otherwise inherit the client's stdin/stderr pipes
+    (keeping them open after the server exits) and its process group (so a client killing the
+    server's group, or a SIGHUP, would close Zotero too).
+    """
+    kwargs: dict[str, object] = {
+        "stdin": subprocess.DEVNULL,
+        "stdout": subprocess.DEVNULL,
+        "stderr": subprocess.DEVNULL,
+    }
+    if os.name != "nt":
+        return subprocess.Popen(args, start_new_session=True, **kwargs)  # type: ignore[call-overload]
+    flags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP  # type: ignore[attr-defined]
+    try:
+        # Out of a kill-on-close job the client may run the server in; refused when the job
+        # forbids breakaway, in which case launching inside it is still better than not at all.
+        return subprocess.Popen(  # type: ignore[call-overload]
+            args, creationflags=flags | subprocess.CREATE_BREAKAWAY_FROM_JOB, **kwargs  # type: ignore[attr-defined]
+        )
+    except OSError:
+        return subprocess.Popen(args, creationflags=flags, **kwargs)  # type: ignore[call-overload]
 
 
 def probe_zotero_connector(
@@ -89,7 +117,7 @@ def ensure_zotero_running(
     launch: bool = True,
     require_connector: bool = False,
     run_process: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
-    popen: Callable[..., subprocess.Popen[bytes]] = subprocess.Popen,
+    popen: Callable[..., subprocess.Popen[bytes]] = launch_detached,
     connector_probe: Callable[[], tuple[bool, str]] | None = None,
 ) -> ZoteroRuntimeStatus:
     if wait_seconds < 0:

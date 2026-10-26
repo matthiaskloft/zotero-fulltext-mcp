@@ -5,6 +5,13 @@ All notable changes to this project are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Added
+
+- Opt-in `start_zotero` MCP tool (`--enable-zotero-launch`, plus `--zotero-exe PATH` for a
+  non-default install), also available through `install-mcp`. It opens the Zotero desktop app
+  when it is not running, so an assistant no longer has to ask you to open it each session. It
+  never closes Zotero and writes nothing.
+
 ### Fixed
 
 - `convert-new` and `dry-run` missed PDF attachments that Zotero had committed but not yet

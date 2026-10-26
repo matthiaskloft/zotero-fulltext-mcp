@@ -104,6 +104,20 @@ governed by that config. The generated registration adds `skip_timeout_extractio
 `retry_timeout_extraction`; both require their own literal `confirm` string and should be called
 only after the user approves that specific decision.
 
+Opening Zotero from the assistant is opt-in too, so it can start Zotero when a task needs it
+instead of asking you to:
+
+```powershell
+& $python -m zotero_pdf_text install-mcp --config .\config.json --enable-zotero-launch
+```
+
+The registration adds `start_zotero`. It opens Zotero only when its local connector does not
+answer, launches it detached from the MCP server (so it keeps running after the client exits),
+waits up to 60 seconds for the connector, and never closes Zotero or writes anything. Pass
+`--zotero-exe PATH` when Zotero is not in the default location below. Its MCP annotations do not
+mark it read-only, because it starts a process, so some clients still ask before each call; allow
+the tool in your client if you want it to run without asking.
+
 Conversion also makes one automatic lower-concurrency retry when a child extractor
 exits with Windows native crash status `0xC000070A`. The run summary separates
 recovered, fallback-only, and still-failed retries. Ordinary errors and timeouts
@@ -144,7 +158,7 @@ use the locked environment in [Developer test setup](dev-test-setup.md).
 ## Cross-platform notes
 
 - Zotero executable auto-detection (`--zotero-exe` default) and process-name checks
-  (`ensure_zotero_running`) are Windows-verified. macOS (`/Applications/Zotero.app/...`) and
+  (`ensure_zotero_running`, also behind `start_zotero`) are Windows-verified. macOS (`/Applications/Zotero.app/...`) and
   Linux (`/usr/lib/zotero/zotero`) defaults are best-effort, untested guesses — pass
   `--zotero-exe` explicitly if the default doesn't match your install.
 - Most dependencies (`pyproject.toml`) are minimum-pinned (`>=`). The MCP SDK is deliberately

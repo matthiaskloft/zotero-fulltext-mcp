@@ -1,9 +1,11 @@
+import os
 import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
-from zotero_pdf_text.runtime import ensure_zotero_running, is_zotero_running
+from zotero_pdf_text.runtime import ensure_zotero_running, is_zotero_running, launch_detached
 
 
 class RuntimeTests(unittest.TestCase):
@@ -12,6 +14,28 @@ class RuntimeTests(unittest.TestCase):
             return subprocess.CompletedProcess(args, 0, stdout="zotero.exe                  123 Console", stderr="")
 
         self.assertTrue(is_zotero_running(run_process=fake_run))
+
+    def test_posix_check_matches_the_process_name_not_any_command_line(self):
+        # `pgrep -f zotero` also matched the zotero-fulltext-mcp server itself, so a server
+        # asking whether Zotero runs always heard yes and never launched it.
+        calls = []
+
+        def fake_run(args, **kwargs):
+            calls.append(args)
+            return subprocess.CompletedProcess(args, 1, stdout="", stderr="")
+
+        with patch("zotero_pdf_text.runtime.os.name", "posix"):
+            self.assertFalse(is_zotero_running(process_name="zotero", run_process=fake_run))
+        self.assertEqual(calls, [["pgrep", "-x", "zotero"]])
+
+    @unittest.skipIf(os.name == "nt", "POSIX session detachment")
+    def test_launch_detached_shares_no_stdio_and_starts_a_new_session(self):
+        with patch("zotero_pdf_text.runtime.subprocess.Popen") as popen:
+            launch_detached(["zotero"])
+        kwargs = popen.call_args.kwargs
+        self.assertTrue(kwargs["start_new_session"])
+        for stream in ("stdin", "stdout", "stderr"):
+            self.assertEqual(kwargs[stream], subprocess.DEVNULL)
 
     def test_ensure_zotero_launches_when_missing(self):
         with tempfile.TemporaryDirectory() as tmp:

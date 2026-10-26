@@ -180,8 +180,10 @@ config, and index paths already filled in:
 
 Restart your MCP client and check that `zotero-fulltext` connects and its tools are available.
 `--enable-bibtex` adds citation export through Better BibTeX, which requires Zotero running.
-Omit that flag for search and reading alone. The debug bridge is used by the CLI and does
-not need to be registered as an MCP server.
+Omit that flag for search and reading alone. Add `--enable-zotero-launch` to let your
+assistant open Zotero itself (the `start_zotero` tool) instead of asking you to; pass
+`--zotero-exe PATH` if Zotero is not installed in the default location. The debug bridge is
+used by the CLI and does not need to be registered as an MCP server.
 
 For registration updates, optional OCR tools, and client configuration details, see
 [Advanced setup](docs/advanced-setup.md).
