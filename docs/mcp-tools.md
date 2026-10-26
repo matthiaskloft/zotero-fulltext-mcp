@@ -157,6 +157,13 @@ Optional tools:
   `--enable-retry-timeout`). Only a successful result overwrites the sidecar index entry; the
   originally converted Markdown file is never overwritten. Blocking, can be CPU-heavy, rate-limited,
   never writes Zotero.
+- `start_zotero(wait_seconds=15)` — open the Zotero desktop app if it is not running and wait up to
+  `wait_seconds` (0–60) for its local connector (available only with `--enable-zotero-launch`;
+  `--zotero-exe PATH` overrides the default executable location). Returns `running`, `launched`,
+  `connector_ok` and `troubleshooting`, never the executable path. It never closes Zotero and
+  writes nothing to Zotero, converted text or the index; enabling it at registration is the
+  approval, so an assistant calls it without asking each time. The launch path is verified on
+  Windows; the macOS and Linux default locations are best-effort.
 
 The index can lag behind live Zotero. Search hits are discovery candidates, not automatically
 body-text evidence: a metadata-only match still carries a chunk locator as a navigation starting

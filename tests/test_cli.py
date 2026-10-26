@@ -740,6 +740,38 @@ class InstallMcpCliTests(unittest.TestCase):
             self.assertNotIn("--enable-reconvert", printed)
             self.assertNotIn("reconvert_with_math_ocr", printed)
 
+    def test_enable_zotero_launch_is_passed_to_the_server_and_enabled_tools(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config_path = root / "config.json"
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "zotero_root": str(root),
+                        "zotero_data_directory": str(root),
+                        "linked_attachments": str(root),
+                        "output_root": str(root / "converted_text"),
+                    }
+                ),
+                encoding="utf-8",
+            )
+            exe = root / "zotero"
+            with patch("sys.executable", str(root / "Scripts" / "python.exe")), patch("sys.stdout") as mock_stdout:
+                exit_code = main(
+                    ["install-mcp", "--config", str(config_path), "--enable-zotero-launch", "--zotero-exe", str(exe)]
+                )
+            printed = "".join(call.args[0] for call in mock_stdout.write.call_args_list)
+            self.assertEqual(exit_code, 0)
+            self.assertIn("--enable-zotero-launch", printed)
+            self.assertIn('"start_zotero"', printed)
+            self.assertIn("--zotero-exe", printed)
+
+            errors = io.StringIO()
+            with redirect_stderr(errors), patch("sys.stdout"):
+                exit_code = main(["install-mcp", "--config", str(config_path), "--zotero-exe", str(exe)])
+            self.assertEqual(exit_code, 2)
+            self.assertIn("--zotero-exe requires --enable-zotero-launch", errors.getvalue())
+
     def test_codex_toml_block_round_trips_windows_style_paths(self):
         # Regression test: the codex_block used to build its `args` list with Python's repr(),
         # which escapes each backslash as two characters. TOML single-quoted (literal) strings

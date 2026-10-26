@@ -89,6 +89,7 @@ from .mcp_contract import (
     RECONVERT_STARTUP_TIMEOUT_SECONDS,
     RECONVERT_TOOL_TIMEOUT_SECONDS,
     RETRY_TIMEOUT_MCP_TOOL_NAMES,
+    ZOTERO_LAUNCH_MCP_TOOL_NAME,
     configured_index_path,
     marker_dependency_available,
 )
@@ -962,6 +963,17 @@ def build_parser() -> argparse.ArgumentParser:
         "--enable-retry-timeout",
         action="store_true",
         help="Enable timeout skip/retry decisions in MCP; the generated registration includes the explicit config.",
+    )
+    install_mcp.add_argument(
+        "--enable-zotero-launch",
+        action="store_true",
+        help="Enable the MCP start_zotero tool, so an assistant can open Zotero instead of asking you to.",
+    )
+    install_mcp.add_argument(
+        "--zotero-exe",
+        type=Path,
+        default=None,
+        help="Zotero executable for start_zotero when it is not in the default location; requires --enable-zotero-launch.",
     )
     install_mcp.add_argument(
         "--bibtex-endpoint",
@@ -2085,6 +2097,13 @@ def _install_mcp(args: argparse.Namespace) -> int:
             print("--bibtex-endpoint requires --enable-bibtex.", file=sys.stderr)
             return 2
         server_args.extend(["--bibtex-endpoint", args.bibtex_endpoint])
+    if args.enable_zotero_launch:
+        server_args.append("--enable-zotero-launch")
+    if args.zotero_exe is not None:
+        if not args.enable_zotero_launch:
+            print("--zotero-exe requires --enable-zotero-launch.", file=sys.stderr)
+            return 2
+        server_args.extend(["--zotero-exe", os.path.abspath(args.zotero_exe)])
     claude_add_args = ["mcp", "add", "--scope", "user", server_name, str(server_exe), "--", *server_args]
     claude_cmd = "claude " + " ".join(_shell_quote(a) for a in claude_add_args)
 
@@ -2099,6 +2118,8 @@ def _install_mcp(args: argparse.Namespace) -> int:
         enabled_tools.append(RECONVERT_MCP_TOOL_NAME)
     if args.enable_retry_timeout:
         enabled_tools.extend(RETRY_TIMEOUT_MCP_TOOL_NAMES)
+    if args.enable_zotero_launch:
+        enabled_tools.append(ZOTERO_LAUNCH_MCP_TOOL_NAME)
     # Use json.dumps for every embedded string, not Python repr(): repr() renders a backslash
     # as two characters, but TOML single-quoted (literal) strings treat backslashes literally,
     # so repr() output silently doubles every backslash in a Windows path once TOML parses it.

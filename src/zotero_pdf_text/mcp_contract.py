@@ -36,6 +36,7 @@ from .artifacts import (
 from .bibtex import DEFAULT_BBT_ENDPOINT, DEFAULT_BBT_TRANSLATOR, BibtexExport, export_bibtex_entries
 from .config import ImageOcrSettings, ProjectConfig, validate_config
 from .layout import runs_root
+from .runtime import DEFAULT_ZOTERO_EXE, ensure_zotero_running, is_zotero_running
 from .library import (
     MAPPING_REPORT_JSONL,
     ExtractedImageNotFoundError,
@@ -149,6 +150,8 @@ LIBRARY_STATUS_CACHE_SECONDS = 120
 BIBTEX_MCP_TOOL_NAME = "export_bibtex_entries_by_key"
 RECONVERT_MCP_TOOL_NAME = "reconvert_with_math_ocr"
 RETRY_TIMEOUT_MCP_TOOL_NAMES = ("skip_timeout_extraction", "retry_timeout_extraction")
+ZOTERO_LAUNCH_MCP_TOOL_NAME = "start_zotero"
+MAX_ZOTERO_LAUNCH_WAIT_SECONDS = 60
 
 # Extraction paths that resolve mathematical notation faithfully, so a record produced by one of
 # them needs no lossy-math warning. A record's extraction_tool can be a composite such as
@@ -178,6 +181,14 @@ RETRY_TIMEOUT_TOOL_ANNOTATIONS = {
     "readOnlyHint": False,
     "destructiveHint": True,
     "idempotentHint": False,
+    "openWorldHint": False,
+}
+# Starting the desktop app changes nothing in Zotero's data, the index or converted text, and a
+# second call while Zotero runs launches nothing -- but it does start a process, so not read-only.
+ZOTERO_LAUNCH_TOOL_ANNOTATIONS = {
+    "readOnlyHint": False,
+    "destructiveHint": False,
+    "idempotentHint": True,
     "openWorldHint": False,
 }
 TIMEOUT_CANDIDATE_STATUSES = (STATUS_PENDING, STATUS_SKIPPED, STATUS_RESOLVED, "all")
@@ -512,6 +523,13 @@ class RetryTimeoutResponse(TypedDict):
     provenance: ReconvertProvenance
 
 
+class ZoteroLaunchResponse(TypedDict):
+    running: bool
+    launched: bool
+    connector_ok: bool
+    troubleshooting: list[str]
+
+
 class WriteOperation(TypedDict):
     name: str
     surface: str
@@ -646,6 +664,8 @@ def create_server(
     enable_bibtex: bool = False,
     enable_reconvert: bool = False,
     enable_retry_timeout: bool = False,
+    enable_zotero_launch: bool = False,
+    zotero_exe: Path = DEFAULT_ZOTERO_EXE,
     bibtex_endpoint: str = DEFAULT_BBT_ENDPOINT,
     mcp_factory: Callable[..., Any] | None = None,
 ) -> Any:
@@ -712,6 +732,10 @@ def create_server(
                 ],
                 ReasonInput=Annotated[object, WithJsonSchema({"type": "string", "maxLength": MAX_REASON_CHARS})],
                 GuideTopicInput=Annotated[object, WithJsonSchema({"enum": list(GUIDE_TOPICS)})],
+                WaitSecondsInput=Annotated[
+                    object,
+                    WithJsonSchema({"type": "integer", "minimum": 0, "maximum": MAX_ZOTERO_LAUNCH_WAIT_SECONDS}),
+                ],
             )
 
     if "PassageImageResult" not in globals() and importlib.util.find_spec("mcp") is not None:
@@ -732,6 +756,7 @@ def create_server(
             enable_reconvert=enable_reconvert,
             enable_retry_timeout=enable_retry_timeout,
             enable_bibtex=enable_bibtex,
+            enable_zotero_launch=enable_zotero_launch,
         ),
     )
 
@@ -1068,8 +1093,24 @@ def create_server(
                 enable_reconvert=enable_reconvert,
                 enable_retry_timeout=enable_retry_timeout,
                 enable_bibtex=enable_bibtex,
+                enable_zotero_launch=enable_zotero_launch,
             )
         )
+
+    if enable_zotero_launch:
+
+        @mcp.tool(annotations=ZOTERO_LAUNCH_TOOL_ANNOTATIONS)
+        def start_zotero(wait_seconds: WaitSecondsInput = 15) -> ZoteroLaunchResponse:
+            """Start the Zotero desktop app on this machine if it is not already running.
+
+            Use it when a CLI command or integration needs Zotero open (Better BibTeX export,
+            import-doi, link-pdf, find-pdf) instead of asking the user to open it. The user
+            enabled this tool when registering the server, so no per-call approval is needed;
+            it never closes Zotero and writes nothing to Zotero, converted text or the index.
+            Waits up to wait_seconds for Zotero's local connector to answer; connector_ok false
+            with running true usually means Zotero is still starting, so call again.
+            """
+            return _public_call(lambda: _start_zotero(wait_seconds, zotero_exe=zotero_exe))
 
     if enable_reconvert:
         limiter = ReconvertRateLimiter()
@@ -1212,7 +1253,11 @@ def _enabled_write_tools(*, enable_reconvert: bool, enable_retry_timeout: bool) 
 
 
 def build_mcp_instructions(
-    *, enable_reconvert: bool = False, enable_retry_timeout: bool = False, enable_bibtex: bool = False
+    *,
+    enable_reconvert: bool = False,
+    enable_retry_timeout: bool = False,
+    enable_bibtex: bool = False,
+    enable_zotero_launch: bool = False,
 ) -> str:
     """Compose the always-loaded server instructions: the non-skippable rules plus a tool map.
 
@@ -1233,6 +1278,8 @@ def build_mcp_instructions(
     ]
     if enable_bibtex:
         tool_map.append(f"{BIBTEX_MCP_TOOL_NAME} exports BibLaTeX")
+    if enable_zotero_launch:
+        tool_map.append(f"{ZOTERO_LAUNCH_MCP_TOOL_NAME} opens Zotero when a task needs it")
     if write_tools:
         tool_map.append(f"write tools: {', '.join(write_tools)}")
     tool_map.append("guide explains workflows")
@@ -1258,7 +1305,12 @@ MCP_INSTRUCTIONS = build_mcp_instructions()
 
 
 def guide_response(
-    topic: str, *, enable_reconvert: bool, enable_retry_timeout: bool, enable_bibtex: bool
+    topic: str,
+    *,
+    enable_reconvert: bool,
+    enable_retry_timeout: bool,
+    enable_bibtex: bool,
+    enable_zotero_launch: bool = False,
 ) -> GuideResponse:
     """Return one guide topic, generated from the startup flags alone.
 
@@ -1283,6 +1335,12 @@ def guide_response(
             "list_timeout_candidates lists attachments whose structured extraction timed out; "
             "list_orphan_candidates lists likely Zotero parents the CLI found for orphan PDFs."
             + bibtex
+            + (
+                f" When a command or integration needs Zotero open, call {ZOTERO_LAUNCH_MCP_TOOL_NAME} "
+                "rather than asking the user to open it."
+                if enable_zotero_launch
+                else ""
+            )
             + (
                 f" Enabled write tools: {', '.join(write_tools)}; each needs the user's explicit "
                 "approval of that specific operation."
@@ -2260,6 +2318,36 @@ def _reconvert_with_math_ocr(
         "reconverted_at": result.reconverted_at,
         "provenance": {"content_trust": "untrusted_source", "source_kind": "converted_pdf", "attachment_key": result.attachment_key},
     }
+
+
+def _start_zotero(wait_seconds: object, *, zotero_exe: Path) -> ZoteroLaunchResponse:
+    if (
+        isinstance(wait_seconds, bool)
+        or not isinstance(wait_seconds, int)
+        or not 0 <= wait_seconds <= MAX_ZOTERO_LAUNCH_WAIT_SECONDS
+    ):
+        raise PublicMcpError(
+            "invalid_wait_seconds",
+            f"wait_seconds must be an integer from 0 to {MAX_ZOTERO_LAUNCH_WAIT_SECONDS}.",
+        )
+    if not zotero_exe.exists() and not is_zotero_running():
+        # The runtime's own message names the executable path, which this surface never returns.
+        return ZoteroLaunchResponse(
+            running=False,
+            launched=False,
+            connector_ok=False,
+            troubleshooting=[
+                "The Zotero executable was not found where this server looks for it. The user can "
+                "re-register the server with install-mcp --zotero-exe pointing at their Zotero."
+            ],
+        )
+    status = ensure_zotero_running(zotero_exe=zotero_exe, wait_seconds=wait_seconds)
+    return ZoteroLaunchResponse(
+        running=status.running,
+        launched=status.launched,
+        connector_ok=status.connector_ok,
+        troubleshooting=list(status.troubleshooting),
+    )
 
 
 def _list_timeout_candidates(db_path: Path, *, status: object, limit: object) -> ListTimeoutCandidatesResponse:

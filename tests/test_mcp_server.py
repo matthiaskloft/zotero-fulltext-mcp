@@ -31,6 +31,8 @@ from zotero_pdf_text.mcp_contract import (
     RETRY_TIMEOUT_MCP_TOOL_NAMES,
     RETRY_TIMEOUT_TOOL_ANNOTATIONS,
     SKIP_TIMEOUT_TOOL_ANNOTATIONS,
+    ZOTERO_LAUNCH_MCP_TOOL_NAME,
+    ZOTERO_LAUNCH_TOOL_ANNOTATIONS,
     build_mcp_instructions,
     create_server,
     validate_bibtex_endpoint,
@@ -100,6 +102,7 @@ class McpServerTests(unittest.TestCase):
                 {"search_fulltext", "search_within_fulltext", "get_fulltext_chunk", "get_passage_image", "get_item_context", "lookup_citation_key", "list_timeout_candidates", "list_orphan_candidates", "library_status", "guide"},
             )
             self.assertNotIn("ensure_zotero_running", server.tools)
+            self.assertNotIn(ZOTERO_LAUNCH_MCP_TOOL_NAME, server.tools)
             self.assertNotIn("export_bibtex_entries_by_key", server.tools)
             self.assertNotIn("reconvert_with_math_ocr", server.tools)
             self.assertIn("untrusted", server.instructions)
@@ -251,7 +254,12 @@ class McpServerTests(unittest.TestCase):
             _, sqlite_path, config = _build_index(Path(tmp))
             with patch("zotero_pdf_text.mcp_contract.marker_dependency_available", return_value=True):
                 server = create_server(
-                    sqlite_path, config=config, enable_reconvert=True, enable_retry_timeout=True, enable_bibtex=True
+                    sqlite_path,
+                    config=config,
+                    enable_reconvert=True,
+                    enable_retry_timeout=True,
+                    enable_bibtex=True,
+                    enable_zotero_launch=True,
                 )
 
             tools = asyncio.run(server.list_tools())
@@ -1310,11 +1318,73 @@ class ReconvertRateLimiterConcurrencyTests(unittest.TestCase):
         self.assertEqual(len(failures), 19)
 
 
+class StartZoteroToolTests(unittest.TestCase):
+    """start_zotero opens Zotero on request, never returns a local path, and validates its input."""
+
+    def _server(self, zotero_exe: Path) -> FakeFastMCP:
+        return create_server(
+            Path("unused.sqlite"), enable_zotero_launch=True, zotero_exe=zotero_exe, mcp_factory=FakeFastMCP
+        )
+
+    def test_registered_only_when_enabled_with_its_annotations(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            server = self._server(Path(tmp) / "zotero")
+            self.assertIn(ZOTERO_LAUNCH_MCP_TOOL_NAME, server.tools)
+            self.assertEqual(
+                server.tool_metadata[ZOTERO_LAUNCH_MCP_TOOL_NAME]["annotations"], ZOTERO_LAUNCH_TOOL_ANNOTATIONS
+            )
+            self.assertIn(ZOTERO_LAUNCH_MCP_TOOL_NAME, server.instructions)
+
+    def test_launches_with_the_configured_executable(self):
+        from zotero_pdf_text.runtime import ZoteroRuntimeStatus
+
+        with tempfile.TemporaryDirectory() as tmp:
+            exe = Path(tmp) / "zotero"
+            exe.write_bytes(b"")
+            server = self._server(exe)
+            status = ZoteroRuntimeStatus(str(exe), True, True, True, "ok", [])
+            with patch("zotero_pdf_text.mcp_contract.ensure_zotero_running", return_value=status) as ensure:
+                response = server.tools[ZOTERO_LAUNCH_MCP_TOOL_NAME](5)
+
+            self.assertEqual(
+                response, {"running": True, "launched": True, "connector_ok": True, "troubleshooting": []}
+            )
+            self.assertEqual(ensure.call_args.kwargs, {"zotero_exe": exe, "wait_seconds": 5})
+            assert_no_local_path(self, response, Path(tmp))
+
+    def test_missing_executable_is_reported_without_its_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            server = self._server(Path(tmp) / "missing" / "zotero")
+            with patch("zotero_pdf_text.mcp_contract.is_zotero_running", return_value=False), patch(
+                "zotero_pdf_text.mcp_contract.ensure_zotero_running"
+            ) as ensure:
+                response = server.tools[ZOTERO_LAUNCH_MCP_TOOL_NAME]()
+
+            ensure.assert_not_called()
+            self.assertFalse(response["running"])
+            self.assertIn("--zotero-exe", response["troubleshooting"][0])
+            assert_no_local_path(self, response, Path(tmp))
+
+    def test_rejects_out_of_range_wait(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            server = self._server(Path(tmp) / "zotero")
+            for value in (-1, 61, "5", True, 1.5):
+                with self.subTest(value=value):
+                    _assert_tool_error(
+                        self, lambda: server.tools[ZOTERO_LAUNCH_MCP_TOOL_NAME](value), "invalid_wait_seconds"
+                    )
+
+
 _FLAG_COMBINATIONS = [
-    {"enable_reconvert": reconvert, "enable_retry_timeout": retry, "enable_bibtex": bibtex}
-    for reconvert, retry, bibtex in itertools.product((False, True), repeat=3)
+    {"enable_reconvert": reconvert, "enable_retry_timeout": retry, "enable_bibtex": bibtex, "enable_zotero_launch": launch}
+    for reconvert, retry, bibtex, launch in itertools.product((False, True), repeat=4)
 ]
-_OPTIONAL_TOOL_NAMES = (BIBTEX_MCP_TOOL_NAME, RECONVERT_MCP_TOOL_NAME, *RETRY_TIMEOUT_MCP_TOOL_NAMES)
+_OPTIONAL_TOOL_NAMES = (
+    BIBTEX_MCP_TOOL_NAME,
+    RECONVERT_MCP_TOOL_NAME,
+    *RETRY_TIMEOUT_MCP_TOOL_NAMES,
+    ZOTERO_LAUNCH_MCP_TOOL_NAME,
+)
 # A drive-letter or POSIX home/temp path; "https://" is excluded by the lookarounds.
 _ABSOLUTE_PATH = re.compile(r"(?<![A-Za-z])[A-Za-z]:(?:\\|/(?!/))|(?<![\w.<])/(?:Users|home|mnt|var|tmp)/")
 
