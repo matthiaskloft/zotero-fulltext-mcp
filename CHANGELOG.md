@@ -5,6 +5,8 @@ All notable changes to this project are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-10-27
+
 ### Added
 
 - Physical PDF pages. Conversion now records where each PDF page starts and ends in the converted
@@ -1156,7 +1158,8 @@ author's own machine.
 
 Initial import of the Zotero full-text conversion pipeline, CLI, and MCP server. Not tagged.
 
-[Unreleased]: https://github.com/matthiaskloft/zotero-fulltext-mcp/compare/v0.14.0...HEAD
+[Unreleased]: https://github.com/matthiaskloft/zotero-fulltext-mcp/compare/v0.15.0...HEAD
+[0.15.0]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.15.0
 [0.14.0]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.14.0
 [0.13.1]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.13.1
 [0.13.0]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.13.0
