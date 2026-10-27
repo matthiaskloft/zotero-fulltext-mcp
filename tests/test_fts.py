@@ -275,8 +275,8 @@ class FtsTests(unittest.TestCase):
         text = "  abcdefghij  "
         chunks = list(_chunk_text(text, chunk_chars=5, overlap_chars=2))
 
-        self.assertEqual(chunks[0], (0, 2, 5, "abc", ""))
-        self.assertEqual(chunks[-1], (2, 10, 12, "ij", ""))
+        self.assertEqual(chunks[0], (0, 2, 7, "abcde", ""))
+        self.assertEqual(chunks[-1], (2, 8, 12, "ghij", ""))
         for _, start, end, chunk, _heading_path in chunks:
             self.assertEqual(text[start:end], chunk)
 

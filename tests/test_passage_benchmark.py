@@ -53,7 +53,7 @@ class ChunkerTests(unittest.TestCase):
     def _chunks(self, text, spec):
         return chunking.chunk_document(text, chunking.parse_spec(spec), TOKENIZER)
 
-    def test_chars_strategy_reproduces_the_current_production_slicing(self):
+    def test_production_strategy_reproduces_the_current_production_slicing(self):
         with tempfile.TemporaryDirectory() as tmp:
             jsonl = Path(tmp) / "c.jsonl"
             records = json.loads(CORPUS.read_text(encoding="utf-8"))
@@ -73,7 +73,7 @@ class ChunkerTests(unittest.TestCase):
         expected = [
             (d.attachment_key, s, e)
             for d in self.docs.values()
-            for s, e in self._chunks(d.text, "chars:300:40")
+            for s, e in self._chunks(d.text, "production:300:40")
         ]
         self.assertEqual(rows, expected)
 

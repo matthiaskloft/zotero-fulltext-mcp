@@ -1638,6 +1638,7 @@ _HEADING_RE = re.compile(r"^(#{1,6})[ \t]+(.+?)[ \t#]*$", re.MULTILINE)
 _FENCE_RE = re.compile(r"^[ \t]{0,3}(```|~~~)", re.MULTILINE)
 # The plain-text fallback's page markers look like headings but are not document structure.
 _FALLBACK_PAGE_MARKER_RE = re.compile(r"## Page \d+")
+_LAST_SPACE_RE = re.compile(r"\s+(?!.*\s)", re.DOTALL)
 _PARAGRAPH_BREAK_RE = re.compile(r"\n[ \t]*\n")
 _SENTENCE_END_RE = re.compile(r"(?<=[.!?])[\"')\]]*\s+")
 
@@ -1656,18 +1657,24 @@ def _chunk_text(text: str, chunk_chars: int, overlap_chars: int) -> Iterable[tup
     if not text:
         return
     chunk_index = 0
-    for sec_start, sec_end, heading_path in _sections(text, max(chunk_chars // MIN_SECTION_CHARS_FRACTION, 1)):
+    spans, headings = _sections(text, max(chunk_chars // MIN_SECTION_CHARS_FRACTION, 1))
+    for sec_start, sec_end in spans:
         for start, end in _pack_section(text, sec_start, sec_end, chunk_chars, overlap_chars):
             raw = text[start:end]
             chunk = raw.strip()
+            heading_path = _heading_path_at(headings, start, end)
             if chunk:
                 lead = len(raw) - len(raw.lstrip())
                 yield chunk_index, start + lead, start + lead + len(chunk), chunk, heading_path
                 chunk_index += 1
 
 
-def _sections(text: str, min_chars: int) -> list[tuple[int, int, str]]:
-    """Return (start, end, heading_path) spans that start at headings, small ones merged forward."""
+def _sections(text: str, min_chars: int) -> tuple[list[tuple[int, int]], list[tuple[int, str, bool]]]:
+    """Return (start, end) spans that start at headings, small ones merged forward, and the headings.
+
+    Each heading entry is (start, heading_path, has_body); the first entry covers any text before
+    the first heading.
+    """
     fences = [m.start() for m in _FENCE_RE.finditer(text)]
     starts: list[tuple[int, str]] = [(0, "")]
     stack: list[tuple[int, str]] = []
@@ -1683,24 +1690,38 @@ def _sections(text: str, min_chars: int) -> list[tuple[int, int, str]]:
         path = " > ".join(name for _level, name in stack if name)
         starts.append((match.start(), path[:MAX_HEADING_PATH_CHARS]))
     bounds = [start for start, _path in starts] + [len(text)]
-    sections: list[tuple[int, int, str]] = []
+    headings = [
+        (start, path, _has_body(text, start, bounds[i + 1], heading=i > 0)) for i, (start, path) in enumerate(starts)
+    ]
+    spans: list[tuple[int, int]] = []
     pending_start: int | None = None
-    # A merged span is labelled by its first section that has text under its heading, so text
-    # never appears under a later heading; a run of bare headings takes the deepest one's path.
-    pending_path: str | None = None
-    for i, (start, path) in enumerate(starts):
+    for i, (start, _path) in enumerate(starts):
         end = bounds[i + 1]
         if end <= start:
             continue
         merged_start = start if pending_start is None else pending_start
-        if pending_path is None and _has_body(text, start, end, heading=i > 0):
-            pending_path = path
         if len(text[merged_start:end].strip()) < min_chars and i + 1 < len(starts):
             pending_start = merged_start
             continue
-        sections.append((merged_start, end, path if pending_path is None else pending_path))
-        pending_start = pending_path = None
-    return sections
+        spans.append((merged_start, end))
+        pending_start = None
+    return spans, headings
+
+
+def _heading_path_at(headings: list[tuple[int, str, bool]], start: int, end: int) -> str:
+    """The path of the section a chunk's text begins under.
+
+    That is the section holding ``start``, unless it is a bare heading: then the first section
+    inside the chunk that has text, so a run of headings takes the one its text sits under.
+    """
+    starts = [heading_start for heading_start, _path, _body in headings]
+    index = max(bisect.bisect_right(starts, start) - 1, 0)
+    for heading_start, path, has_body in headings[index:]:
+        if heading_start >= end:
+            break
+        if has_body:
+            return path
+    return headings[index][1]
 
 
 def _has_body(text: str, start: int, end: int, *, heading: bool) -> bool:
@@ -1741,9 +1762,21 @@ def _split_long(text: str, start: int, end: int, chunk_chars: int, overlap_chars
             return
         # Past the previous cut, so an overlapping piece never ends where the one before it did.
         fitting = [s for s in sentence_starts if max(pos, previous_cut) < s <= limit]
-        cut = fitting[-1] if fitting else limit
+        word_safe = True
+        if fitting:
+            cut = fitting[-1]
+        else:
+            # No sentence end fits: cut before the last word that would not fit, so no search
+            # token is split between two chunks. Only text without whitespace is cut mid-word.
+            space = _LAST_SPACE_RE.search(text, max(pos, previous_cut) + 1, limit + 1)
+            cut = space.end() if space else limit
+            word_safe = space is not None
         previous_cut = cut
         yield pos, cut
+        if not word_safe:
+            # A mid-word cut keeps character overlap, so the split token is whole in one chunk.
+            pos = max(cut - overlap_chars, pos + 1)
+            continue
         # Restart at the earliest sentence start within the overlap window, else exactly at cut.
         overlap = [s for s in sentence_starts if max(cut - overlap_chars, pos + 1) <= s < cut]
         pos = overlap[0] if overlap else cut

@@ -177,6 +177,19 @@ class StructureChunkTests(unittest.TestCase):
         chunks = list(_chunk_text("# A\n\nshort\n\n# B\n\ntiny", chunk_chars=400, overlap_chars=40))
         self.assertEqual([chunk[4] for chunk in chunks], ["A"])
 
+    def test_later_chunks_of_a_merged_span_take_their_own_heading(self):
+        methods = "\n\n".join("Methods paragraph text here. " * 4 for _ in range(6))
+        chunks = list(_chunk_text(f"# Abstract\n\nShort.\n\n# Methods\n\n{methods}", chunk_chars=300, overlap_chars=30))
+        self.assertEqual(chunks[0][4], "Abstract")
+        self.assertEqual({chunk[4] for chunk in chunks[1:]}, {"Methods"})
+
+    def test_a_long_sentence_is_cut_between_words(self):
+        text = "a " * 749 + "needle" + " b" * 100
+        chunks = list(_chunk_text(text, chunk_chars=1500, overlap_chars=150))
+        self.assertTrue(any("needle" in chunk[3].split() for chunk in chunks))
+        for chunk in chunks:
+            self.assertTrue(set(chunk[3].split()) <= {"a", "b", "needle"})
+
     def test_paragraphs_are_packed_whole_within_the_budget(self):
         paragraphs = [f"Paragraph {i} " + "x" * 80 for i in range(6)]
         text = "\n\n".join(paragraphs)
