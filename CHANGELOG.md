@@ -5,6 +5,33 @@ All notable changes to this project are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Added
+
+- Physical PDF pages. Conversion now records where each PDF page starts and ends in the converted
+  text (`<stem>.pages.json` beside the Markdown, carried into the index as `page_map`); the stored
+  Markdown is byte-identical to before. Text from the plain-text fallback gets its pages from its
+  `## Page N` markers. Text converted before this change has no page map until it is reconverted,
+  and says so instead of guessing.
+- Search results and `get_fulltext_chunk` passages carry `pdf_pages` (`start`, `end`, labelled
+  `physical_pdf_page_1_based`) and `heading_path` (e.g. `Methods > Participants`). `pdf_pages` is
+  null where no page map exists.
+- `get_page(attachment_key, page)` MCP tool: the bounded, untrusted stored text of one physical PDF
+  page, to check a quote against its whole page.
+
+### Changed
+
+- Chunks follow document structure: split at Markdown headings, then paragraphs, then sentences,
+  within 1500 characters (was fixed 6000-character windows with 500 overlap); overlap (150) is used
+  only where one paragraph has to be split. A chunk never crosses a heading unless a section is
+  shorter than a quarter of the budget. The generation manifest records `chunking_strategy`, and a
+  library built with the old windows moves to the new defaults on its next rebuild.
+- **Locators change.** Re-chunking changes chunk indexes and hashes, so locators recorded before
+  the rebuild answer `stale_locator`; search again. Run `zotero-pdf-text rebuild-index` once to get
+  the new chunks; an index built before this release stays readable but reports no pages and
+  `schema_current: false`.
+- Header/footer removal and text normalization for indexing were measured and left unchanged; see
+  [docs/conversion-text-decisions.md](docs/conversion-text-decisions.md).
+
 ## [0.14.0] - 2026-10-26
 
 ### Added

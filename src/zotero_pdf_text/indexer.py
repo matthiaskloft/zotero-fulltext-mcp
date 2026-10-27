@@ -8,6 +8,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .identity import strip_front_matter
+from .pages import PageMap, page_map_from_fallback_markers, read_page_map_sidecar
+
+FALLBACK_EXTRACTION_TOOL = "pymupdf.get_text"
 
 
 @dataclass
@@ -38,6 +41,9 @@ class TextIndexRecord:
     # absent even on a successful pipeline run.
     source_sha256: str = ""
     indexed_at: str = ""
+    # Physical PDF page offsets into `text` (see pages.py), or None when they were never measured:
+    # text converted before page maps existed, or rewritten since. Never estimated.
+    page_map: PageMap | None = None
 
 
 def load_indexed_keys(jsonl_path: Path) -> set[str]:
@@ -72,6 +78,10 @@ def _record_from_manifest_row(row: dict[str, str]) -> TextIndexRecord:
     markdown_path = Path(row["output_path"])
     markdown = markdown_path.read_text(encoding="utf-8")
     text = strip_front_matter(markdown)
+    extraction_tool = row.get("extraction_tool", "")
+    page_map = read_page_map_sidecar(markdown_path, text)
+    if page_map is None and extraction_tool == FALLBACK_EXTRACTION_TOOL:
+        page_map = page_map_from_fallback_markers(text)
     return TextIndexRecord(
         zotero_parent_key=row.get("zotero_parent_key", ""),
         zotero_attachment_key=row.get("zotero_attachment_key", ""),
@@ -83,7 +93,7 @@ def _record_from_manifest_row(row: dict[str, str]) -> TextIndexRecord:
         source_path=row.get("source_path", ""),
         markdown_path=str(markdown_path),
         markdown_sha256=_sha256(markdown_path),
-        extraction_tool=row.get("extraction_tool", ""),
+        extraction_tool=extraction_tool,
         char_count=len(text),
         word_count=len(text.split()),
         page_count=row.get("page_count", ""),
@@ -98,6 +108,7 @@ def _record_from_manifest_row(row: dict[str, str]) -> TextIndexRecord:
         # to catch. A manifest predating this field yields "", i.e. not known.
         source_sha256=row.get("source_sha256", ""),
         indexed_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        page_map=page_map,
     )
 
 

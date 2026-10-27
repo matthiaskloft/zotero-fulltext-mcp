@@ -275,9 +275,9 @@ class FtsTests(unittest.TestCase):
         text = "  abcdefghij  "
         chunks = list(_chunk_text(text, chunk_chars=5, overlap_chars=2))
 
-        self.assertEqual(chunks[0], (0, 2, 5, "abc"))
-        self.assertEqual(chunks[-1], (3, 9, 12, "hij"))
-        for _, start, end, chunk in chunks:
+        self.assertEqual(chunks[0], (0, 2, 7, "abcde", ""))
+        self.assertEqual(chunks[-1], (2, 8, 12, "ghij", ""))
+        for _, start, end, chunk, _heading_path in chunks:
             self.assertEqual(text[start:end], chunk)
 
     def test_rebuild_replaces_old_chunks_and_preserves_trimmed_offsets(self):
@@ -1371,7 +1371,10 @@ class SearchWithinAttachmentTests(unittest.TestCase):
                     " word_count, page_count, classification, identity_status, identity_rule, has_math,"
                     " source_sha256, indexed_at FROM metadata WHERE zotero_attachment_key = 'ATTACH2'"
                 )
-                con.execute("INSERT INTO chunks VALUES (999, 99, 0, 0, 20, 'Consensus impostor.')")
+                con.execute(
+                    "INSERT INTO chunks (chunk_id, record_id, chunk_index, start_char, end_char, text)"
+                    " VALUES (999, 99, 0, 0, 20, 'Consensus impostor.')"
+                )
                 con.execute(
                     "INSERT INTO chunks_fts (rowid, title, creators, text, citation_key, record_id, chunk_id)"
                     " VALUES (999, '', '', 'Consensus impostor.', '', 99, 999)"

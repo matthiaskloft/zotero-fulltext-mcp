@@ -37,7 +37,9 @@ from pathlib import Path
 from zotero_pdf_text.zotero_db import read_only_uri
 from zotero_pdf_text.fts import _chunk_text, chunk_sha256, fts_body_text, image_markup_spans
 
-STRATEGIES = ("chars", "sentence", "structural")
+# "chars" is the fixed-window slicing production used before structure-based chunks, kept so
+# earlier experiment labels keep measuring the same thing; "production" is fts._chunk_text.
+STRATEGIES = ("chars", "production", "sentence", "structural")
 SWEEP_TARGETS = (128, 256, 384, 512, 768)
 BOUNDED_OVERLAP_FRACTION = 0.125  # inside the proposal's 10-15% bound
 EXPERIMENT_SUFFIX = ".experiment.sqlite"
@@ -111,7 +113,7 @@ class ChunkSpec:
 
     @property
     def unit(self) -> str:
-        return "chars" if self.strategy == "chars" else "tokens"
+        return "chars" if self.strategy in ("chars", "production") else "tokens"
 
     @property
     def label(self) -> str:
@@ -342,10 +344,28 @@ def _pack(text: str, atoms: list[Atom], target: int, overlap: int, tokenizer: To
     return chunks
 
 
+def _fixed_windows(text: str, chunk_chars: int, overlap_chars: int) -> list[tuple[int, int]]:
+    """Fixed character windows with overlap, trimmed of surrounding whitespace (pre-#80 production)."""
+    chunks: list[tuple[int, int]] = []
+    start = 0
+    while start < len(text):
+        end = min(start + chunk_chars, len(text))
+        raw = text[start:end]
+        if raw.strip():
+            lead = len(raw) - len(raw.lstrip())
+            chunks.append((start + lead, start + lead + len(raw.strip())))
+        if end >= len(text):
+            break
+        start = max(start + 1, end - overlap_chars)
+    return chunks
+
+
 def chunk_document(text: str, spec: ChunkSpec, tokenizer: Tokenizer) -> list[tuple[int, int]]:
     """Chunk ``text`` into ``(start, end)`` slices according to ``spec``."""
     if spec.strategy == "chars":
-        return [(start, end) for _, start, end, _ in _chunk_text(text, spec.target, spec.overlap)]
+        return _fixed_windows(text, spec.target, spec.overlap)
+    if spec.strategy == "production":
+        return [(start, end) for _, start, end, _, _ in _chunk_text(text, spec.target, spec.overlap)]
     if spec.strategy == "sentence":
         return _pack(text, _sentence_atoms(text, tokenizer, spec.target), spec.target, spec.overlap, tokenizer, False)
     return _pack(text, _structural_atoms(text, tokenizer, spec.target), spec.target, spec.overlap, tokenizer, True)

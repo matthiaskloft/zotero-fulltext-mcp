@@ -24,7 +24,8 @@ Zotero library (read-only)  →  PDFs  →  converted Markdown  →  search inde
   build is a new immutable **generation**; a small `current.json` pointer is switched atomically to
   the new one, so a failed build leaves the previous index working (`artifacts.py`).
 - **Search** is lexical: FTS5 with BM25 ranking over each record's title, creators, citation key and
-  body text, which is split into ~6000-character **chunks**.
+  body text, which is split into structure-based **chunks** of up to ~1500 characters (headings,
+  then paragraphs, then sentences), each with its physical PDF pages and heading path.
 - **Locators.** Each search hit carries a `source_locator` with a `chunk_sha256`. When a client reads
   the chunk back with that hash and the text has since changed, it gets `stale_locator` instead of
   different text under an old citation. Re-chunking the library therefore invalidates every locator

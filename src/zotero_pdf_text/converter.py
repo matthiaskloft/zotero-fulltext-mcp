@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import csv
 import hashlib
 import json
@@ -18,6 +19,7 @@ from pathlib import Path
 from typing import Callable
 
 from .config import ProjectConfig
+from .identity import strip_front_matter
 from .indexer import load_indexed_keys
 from .layout import new_run_dir, review_root
 from .library import (
@@ -32,6 +34,7 @@ from .library import (
 from ._atomic import atomic_write_text, replace_with_retry
 from .artifacts import ArtifactError, current_generation_jsonl
 from .checkpoint import ConversionCheckpoint, body_sha256, classify_entry
+from .pages import page_map_for_body, page_map_sidecar_path, write_page_map_sidecar
 from .timeout_candidates import (
     TimeoutCandidate,
     append_master_candidates,
@@ -589,6 +592,7 @@ def _convert_row(
     staged_images_root: Path | None = None
     extraction_images_dir = images_dir
     math_sidecar_path = raw_output_path.with_suffix(".math.json")
+    pages_sidecar_path = raw_output_path.with_suffix(".pages.json")
     effective_timeout = _effective_timeout(row, timeout_seconds, source_path)
     source_sha256_before = ""
     # Set once this row has cleared a fresh images_dir for its own extraction: from then on the
@@ -669,9 +673,14 @@ def _convert_row(
             # A native primary crash must not replace an already usable conversion
             # with fallback text while the lower-concurrency retry is pending.
             return _result(row, output_path, "error", fallback_note + "; existing Markdown retained"), None
-        markdown = raw_output_path.read_text(encoding="utf-8")
+        raw_markdown = raw_output_path.read_text(encoding="utf-8")
+        page_texts = _read_page_texts(pages_sidecar_path, raw_markdown)
         if extraction_tool == PRIMARY_EXTRACTION_TOOL:
-            markdown = relative_image_links(markdown, output_path)
+            # Per page, so the page boundaries survive the rewrite; no image link spans two pages.
+            page_texts = [(page, relative_image_links(text, output_path)) for page, text in page_texts]
+            markdown = relative_image_links(raw_markdown, output_path)
+        else:
+            markdown = raw_markdown
         has_math = _read_math_sidecar(math_sidecar_path)
         if staged_images_root is not None:
             staged_markdown = staged_images_root / output_path.name
@@ -703,6 +712,7 @@ def _convert_row(
                 raise
         else:
             atomic_write_text(output_path, _with_front_matter(row, markdown, extraction_tool, has_math=has_math))
+        _publish_page_map(output_path, page_texts)
         keep_images = extraction_tool == PRIMARY_EXTRACTION_TOOL
         result = _result(
             row,
@@ -745,6 +755,7 @@ def _convert_row(
     finally:
         raw_output_path.unlink(missing_ok=True)
         math_sidecar_path.unlink(missing_ok=True)
+        pages_sidecar_path.unlink(missing_ok=True)
         # A staging directory still holding the previous images is kept unless the new Markdown
         # was published: they are the only copy the old Markdown can still reference.
         if staged_images_root is not None and (published or not (staged_images_root / SWAP_BACKUP_DIRNAME).exists()):
@@ -1115,6 +1126,48 @@ def _read_math_sidecar(sidecar_path: Path) -> bool:
         return bool(data.get("has_math", False))
     except (OSError, ValueError):
         return False
+
+
+def _read_page_texts(sidecar_path: Path, raw_markdown: str) -> list[tuple[int, str]]:
+    """Split the extractor's raw output into its pages using the per-page lengths it recorded.
+
+    Returns [] when the lengths are missing or do not add up to the output, which publishes the
+    Markdown without a page map rather than with a wrong one.
+    """
+    try:
+        lengths = json.loads(sidecar_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    if not isinstance(lengths, list):
+        return []
+    pages: list[tuple[int, str]] = []
+    offset = 0
+    for entry in lengths:
+        if not (isinstance(entry, list) and len(entry) == 2 and all(type(v) is int and v >= 0 for v in entry)):
+            return []
+        page, length = entry
+        pages.append((page, raw_markdown[offset : offset + length]))
+        offset += length
+    return pages if offset == len(raw_markdown) else []
+
+
+def _publish_page_map(output_path: Path, page_texts: list[tuple[int, str]]) -> None:
+    """Record the page map of the Markdown just published at output_path, or remove a stale one.
+
+    The map addresses the stored body exactly as the indexer reads it back, so it is computed
+    from the published file rather than from the extractor output it came from.
+    """
+    # The Markdown is already published, so a failure here costs only the page map, never the row.
+    try:
+        body = strip_front_matter(output_path.read_text(encoding="utf-8"))
+        page_map = page_map_for_body(page_texts, body) if page_texts else None
+        if page_map is not None:
+            write_page_map_sidecar(output_path, body, page_map)
+            return
+    except OSError:
+        pass
+    with contextlib.suppress(OSError):
+        page_map_sidecar_path(output_path).unlink(missing_ok=True)
 
 
 def _extract_markdown(

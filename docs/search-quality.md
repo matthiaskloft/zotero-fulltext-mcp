@@ -146,7 +146,7 @@ quotes, for locator validation and for building experimental indexes. It is read
 
 `--chunking strategy:target[:overlap]` (repeatable) builds one scratch index per spec from
 `--corpus`; `--sweep sentence` or `--sweep structural` expands to 128/256/384/512/768-token
-targets, each with zero and bounded (12.5%) overlap. Strategies: `chars` (the current 6000/500
+targets, each with zero and bounded (12.5%) overlap. Strategies: `production` (the current structure-based chunker, `fts._chunk_text`), `chars` (the pre-#80 fixed-window 6000/500
 slicing, in characters), `sentence` (token-budgeted sentence packing) and `structural`
 (heading-bounded paragraph, table-row and display-equation packing with a sentence fallback;
 a chunk never crosses a heading). Every chunk is a contiguous slice of the original text, nothing
