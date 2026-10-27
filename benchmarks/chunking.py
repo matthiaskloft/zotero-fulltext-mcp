@@ -345,7 +345,7 @@ def _pack(text: str, atoms: list[Atom], target: int, overlap: int, tokenizer: To
 def chunk_document(text: str, spec: ChunkSpec, tokenizer: Tokenizer) -> list[tuple[int, int]]:
     """Chunk ``text`` into ``(start, end)`` slices according to ``spec``."""
     if spec.strategy == "chars":
-        return [(start, end) for _, start, end, _ in _chunk_text(text, spec.target, spec.overlap)]
+        return [(start, end) for _, start, end, _, _ in _chunk_text(text, spec.target, spec.overlap)]
     if spec.strategy == "sentence":
         return _pack(text, _sentence_atoms(text, tokenizer, spec.target), spec.target, spec.overlap, tokenizer, False)
     return _pack(text, _structural_atoms(text, tokenizer, spec.target), spec.target, spec.overlap, tokenizer, True)

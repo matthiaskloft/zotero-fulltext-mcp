@@ -74,6 +74,8 @@ class Library:
     def add(self, paper: Paper) -> None:
         doc = pymupdf.open()
         doc.new_page().insert_text((72, 72), f"{paper.title}\ndoi:{paper.doi}\n{paper.body}")
+        # A second page, so the end-to-end test covers a page map with more than one page.
+        doc.new_page().insert_text((72, 72), "Appendix on a second page.")
         doc.save(self.linked / f"{paper.attachment_key}.pdf")
         doc.close()
         self.papers.append(paper)
@@ -206,6 +208,16 @@ class ConvertIndexServeTests(unittest.TestCase):
             _, (passage,) = _call_server(server_command, [_fetch(search.structuredContent["results"][0])])
             self.assertFalse(passage.isError)
             self.assertIn("zebrafinch", passage.structuredContent["text"])
+            # Page boundaries measured at conversion reach the client as physical PDF pages.
+            pages = passage.structuredContent["pdf_pages"]
+            self.assertEqual((pages["start"], pages["end"]), (1, 2))
+            self.assertEqual(search.structuredContent["results"][0]["pdf_pages"], pages)
+            _, (page,) = _call_server(
+                server_command, [("get_page", {"attachment_key": FIRST.attachment_key, "page": 2})]
+            )
+            self.assertFalse(page.isError)
+            self.assertIn("Appendix on a second page.", page.structuredContent["text"])
+            self.assertNotIn("zebrafinch", page.structuredContent["text"])
 
     def test_incremental_conversion_and_reindex_keep_old_locators_valid(self):
         with tempfile.TemporaryDirectory() as tmp:

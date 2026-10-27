@@ -356,7 +356,22 @@ and null for an unscored index), `library_status` counts records by label under
 `by_extraction_quality`, and `list-degraded-records` lists the `degraded` and `unusable` records
 without any paths. A degraded record may be missing from search because extraction failed.
 
-The default chunk size is 6,000 characters with 500 characters of overlap.
+Chunks follow document structure (`chunking_strategy: "structure-v1"` in the generation
+manifest): the text is split at Markdown headings, each section's paragraphs are packed whole up to
+`chunk_chars` (default 1,500), and a paragraph longer than that is split at sentence ends with up to
+`overlap_chars` (default 150) of overlap. A chunk never crosses a heading, except that a section
+shorter than `chunk_chars / 4` (a heading followed directly by a subheading) is merged into the next.
+Each chunk stores `heading_path` (enclosing headings joined by ` > `) and `page_start`/`page_end`,
+the physical, 1-based PDF pages its characters fall on, computed from the record's `page_map`; both
+page columns are null when the record has no page map. The `pages` table holds each mapped page's
+stored text (`record_id`, `page`, `start_char`, `end_char`, `text`) for `get_page`.
+
+`page_map` in the index JSONL is a list of `[page, start_char, end_char]` over the record's `text`:
+contiguous, in order, reconstructing `text` exactly, with no entry for pages without text. It comes
+from `<stem>.pages.json` beside the Markdown, which binds the map to the hash of the body it was
+measured on, so text rewritten later (equation OCR, figure enrichment) is indexed without pages.
+Fallback-extractor records without that file take the map from their `## Page N` markers. Pages are
+indices into the PDF file, never printed journal page numbers (see `pages` in the metadata table).
 Stored chunk character ranges refer exactly to their trimmed stored text. FTS ranking deliberately
 weights title matches most strongly, citation-key matches next, and body text as the baseline.
 Search results include `markdown_sha256` and `matched_fields`. The latter is an ordered subset of

@@ -39,7 +39,7 @@ from typing import Callable, cast
 from ._atomic import replace_with_retry
 from .catalog import write_output_guides
 from .zotero_db import read_only_uri
-from .fts import DEFAULT_CHUNK_CHARS, DEFAULT_OVERLAP_CHARS, FtsBuildSummary, build_fts_index
+from .fts import CHUNKING_STRATEGY, DEFAULT_CHUNK_CHARS, DEFAULT_OVERLAP_CHARS, FtsBuildSummary, build_fts_index
 from .identity import front_matter_fields
 from .indexer import TextIndexRecord, _converted_rows, _record_from_manifest_row, _sha256
 from .zotero_metadata import ZOTERO_METADATA_KEYS
@@ -298,6 +298,7 @@ def stage_generation(
             "generation_id": generation_id,
             "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "command": command,
+            "chunking_strategy": CHUNKING_STRATEGY,
             "chunk_chars": chunk_chars,
             "overlap_chars": overlap_chars,
             "records": summary.records,
@@ -884,12 +885,17 @@ def chunking_params_from_current(index_root: Path) -> tuple[int, int]:
     """Read chunking parameters from the current generation's manifest, else the defaults.
 
     Successor generations must preserve the chunking a library was deliberately built with;
-    falling back to the defaults only happens when no managed generation exists yet.
+    falling back to the defaults only happens when no managed generation exists yet, or when
+    the current generation was chunked by another strategy, whose sizes do not carry over (the
+    fixed 6000-character windows that predate chunking_strategy would make oversized
+    structure-based chunks).
     """
     pointer = read_current_pointer(index_root)
     if pointer is None:
         return DEFAULT_CHUNK_CHARS, DEFAULT_OVERLAP_CHARS
     manifest = read_generation_manifest(index_root, str(pointer["current_generation"]))
+    if manifest.get("chunking_strategy") != CHUNKING_STRATEGY:
+        return DEFAULT_CHUNK_CHARS, DEFAULT_OVERLAP_CHARS
     chunk_chars = manifest.get("chunk_chars")
     overlap_chars = manifest.get("overlap_chars")
     if isinstance(chunk_chars, int) and isinstance(overlap_chars, int):

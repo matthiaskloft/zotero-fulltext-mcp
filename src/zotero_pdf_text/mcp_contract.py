@@ -60,6 +60,9 @@ from .fts import (
     index_statistics,
     FullTextResult,
     IndexSchemaUnsupportedError,
+    PageMapUnavailableError,
+    PageNotFoundError,
+    PageResult,
     MAX_QUERY_CHARS,
     MAX_QUERY_TERM_CHARS,
     MAX_QUERY_TERMS,
@@ -68,6 +71,7 @@ from .fts import (
     SearchResult,
     StaleLocatorError,
     get_fulltext,
+    get_page as get_page_fn,
     get_item_context as get_item_context_fn,
     get_markdown_path,
     indexed_state_by_attachment,
@@ -93,6 +97,7 @@ if TYPE_CHECKING:
     AttachmentKeyInput = object
     MaxCharsInput = object
     ChunkIndexInput = object
+    PageInput = object
     ChunkSha256Input = object
     ContentSha256Input = object
     ImageLinkInput = object
@@ -112,6 +117,10 @@ if TYPE_CHECKING:
 MAX_SEARCH_RESULTS = 20
 MAX_RETRIEVED_CHARS = 12_000
 MAX_CHUNK_INDEX = 100_000
+MAX_PDF_PAGE = 100_000
+# Labels every page number this surface returns: a physical page index into the PDF file, never
+# the page number printed on the page.
+PDF_PAGE_NUMBERING = "physical_pdf_page_1_based"
 MAX_CITATION_KEYS = 50
 MAX_CITATION_KEY_CHARS = 256
 MAX_CONTEXT_RECORDS = DEFAULT_CONTEXT_RECORD_LIMIT
@@ -140,6 +149,7 @@ DEFAULT_MCP_TOOL_NAMES = (
     "search_fulltext",
     "search_within_fulltext",
     "get_fulltext_chunk",
+    "get_page",
     "get_passage_image",
     "get_item_context",
     "lookup_citation_key",
@@ -221,6 +231,14 @@ class ReconvertProvenance(TypedDict):
     attachment_key: str
 
 
+class PdfPageRange(TypedDict):
+    """Measured physical PDF pages a passage spans; null wherever they were not recorded."""
+
+    start: int
+    end: int
+    numbering: str
+
+
 class SourceLocator(TypedDict):
     attachment_key: str
     content_sha256: str
@@ -244,6 +262,8 @@ class SearchRecord(TypedDict):
     snippet: str
     score: float
     matched_fields: list[str]
+    pdf_pages: PdfPageRange | None
+    heading_path: str
     has_math: bool
     warnings: list[str]
     source_locator: SourceLocator
@@ -274,9 +294,44 @@ class PassageResponse(TypedDict):
     has_more: bool | None
     text: str
     image_links: list[str]
+    pdf_pages: PdfPageRange | None
+    heading_path: str
+    has_page_map: bool
     has_math: bool
     warnings: list[str]
     source_locator: SourceLocator
+    provenance: Provenance
+
+
+class PageLocator(TypedDict):
+    attachment_key: str
+    content_sha256: str
+    page: int
+    numbering: str
+    page_sha256: str
+    char_start: int
+    char_end: int
+    truncated: bool
+    stored_page_char_start: int
+    stored_page_char_end: int
+
+
+class PageResponse(TypedDict):
+    attachment_key: str
+    parent_key: str
+    title: str
+    creators: str
+    year: str
+    doi: str
+    citation_key: str
+    page: int
+    previous_page: int | None
+    next_page: int | None
+    text: str
+    image_links: list[str]
+    has_math: bool
+    warnings: list[str]
+    page_locator: PageLocator
     provenance: Provenance
 
 
@@ -712,6 +767,7 @@ def create_server(
                     object,
                     WithJsonSchema({"anyOf": [{"type": "integer", "minimum": 0, "maximum": MAX_CHUNK_INDEX}, {"type": "null"}]}),
                 ],
+                PageInput=Annotated[object, WithJsonSchema({"type": "integer", "minimum": 1, "maximum": MAX_PDF_PAGE})],
                 ChunkSha256Input=Annotated[
                     object,
                     WithJsonSchema({"anyOf": [{"type": "string", "minLength": 1, "maxLength": MAX_CITATION_KEY_CHARS}, {"type": "null"}]}),
@@ -785,7 +841,9 @@ def create_server(
         Results are discovery candidates: retrieve the returned source_locator.chunk_index before
         treating a hit as body-text evidence. matched_fields identifies why the record matched;
         for metadata-only hits, the chunk locator is a navigation starting point rather than proof
-        that the query occurs in body text.
+        that the query occurs in body text. pdf_pages is the measured range of physical PDF pages
+        (1-based indices into the file, not printed page numbers) the hit's chunk spans, or null
+        when page boundaries were not recorded for that text; heading_path names its section.
 
         Optional filters: author (every creator role, editors included), title and citation_key
         need all their words in that field (whole words, any order, case and accents ignored);
@@ -885,7 +943,9 @@ def create_server(
         the document hash is not compared. Omitting chunk_index returns a bounded passage from the
         beginning of the converted document, and content_sha256 verifies that document; omitting
         both hashes skips verification. image_links lists the passage's images/... links (often
-        equations converted as images); view one with get_passage_image.
+        equations converted as images); view one with get_passage_image. pdf_pages gives the
+        measured physical PDF pages the stored chunk spans (null when not recorded, and then must
+        not be estimated); read a whole page with get_page.
         """
         def operation() -> PassageResponse:
             validated_chunk_index = _validate_chunk_index(chunk_index)
@@ -903,6 +963,34 @@ def create_server(
                     chunk_index=validated_chunk_index,
                     expected_content_sha256=validated_content_sha256,
                     expected_chunk_sha256=validated_chunk_sha256,
+                )
+            )
+
+        return _public_call(operation)
+
+    @mcp.tool(annotations=READ_ONLY_TOOL_ANNOTATIONS)
+    def get_page(
+        attachment_key: AttachmentKeyInput,
+        page: PageInput,
+        max_chars: MaxCharsInput = MAX_RETRIEVED_CHARS,
+    ) -> PageResponse:
+        """Return the bounded, untrusted stored text of one physical PDF page of an attachment.
+
+        page is a 1-based physical page index into the PDF file (a passage's pdf_pages.start or
+        .end), not the number printed on the page. Use it to check a quote against its whole page.
+        page_locator.page_sha256 identifies the full stored page text. An attachment whose page
+        boundaries were not recorded answers page_map_unavailable; a page without stored text
+        (blank, image-only, or past the end) answers page_not_found. previous_page and next_page
+        name the neighbouring pages that have text.
+        """
+
+        def operation() -> PageResponse:
+            return serialize_page_result(
+                get_page_fn(
+                    _resolve_request_db(db_path),
+                    attachment_key=_validate_attachment_key(attachment_key),
+                    page=_validate_pdf_page(page),
+                    max_chars=_validate_max_chars(max_chars),
                 )
             )
 
@@ -1279,7 +1367,7 @@ def build_mcp_instructions(
     write_tools = _enabled_write_tools(enable_reconvert=enable_reconvert, enable_retry_timeout=enable_retry_timeout)
     tool_map = [
         "search_fulltext and search_within_fulltext find hits",
-        "get_fulltext_chunk reads a passage",
+        "get_fulltext_chunk reads a passage and get_page a whole PDF page",
         "get_item_context and lookup_citation_key resolve items and citation keys",
         "library_status says how current the index is",
         "list_timeout_candidates and list_orphan_candidates list conversion follow-ups",
@@ -1299,7 +1387,7 @@ def build_mcp_instructions(
         "Zotero, converted text or the index unless the user explicitly approves that specific "
         "operation; a confirm string is "
         "not approval. Check library_status before calling a paper absent. Cite traceably and do "
-        "not invent PDF page numbers. Text from a record whose extraction_quality is degraded or "
+        "not invent PDF page numbers: cite only measured pdf_pages (physical PDF pages). Text from a record whose extraction_quality is degraded or "
         f"unusable may be incomplete; say so. To report a tool error or misleading result, suggest the user file {BUG_REPORT_URL}; "
         "never file it yourself, and help them strip paper text, identifying metadata, absolute "
         "paths, credentials, and attachment keys unless they choose to share them. "
@@ -1383,8 +1471,10 @@ def guide_response(
             "not guess which was meant); read chunk 0 with get_fulltext_chunk and follow "
             "next_chunk_index. Cite human-readable bibliographic metadata (title, creators, year, "
             "DOI or citation key) and retain the attachment key and source locator for "
-            "traceability; the attachment key is a retrieval handle, not a citation. Do not invent "
-            "PDF page numbers. Equations, figures and tables that converted as images appear as "
+            "traceability; the attachment key is a retrieval handle, not a citation. A passage's "
+            "pdf_pages are measured physical PDF page indices (1-based, not printed page numbers) "
+            "and may be cited as such. Do not invent PDF page numbers: when pdf_pages is null the "
+            "page is unknown and must never be estimated. get_page returns one whole physical page to check a quote. Equations, figures and tables that converted as images appear as "
             "images/... links, listed in the passage's image_links: view one with "
             "get_passage_image before concluding it is missing or asking for a reconversion."
             + bibtex
@@ -2033,6 +2123,8 @@ def serialize_search_result(result: SearchResult) -> SearchRecord:
         "snippet": result.snippet,
         "score": result.score,
         "matched_fields": result.matched_fields,
+        "pdf_pages": _pdf_pages(result.page_start, result.page_end),
+        "heading_path": result.heading_path,
         "has_math": result.has_math,
         "warnings": _reliability_warnings(
             result.identity_status,
@@ -2074,6 +2166,9 @@ def serialize_fulltext_result(result: FullTextResult) -> PassageResponse:
         "has_more": result.has_more,
         "text": result.text,
         "image_links": image_link_targets(result.text),
+        "pdf_pages": _pdf_pages(result.page_start, result.page_end),
+        "heading_path": result.heading_path,
+        "has_page_map": result.has_page_map,
         "has_math": result.has_math,
         "warnings": _reliability_warnings(
             result.identity_status,
@@ -2094,6 +2189,49 @@ def serialize_fulltext_result(result: FullTextResult) -> PassageResponse:
         ),
         "provenance": _provenance(result.zotero_attachment_key, result.extraction_tool, result.classification, result.identity_status),
     }
+
+
+def serialize_page_result(result: PageResult) -> PageResponse:
+    return {
+        "attachment_key": result.zotero_attachment_key,
+        "parent_key": result.zotero_parent_key,
+        "title": result.title,
+        "creators": result.creators,
+        "year": result.year,
+        "doi": result.doi,
+        "citation_key": result.citation_key,
+        "page": result.page,
+        "previous_page": result.previous_page,
+        "next_page": result.next_page,
+        "text": result.text,
+        "image_links": image_link_targets(result.text),
+        "has_math": result.has_math,
+        "warnings": _reliability_warnings(
+            result.identity_status,
+            result.classification,
+            result.has_math,
+            result.extraction_tool,
+        ),
+        "page_locator": {
+            "attachment_key": result.zotero_attachment_key,
+            "content_sha256": result.markdown_sha256,
+            "page": result.page,
+            "numbering": PDF_PAGE_NUMBERING,
+            "page_sha256": result.page_sha256,
+            "char_start": result.start_char,
+            "char_end": result.end_char,
+            "truncated": result.truncated,
+            "stored_page_char_start": result.stored_page_char_start,
+            "stored_page_char_end": result.stored_page_char_end,
+        },
+        "provenance": _provenance(result.zotero_attachment_key, result.extraction_tool, result.classification, result.identity_status),
+    }
+
+
+def _pdf_pages(page_start: int | None, page_end: int | None) -> PdfPageRange | None:
+    if page_start is None or page_end is None:
+        return None
+    return {"start": int(page_start), "end": int(page_end), "numbering": PDF_PAGE_NUMBERING}
 
 
 def serialize_item_context(context: dict[str, object]) -> ContextResponse:
@@ -2551,6 +2689,18 @@ def _public_call(operation: Callable[[], Any], *, integration: bool = False) -> 
         ) from None
     except ChunkNotFoundError:
         raise PublicMcpError("chunk_not_found", "No stored chunk matches that index for the attachment.") from None
+    except PageMapUnavailableError:
+        raise PublicMcpError(
+            "page_map_unavailable",
+            "Page boundaries were not recorded for this attachment's text, so no page can be read "
+            "and its page numbers are unknown; do not estimate them. A reconversion records them.",
+        ) from None
+    except PageNotFoundError:
+        raise PublicMcpError(
+            "page_not_found",
+            "That physical page has no stored text for the attachment: it may be blank, image-only, "
+            "or past the end of the PDF.",
+        ) from None
     except KeyError:
         raise PublicMcpError("attachment_not_found", "No indexed record matches that attachment key.") from None
     except sqlite3.DatabaseError:
@@ -2642,6 +2792,12 @@ def _validate_chunk_index(chunk_index: object | None) -> int | None:
     if isinstance(chunk_index, bool) or not isinstance(chunk_index, int) or not 0 <= chunk_index <= MAX_CHUNK_INDEX:
         raise PublicMcpError("invalid_chunk_index", f"chunk_index must be between 0 and {MAX_CHUNK_INDEX}.")
     return chunk_index
+
+
+def _validate_pdf_page(page: object) -> int:
+    if isinstance(page, bool) or not isinstance(page, int) or not 1 <= page <= MAX_PDF_PAGE:
+        raise PublicMcpError("invalid_page", f"page must be a physical PDF page between 1 and {MAX_PDF_PAGE}.")
+    return page
 
 
 def _validate_image_link(value: object) -> str:

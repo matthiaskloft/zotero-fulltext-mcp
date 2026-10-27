@@ -199,7 +199,8 @@ Try asking your assistant:
 
 Read the retrieved passages before relying on an answer. PDF extraction can lose equations
 or misread scanned pages; equations that converted as images stay viewable through
-`get_passage_image`. Search covers the **converted index**, so a missing hit does not
+`get_passage_image`. Passages give their physical PDF pages when they were recorded at conversion,
+and `get_page` shows a whole page to check a quote. Search covers the **converted index**, so a missing hit does not
 prove a paper is absent from Zotero. Ask the assistant to check `library_status` when coverage
 or freshness matters. The [MCP tool reference](docs/mcp-tools.md) explains retrieval,
 source locators, citation handling, and guidance for agents.

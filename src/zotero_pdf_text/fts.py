@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import bisect
 import contextlib
 import hashlib
 import json
@@ -12,12 +13,20 @@ from pathlib import Path
 from typing import Iterable, Literal, TypedDict, cast
 
 from ._atomic import replace_with_retry
+from .pages import PageMap, page_range, validate_page_map
 from .quality import detect_language, quality_signals_json, score_extraction
 from .zotero_db import read_only_uri
 
 
-DEFAULT_CHUNK_CHARS = 6000
-DEFAULT_OVERLAP_CHARS = 500
+# Chunks follow document structure (see _chunk_text): headings first, then paragraphs, then
+# sentences, within this budget. overlap_chars applies only where one paragraph has to be split.
+CHUNKING_STRATEGY = "structure-v1"
+DEFAULT_CHUNK_CHARS = 1500
+DEFAULT_OVERLAP_CHARS = 150
+# A section shorter than chunk_chars // this (a heading followed directly by a subheading, a
+# two-line abstract) is merged into the section after it instead of becoming a chunk of its own.
+MIN_SECTION_CHARS_FRACTION = 4
+MAX_HEADING_PATH_CHARS = 300
 MAX_QUERY_CHARS = 1_000
 MAX_QUERY_TERMS = 20
 MAX_QUERY_TERM_CHARS = 64
@@ -30,7 +39,8 @@ SEARCH_MODES = frozenset({"all_terms", "any_terms", "phrase"})
 # Starting guess for how many characters consecutive stored chunks advance by. An index is not
 # required to have been built with the default chunk_chars/overlap_chars, so this is only an
 # initial estimate for the first fetch in _fetch_covering_chunks below, never assumed correct.
-_CHUNK_ADVANCE_CHARS_ESTIMATE = max(DEFAULT_CHUNK_CHARS - DEFAULT_OVERLAP_CHARS, 1)
+# Structure-based chunks end at paragraph boundaries, so they are usually shorter than the budget.
+_CHUNK_ADVANCE_CHARS_ESTIMATE = max(DEFAULT_CHUNK_CHARS // 2, 1)
 _MAX_CHUNK_FETCH_ITERATIONS = 6
 DEFAULT_CONTEXT_RECORD_LIMIT = 50
 # Longer than any real image path; bounds the per-request link scan (see image_destination_spans).
@@ -74,6 +84,9 @@ class SearchResult:
     identity_status: str
     identity_rule: str
     has_math: bool
+    page_start: int | None = None
+    page_end: int | None = None
+    heading_path: str = ""
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -110,12 +123,54 @@ class FullTextResult:
     identity_rule: str
     has_math: bool
 
+    page_start: int | None = None
+    page_end: int | None = None
+    heading_path: str = ""
+    has_page_map: bool = False
+
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
 
 
 class ChunkNotFoundError(LookupError):
     """Raised when an attachment exists but an exact chunk index does not."""
+
+
+class PageMapUnavailableError(LookupError):
+    """Raised when an attachment's text has no measured page boundaries to read a page by."""
+
+
+class PageNotFoundError(LookupError):
+    """Raised when an attachment has a page map but no text on the requested physical page."""
+
+
+@dataclass(frozen=True)
+class PageResult:
+    zotero_parent_key: str
+    zotero_attachment_key: str
+    title: str
+    creators: str
+    year: str
+    doi: str
+    citation_key: str
+    page: int
+    previous_page: int | None
+    next_page: int | None
+    start_char: int
+    end_char: int
+    stored_page_char_start: int
+    stored_page_char_end: int
+    page_sha256: str
+    truncated: bool
+    text: str
+    markdown_sha256: str
+    extraction_tool: str
+    classification: str
+    identity_status: str
+    has_math: bool
+
+    def to_dict(self) -> dict[str, object]:
+        return asdict(self)
 
 
 class StaleLocatorError(LookupError):
@@ -159,6 +214,9 @@ class IndexSchemaUnsupportedError(RuntimeError):
 
 
 _REQUIRED_TABLES = frozenset({"metadata", "chunks", "chunks_fts"})
+# Added with structure-based chunking. Like the metadata columns that are not required, an index
+# built before them stays readable: it reports no pages (see _page_schema) and a rebuild adds them.
+PAGE_CHUNK_COLUMNS = ("page_start", "page_end", "heading_path")
 _REQUIRED_METADATA_COLUMNS = frozenset(
     {
         "record_id",
@@ -231,10 +289,14 @@ def build_fts_index(
                     total_words += int(record.get("word_count") or 0)
                     record_id = _insert_metadata(con, record)
                     record_text = record.get("text", "")
-                    image_spans = image_markup_spans(record_text) if isinstance(record_text, str) else []
+                    if not isinstance(record_text, str):
+                        record_text = ""
+                    image_spans = image_markup_spans(record_text)
+                    page_map = validate_page_map(record.get("page_map"), len(record_text)) or None
+                    _insert_pages(con, record_id, record_text, page_map)
                     for chunk in _chunk_text(record_text, chunk_chars, overlap_chars):
                         chunks += 1
-                        _insert_chunk(con, record_id, record, chunk, image_spans)
+                        _insert_chunk(con, record_id, record, chunk, image_spans, page_map)
             con.commit()
         finally:
             con.close()
@@ -360,6 +422,7 @@ def search_fts(
         # full stored chunk text. The full highlight()-vs-original comparison used to detect
         # matched_fields precisely is deferred to a second query scoped to just the rows that
         # survive ranking and LIMIT, so it never runs against the full candidate set.
+        chunk_page_columns = _chunk_page_columns(con, "c")
         rows = con.execute(
             f"""
             WITH matches AS (
@@ -382,6 +445,7 @@ def search_fts(
                     c.chunk_index,
                     c.start_char,
                     c.end_char,
+                    {chunk_page_columns},
                     m.markdown_sha256,
                     m.source_path,
                     m.markdown_path,
@@ -607,11 +671,15 @@ def get_fulltext(
     con = connect_readonly(db_path)
     con.row_factory = sqlite3.Row
     try:
+        page_schema = _page_schema(con)
+        has_page_map = (
+            "EXISTS (SELECT 1 FROM pages WHERE pages.record_id = metadata.record_id)" if page_schema else "0"
+        )
         metadata = con.execute(
-            """
+            f"""
             SELECT metadata.*, (
                 SELECT COUNT(*) FROM chunks WHERE chunks.record_id = metadata.record_id
-            ) AS chunk_count
+            ) AS chunk_count, {has_page_map} AS has_page_map
             FROM metadata
             WHERE zotero_attachment_key = ?
             """,
@@ -636,8 +704,8 @@ def get_fulltext(
             chunk_rows = _fetch_covering_chunks(con, metadata["record_id"], max_chars)
         else:
             chunk_rows = con.execute(
-                """
-                SELECT chunk_index, start_char, end_char, text
+                f"""
+                SELECT chunk_index, start_char, end_char, text, {_chunk_page_columns(con)}
                 FROM chunks
                 WHERE record_id = ? AND chunk_index = ?
                 ORDER BY chunk_index
@@ -648,6 +716,8 @@ def get_fulltext(
         con.close()
 
     chunk_count = int(metadata["chunk_count"])
+    page_start = page_end = None
+    heading_path = ""
     if chunk_index is not None and not chunk_rows:
         raise ChunkNotFoundError(f"Chunk {chunk_index} does not exist for attachment {attachment_key}")
 
@@ -676,6 +746,9 @@ def get_fulltext(
             parts.append(next_part)
             end_char = int(row["end_char"])
         text = "\n\n".join(parts)[:max_chars]
+        included = chunk_rows[: max(len(parts), 1)]
+        if included[0]["page_start"] is not None:
+            page_start, page_end = int(included[0]["page_start"]), int(included[-1]["page_end"])
         stored_chunk_char_start = stored_chunk_char_end = None
         truncated = end_char < int(metadata["char_count"] or 0)
         previous_chunk_index = next_chunk_index = has_more = None
@@ -690,6 +763,9 @@ def get_fulltext(
             chunk_index=chunk_index,
         )
         result_chunk_sha256 = chunk_sha256(row["text"])
+        # Like chunk_sha256, the page range describes the whole stored chunk, not a truncated slice.
+        page_start, page_end = row["page_start"], row["page_end"]
+        heading_path = row["heading_path"]
         stored_chunk_char_start = start_char = int(row["start_char"])
         stored_chunk_char_end = int(row["end_char"])
         text = row["text"][:max_chars]
@@ -721,12 +797,80 @@ def get_fulltext(
         stored_chunk_char_end=stored_chunk_char_end,
         truncated=truncated,
         text=text,
+        page_start=page_start,
+        page_end=page_end,
+        heading_path=heading_path,
+        has_page_map=bool(metadata["has_page_map"]),
         source_path=metadata["source_path"],
         markdown_path=metadata["markdown_path"],
         extraction_tool=metadata["extraction_tool"],
         classification=metadata["classification"],
         identity_status=metadata["identity_status"],
         identity_rule=metadata["identity_rule"],
+        has_math=bool(metadata["has_math"]),
+    )
+
+
+def get_page(db_path: Path, *, attachment_key: str, page: int, max_chars: int) -> PageResult:
+    """Return the stored text of one physical PDF page, at most max_chars of it.
+
+    Raises KeyError for an unknown attachment, PageMapUnavailableError when its text has no
+    measured page boundaries, and PageNotFoundError when the page produced no text or does not
+    exist. Offsets address the record's stored text, like chunk offsets.
+    """
+    con = connect_readonly(db_path)
+    con.row_factory = sqlite3.Row
+    try:
+        metadata = con.execute(
+            "SELECT * FROM metadata WHERE zotero_attachment_key = ?", (attachment_key,)
+        ).fetchone()
+        if metadata is None:
+            raise KeyError(f"No record found for attachment key {attachment_key}")
+        record_id = metadata["record_id"]
+        if not _page_schema(con):
+            raise PageMapUnavailableError(f"The index predates page maps; rebuild it to read {attachment_key} by page")
+        row = con.execute(
+            "SELECT page, start_char, end_char, text FROM pages WHERE record_id = ? AND page = ?",
+            (record_id, page),
+        ).fetchone()
+        if row is None:
+            if con.execute("SELECT 1 FROM pages WHERE record_id = ? LIMIT 1", (record_id,)).fetchone() is None:
+                raise PageMapUnavailableError(f"Attachment {attachment_key} has no recorded page boundaries")
+            raise PageNotFoundError(f"Page {page} of attachment {attachment_key} has no stored text")
+        neighbours = con.execute(
+            """
+            SELECT
+                (SELECT MAX(page) FROM pages WHERE record_id = ? AND page < ?) AS previous_page,
+                (SELECT MIN(page) FROM pages WHERE record_id = ? AND page > ?) AS next_page
+            """,
+            (record_id, page, record_id, page),
+        ).fetchone()
+    finally:
+        con.close()
+    stored_start = int(row["start_char"])
+    text = row["text"][:max_chars]
+    return PageResult(
+        zotero_parent_key=metadata["zotero_parent_key"],
+        zotero_attachment_key=metadata["zotero_attachment_key"],
+        title=metadata["title"],
+        creators=metadata["creators"],
+        year=metadata["year"],
+        doi=metadata["doi"],
+        citation_key=metadata["citation_key"],
+        page=int(row["page"]),
+        previous_page=neighbours["previous_page"],
+        next_page=neighbours["next_page"],
+        start_char=stored_start,
+        end_char=stored_start + len(text),
+        stored_page_char_start=stored_start,
+        stored_page_char_end=int(row["end_char"]),
+        page_sha256=chunk_sha256(row["text"]),
+        truncated=len(text) < len(row["text"]),
+        text=text,
+        markdown_sha256=metadata["markdown_sha256"],
+        extraction_tool=metadata["extraction_tool"],
+        classification=metadata["classification"],
+        identity_status=metadata["identity_status"],
         has_math=bool(metadata["has_math"]),
     )
 
@@ -763,11 +907,12 @@ def _fetch_covering_chunks(con: sqlite3.Connection, record_id: int, max_chars: i
     entire large document's chunks.
     """
     limit = math.ceil(max_chars / _CHUNK_ADVANCE_CHARS_ESTIMATE) + 1
+    page_columns = _chunk_page_columns(con)
     rows: list[sqlite3.Row] = []
     for _ in range(_MAX_CHUNK_FETCH_ITERATIONS):
         rows = con.execute(
-            """
-            SELECT chunk_index, start_char, end_char, text
+            f"""
+            SELECT chunk_index, start_char, end_char, text, {page_columns}
             FROM chunks
             WHERE record_id = ?
             ORDER BY chunk_index
@@ -998,7 +1143,7 @@ def index_statistics(
         # An index built before extraction quality was scored has no such column. Report its rows
         # as "unscored" and say the schema is not current, rather than failing the whole summary.
         columns = {row[1] for row in con.execute("PRAGMA table_info(metadata)").fetchall()}
-        schema_current = set(DERIVED_COLUMNS + ZOTERO_TEXT_COLUMNS + ZOTERO_JSON_COLUMNS) <= columns
+        schema_current = set(DERIVED_COLUMNS + ZOTERO_TEXT_COLUMNS + ZOTERO_JSON_COLUMNS) <= columns and _page_schema(con)
         populated = (
             int(con.execute("SELECT COUNT(*) FROM metadata WHERE item_type != ''").fetchone()[0])
             if "item_type" in columns
@@ -1160,9 +1305,21 @@ def _create_schema(con: sqlite3.Connection) -> None:
             start_char INTEGER NOT NULL,
             end_char INTEGER NOT NULL,
             text TEXT NOT NULL,
+            page_start INTEGER,
+            page_end INTEGER,
+            heading_path TEXT NOT NULL DEFAULT '',
             FOREIGN KEY(record_id) REFERENCES metadata(record_id)
         );
         CREATE INDEX chunks_record_chunk_idx ON chunks(record_id, chunk_index);
+        CREATE TABLE pages (
+            record_id INTEGER NOT NULL,
+            page INTEGER NOT NULL,
+            start_char INTEGER NOT NULL,
+            end_char INTEGER NOT NULL,
+            text TEXT NOT NULL,
+            PRIMARY KEY(record_id, page),
+            FOREIGN KEY(record_id) REFERENCES metadata(record_id)
+        );
         CREATE VIRTUAL TABLE chunks_fts USING fts5(
             title,
             creators,
@@ -1422,16 +1579,19 @@ def _insert_chunk(
     con: sqlite3.Connection,
     record_id: int,
     record: dict[str, object],
-    chunk: tuple[int, int, int, str],
+    chunk: tuple[int, int, int, str, str],
     image_spans: list[tuple[int, int]],
+    page_map: PageMap | None = None,
 ) -> None:
-    chunk_index, start_char, end_char, text = chunk
+    chunk_index, start_char, end_char, text, heading_path = chunk
+    pages = page_range(page_map, start_char, end_char) if page_map else None
+    page_start, page_end = pages if pages else (None, None)
     cursor = con.execute(
         """
-        INSERT INTO chunks (record_id, chunk_index, start_char, end_char, text)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO chunks (record_id, chunk_index, start_char, end_char, text, page_start, page_end, heading_path)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """,
-        (record_id, chunk_index, start_char, end_char, text),
+        (record_id, chunk_index, start_char, end_char, text, page_start, page_end, heading_path),
     )
     chunk_id = int(cast(int, cursor.lastrowid))
     con.execute(
@@ -1451,24 +1611,142 @@ def _insert_chunk(
     )
 
 
-def _chunk_text(text: str, chunk_chars: int, overlap_chars: int) -> Iterable[tuple[int, int, int, str]]:
+def _insert_pages(con: sqlite3.Connection, record_id: int, text: str, page_map: PageMap | None) -> None:
+    for page, start_char, end_char in page_map or ():
+        con.execute(
+            "INSERT INTO pages (record_id, page, start_char, end_char, text) VALUES (?, ?, ?, ?, ?)",
+            (record_id, page, start_char, end_char, text[start_char:end_char]),
+        )
+
+
+def _page_schema(con: sqlite3.Connection) -> bool:
+    """Whether this index has the page table and chunk page columns (built after page maps)."""
+    if con.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'pages'").fetchone() is None:
+        return False
+    columns = {row[1] for row in con.execute("PRAGMA table_info(chunks)").fetchall()}
+    return set(PAGE_CHUNK_COLUMNS) <= columns
+
+
+def _chunk_page_columns(con: sqlite3.Connection, alias: str = "") -> str:
+    prefix = f"{alias}." if alias else ""
+    if _page_schema(con):
+        return ", ".join(f"{prefix}{column}" for column in PAGE_CHUNK_COLUMNS)
+    return "NULL AS page_start, NULL AS page_end, '' AS heading_path"
+
+
+_HEADING_RE = re.compile(r"^(#{1,6})[ \t]+(.+?)[ \t#]*$", re.MULTILINE)
+_FENCE_RE = re.compile(r"^[ \t]{0,3}(```|~~~)", re.MULTILINE)
+# The plain-text fallback's page markers look like headings but are not document structure.
+_FALLBACK_PAGE_MARKER_RE = re.compile(r"## Page \d+")
+_PARAGRAPH_BREAK_RE = re.compile(r"\n[ \t]*\n")
+_SENTENCE_END_RE = re.compile(r"(?<=[.!?])[\"')\]]*\s+")
+
+
+def _chunk_text(text: str, chunk_chars: int, overlap_chars: int) -> Iterable[tuple[int, int, int, str, str]]:
+    """Split text into chunks that follow its structure: (index, start, end, text, heading_path).
+
+    Rules, in order: a chunk never crosses a Markdown heading, except that a section shorter than
+    chunk_chars // MIN_SECTION_CHARS_FRACTION is merged into the section after it; within a
+    section, whole paragraphs are packed up to chunk_chars; a paragraph longer than that is split
+    at sentence ends, consecutive pieces overlapping by up to overlap_chars; a sentence longer
+    than chunk_chars is cut at chunk_chars. Offsets address ``text``; chunk text is the stripped
+    slice. heading_path joins the enclosing headings with " > ".
+    """
     _validate_chunking(chunk_chars, overlap_chars)
     if not text:
         return
-    start = 0
     chunk_index = 0
-    text_len = len(text)
-    while start < text_len:
-        end = min(start + chunk_chars, text_len)
-        raw_chunk = text[start:end]
-        chunk = raw_chunk.strip()
-        if chunk:
-            leading_whitespace = len(raw_chunk) - len(raw_chunk.lstrip())
-            yield chunk_index, start + leading_whitespace, start + leading_whitespace + len(chunk), chunk
-            chunk_index += 1
-        if end >= text_len:
-            break
-        start = max(start + 1, end - overlap_chars)
+    for sec_start, sec_end, heading_path in _sections(text, max(chunk_chars // MIN_SECTION_CHARS_FRACTION, 1)):
+        for start, end in _pack_section(text, sec_start, sec_end, chunk_chars, overlap_chars):
+            raw = text[start:end]
+            chunk = raw.strip()
+            if chunk:
+                lead = len(raw) - len(raw.lstrip())
+                yield chunk_index, start + lead, start + lead + len(chunk), chunk, heading_path
+                chunk_index += 1
+
+
+def _sections(text: str, min_chars: int) -> list[tuple[int, int, str]]:
+    """Return (start, end, heading_path) spans that start at headings, small ones merged forward."""
+    fences = [m.start() for m in _FENCE_RE.finditer(text)]
+    starts: list[tuple[int, str]] = [(0, "")]
+    stack: list[tuple[int, str]] = []
+    for match in _HEADING_RE.finditer(text):
+        # A "#" line inside a code fence (an odd number of fence lines before it) is code.
+        if bisect.bisect_left(fences, match.start()) % 2 or _FALLBACK_PAGE_MARKER_RE.fullmatch(match.group(0)):
+            continue
+        level = len(match.group(1))
+        title = match.group(2).replace("**", "").replace("__", "").strip()
+        while stack and stack[-1][0] >= level:
+            stack.pop()
+        stack.append((level, title))
+        path = " > ".join(name for _level, name in stack if name)
+        starts.append((match.start(), path[:MAX_HEADING_PATH_CHARS]))
+    bounds = [start for start, _path in starts] + [len(text)]
+    sections: list[tuple[int, int, str]] = []
+    pending_start: int | None = None
+    # A merged span is labelled by its first section that has text under its heading, so text
+    # never appears under a later heading; a run of bare headings takes the deepest one's path.
+    pending_path: str | None = None
+    for i, (start, path) in enumerate(starts):
+        end = bounds[i + 1]
+        if end <= start:
+            continue
+        merged_start = start if pending_start is None else pending_start
+        if pending_path is None and _has_body(text, start, end, heading=i > 0):
+            pending_path = path
+        if len(text[merged_start:end].strip()) < min_chars and i + 1 < len(starts):
+            pending_start = merged_start
+            continue
+        sections.append((merged_start, end, path if pending_path is None else pending_path))
+        pending_start = pending_path = None
+    return sections
+
+
+def _has_body(text: str, start: int, end: int, *, heading: bool) -> bool:
+    section = text[start:end]
+    if heading:
+        section = section.split("\n", 1)[1] if "\n" in section else ""
+    return bool(section.strip())
+
+
+def _pack_section(text: str, start: int, end: int, chunk_chars: int, overlap_chars: int) -> Iterable[tuple[int, int]]:
+    """Yield (start, end) spans packing the section's paragraphs into at most chunk_chars each."""
+    breaks = [m.end() for m in _PARAGRAPH_BREAK_RE.finditer(text, start, end)]
+    current_start: int | None = None
+    current_end = start
+    for p_start, p_end in zip([start] + breaks, breaks + [end]):
+        if current_start is not None and len(text[current_start:p_end].strip()) <= chunk_chars:
+            current_end = p_end
+            continue
+        if current_start is not None:
+            yield current_start, current_end
+            current_start = None
+        if len(text[p_start:p_end].strip()) <= chunk_chars:
+            current_start, current_end = p_start, p_end
+        else:
+            yield from _split_long(text, p_start, p_end, chunk_chars, overlap_chars)
+    if current_start is not None:
+        yield current_start, current_end
+
+
+def _split_long(text: str, start: int, end: int, chunk_chars: int, overlap_chars: int) -> Iterable[tuple[int, int]]:
+    """Split one over-long paragraph at sentence ends, overlapping consecutive pieces."""
+    sentence_starts = [m.end() for m in _SENTENCE_END_RE.finditer(text, start, end) if m.end() < end]
+    pos = previous_cut = start
+    while pos < end:
+        limit = pos + chunk_chars
+        if limit >= end:
+            yield pos, end
+            return
+        # Past the previous cut, so an overlapping piece never ends where the one before it did.
+        fitting = [s for s in sentence_starts if max(pos, previous_cut) < s <= limit]
+        cut = fitting[-1] if fitting else limit
+        previous_cut = cut
+        yield pos, cut
+        # Restart at the earliest sentence start within the overlap window, else exactly at cut.
+        overlap = [s for s in sentence_starts if max(cut - overlap_chars, pos + 1) <= s < cut]
+        pos = overlap[0] if overlap else cut
 
 
 def _validate_chunking(chunk_chars: int, overlap_chars: int) -> None:

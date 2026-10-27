@@ -811,7 +811,8 @@ attachment key alone is not a bibliography. Check `matched_fields` first: for a 
 the located chunk is a navigation starting point rather than proof that the query occurs in the
 body. Exact retrieval reports adjacent chunk indexes and whether `max_chars` truncated the stored
 chunk. Locator `content_sha256` values bind evidence to converted Markdown content, not to an
-index generation, and character offsets are not PDF page numbers. `chunk_sha256` binds it to one
+index generation, and character offsets are not PDF page numbers (`pdf_pages` gives the measured
+physical pages where recorded). `chunk_sha256` binds it to one
 stored passage instead of the whole document: prefer it, since a document-level check also refuses
 locators into passages that did not themselves change. What it guarantees is textual rather than
 positional -- the passage returned is the passage cited, while the surrounding document may have
