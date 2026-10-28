@@ -53,6 +53,14 @@ class ChunkerTests(unittest.TestCase):
     def _chunks(self, text, spec):
         return chunking.chunk_document(text, chunking.parse_spec(spec), TOKENIZER)
 
+    def test_jsonl_corpus_keeps_unicode_line_separators_inside_records(self):
+        # json.dumps leaves U+2028 and similar separators raw; only "\n" ends a JSONL record.
+        with tempfile.TemporaryDirectory() as tmp:
+            jsonl = Path(tmp) / "c.jsonl"
+            record = {"zotero_attachment_key": "K1", "citation_key": "c1", "text": "a\u2028b\x1cc"}
+            jsonl.write_text(json.dumps(record, ensure_ascii=False) + "\n", encoding="utf-8")
+            self.assertEqual(chunking.load_corpus(jsonl)["K1"].text, "a\u2028b\x1cc")
+
     def test_production_strategy_reproduces_the_current_production_slicing(self):
         with tempfile.TemporaryDirectory() as tmp:
             jsonl = Path(tmp) / "c.jsonl"
