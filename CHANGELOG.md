@@ -5,6 +5,8 @@ All notable changes to this project are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.15.1] - 2026-10-28
+
 ### Changed
 
 - `guide('search')` and the `search_fulltext` docstring tell agents to search with 2-4
@@ -1175,7 +1177,8 @@ author's own machine.
 
 Initial import of the Zotero full-text conversion pipeline, CLI, and MCP server. Not tagged.
 
-[Unreleased]: https://github.com/matthiaskloft/zotero-fulltext-mcp/compare/v0.15.0...HEAD
+[Unreleased]: https://github.com/matthiaskloft/zotero-fulltext-mcp/compare/v0.15.1...HEAD
+[0.15.1]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.15.1
 [0.15.0]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.15.0
 [0.14.0]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.14.0
 [0.13.1]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.13.1
