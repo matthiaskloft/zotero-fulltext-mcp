@@ -1443,7 +1443,7 @@ class ManagedIndexCliTests(unittest.TestCase):
             current, added = [json.loads(line) for line in current_generation_jsonl(index_root).read_text(encoding="utf-8").splitlines()]
             self.assertEqual(current["text"], "Improved searchable body")
             self.assertEqual(current["source_sha256"], row["source_sha256"])
-            self.assertEqual(current["markdown_path"], str(output_root / "library" / "AAAA1111" / "versions" / result["generation_id"] / "AAAA1111.md"))
+            self.assertEqual(current["markdown_path"], str((output_root / "library" / "AAAA1111" / "versions" / result["generation_id"] / "AAAA1111.md").resolve()))
             self.assertEqual(current["extraction_tool"], "pymupdf4llm.to_markdown")
             self.assertEqual(added["text"], "New searchable body")
             current_db = resolve_reader_db_path(index_root / "zotero_text_index.sqlite")

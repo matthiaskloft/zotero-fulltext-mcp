@@ -443,7 +443,7 @@ class LibraryRetryTests(unittest.TestCase):
             result = retry_timeout_candidate("ATTKEY01", config=self.config)
 
         self.assertTrue(result.ok, result.error)
-        self.assertTrue(Path(result.markdown_path).is_relative_to(self.markdown.parent / "versions"))
+        self.assertTrue(Path(result.markdown_path).is_relative_to((self.markdown.parent / "versions").resolve()))
         records = [json.loads(line) for line in current_generation_jsonl(self.output_root / "index").read_text(encoding="utf-8").splitlines() if line]
         self.assertEqual([record["markdown_path"] for record in records], [result.markdown_path])
         self.assertIn("Extracted", Path(result.markdown_path).read_text(encoding="utf-8"))

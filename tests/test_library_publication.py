@@ -315,3 +315,38 @@ def test_missing_revision_images_never_fall_back_to_canonical_images(tmp_path):
     misleading.mkdir(parents=True)
     (misleading / "old.png").write_bytes(b"unrelated image")
     assert locate_images_dir(Path(record["markdown_path"]), attachment_key=KEY, output_root=tmp_path) is None
+
+
+@pytest.mark.parametrize("command,options,expected", [
+    ("rebuild-index", [], 0),
+    ("rebuild-index", ["--keep-current"], 2),
+    ("update-index", [], 2),
+    ("update-index", ["--replace-existing"], 2),
+])
+def test_missing_current_jsonl_allows_only_independent_manifest_rebuild(tmp_path, command, options, expected, capsys):
+    from zotero_pdf_text.cli import main
+
+    first = seed(tmp_path)
+    _, markdown = conversion(tmp_path, body="Recovered evidence")
+    manifest = tmp_path / "manifest.csv"
+    row = {
+        "status": "converted", "output_path": str(markdown), "zotero_attachment_key": KEY,
+        "classification": "mapped_verified", "identity_status": "verified",
+    }
+    with manifest.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(row))
+        writer.writeheader()
+        writer.writerow(row)
+    first.jsonl_path.unlink()
+
+    assert main([command, "--output-root", str(tmp_path), "--manifest", str(manifest), *options]) == expected
+    output = capsys.readouterr()
+    if expected == 0:
+        assert json.loads(output.out)["generation_id"] != first.generation_id
+        record = current(tmp_path)[0]
+        assert record["text"] == "Recovered evidence"
+        assert Path(record["markdown_path"]).is_file()
+    else:
+        assert "JSONL file is missing" in output.err
+        assert read_current_pointer(tmp_path / "index")["current_generation"] == first.generation_id
+    assert (tmp_path / "library" / KEY / f"{KEY}.md").read_text(encoding="utf-8") == "Old evidence"

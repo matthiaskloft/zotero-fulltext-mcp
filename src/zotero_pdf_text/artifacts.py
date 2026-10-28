@@ -242,14 +242,16 @@ def resolve_reader_db_path(db_path: Path) -> Path:
     return resolve_reader_generation(db_path).db_path
 
 
-def current_generation_jsonl(index_root: Path) -> Path | None:
-    """Return the current generation's JSONL path, or None when the layout is legacy."""
+def current_generation_jsonl(index_root: Path, *, allow_missing: bool = False) -> Path | None:
+    """Return the current JSONL, optionally tolerating its absence for comparison-only reads."""
     pointer = read_current_pointer(index_root)
     if pointer is None:
         return None
     generation_dir = resolve_generation_dir(index_root, str(pointer["current_generation"]))
     jsonl_path = generation_dir / GENERATION_JSONL_FILENAME
     if not jsonl_path.is_file():
+        if allow_missing:
+            return None
         raise CurrentPointerError(
             f"current.json names generation '{pointer['current_generation']}' but its JSONL "
             "file is missing. Re-publish with 'zotero-pdf-text rebuild-index'."
@@ -575,7 +577,9 @@ def stage_and_publish(
         from ._library_publish import stage_library_files
 
         original_writer = write_jsonl
-        current_jsonl = current_generation_jsonl(index_root)
+        # This comparison only avoids recopying retained assets. Merge writers still require
+        # the current JSONL themselves; an independent manifest rebuild must not depend on it.
+        current_jsonl = current_generation_jsonl(index_root, allow_missing=True)
 
         def write_jsonl(path: Path) -> None:
             original_writer(path)
