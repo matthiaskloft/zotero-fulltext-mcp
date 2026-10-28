@@ -836,8 +836,9 @@ def create_server(
     ) -> SearchResponse:
         """Search title, creators, citation key, and converted body text.
 
-        search_mode: "all_terms" (default) requires every normalized query term; "any_terms" is a
-        broader fallback that matches any term; "phrase" requires the normalized terms in order.
+        search_mode: "all_terms" (default) requires every normalized query term, so pass 2-4
+        distinctive terms rather than a question; "any_terms" is a broader fallback that matches any
+        term; "phrase" requires the normalized terms in order.
         Results are discovery candidates: retrieve the returned source_locator.chunk_index before
         treating a hit as body-text evidence. matched_fields identifies why the record matched;
         for metadata-only hits, the chunk locator is a navigation starting point rather than proof
@@ -1448,9 +1449,15 @@ def guide_response(
         )
     elif topic == "search":
         text = (
-            "Start with search_fulltext using concise terms and search_mode all_terms (the default: "
-            "every normalized term must match). Use any_terms only to broaden a search that found "
-            "too little, and phrase for exact wording in order. To restrict by field, pass author, "
+            "Start with search_fulltext using 2-4 distinctive terms (technical terms, abbreviations, "
+            "names, numbers) and search_mode all_terms (the default: every normalized term must "
+            "match); leave out question words and generic words such as how, effect or results. "
+            "If nothing matches, drop the most generic term before switching to any_terms, which "
+            "broadens a search that found too little; use phrase for exact wording in order. "
+            "Passages are about 1,500 characters, so an answer often sits in the next or previous "
+            "chunk of a hit: read the neighbours (next_chunk_index) before concluding a paper does "
+            "not say it, and in a paper that is clearly right use search_within_fulltext to find "
+            "the passage. heading_path names a hit's section. To restrict by field, pass author, "
             "title or citation_key (all their words must match that field) and year_from/year_to; "
             "papers by X about Y is author=\"X\", query=\"Y\", and a filter alone lists a "
             "field's papers. A hit is discovery, not evidence: "
