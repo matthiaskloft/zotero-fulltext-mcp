@@ -5,6 +5,13 @@ All notable changes to this project are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Changed
+
+- `guide('search')` and the `search_fulltext` docstring tell agents to search with 2-4
+  distinctive terms instead of a question, drop the most generic term before switching to
+  `any_terms`, and read neighbouring chunks before concluding a paper lacks an answer. In a
+  blind-agent test on 22 questions the passage was found for 15 instead of 11.
+
 ### Fixed
 
 - The passage benchmark could not read a real `index.jsonl` corpus: it split records with
