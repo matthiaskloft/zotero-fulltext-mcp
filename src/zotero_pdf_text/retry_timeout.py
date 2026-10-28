@@ -17,6 +17,7 @@ from .config import ProjectConfig
 from .converter import convert_verified
 from .indexer import _record_from_manifest_row
 from .layout import REVIEW_DIRNAME, new_run_dir
+from .library import library_revision_markdown_path
 from .lock import PipelineLockedError, pipeline_write_lock
 from .timeout_candidates import (
     STATUS_PENDING,
@@ -124,11 +125,11 @@ def retry_timeout_candidate(
 ) -> RetryTimeoutResult:
     """Reconvert one recorded timeout candidate with a longer budget.
 
-    Always converts into a fresh run directory, never into the canonical library: the Markdown the
+    Always converts into a fresh run directory: the Markdown the
     current index reads is not touched, so a retry that fails at any point -- conversion, manifest,
     publication, or a hard exit -- leaves the index and the files it reads in step. Only a
     successful result gets promoted, by publishing a successor managed index generation whose
-    record points at the run directory. A failed retry leaves the published index and the
+    record points at the canonical library. A failed retry leaves the published index and the
     candidate's status untouched; the candidate's own
     occurrence_count/last_detected_at are refreshed automatically by the nested
     convert_verified() call if it times out again.
@@ -223,10 +224,11 @@ def retry_timeout_candidate(
 
             manifest_row = manifest_rows[0]
             new_record = _record_from_manifest_row(manifest_row)
-            stage_and_publish(
+            info = stage_and_publish(
                 index_root,
                 write_jsonl_upserting_record(current_jsonl, attachment_key, new_record),
                 command="retry-timeout",
+                publish_library=True,
             )
             mark_status(
                 candidates_jsonl,
@@ -253,7 +255,7 @@ def retry_timeout_candidate(
         new_status=STATUS_RESOLVED,
         timeout_seconds_used=next_timeout,
         extraction_tool=manifest_row["extraction_tool"],
-        markdown_path=manifest_row["output_path"],
+        markdown_path=str(library_revision_markdown_path(config, attachment_key, info.generation_id).resolve()),
         error="",
         resolved_at=now,
     )

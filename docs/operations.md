@@ -55,6 +55,27 @@ images in `library\<attachment-key>\images\`. The run folder `runs\<date>_<time>
 manifest, checkpoint and summary. A row whose identity is not verified, and every row of
 `convert-sample` and `verify-unverified`, still writes into its run folder.
 
+Provenance reconversion, index repair and `retry-timeout` extract into isolated run folders.
+On successful index publication, accepted conversions live in immutable library revisions:
+`library/<key>/versions/<generation>/<key>.md`, with sibling `images/` and measured page maps.
+`rebuild-index --manifest` and
+`update-index --manifest` also publish accepted review output there. Unaccepted review files
+remain in quarantine. Run manifests and checkpoints keep their original paths for resume;
+the published index points to the library copy. `--keep-current` retains better extractions
+without replacing their files.
+
+Library replacements are staged before the index is built and validated. Publication installs
+the new revision without changing any older files, then commits the index pointer. Readers of
+either generation therefore retain matching Markdown and images, including before recovery
+after a crash. An error removes only unpublished revisions. The next writer cleans up an
+interrupted publication according to whether the pointer committed. Keep the publish journal
+and its generation directory until recovery finishes.
+
+Published library revisions are retained even when index-generation retention removes their
+originating generation: newer indexes can still reference them. No revision pruning is performed.
+Existing root-level `<key>.md` and images remain unchanged; use `library/catalog.md` or the
+indexed Markdown path to locate the current conversion.
+
 A library file is shared by every run, so a new run treats one it did not record itself with
 care. It is reused unchanged when the published index already holds exactly that file and the
 source PDF still has the hash it was extracted from; otherwise it is re-extracted, and the old
@@ -115,9 +136,9 @@ after extraction succeeds:
 The output root has four folders, and every publication rewrites a `README.md` at its top that
 explains them:
 
-- `library/<attachment-key>/`, holding `<attachment-key>.md` and `images/`, is the one current
-  copy of each paper converted by `convert-verified` or `convert-new`, so the index reads those
-  papers from a path that never changes. `library/catalog.md` (clickable) and
+- `library/<attachment-key>/` holds initial `<attachment-key>.md` and `images/` files, plus
+  accepted replacements under `versions/<generation>/`. The index references the exact conversion
+  it was built from. `library/catalog.md` (clickable) and
   `library/catalog.csv` (spreadsheet) list every indexed paper by citation key, year, authors and
   title, with links relative to the catalog, so they open the right file on any machine the
   folder is synced to.
@@ -192,7 +213,7 @@ with the new conversion manifest. Existing keys are replaced only when the row i
 its Markdown front matter names that attachment, and its recorded source hash still matches the
 PDF. `skipped_existing` and failed rows cannot replace indexed text. Duplicate attachment keys
 in the input manifest are rejected. A new conversion run directory is supported; the replacement
-record points to the new Markdown file. The command reports `added_records`, `replaced_records`,
+record points to its immutable library revision. The command reports `added_records`, `replaced_records`,
 and `skipped_records`;
 without the flag, `update-index` remains add-only and reports zero replacements.
 
@@ -508,9 +529,9 @@ go straight to the plain-text fallback. Or retry with a longer budget:
 
 This defaults to the candidate's `suggested_next_timeout_seconds` (2x the last attempted budget,
 capped at 6h); override with `--timeout-seconds` or `--multiplier` (hard-capped at 24h even by
-explicit request). A successful retry converts into a fresh, isolated run directory — the
-originally converted Markdown is never overwritten — and only then promotes the result by
-publishing a successor managed index generation, marking the candidate `resolved`. A failed
+explicit request). A successful retry converts into a fresh, isolated run directory, then
+publishes the accepted Markdown and images into an immutable library revision together with a successor
+managed index generation, marking the candidate `resolved`. A failed
 retry leaves the published index and the candidate's status untouched. Requires the managed
 index layout (run `rebuild-index` once to migrate).
 

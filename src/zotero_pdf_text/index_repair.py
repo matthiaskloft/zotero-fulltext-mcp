@@ -756,7 +756,7 @@ def apply_plan(
             writer = write_jsonl_applying_repairs(
                 current_jsonl, replacements=replacements, metadata_updates=metadata_updates, removals=removals
             )
-            info = stage_and_publish(index_root, writer, command=COMMAND)
+            info = stage_and_publish(index_root, writer, command=COMMAND, publish_library=True)
             report.generation_id = info.generation_id
         report.rows = outcomes
         _append_log(plan_dir, report)
@@ -859,6 +859,23 @@ def _revalidate_reconvert(row: RepairRow, current: list[dict[str, object]], run_
         markdown_path = _text(record, "markdown_path")
         if markdown_path and _text(record, "source_sha256") and is_within(Path(markdown_path), run_dir):
             return RepairOutcome(key, GROUP_RECONVERT, OUTCOME_ALREADY_RESOLVED, "Already replaced by this plan's reconversion.")
+        from ._library_publish import canonical_image_links
+        from .identity import strip_front_matter
+
+        manifest = run_dir / "manifest.csv"
+        completed = read_conversion_manifest(manifest).get(key) if manifest.exists() else None
+        if completed is not None and completed.get("status") == "converted" and completed.get("source_sha256"):
+            try:
+                body = strip_front_matter(canonical_image_links(Path(completed["output_path"]).read_text(encoding="utf-8")))
+                if (
+                    completed.get("source_sha256") == _text(record, "source_sha256")
+                    and completed.get("zotero_parent_key") == _text(record, "zotero_parent_key")
+                    and same_path(completed.get("source_path", ""), _text(record, "source_path"))
+                    and body == _text(record, "text")
+                ):
+                    return RepairOutcome(key, GROUP_RECONVERT, OUTCOME_ALREADY_RESOLVED, "Already replaced by this plan's reconversion.")
+            except OSError:
+                pass
         return stale("The indexed record changed after the plan was made; plan again.")
     if not Path(row.source_path).is_file():
         return RepairOutcome(key, GROUP_RECONVERT, OUTCOME_MISSING_PDF, "The PDF is no longer on disk.")

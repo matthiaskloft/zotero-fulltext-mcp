@@ -31,7 +31,7 @@ import csv
 import json
 import secrets
 from collections import Counter
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Protocol
@@ -51,6 +51,7 @@ from .library import (
     ELIGIBLE_CLASSIFICATION,
     ItemObservation,
     build_observations,
+    library_revision_markdown_path,
     inventory_source_path,
     load_attachment_inventory,
     load_index_records,
@@ -611,8 +612,13 @@ def apply_plan(
                     f"Replacement would add {added} and replace {replaced} records; expected to replace "
                     f"exactly {len(accepted)}. Nothing was published."
                 )
-            info = stage_and_publish(index_root, writer, command=COMMAND)
+            info = stage_and_publish(index_root, writer, command=COMMAND, publish_library=True)
             report.generation_id = info.generation_id
+            outcomes = [
+                replace(row, markdown_path=str(library_revision_markdown_path(config, row.attachment_key, info.generation_id).resolve()))
+                if row.outcome == OUTCOME_PUBLISHED else row
+                for row in outcomes
+            ]
         report.rows = outcomes
         _append_log(plan_dir, report)
         return report

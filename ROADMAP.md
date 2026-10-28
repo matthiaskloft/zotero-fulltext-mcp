@@ -175,10 +175,14 @@ off from its Markdown, and the whole library is being reconverted. A reconversio
 layout directly, so `migrate-library-layout` (step 5) and its rename-heavy copy are not needed and
 are not planned. Still open:
 
-- Provenance reconversion, index repair, `retry-timeout` and unverified reviews write into run
-  folders, so a record they replace points there again. They must not change the file the current
-  index reads before their own publication succeeds. Publishing their validated output into
-  `library/` is the next step, tracked in [#93](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/93).
+- Provenance reconversion, index repair and `retry-timeout` now stage in run folders and publish
+  accepted Markdown, images and page maps into `library/` with the successor index. Accepted
+  unverified reviews use the same publication through manifest-based rebuild/update commands;
+  quarantine output stays separate. Replacements use immutable `library/<key>/versions/<generation>/`
+  folders, preserving older readers' Markdown and images even during a crash. Failed publication
+  removes only unpublished revisions; published revisions are retained. `--keep-current`
+  retains better extractions without replacing their files
+  ([#93](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/93), implemented, unreleased).
 - Steps 3 and 6 were covered by earlier work (source hashes in the index, the repair plan).
 
 The evidence behind this came from `library-status --full --mapping-report <run>` and

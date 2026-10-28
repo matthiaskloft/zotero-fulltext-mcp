@@ -159,7 +159,8 @@ def convert_verified(
 
     ``canonical=False`` keeps every row's output in the run directory, for a caller that replaces
     an indexed record and must not touch the library file the current index reads before its own
-    publication succeeds.
+    publication succeeds. Such callers publish the validated files with the successor index
+    through ``stage_and_publish(..., publish_library=True)``.
     """
     if pymupdf4llm is None:
         raise RuntimeError("pymupdf4llm is not installed")

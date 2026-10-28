@@ -14,9 +14,9 @@ SQLite. Writers record a small publish journal immediately before swapping the p
 interruption between "generation validated" and "pointer replaced" is recovered deterministically
 by the next writer run (readers never attempt recovery).
 
-This module stays path-agnostic about converted Markdown: generations snapshot the JSONL/SQLite
-pair from wherever the Markdown currently lives. Canonical Markdown publication is a separate,
-deliberately deferred piece of work (Package 3 in plan-mcp-server-hardening.md).
+Manifest-based publications can also install accepted conversions as immutable library revisions.
+Previously indexed files remain unchanged before and after the pointer commits. Writer recovery
+removes only unpublished revisions when the old generation is still current.
 """
 
 from __future__ import annotations
@@ -242,14 +242,16 @@ def resolve_reader_db_path(db_path: Path) -> Path:
     return resolve_reader_generation(db_path).db_path
 
 
-def current_generation_jsonl(index_root: Path) -> Path | None:
-    """Return the current generation's JSONL path, or None when the layout is legacy."""
+def current_generation_jsonl(index_root: Path, *, allow_missing: bool = False) -> Path | None:
+    """Return the current JSONL, optionally tolerating its absence for comparison-only reads."""
     pointer = read_current_pointer(index_root)
     if pointer is None:
         return None
     generation_dir = resolve_generation_dir(index_root, str(pointer["current_generation"]))
     jsonl_path = generation_dir / GENERATION_JSONL_FILENAME
     if not jsonl_path.is_file():
+        if allow_missing:
+            return None
         raise CurrentPointerError(
             f"current.json names generation '{pointer['current_generation']}' but its JSONL "
             "file is missing. Re-publish with 'zotero-pdf-text rebuild-index'."
@@ -405,12 +407,17 @@ def publish_generation(index_root: Path, generation_id: str) -> dict[str, object
         # generation cannot be preserved as rollback state because the corrupt pointer no longer
         # says which generation that was.
         previous_pointer = None
+    from ._library_publish import PUBLICATION_DIR, install_library_files, rollback_library_files
+
+    generation_dir = resolve_generation_dir(index_root, generation_id)
+    has_library_files = (generation_dir / PUBLICATION_DIR / "plan.json").exists()
     journal = {
         "schema_version": ARTIFACT_SCHEMA_VERSION,
         "state": "publishing",
         "generation_id": generation_id,
         "previous_pointer": previous_pointer,
         "started_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "library_publication": has_library_files,
     }
     _atomic_write_json(paths.journal_path, journal)
     pointer = {
@@ -419,7 +426,18 @@ def publish_generation(index_root: Path, generation_id: str) -> dict[str, object
         "previous_generation": (previous_pointer or {}).get("current_generation"),
         "published_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }
-    _atomic_write_json(paths.pointer_path, pointer)
+    try:
+        install_library_files(index_root, resolve_generation_dir(index_root, generation_id))
+        _atomic_write_json(paths.pointer_path, pointer)
+    except BaseException:
+        # Do not leave a recoverable index-only journal after undoing the corresponding files.
+        # If rollback itself fails, keep the journal so the next writer retries revision cleanup.
+        if _current_generation_id(index_root) != generation_id:
+            generation_dir = resolve_generation_dir(index_root, generation_id)
+            if has_library_files:
+                rollback_library_files(index_root, generation_dir)
+                paths.journal_path.unlink(missing_ok=True)
+            raise
     _post_commit_cleanup(paths, keep={generation_id, pointer.get("previous_generation")})
     return pointer
 
@@ -431,7 +449,12 @@ def _post_commit_cleanup(paths: IndexPaths, keep: set[object]) -> None:
     would make callers believe it failed. Failures leave at most a stale journal (cleaned by the
     next recovery pass) or an extra retained generation directory (swept on the next publish).
     """
-    with contextlib.suppress(OSError):
+    from ._library_publish import cleanup_library_files
+
+    with contextlib.suppress(OSError, ArtifactError):
+        current = read_current_pointer(paths.index_root)
+        if current is not None:
+            cleanup_library_files(resolve_generation_dir(paths.index_root, str(current["current_generation"])))
         paths.journal_path.unlink(missing_ok=True)
     with contextlib.suppress(OSError):
         _sweep_unreferenced_generations(paths, keep=keep)
@@ -480,6 +503,17 @@ def recover_pending_publication(index_root: Path) -> str | None:
         # The swap completed; only the journal cleanup was interrupted.
         _post_commit_cleanup(paths, keep={generation_id, pointer.get("previous_generation")})
         return f"completed interrupted publication of generation '{generation_id}'"
+    from ._library_publish import PUBLICATION_DIR, rollback_library_files
+
+    generation_dir = resolve_generation_dir(index_root, generation_id)
+    library_plan = generation_dir / PUBLICATION_DIR / "plan.json"
+    if journal.get("library_publication") and not library_plan.is_file():
+        raise ArtifactError("Interrupted library publication has no recovery plan; refusing to guess.")
+    if library_plan.exists():
+        rollback_library_files(index_root, generation_dir)
+        paths.journal_path.unlink(missing_ok=True)
+        shutil.rmtree(generation_dir)
+        return f"rolled back interrupted library publication of generation '{generation_id}'"
     try:
         validate_generation(index_root, generation_id)
     except (GenerationValidationError, CurrentPointerError):
@@ -509,6 +543,7 @@ def stage_and_publish(
     command: str,
     chunk_chars: int | None = None,
     overlap_chars: int | None = None,
+    publish_library: bool = False,
 ) -> GenerationInfo:
     """Recover any pending publication, then stage, validate, and publish one generation.
 
@@ -519,6 +554,10 @@ def stage_and_publish(
     reading the current generation to build ``write_jsonl``; if recovery here has to publish an
     interrupted generation, this raises StalePublicationBaseError instead of publishing a
     successor that drops its records.
+
+    ``publish_library`` stages newly accepted records as immutable revisions beneath their
+    attachment's library folder. Retained records (including --keep-current winners) are left
+    untouched. Failed commits remove only the new, unpublished revisions.
     """
     generation_before = _current_generation_id(index_root)
     recovered = recover_pending_publication(index_root)
@@ -534,6 +573,18 @@ def stage_and_publish(
         default_chunk, default_overlap = chunking_params_from_current(index_root)
         chunk_chars = default_chunk if chunk_chars is None else chunk_chars
         overlap_chars = default_overlap if overlap_chars is None else overlap_chars
+    if publish_library:
+        from ._library_publish import stage_library_files
+
+        original_writer = write_jsonl
+        # This comparison only avoids recopying retained assets. Merge writers still require
+        # the current JSONL themselves; an independent manifest rebuild must not depend on it.
+        current_jsonl = current_generation_jsonl(index_root, allow_missing=True)
+
+        def write_jsonl(path: Path) -> None:
+            original_writer(path)
+            stage_library_files(index_root, path, current_jsonl)
+
     info = stage_generation(
         index_root, write_jsonl, command=command, chunk_chars=chunk_chars, overlap_chars=overlap_chars
     )

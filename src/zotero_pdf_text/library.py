@@ -7,9 +7,9 @@ published index generation's JSONL metadata (what search can currently return) -
 where they disagree.
 
 A fourth view, the canonical layout, is recorded per item as `canonical_markdown_exists` but is
-deliberately not classified: only `convert-verified` and `convert-new` write to `library/`, so an
-attachment last converted by another command, or before the layout existed, legitimately has no
-library file, and a status derived from that would read as drift.
+deliberately not classified: indexed revisions and retained older records may legitimately
+have no root-level canonical file, and a status derived from that would read as drift. Newly accepted
+reconversions, repairs, retries and manifest-based reviews publish to `library/` as well.
 
 The index is read through its generation JSONL only; this module never opens the SQLite index, so
 a divergence between the two within one generation is out of scope here.
@@ -42,6 +42,7 @@ from .artifacts import (
     GENERATION_JSONL_FILENAME,
     CurrentPointerError,
     ManagedIndexMissingError,
+    is_valid_generation_id,
     read_current_pointer,
     resolve_generation_dir,
 )
@@ -190,15 +191,27 @@ def canonical_image_dir(config: ProjectConfig, attachment_key: str) -> Path:
     return canonical_paper_dir(config, attachment_key) / IMAGES_DIRNAME
 
 
+def library_revision_markdown_path(config: ProjectConfig, attachment_key: str, generation_id: str) -> Path:
+    """An immutable replacement, separate from files still referenced by older indexes."""
+    if not is_valid_generation_id(generation_id):
+        raise ValueError(f"Invalid library revision: {generation_id!r}")
+    return canonical_paper_dir(config, attachment_key) / "versions" / generation_id / f"{attachment_key}.md"
+
+
 def images_dir_for(markdown_path: PurePathT) -> PurePathT:
     """Where the images extracted alongside converted Markdown `markdown_path` live.
 
-    Two layouts exist: the canonical library keeps each paper in its own folder
+    The canonical library keeps each paper in its own folder
     (`library/<key>/<key>.md` with `library/<key>/images/`), while a run directory keeps numbered
     files side by side (`<run>/markdown/<stem>.md` with `<run>/images/<stem>/`). A Markdown file
     named after its own folder is the former; so is an enriched sibling such as `<key>.ocr.md`.
+    Immutable replacements use `library/<key>/versions/<generation>/<key>.md` with sibling images.
     """
     if markdown_path.parent.name == markdown_path.name.split(".", 1)[0]:
+        return markdown_path.parent / IMAGES_DIRNAME
+    if markdown_path.parent.parent.name == "versions" and (
+        markdown_path.parent.parent.parent.name == markdown_path.name.split(".", 1)[0]
+    ):
         return markdown_path.parent / IMAGES_DIRNAME
     return markdown_path.parent.parent / IMAGES_DIRNAME / markdown_path.stem
 
@@ -336,6 +349,18 @@ def locate_images_dir(
         return Path(stored)
     if output_root is None:
         return None
+    if recorded.parent.parent.name == "versions":
+        # Re-root the complete revision identity; shorter tails or canonical fallback can
+        # silently return a different conversion's equation image.
+        try:
+            key = validate_attachment_key(attachment_key)
+        except ValueError:
+            return None
+        revision = recorded.parent.name
+        if not is_valid_generation_id(revision):
+            return None
+        candidate = output_root / LIBRARY_DIRNAME / key / "versions" / revision / IMAGES_DIRNAME
+        return candidate if _is_dir(candidate) else None
     parts = stored.parts
     # Skip index 0: on Windows that is the drive anchor, which never appears mid-tree.
     for start in range(1, len(parts) - _MIN_REROOT_TAIL_PARTS + 1):

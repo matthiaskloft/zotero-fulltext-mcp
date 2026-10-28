@@ -299,7 +299,7 @@ class ApplyTests(ProvenanceFixture):
         second = self.apply(plan_path, _Extractor(), limit=5)
         self.assertEqual([row.attachment_key for row in second.rows if row.outcome == OUTCOME_PUBLISHED], ["BBBB2222", "CCCC3333"])
         paths = {key: Path(record["markdown_path"]).name for key, record in self.records().items() if key in ELIGIBLE_KEYS}
-        self.assertEqual(paths, {"AAAA1111": "0001_zotero_AAAA1111.md", "BBBB2222": "0002_zotero_BBBB2222.md", "CCCC3333": "0003_zotero_CCCC3333.md"})
+        self.assertEqual(paths, {key: f"{key}.md" for key in ELIGIBLE_KEYS})
         # The first batch's Markdown, now referenced by the index, is still in place.
         self.assertTrue(Path(self.records()["AAAA1111"]["markdown_path"]).is_file())
 
