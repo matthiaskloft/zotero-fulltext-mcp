@@ -160,6 +160,9 @@ PDFs or uncertain matches, follow [Library cleanup](docs/library-cleanup.md).
 The first conversion can take a while; later runs add newly linked papers.
 
 Converted papers live under `output_root/library/`; reports are under `output_root/runs/`.
+Repair, reconversion and timeout-retry commands stage in run folders, then publish accepted
+Markdown and images into immutable library revisions with the index. Accepted reviews follow the same path
+through `rebuild-index --manifest` or `update-index --manifest`; unaccepted files stay in quarantine.
 For interrupted runs, selective repairs, and index maintenance, see
 [Operations](docs/operations.md).
 

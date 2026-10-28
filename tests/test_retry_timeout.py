@@ -44,7 +44,7 @@ def _seed_candidate(
     *,
     attempted_timeout_seconds: int = 600,
     detected_at: str | None = None,
-    attachment_key: str = "ATTACH",
+    attachment_key: str = "ATTACH01",
 ) -> None:
     candidate = TimeoutCandidate(
         zotero_parent_key="PARENT",
@@ -85,13 +85,13 @@ class SkipTimeoutCandidateTests(unittest.TestCase):
             _seed_candidate(output_root, pdf)
             config = ProjectConfig(root, root, root, output_root)
 
-            result = skip_timeout_candidate("ATTACH", config=config, reason="too slow")
+            result = skip_timeout_candidate("ATTACH01", config=config, reason="too slow")
 
             self.assertTrue(result.ok)
             self.assertEqual(result.new_status, "skipped")
             skip_list = json.loads((output_root / "review" / "timeout_skip_list.json").read_text(encoding="utf-8"))
-            self.assertEqual(skip_list["entries"]["ATTACH"]["reason"], "too slow")
-            candidate = find_candidate(output_root / "review" / "timeout_candidates.jsonl", "ATTACH")
+            self.assertEqual(skip_list["entries"]["ATTACH01"]["reason"], "too slow")
+            candidate = find_candidate(output_root / "review" / "timeout_candidates.jsonl", "ATTACH01")
             self.assertEqual(candidate["status"], "skipped")
 
     def test_skip_unknown_key_returns_error_result(self):
@@ -129,7 +129,7 @@ class RetryTimeoutCandidateTests(unittest.TestCase):
             _publish_generation(output_root, [])
 
             with patch("zotero_pdf_text.converter.subprocess.run", side_effect=_write_raw_markdown):
-                result = retry_timeout_candidate("ATTACH", config=config)
+                result = retry_timeout_candidate("ATTACH01", config=config)
 
             self.assertTrue(result.ok, result.error)
             self.assertEqual(result.new_status, "resolved")
@@ -137,9 +137,9 @@ class RetryTimeoutCandidateTests(unittest.TestCase):
             jsonl_path = current_generation_jsonl(output_root / "index")
             records = [json.loads(line) for line in jsonl_path.read_text(encoding="utf-8").splitlines() if line]
             self.assertEqual(len(records), 1)
-            self.assertEqual(records[0]["zotero_attachment_key"], "ATTACH")
+            self.assertEqual(records[0]["zotero_attachment_key"], "ATTACH01")
             self.assertTrue(resolve_reader_db_path(output_root / "index" / "zotero_text_index.sqlite").exists())
-            candidate = find_candidate(output_root / "review" / "timeout_candidates.jsonl", "ATTACH")
+            candidate = find_candidate(output_root / "review" / "timeout_candidates.jsonl", "ATTACH01")
             self.assertEqual(candidate["status"], "resolved")
             self.assertEqual(candidate["resolved_via"], "retry")
 
@@ -156,7 +156,7 @@ class RetryTimeoutCandidateTests(unittest.TestCase):
                 [
                     {
                         "zotero_parent_key": "PARENT",
-                        "zotero_attachment_key": "ATTACH",
+                        "zotero_attachment_key": "ATTACH01",
                         "title": "Title",
                         "creators": "Jane Smith",
                         "year": "2024",
@@ -179,7 +179,7 @@ class RetryTimeoutCandidateTests(unittest.TestCase):
             )
 
             with patch("zotero_pdf_text.converter.subprocess.run", side_effect=_write_raw_markdown):
-                result = retry_timeout_candidate("ATTACH", config=config)
+                result = retry_timeout_candidate("ATTACH01", config=config)
 
             self.assertTrue(result.ok, result.error)
             jsonl_path = current_generation_jsonl(output_root / "index")
@@ -202,12 +202,12 @@ class RetryTimeoutCandidateTests(unittest.TestCase):
                 raise subprocess.TimeoutExpired(cmd=args, timeout=kwargs.get("timeout"))
 
             with patch("zotero_pdf_text.converter.subprocess.run", side_effect=_raise_timeout):
-                result = retry_timeout_candidate("ATTACH", config=config)
+                result = retry_timeout_candidate("ATTACH01", config=config)
 
             self.assertFalse(result.ok)
             # No successor generation was published.
             self.assertEqual(current_generation_jsonl(output_root / "index"), jsonl_before)
-            candidate = find_candidate(output_root / "review" / "timeout_candidates.jsonl", "ATTACH")
+            candidate = find_candidate(output_root / "review" / "timeout_candidates.jsonl", "ATTACH01")
             self.assertEqual(candidate["status"], "pending")
             self.assertEqual(candidate["occurrence_count"], 2)  # bumped by the nested convert_verified call
 
@@ -232,7 +232,7 @@ class RetryTimeoutCandidateTests(unittest.TestCase):
             config = ProjectConfig(root, root, root, output_root)
 
             result = retry_timeout_candidate(
-                "ATTACH",
+                "ATTACH01",
                 config=config,
                 timeout_seconds=MAX_RETRY_TIMEOUT_SECONDS + 1,
             )
@@ -250,7 +250,7 @@ class RetryTimeoutCandidateTests(unittest.TestCase):
             config = ProjectConfig(root, root, root, output_root)
 
             result = retry_timeout_candidate(
-                "ATTACH",
+                "ATTACH01",
                 config=config,
                 timeout_seconds=0,
             )
@@ -268,7 +268,7 @@ class RetryTimeoutCandidateTests(unittest.TestCase):
             config = ProjectConfig(root, root, root, output_root)
 
             result = retry_timeout_candidate(
-                "ATTACH",
+                "ATTACH01",
                 config=config,
                 multiplier=0,
             )
@@ -286,7 +286,7 @@ class RetryTimeoutCandidateTests(unittest.TestCase):
             config = ProjectConfig(root, root, root, output_root)
 
             result = retry_timeout_candidate(
-                "ATTACH",
+                "ATTACH01",
                 config=config,
                 multiplier=-2.0,
             )
@@ -306,7 +306,7 @@ class RetryTimeoutCandidateTests(unittest.TestCase):
 
             with patch("zotero_pdf_text.converter.subprocess.run", side_effect=_write_raw_markdown):
                 result = retry_timeout_candidate(
-                    "ATTACH",
+                    "ATTACH01",
                     config=config,
                     multiplier=0.001,
                 )
@@ -340,7 +340,7 @@ class RetryTimeoutCandidateTests(unittest.TestCase):
 
             with patch("zotero_pdf_text.retry_timeout.convert_verified", side_effect=RuntimeError("boom")):
                 result = retry_timeout_candidate(
-                    "ATTACH",
+                    "ATTACH01",
                     config=config,
                 )
 
@@ -357,7 +357,7 @@ class RetryTimeoutCandidateTests(unittest.TestCase):
             config = ProjectConfig(root, root, root, output_root)
 
             result = retry_timeout_candidate(
-                "ATTACH",
+                "ATTACH01",
                 config=config,
                 timeout_seconds=1000,
                 multiplier=2.0,
@@ -376,14 +376,14 @@ class RetryTimeoutCandidateTests(unittest.TestCase):
             config = ProjectConfig(root, root, root, output_root)
 
             with patch("zotero_pdf_text.converter.subprocess.run", side_effect=_write_raw_markdown) as run:
-                result = retry_timeout_candidate("ATTACH", config=config)
+                result = retry_timeout_candidate("ATTACH01", config=config)
 
             # Checked before converting: a retry writes a library file in place, which must not
             # happen when nothing can publish the matching index record.
             run.assert_not_called()
             self.assertFalse(result.ok)
             self.assertIn("rebuild-index", result.error)
-            candidate = find_candidate(output_root / "review" / "timeout_candidates.jsonl", "ATTACH")
+            candidate = find_candidate(output_root / "review" / "timeout_candidates.jsonl", "ATTACH01")
             self.assertEqual(candidate["status"], "pending")
 
     def test_multiplier_scales_the_last_attempted_timeout(self):
@@ -404,7 +404,7 @@ class RetryTimeoutCandidateTests(unittest.TestCase):
 
             with patch("zotero_pdf_text.converter.subprocess.run", side_effect=_capture_and_write):
                 result = retry_timeout_candidate(
-                    "ATTACH",
+                    "ATTACH01",
                     config=config,
                     multiplier=3.0,
                 )
@@ -414,7 +414,7 @@ class RetryTimeoutCandidateTests(unittest.TestCase):
 
 
 class LibraryRetryTests(unittest.TestCase):
-    """A verified candidate with a real attachment key never touches its library file."""
+    """Verified retries replace library files only through successful publication."""
 
     def setUp(self):
         self.root = Path(tempfile.mkdtemp())
@@ -438,14 +438,15 @@ class LibraryRetryTests(unittest.TestCase):
         self.assertEqual(self.markdown.read_bytes(), self.before)
         self.assertEqual([path.name for path in self.images.iterdir()], ["old.png"])
 
-    def test_a_successful_retry_publishes_its_run_folder_copy(self):
+    def test_a_successful_retry_publishes_into_the_library(self):
         with patch("zotero_pdf_text.converter.subprocess.run", side_effect=_write_raw_markdown):
             result = retry_timeout_candidate("ATTKEY01", config=self.config)
 
         self.assertTrue(result.ok, result.error)
-        self.assertTrue(Path(result.markdown_path).is_relative_to(self.output_root / "runs"))
+        self.assertTrue(Path(result.markdown_path).is_relative_to(self.markdown.parent / "versions"))
         records = [json.loads(line) for line in current_generation_jsonl(self.output_root / "index").read_text(encoding="utf-8").splitlines() if line]
         self.assertEqual([record["markdown_path"] for record in records], [result.markdown_path])
+        self.assertIn("Extracted", Path(result.markdown_path).read_text(encoding="utf-8"))
         self._library_untouched()
 
     def test_a_failure_after_conversion_leaves_the_library_file_the_index_reads(self):
@@ -465,7 +466,7 @@ class LibraryRetryTests(unittest.TestCase):
 def _fallback_record(pdf: Path) -> dict:
     return {
         "zotero_parent_key": "PARENT",
-        "zotero_attachment_key": "ATTACH",
+        "zotero_attachment_key": "ATTACH01",
         "title": "Title",
         "creators": "Jane Smith",
         "year": "2024",
@@ -548,7 +549,7 @@ class CurrentIndexStateTests(unittest.TestCase):
             output_root, _, config = self._setup(Path(tmp))
 
             with patch("zotero_pdf_text.converter.subprocess.run", side_effect=_write_raw_markdown):
-                result = retry_timeout_candidate("ATTACH", config=config)
+                result = retry_timeout_candidate("ATTACH01", config=config)
             self.assertTrue(result.ok, result.error)
 
             listed = _listed(output_root)
@@ -578,7 +579,7 @@ class CurrentIndexStateTests(unittest.TestCase):
                     "source_path": str(pdf),
                     "safe_folder_id": "zotero_ATTACH",
                     "zotero_parent_key": "PARENT",
-                    "zotero_attachment_key": "ATTACH",
+                    "zotero_attachment_key": "ATTACH01",
                     "item_type": "attachment",
                     "title": "Title",
                     "creators": "Jane Smith",
@@ -608,10 +609,10 @@ class CurrentIndexStateTests(unittest.TestCase):
             db_path = output_root / "index" / "zotero_text_index.sqlite"
             self.assertEqual(_list_timeout_candidates(db_path, status="pending", limit=10)["candidates"], [])
             resolved = _list_timeout_candidates(db_path, status="resolved", limit=10)["candidates"]
-            self.assertEqual([c["attachment_key"] for c in resolved], ["ATTACH"])
+            self.assertEqual([c["attachment_key"] for c in resolved], ["ATTACH01"])
             # Read-only: the master history file is not rewritten by the listing.
             self.assertEqual(candidates_jsonl.read_text(encoding="utf-8"), history_before)
-            self.assertEqual(find_candidate(candidates_jsonl, "ATTACH")["status"], "pending")
+            self.assertEqual(find_candidate(candidates_jsonl, "ATTACH01")["status"], "pending")
 
 
 if __name__ == "__main__":

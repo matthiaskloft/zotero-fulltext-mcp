@@ -35,7 +35,7 @@ rebuilt from it; nothing in this folder is read back into Zotero.
 
 | Folder | What it holds | Edit by hand? |
 |---|---|---|
-| `library/` | One folder per Zotero PDF attachment, named by its attachment key: `<key>/<key>.md` is the paper's text, `<key>/images/` its figures. Start with `library/catalog.md` (clickable) or `library/catalog.csv` (spreadsheet) to find a paper by author, year or title. | No |
+| `library/` | One folder per Zotero PDF attachment. Initial conversions use `<key>/<key>.md` and `<key>/images/`; accepted replacements use `<key>/versions/<generation>/` with Markdown and images together. Published revisions are retained. Start with `library/catalog.md` (clickable) or `library/catalog.csv` (spreadsheet) to find the current conversion. | No |
 | `index/` | The search index. `current.json` names the live version in `versions/`; the previous version is kept for rollback. | No |
 | `runs/` | One folder per command run, named `<date>_<time>_<command>`: logs, manifests, mapping reports and plans. Safe to delete old ones once nothing refers to them. | No |
 | `review/` | Lists waiting for your decision: PDFs whose conversion timed out, PDFs with no Zotero item, and the extraction skip list. Change them through the `zotero-pdf-text` commands. | Through commands |

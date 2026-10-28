@@ -1295,16 +1295,16 @@ class ManagedIndexCliTests(unittest.TestCase):
             index_root = output_root / "index"
             index_root.mkdir(parents=True)
             existing_md = root / "existing.md"
-            existing_md.write_text("---\nzotero_attachment_key: OLD1\n---\nOld body", encoding="utf-8")
+            existing_md.write_text("---\nzotero_attachment_key: OLD00001\n---\nOld body", encoding="utf-8")
             new_md = root / "new.md"
-            new_md.write_text("---\nzotero_attachment_key: NEW1\n---\nNew body", encoding="utf-8")
+            new_md.write_text("---\nzotero_attachment_key: NEW00001\n---\nNew body", encoding="utf-8")
 
             legacy_jsonl = index_root / "zotero_text_index.jsonl"
             legacy_jsonl.write_text(
                 json.dumps(
                     {
                         "zotero_parent_key": "P1",
-                        "zotero_attachment_key": "OLD1",
+                        "zotero_attachment_key": "OLD00001",
                         "title": "Old Title",
                         "creators": "",
                         "year": "",
@@ -1339,9 +1339,9 @@ class ManagedIndexCliTests(unittest.TestCase):
             new_manifest = root / "new_manifest.csv"
             new_manifest.write_text(
                 self._MANIFEST_HEADER
-                + f"converted,{new_md},NEW1,P2,New Title,,,,,,pymupdf,1,mapped_verified,fulltext_verified,"
+                + f"converted,{new_md},NEW00001,P2,New Title,,,,,,pymupdf,1,mapped_verified,fulltext_verified,"
                 "fulltext_review:agent,false\n"
-                + f"converted,{existing_md},OLD1,P1,Old Title,,,,,,pymupdf,1,mapped_verified,verified,doi_exact,false\n",
+                + f"converted,{existing_md},OLD00001,P1,Old Title,,,,,,pymupdf,1,mapped_verified,verified,doi_exact,false\n",
                 encoding="utf-8",
             )
             buffer = io.StringIO()
@@ -1360,7 +1360,7 @@ class ManagedIndexCliTests(unittest.TestCase):
                 for line in current_jsonl.read_text(encoding="utf-8").splitlines()
                 if line.strip()
             ]
-            self.assertEqual(keys, ["OLD1", "NEW1"])
+            self.assertEqual(keys, ["OLD00001", "NEW00001"])
             # The legacy files are left untouched for the user to remove manually.
             self.assertTrue(legacy_jsonl.exists())
 
@@ -1391,7 +1391,7 @@ class ManagedIndexCliTests(unittest.TestCase):
             fields = self._MANIFEST_HEADER.strip().split(",") + ["source_sha256"]
             row = dict.fromkeys(fields, "")
             row.update(
-                status="converted", output_path=str(markdown), zotero_attachment_key="A1",
+                status="converted", output_path=str(markdown), zotero_attachment_key="AAAA1111",
                 zotero_parent_key="P1", title="Paper", source_path=str(source),
                 extraction_tool="plain_text_fallback", classification="mapped_verified",
                 identity_status="verified", identity_rule="doi_exact",
@@ -1412,7 +1412,7 @@ class ManagedIndexCliTests(unittest.TestCase):
             reconverted = root / "later-run" / "paper.md"
             reconverted.parent.mkdir()
             reconverted.write_text(
-                "---\nzotero_attachment_key: A1\n"
+                "---\nzotero_attachment_key: AAAA1111\n"
                 + "".join(f"extra_{i}: value\n" for i in range(25))
                 + "---\nImproved searchable body",
                 encoding="utf-8",
@@ -1432,7 +1432,7 @@ class ManagedIndexCliTests(unittest.TestCase):
 
             new_markdown = root / "new.md"
             new_markdown.write_text("New searchable body", encoding="utf-8")
-            new_row = {**row, "zotero_attachment_key": "A2", "zotero_parent_key": "P2", "output_path": str(new_markdown)}
+            new_row = {**row, "zotero_attachment_key": "BBBB2222", "zotero_parent_key": "P2", "output_path": str(new_markdown)}
             write_manifest([replacement_row, new_row])
             output = io.StringIO()
             with redirect_stdout(output):
@@ -1443,7 +1443,7 @@ class ManagedIndexCliTests(unittest.TestCase):
             current, added = [json.loads(line) for line in current_generation_jsonl(index_root).read_text(encoding="utf-8").splitlines()]
             self.assertEqual(current["text"], "Improved searchable body")
             self.assertEqual(current["source_sha256"], row["source_sha256"])
-            self.assertEqual(current["markdown_path"], str(reconverted))
+            self.assertEqual(current["markdown_path"], str(output_root / "library" / "AAAA1111" / "versions" / result["generation_id"] / "AAAA1111.md"))
             self.assertEqual(current["extraction_tool"], "pymupdf4llm.to_markdown")
             self.assertEqual(added["text"], "New searchable body")
             current_db = resolve_reader_db_path(index_root / "zotero_text_index.sqlite")
@@ -1468,7 +1468,7 @@ class ManagedIndexCliTests(unittest.TestCase):
                 self.assertEqual(read_current_pointer(index_root)["current_generation"], published)
 
             wrong_markdown = root / "wrong.md"
-            wrong_markdown.write_text('---\nzotero_attachment_key: "A2"\n---\nWrong body', encoding="utf-8")
+            wrong_markdown.write_text('---\nzotero_attachment_key: "BBBB2222"\n---\nWrong body', encoding="utf-8")
             write_manifest([{**replacement_row, "output_path": str(wrong_markdown)}])
             with redirect_stderr(io.StringIO()):
                 self.assertEqual(main(["update-index", "--replace-existing", "--output-root", str(output_root), "--manifest", str(manifest)]), 2)

@@ -1271,6 +1271,7 @@ def main(argv: list[str] | None = None) -> int:
                     command="rebuild-index",
                     chunk_chars=args.chunk_chars,
                     overlap_chars=args.overlap_chars,
+                    publish_library=args.manifest is not None,
                 )
         except PipelineLockedError as exc:
             print(str(exc), file=sys.stderr)
@@ -1312,7 +1313,7 @@ def main(argv: list[str] | None = None) -> int:
                     with args.manifest.open("r", encoding="utf-8-sig", newline="") as handle:
                         skipped = sum(1 for _ in csv.DictReader(handle)) - added
                 writer, merge_stats = _with_metadata_refresh(args, writer)
-                info = stage_and_publish(index_root, writer, command="update-index")
+                info = stage_and_publish(index_root, writer, command="update-index", publish_library=True)
         except PipelineLockedError as exc:
             print(str(exc), file=sys.stderr)
             return 2
