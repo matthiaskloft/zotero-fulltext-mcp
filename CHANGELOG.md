@@ -5,6 +5,24 @@ All notable changes to this project are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.15.2] - 2026-10-28
+
+### Fixed
+
+- Provenance reconversion, index repair, timeout retries and manifest-based accepted reviews
+  now publish Markdown, images and measured page maps into the library instead of leaving
+  indexed records pointing into run folders. Removing those run folders no longer breaks the
+  published conversions. Replacements use `library/<key>/versions/<generation>/`; earlier files
+  remain unchanged, so readers of old and new indexes keep matching text and images throughout
+  publication and crash recovery. Published revisions are retained; `library/catalog.md` links
+  to the current conversion. `--keep-current`, conversion checkpoints and repeated repairs
+  preserve their existing behavior.
+  ([#93](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/93),
+  [#161](https://github.com/matthiaskloft/zotero-fulltext-mcp/pull/161))
+- An independent `rebuild-index --manifest` can recover when the current generation's JSONL
+  is missing. Workflows that merge existing records, including `--keep-current` and
+  `update-index`, still require that JSONL and refuse to publish without it.
+
 ## [0.15.1] - 2026-10-28
 
 ### Changed
@@ -1177,7 +1195,8 @@ author's own machine.
 
 Initial import of the Zotero full-text conversion pipeline, CLI, and MCP server. Not tagged.
 
-[Unreleased]: https://github.com/matthiaskloft/zotero-fulltext-mcp/compare/v0.15.1...HEAD
+[Unreleased]: https://github.com/matthiaskloft/zotero-fulltext-mcp/compare/v0.15.2...HEAD
+[0.15.2]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.15.2
 [0.15.1]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.15.1
 [0.15.0]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.15.0
 [0.14.0]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.14.0
