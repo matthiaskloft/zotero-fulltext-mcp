@@ -95,7 +95,7 @@ Windows (PowerShell):
 $venv = "$env:USERPROFILE\.venvs\zotero_fulltext_mcp"
 py -3.11 -m venv $venv
 $python = "$venv\Scripts\python.exe"
-& $python -m pip install "zotero-fulltext-mcp[mcp] @ git+https://github.com/matthiaskloft/zotero-fulltext-mcp.git@v0.15.0"
+& $python -m pip install "zotero-fulltext-mcp[mcp] @ git+https://github.com/matthiaskloft/zotero-fulltext-mcp.git@v0.15.1"
 ```
 
 macOS/Linux:
@@ -103,7 +103,7 @@ macOS/Linux:
 ```bash
 python3 -m venv ~/.venvs/zotero_fulltext_mcp
 python=~/.venvs/zotero_fulltext_mcp/bin/python
-"$python" -m pip install 'zotero-fulltext-mcp[mcp] @ git+https://github.com/matthiaskloft/zotero-fulltext-mcp.git@v0.15.0'
+"$python" -m pip install 'zotero-fulltext-mcp[mcp] @ git+https://github.com/matthiaskloft/zotero-fulltext-mcp.git@v0.15.1'
 ```
 
 Use a published tag from the [releases page](https://github.com/matthiaskloft/zotero-fulltext-mcp/releases).
