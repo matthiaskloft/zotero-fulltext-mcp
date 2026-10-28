@@ -5,6 +5,16 @@ All notable changes to this project are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Fixed
+
+- The passage benchmark could not read a real `index.jsonl` corpus: it split records with
+  `str.splitlines()`, which also breaks at U+2028 and similar separators inside the text.
+
+### Documentation
+
+- `docs/chunking-results-2026-10.md`: first measurements of fixed windows versus structure-based
+  chunks on a real library, including a blind-agent search test, and the lessons learned.
+
 ## [0.15.0] - 2026-10-27
 
 ### Added
