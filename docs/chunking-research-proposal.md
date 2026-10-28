@@ -88,3 +88,5 @@ Compare the existing character slices, token-budgeted sentence-respecting chunks
 Measure paper recall@k/MRR, graded passage nDCG@k, evidence-span recall and precision, duplicate rate, source-locator validity, build time, index size and p50/p95 query latency. Compare evidence retrieval at equal returned-token budgets as well as equal top-k; include ancestor and expansion tokens and distinguish exact-match queries from conceptual ones. For chunkset assembly, measure token savings at matched evidence recall, citation coverage and missing qualifiers; include bad-heading and cross-section-dependency cases. Use paired uncertainty estimates and inspect regressions. Promote a method only when held-out gains justify its cost and important exact-match behavior remains acceptable.
 
 No retrieval implementation or existing index was changed for this research.
+
+First local measurements after #80: [chunking-results-2026-10.md](chunking-results-2026-10.md).

@@ -107,7 +107,8 @@ The paper-level numbers above say whether the right *paper* comes back. Choosing
 boundaries, overlap and context assembly also needs to know whether the right *passage* comes
 back, and at what cost in returned text. The same script does this in **passage mode**, switched
 on by `--chunking`, `--sweep` or `--passages`. Design and rationale:
-[chunking-research-proposal.md](chunking-research-proposal.md); issue
+[chunking-research-proposal.md](chunking-research-proposal.md); first results and lessons for
+writing questions: [chunking-results-2026-10.md](chunking-results-2026-10.md); issue
 [#107](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/107).
 
 ### Judgments (private)

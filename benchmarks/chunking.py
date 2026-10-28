@@ -388,7 +388,7 @@ def load_corpus(path: Path) -> dict[str, CorpusDoc]:
     try:
         raw = path.read_text(encoding="utf-8")
         if path.suffix == ".jsonl":
-            records = [json.loads(line) for line in raw.splitlines() if line.strip()]
+            records = [json.loads(line) for line in raw.split("\n") if line.strip()]
         else:
             records = json.loads(raw)
     except (OSError, ValueError) as exc:
