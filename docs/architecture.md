@@ -127,6 +127,20 @@ or a bibliography entry sharing a claimed author's surname, from being penalized
 evidence that isn't actually about the document itself. Title matching is intentionally not
 windowed, since `title_score`'s fuzzy partial-ratio matching can find a title anywhere in the text.
 
+## External ingestion and chunking reuse (planned)
+
+The [2026-11-05 implementation review](chunking-research-proposal.md#open-source-implementation-review-2026-11-05)
+informs the remaining S4/S4a/S6 work. Prefer focused parsing/tokenizer libraries where they
+reduce implementation work while preserving exact source spans. Attachment identity, source
+hashes, page mappings and atomic sidecar publication remain authoritative project boundaries.
+
+RAGFlow is not a required dependency: the inspected chunkers are Go internal packages and the
+application runs as a separate service stack. An optional explicitly configured local conversion
+adapter may be evaluated if complex-layout extraction warrants it, separately from retrieval
+experiments. It must preserve provenance, write only derived artifacts, and leave ordinary
+conversion and lexical search available without that service. API/source-map compatibility and
+platform/resource costs have not been validated. No adapter or new dependency is implemented.
+
 ## Deferred Memory Layer
 
 Obsidian-style memory is out of scope for this implementation. If added later,
