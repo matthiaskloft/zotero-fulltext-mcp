@@ -240,7 +240,8 @@ class CheckSetupCliTests(unittest.TestCase):
             # Missing optional extras are WARN, not FAIL, and must not affect the exit code.
             self.assertEqual(exit_code, 0)
             self.assertIn("[OK] config:", buffer.getvalue())
-            self.assertIn("[WARN] extra:marker:", buffer.getvalue())
+            self.assertIn("[WARN] extra:zotero-write:", buffer.getvalue())
+            self.assertNotIn("extra:marker", buffer.getvalue())
 
     def test_require_mcp_flag_reaches_run_setup_checks_through_the_cli(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -23,7 +23,7 @@ sync or re-clone elsewhere just creates dead weight.
 
 Read-only and fast: validates that the config loads, that `zotero_data_directory`,
 `linked_attachments`, and `zotero.sqlite` exist, that `output_root` exists (or is creatable) and
-writable, and reports Python version and which optional extras (`mcp`, `zotero-write`, `marker`)
+writable, and reports Python version and which optional extras (`mcp`, `zotero-write`)
 are installed. Exits non-zero if any required check fails. Optional extras are informational by
 default — pass `--require-mcp` to fail if `mcp` isn't installed. Add `--json` for machine-readable
 output. Run this first on a new machine or after editing `config.json`, before `dry-run` or any
@@ -189,7 +189,7 @@ failed in it, and every record another workflow added, drops out of search. Afte
 whole library, add `--keep-current` so those papers keep their current record (and stay
 searchable) until a later run converts them. It also keeps a current record over a manifest row
 for the same PDF (same source hash) that was extracted less well: a `retry-timeout` primary
-extraction over a fallback, or a `reconvert-math` result over either. The output reports how many
+extraction over a fallback, or a previously enriched result over either. The output reports how many
 records were kept as `kept_from_current`:
 
 ```powershell
@@ -801,27 +801,6 @@ Better BibTeX export is off by default. Enable it only for a local installation:
 The optional endpoint accepts credential-free `http` loopback URLs on port 23119 only. MCP results
 omit local source and Markdown paths and label converted content as `untrusted_source`.
 
-Math OCR is a separate opt-in capability because it overwrites converted Markdown, extracted image
-assets, and the sidecar index for one attachment:
-
-```powershell
-& $python -m zotero_pdf_text.mcp_server `
-  --db $data\index\zotero_text_index.sqlite `
-  --config .\config.json `
-  --enable-reconvert
-```
-
-`--enable-reconvert` requires an explicitly supplied valid config, the `[marker]` extra, and the
-exact sidecar database governed by that config. Startup rejects mismatched `--db`/`--config` pairs
-before registering the tool. Generated Codex registrations also use a longer tool timeout for this
-GPU-bound operation. The tool requires the exact argument `confirm="reconvert"` and rate-limits
-starts in a process, but that literal is only a capability check: obtain user approval for the
-specific attachment before calling it. The operation never writes Zotero.
-
-Marker writes into an operation-specific staging directory before the pipeline lock is acquired.
-If an image, Markdown, JSONL, or FTS commit step fails, reconversion restores the previous derived
-assets and rebuilds the previous search index before reporting failure.
-
 The index is an offline snapshot and may lag behind live Zotero. Start searches with concise
 `all_terms` queries; broaden with `any_terms` only when needed, and use `phrase` for exact wording.
 Retrieve a search hit's `source_locator.chunk_index` before treating it as body evidence, passing
@@ -957,7 +936,7 @@ plain `rebuild-index` (or a re-run of `ocr-images`) restores the pointer.
 If `converted_text` is a single index shared across more than one machine (e.g. via a synced
 cloud folder), every command that writes under it (`convert-sample`, `convert-verified`,
 `convert-new`, `verify-unverified`, `apply-verification`, `rebuild-index`, `update-index`,
-`reconvert-math`/`reconvert_with_math_ocr`, `retry-timeout`, `ocr-images`, `find-orphan-parents`,
+`retry-timeout`, `ocr-images`, `find-orphan-parents`,
 `orphan-candidate`, `apply-provenance-reconvert`, `apply-index-repair`) takes the same lock file
 (`config.output_root\.pipeline.lock`) before starting and releases it on exit. The lock is
 acquired with an atomic exclusive create, so two local processes cannot race past each

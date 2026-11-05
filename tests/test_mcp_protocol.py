@@ -11,7 +11,6 @@ import jsonschema
 from mcp.types import CallToolRequest, CallToolRequestParams
 
 from zotero_pdf_text.bibtex import BibtexExport
-from zotero_pdf_text.math_ocr import ReconvertResult
 from test_mcp_server import _build_index
 from zotero_pdf_text.mcp_contract import create_server
 
@@ -138,8 +137,7 @@ class McpProtocolTests(unittest.TestCase):
     def test_enabled_optional_tools_preserve_public_error_codes(self):
         with tempfile.TemporaryDirectory() as tmp:
             _, sqlite_path, config = _build_index(Path(tmp))
-            with patch("zotero_pdf_text.mcp_contract.marker_dependency_available", return_value=True):
-                server = create_server(sqlite_path, config=config, enable_bibtex=True, enable_reconvert=True)
+            server = create_server(sqlite_path, config=config, enable_bibtex=True)
 
             tools = {tool.name: tool for tool in asyncio.run(server.list_tools())}
             self.assertEqual(
@@ -157,16 +155,13 @@ class McpProtocolTests(unittest.TestCase):
                     "library_status",
                     "guide",
                     "export_bibtex_entries_by_key",
-                    "reconvert_with_math_ocr",
                 },
             )
             self.assertEqual(tools["export_bibtex_entries_by_key"].outputSchema["type"], "object")
-            self.assertEqual(tools["reconvert_with_math_ocr"].outputSchema["type"], "object")
             self.assertEqual(
                 set(tools["export_bibtex_entries_by_key"].outputSchema["required"]),
                 {"citation_keys", "translator", "entry", "provenance"},
             )
-            self.assertIn("reconverted_at", tools["reconvert_with_math_ocr"].outputSchema["properties"])
 
             exported = BibtexExport(["smith2024"], "Better BibLaTeX", "@article{smith2024}", "private endpoint")
             with patch("zotero_pdf_text.mcp_contract.export_bibtex_entries", return_value=exported):
@@ -188,71 +183,6 @@ class McpProtocolTests(unittest.TestCase):
             self.assertTrue(unavailable_integration.isError)
             self.assertIn("integration_unavailable: ", unavailable_integration.content[0].text)
             self.assertNotIn("private endpoint", unavailable_integration.content[0].text)
-
-            failed = ReconvertResult(
-                ok=False,
-                attachment_key="ATTACH1",
-                previous_extraction_tool="pymupdf4llm.to_markdown",
-                new_extraction_tool="marker",
-                previous_char_count=1,
-                new_char_count=0,
-                markdown_path="private.md",
-                source_path="private.pdf",
-                reconverted_at="",
-                error="private failure",
-            )
-            with patch("zotero_pdf_text.math_ocr.reconvert_with_marker", return_value=failed):
-                reconversion_failed = self._call(
-                    server,
-                    "reconvert_with_math_ocr",
-                    {"attachment_key": "ATTACH1", "confirm": "reconvert"},
-                )
-            self.assertTrue(reconversion_failed.isError)
-            self.assertIn("reconversion_failed: ", reconversion_failed.content[0].text)
-            self.assertNotIn("private failure", reconversion_failed.content[0].text)
-
-            with patch("zotero_pdf_text.mcp_contract.marker_dependency_available", return_value=True):
-                crash_server = create_server(sqlite_path, config=config, enable_reconvert=True)
-            with patch("zotero_pdf_text.math_ocr.reconvert_with_marker", side_effect=RuntimeError("private failure")):
-                reconversion_crashed = self._call(
-                    crash_server,
-                    "reconvert_with_math_ocr",
-                    {"attachment_key": "ATTACH1", "confirm": "reconvert"},
-                )
-            self.assertTrue(reconversion_crashed.isError)
-            self.assertIn("reconversion_failed: ", reconversion_crashed.content[0].text)
-            self.assertNotIn("private failure", reconversion_crashed.content[0].text)
-
-            with patch("zotero_pdf_text.mcp_contract.marker_dependency_available", return_value=True):
-                rate_limited_server = create_server(sqlite_path, config=config, enable_reconvert=True)
-            success = ReconvertResult(
-                ok=True,
-                attachment_key="ATTACH1",
-                previous_extraction_tool="pymupdf4llm.to_markdown",
-                new_extraction_tool="marker",
-                previous_char_count=1,
-                new_char_count=2,
-                markdown_path="private.md",
-                source_path="private.pdf",
-                reconverted_at="2026-07-13T00:00:00",
-                error="",
-            )
-            with patch("zotero_pdf_text.math_ocr.reconvert_with_marker", return_value=success):
-                reconvert_success = self._call(
-                    rate_limited_server,
-                    "reconvert_with_math_ocr",
-                    {"attachment_key": "ATTACH1", "confirm": "reconvert"},
-                )
-            self.assertFalse(reconvert_success.isError)
-            self.assertTrue(reconvert_success.structuredContent["ok"])
-            self._assert_schema(tools["reconvert_with_math_ocr"], reconvert_success.structuredContent)
-            limited = self._call(
-                rate_limited_server,
-                "reconvert_with_math_ocr",
-                {"attachment_key": "ATTACH1", "confirm": "reconvert"},
-            )
-            self.assertTrue(limited.isError)
-            self.assertIn("reconversion_rate_limited: ", limited.content[0].text)
 
     @staticmethod
     def _call(server, name: str, arguments: dict[str, object]):

@@ -33,7 +33,7 @@ dependencies = [
 packages = ["src/zotero_pdf_text"]
 
 [tool.hatch.build.targets.sdist]
-exclude = ["/test-results/**"]
+exclude = ["/test-results/**", "/.claude/**", "/.codex/**", "/.agents/**"]
 
 [project.scripts]
 zotero-pdf-text = "zotero_pdf_text.cli:main"
@@ -46,9 +46,6 @@ mcp = [
 ]
 zotero-write = [
   "pyzotero>=1.6",
-]
-marker = [
-  "marker-pdf>=1.0,<2",
 ]
 test = [
   "pytest>=7.0",
@@ -84,5 +81,5 @@ module = "fitz"
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-module = ["pymupdf4llm", "marker.*"]
+module = ["pymupdf4llm"]
 ignore_missing_imports = true

@@ -5,6 +5,21 @@ All notable changes to this project are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Removed
+
+- Optional Marker whole-paper reconversion: the `[marker]` extra, `reconvert-math` CLI command,
+  `reconvert_with_math_ocr` MCP tool, `--enable-reconvert` flag and executable benchmark runner.
+  Regenerated the lockfile without Marker and its ML dependencies, including Torch, Transformers,
+  Surya, Pillow and pyasn1. Existing Marker-produced records remain readable. Remove the obsolete
+  flag from MCP registrations and regenerate tool lists with `install-mcp`. Normal conversion,
+  timeout retries and experimental local-service `ocr-images` remain available.
+
+### Fixed
+
+- Source distributions exclude local `.claude`, `.codex` and `.agents` directories, including
+  nested agent worktrees that could otherwise carry old code or local state into an archive.
+  Distribution inspection rejects these directories too.
+
 ## [0.15.2] - 2026-10-28
 
 ### Fixed

@@ -301,9 +301,9 @@ contains one record per available converted full text:
 - `indexed_at`: UTC timestamp of when this record was built
 - full Markdown-derived `text`
 
-Reconvert a single paper with `reconvert-math --key <attachment_key>` when `has_math` is true and
-the notation needs to be trustworthy (LaTeX-aware marker-pdf extraction, in place). This is
-just-in-time only — roughly 27s/page, so it is not meant for bulk reconversion.
+When `has_math` is true, inspect linked equation images with `get_passage_image` before
+assuming notation is missing. Experimental `ocr-images` can enrich extracted crops through a
+separately served local OCR model. Historical `marker` extraction labels remain readable.
 
 ## SQLite FTS
 
@@ -694,7 +694,7 @@ MCP search and passage responses derive normalized warning codes from these fiel
 - `identity_unverified` unless `identity_status` is `verified`, `manual_accepted`, or
   `fulltext_verified` (unknown future values warn conservatively).
 - `attachment_match_unverified` unless `classification` is `mapped_verified`.
-- `math_extraction_may_be_lossy` when `has_math` is true and `extraction_tool` is not `marker`.
+- `math_extraction_may_be_lossy` when `has_math` is true and the extraction tool has no math-capable component (`glm-ocr` or historical `marker`).
 
 LLM tools should show these fields in search results.
 

@@ -9,7 +9,6 @@ import textwrap
 import unittest
 from pathlib import Path
 
-from zotero_pdf_text.mcp_contract import marker_dependency_available
 from test_mcp_server import _build_index, _write_config
 
 # Simulates a dependency that prints diagnostics when an optional tool lazily imports it (the
@@ -55,9 +54,6 @@ class McpStdioTests(unittest.TestCase):
                 "skip_timeout_extraction": {"attachment_key": "NOSUCHKEY", "reason": "test", "confirm": "skip_timeout"},
                 "retry_timeout_extraction": {"attachment_key": "NOSUCHKEY", "confirm": "retry_timeout"},
             }
-            if marker_dependency_available():
-                args.append("--enable-reconvert")
-                calls["reconvert_with_math_ocr"] = {"attachment_key": "NOSUCHKEY", "confirm": "reconvert"}
             params = StdioServerParameters(command=sys.executable, args=args, env=env)
             stderr_path = root / "stderr.log"
 

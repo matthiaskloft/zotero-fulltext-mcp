@@ -78,7 +78,7 @@ recorded, loses its hash this way.
 
 A locator carries the hash of the converted text its offsets were measured against.
 `get_fulltext_chunk` answers `stale_locator` when that text has been replaced since the locator
-was issued -- by `ocr-images`, `reconvert-math`, or an ordinary reconversion of that attachment.
+was issued -- by `ocr-images` or an ordinary reconversion of that attachment.
 
 Unlike the errors above, **nothing is broken and there is nothing to repair.** The index is
 healthy; the cited passage simply no longer exists in the form it was cited. Search again for that
@@ -379,8 +379,7 @@ it reports that no matching file was found under `output_root`, the recorded pat
 suffix with the current tree — check that `output_root` in your config points at the directory
 that actually contains `markdown/` and `images/`.
 
-Other commands that consume recorded paths (`reconvert-math`) do not re-root and will report
-the file as missing. Republishing the index from the current tree (`rebuild-index`) rewrites the
+Republishing the index from the current tree (`rebuild-index`) rewrites the
 stored paths.
 
 ## Image OCR Runtime Is Unavailable
@@ -451,7 +450,7 @@ import -- is redirected to stderr, so a
 non-JSON line on the protocol stream indicates an older install; update it. The project imports
 PyMuPDF as `pymupdf` (not the deprecated `fitz` alias), which requires `pymupdf>=1.24.3`.
 
-When `--enable-reconvert` or `--enable-retry-timeout` is set, the server imports those tools'
+When `--enable-retry-timeout` is set, the server imports those tools'
 conversion dependencies at startup rather than on the first call. On Windows, loading native
 extensions such as numpy while the transport is blocked reading stdin can otherwise hang the first
 write-tool call indefinitely. Startup with those flags is therefore a second or two slower.
@@ -611,11 +610,8 @@ extra (marker deliberately excluded). All still open unless noted.
    `--config`. Confirm the expected filename with
    `python -c "import platform; print('config.'+platform.node()+'.json')"`.
 
-10. **Working as designed — `install-mcp --enable-reconvert` requires the `marker` extra.**
-    Without `marker-pdf` installed, `--enable-reconvert` refuses with
-    `--enable-reconvert requires the optional marker dependency (pip install -e .[marker])`. This
-    is intentional capability separation, not a bug: the base install (`[mcp,zotero-write]`) gives
-    the read-only search server plus the approval-gated `zotero-write` CLI workflow, but **not**
-    the `reconvert_with_math_ocr` MCP tool, which needs marker's torch/transformers stack. Install
-    `[marker]` and re-run `install-mcp --enable-reconvert` (and raise `MCP_TIMEOUT` to `180000`)
-    only if you actually need math-OCR reconversion.
+10. **Marker reconversion was removed.** The `[marker]` extra, `reconvert-math` command and
+    `--enable-reconvert` server flag are no longer supported. Remove that flag from existing
+    registrations and regenerate their tool lists with `install-mcp`. Historical converted text
+    remains readable. Normal conversion, timeout retries and local-service `ocr-images` remain
+    available without Marker.

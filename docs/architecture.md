@@ -81,16 +81,13 @@ as primary library records.
   timeout candidates (`list_timeout_candidates`) and orphan-parent candidates
   (`list_orphan_candidates`) is always available and read-only; both identify the underlying PDF
   by hash/attachment key rather than local path, and neither tool ever triggers discovery,
-  conversion, or a Zotero write itself. The optional math-OCR capability must be enabled at
-  startup with an explicit valid config governing the selected database and with the Marker
-  dependency installed. It requires an exact confirmation literal, overwrites one attachment's
-  derived Markdown, image assets, and index record, and is rate-limited, but it never modifies
-  Zotero. The optional timeout tools (`skip_timeout_extraction`, `retry_timeout_extraction`,
-  enabled with `--enable-retry-timeout`) follow the same pattern: startup opt-in, a confirmation
-  literal, and no Zotero writes. Retrying is also rate-limited; skipping only records a persisted
+  conversion, or a Zotero write itself. The optional timeout tools
+  (`skip_timeout_extraction`, `retry_timeout_extraction`, enabled with `--enable-retry-timeout`)
+  require startup opt-in, an explicit valid config governing the selected index and a confirmation
+  literal; they never write Zotero. Retrying is also rate-limited; skipping only records a persisted
   skip-list entry.
 - Full-text CLI: maintenance and operational commands, including Zotero process startup and
-  unguarded `reconvert-math`, remain explicit local workflows.
+  image OCR, remain explicit local workflows.
 - Better BibTeX CLI/MCP bridge: the CLI returns or appends full `.bib` entries by citation key.
   The MCP export bridge is disabled by default and, when explicitly enabled, can only call the
   configured credential-free loopback endpoint on Zotero's local port.

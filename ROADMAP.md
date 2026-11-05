@@ -53,6 +53,10 @@ read-only by default, with lexical search, metadata filters, verified passage lo
 auditing and crash-safe publication. Optional CLI acquisition/write commands and explicitly
 enabled OCR/reconversion tools remain separate from the default read surface.
 
+Unreleased: Marker whole-paper reconversion and its ML dependency tree have been removed.
+Normal conversion, timeout retries and local-service image OCR remain available. Existing Marker
+records are still readable; remove `--enable-reconvert` from older MCP registrations.
+
 Since v0.11.0, released work includes:
 
 - **v0.12.0:** per-attachment library folders, portable image links and catalogs; richer Zotero
@@ -232,15 +236,15 @@ risk column here is about Zotero and dependencies, not the converted library.
 | Step | What it does | Shipped / still open | Issues | Risk | Needs | Why here |
 |------|--------------|----------------------|--------|------|-------|----------|
 | **M1** (done) | Fixes the duplicate check in `check-pdf` and `import-doi`. Live debug-bridge reads with a verified-copy fallback replace unsafe live `immutable=1` reads; writes refuse to proceed when neither check works. | Shipped v0.11.0 — [PR #97](https://github.com/matthiaskloft/zotero-fulltext-mcp/pull/97). WAL-aware mapper snapshots shipped v0.14.0 — [PR #151](https://github.com/matthiaskloft/zotero-fulltext-mcp/pull/151). | [#91](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/91) | none | — | A correctness bug in shipped write commands, so it comes first. It changes no derived data. |
-| **M2** | Dismisses the 22 Dependabot alerts on `uv.lock` and records why. The optional `[marker]` extra pins `pillow<11` and, before Marker 2.0, `transformers<5`. Marker 2.0 lifts the pins but needs Docker or a `llama-server` binary. Decision: stay on marker-pdf 1.10.2, because the pipeline only processes the user's own PDFs. | Maintainer follow-up: verify current alerts and record any dismissals. The dependency decision is documented; current GitHub alert state is not established here. | [#92](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/92) | none | — | The decision is made. What remains is the dismissal and a note. Revisit when Marker 2.0 no longer needs Docker. |
+| **M2** (implemented, unreleased) | Remove unused Marker whole-paper reconversion and its optional ML dependency tree instead of dismissing the associated alerts. | Removed `[marker]`, its CLI/MCP tools, registration flag and executable benchmark runner; regenerated `uv.lock` without Marker, Torch, Transformers, Surya, Pillow or pyasn1. Historical conversions remain readable. Open: merge/release and confirm GitHub closes the alerts after the default branch updates. | [#92](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/92) | contained | — | Removes an unused feature and the dependency paths behind the current alerts; normal conversion and local image OCR remain available. |
 | **M3** | An opt-in review-and-apply workflow for Zotero item writes from MCP, as a separate entry point because the default server stays read-only. The CLI write commands (`import-doi`, `find-pdf`, `link-pdf`) already exist. | Planned. CLI acquisition exists; a separate MCP review/apply workflow remains open. Prefer Z5 before implementation. | [#34](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/34) | contained | M1 | It builds on the same duplicate check, so M1 must land first. |
 | **M4** | A sidecar library of the reader's own comments, linked to source passages. #3 tracks it together with #1. | Planned. Source-linked sidecar comments remain open; depends on stable source spans. | [#2](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/2), [#3](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/3) | contained | S4, S6 | Links to passages by locator, and future S4 boundary changes can invalidate them. Building it earlier would mean re-linking every comment. |
 | **M5** | Image OCR (`ocr-images`): stress-test on a large library, then decide whether to document it in the release notes. It is packaged but left out of the notes by decision. | Packaged and opt-in, but unannounced and not validated for general use. Open: large-library stress test and release-note decision. | — | none | a large-library run | No date. It is announced once the stress test passes (see `CHANGELOG.md`). |
 
 **Status:** M1 is done ([#97](https://github.com/matthiaskloft/zotero-fulltext-mcp/pull/97)); its
 live path has recorded fixtures and disposable real-Zotero integration coverage. The v0.12.0
-container tests exposed and fixed a PDF-check SQL incompatibility that had forced the copy fallback. M2's decision is made; what remains is dismissing the alerts on
-GitHub, which is a repository security setting and stays with the maintainer. M3 is unblocked now
+container tests exposed and fixed a PDF-check SQL incompatibility that had forced the copy fallback.
+M2's removal is implemented for the next release; verify alert closure after it merges. M3 is unblocked now
 that M1 has landed, but Track 4's Z5 should land first so the MCP write workflow is built on the
 Zotero 10 local API rather than debug-bridge.
 

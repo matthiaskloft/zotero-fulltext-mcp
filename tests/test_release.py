@@ -93,6 +93,8 @@ def current_ref(root: Path) -> str:
 
 @pytest.mark.parametrize("private_path", [
     "test-results/config.example.json", "config.json", ".venv-release/data.txt",
+    ".claude/worktrees/old/src/zotero_pdf_text/math_ocr.py",
+    ".codex/config.toml", ".agents/local.txt",
 ])
 def test_private_content_rejected(private_path: str) -> None:
     with pytest.raises(ValueError):

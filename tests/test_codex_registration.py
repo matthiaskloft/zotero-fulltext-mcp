@@ -1,7 +1,6 @@
 import io
 import json
 import os
-import re
 import tempfile
 import tomllib
 import unittest
@@ -93,22 +92,6 @@ class CodexRegistrationDriftTests(unittest.TestCase):
 
         self.assertIn("enabled: unexpected value 'false'", output)
 
-    def test_reconvert_entry_with_old_timeouts_is_drift_but_larger_ones_are_kept(self):
-        with patch("zotero_pdf_text.cli.validate_config"), patch(
-            "zotero_pdf_text.cli.marker_dependency_available", return_value=True
-        ):
-            block = self._generated_block(self._run("--enable-reconvert"))
-            old = re.sub(r"startup_timeout_sec = \d+", "startup_timeout_sec = 30", block)
-            old = re.sub(r"tool_timeout_sec = \d+", "tool_timeout_sec = 120", old)
-            self.codex_config.write_text(old, encoding="utf-8")
-            outdated = self._run("--enable-reconvert")
-            larger = re.sub(r"startup_timeout_sec = \d+", "startup_timeout_sec = 900", block)
-            self.codex_config.write_text(larger, encoding="utf-8")
-            kept = self._run("--enable-reconvert")
-
-        self.assertIn("startup_timeout_sec: 30 is below the 180", outdated)
-        self.assertIn("tool_timeout_sec: 120 is below the 6000", outdated)
-        self.assertIn("is current", kept)
 
     def test_matching_registration_is_current_and_ignores_approval_overrides(self):
         block = self._generated_block(self._run())

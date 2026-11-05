@@ -5,17 +5,14 @@ scores it. The part worth testing hard is the *anchoring*, because that is what 
 three unrelated engines commensurable: every element is scored inside a window located by its
 CORPUSMARK token, so a token only counts where the element actually is.
 
-The runner (tools/compare_engines.py) needs a model, marker-pdf and a GPU to run an engine, but its
-hardware verdict and its "is this engine even here" classification are pure decisions on strings --
-and that classification is the most failure-prone code in the harness, so it is tested here with a
-faked subprocess rather than left to a live run.
+The runner (tools/compare_engines.py) needs a separately served OCR model for the crop path.
+Its hardware verdict and failure accounting are checked offline with faked runners.
 """
 
 import contextlib
 import importlib.util
 import io
 import json
-import subprocess
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -358,83 +355,19 @@ class RunnerTests(unittest.TestCase):
         with self.assertRaises(self.runner.EngineUnavailable):
             self.runner.run_mineru("cpu")
 
-    # An installed marker-pdf whose native extension will not load. Note that the traceback names
-    # _extract_markdown_marker.py, which is why substring-matching on "marker" misclassified it.
-    BROKEN_CUDA_STDERR = (
-        'File "zotero_pdf_text/_extract_markdown_marker.py", line 20, in main\n'
-        "    from marker.converters.pdf import PdfConverter\n"
-        "ImportError: DLL load failed while importing _C: The specified module could not be found.\n"
-    )
-
-    def _marker_failing_with(self, stderr: str):
-        error = subprocess.CalledProcessError(1, ["marker"], stderr=stderr)
-        return patch.object(self.runner.subprocess, "run", side_effect=error)
-
-    def test_a_missing_marker_pdf_is_reported_as_not_installed(self):
-        stderr = (
-            'File "zotero_pdf_text/_extract_markdown_marker.py", line 20, in main\n'
-            "    from marker.converters.pdf import PdfConverter\n"
-            "ModuleNotFoundError: No module named 'marker'\n"
-        )
-        with self._marker_failing_with(stderr):
-            with self.assertRaises(self.runner.EngineUnavailable) as caught:
-                self.runner.run_marker("gpu")
-        self.assertIn("not installed", str(caught.exception))
-
-    def test_an_installed_marker_with_a_broken_import_is_not_called_uninstalled(self):
-        """The bug this guards is subtle and was real: the subprocess IS
-        zotero_pdf_text._extract_markdown_marker, so its own module path -- containing the substring
-        'marker' -- appears in every traceback it raises. Classifying on that substring told a user
-        whose CUDA chain failed to load to install a package they already had, which is both wrong
-        and unactionable. The real stderr must reach them instead.
-        """
-        with self._marker_failing_with(self.BROKEN_CUDA_STDERR):
-            with self.assertRaises(self.runner.EngineFailed) as caught:
-                self.runner.run_marker("gpu")
-        message = str(caught.exception)
-        self.assertNotIn("not installed", message)
-        self.assertIn("DLL load failed", message)  # the actual cause survives
-
-    def test_an_engine_that_ran_and_failed_is_not_an_absent_engine(self):
-        """A present-but-broken engine has answered, so it must not be filed as unavailable.
-
-        The two are handled differently by main(): an absent engine is omitted from the comparison
-        (there is nothing to say about it), while one that ran and failed stays in and scores zero.
-        Conflating them let a failing engine disappear from the ranking rather than place last.
-        """
-        with self._marker_failing_with(self.BROKEN_CUDA_STDERR):
-            with self.assertRaises(self.runner.EngineAttempted) as caught:
-                self.runner.run_marker("gpu")
-        self.assertNotIsInstance(caught.exception, self.runner.EngineUnavailable)
-
-    def test_a_timeout_is_an_attempt_not_an_absence(self):
-        # A timeout is a cost result, and cost is half of what this harness measures. Filing it
-        # under "unavailable" would report an installed, working engine as absent.
-        timeout = subprocess.TimeoutExpired(["marker"], self.runner.MARKER_TIMEOUT_SECONDS)
-        with patch.object(self.runner.subprocess, "run", side_effect=timeout):
-            with self.assertRaises(self.runner.EngineTimedOut):
-                self.runner.run_marker("gpu")
-        self.assertTrue(issubclass(self.runner.EngineTimedOut, self.runner.EngineAttempted))
-        self.assertFalse(issubclass(self.runner.EngineTimedOut, self.runner.EngineUnavailable))
-
     def test_a_failing_engine_scores_zero_in_the_comparison_instead_of_vanishing(self):
-        """main()'s end of the same contract: the failed engine is present, ranked, and scoring 0.
-
-        Omission would flatter it -- a comparison of two engines where the broken one is simply
-        absent reads as "one engine, works fine" rather than "one engine works, one is broken here".
-        """
         captured = io.StringIO()
-        with self._marker_failing_with(self.BROKEN_CUDA_STDERR), patch.object(
+        with patch.object(self.runner, "run_crop_mvp", side_effect=self.runner.EngineFailed("test failure")), patch.object(
             self.runner, "_ocr_settings", return_value=ImageOcrSettings(),
         ):
             with contextlib.redirect_stdout(captured):
-                exit_code = self.runner.main(["--engine", "marker", "--json"])
-        self.assertEqual(exit_code, 0)  # marker was attempted, so something WAS compared
+                exit_code = self.runner.main(["--engine", "crop-mvp", "--json"])
+        self.assertEqual(exit_code, 0)
         payload = json.loads(captured.getvalue())
-        self.assertEqual([e["engine"] for e in payload["engines"]], ["marker"])
+        self.assertEqual([e["engine"] for e in payload["engines"]], ["crop-mvp"])
         self.assertEqual(payload["engines"][0]["macro_recall"], 0.0)
-        self.assertIn("marker", payload["failed"])
-        self.assertNotIn("marker", payload["unavailable"])
+        self.assertIn("crop-mvp", payload["failed"])
+        self.assertNotIn("crop-mvp", payload["unavailable"])
 
     def test_an_explicit_missing_config_is_an_error_not_a_silent_default(self):
         # Benchmarking the default host/model when the user pointed at a specific config would

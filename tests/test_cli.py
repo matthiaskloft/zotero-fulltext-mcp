@@ -15,76 +15,16 @@ from zotero_pdf_text.cli import _manual_restore_command, _shell_quote, build_par
 from zotero_pdf_text.library import ALL_STATUSES
 from zotero_pdf_text.config import resolve_config_path
 from zotero_pdf_text.fts import ChunkNotFoundError, SearchResult
-from zotero_pdf_text.math_ocr import ReconvertResult
 
 
-class ReconvertMathCliTests(unittest.TestCase):
-    def test_parser_defaults(self):
-        args = build_parser().parse_args(["reconvert-math", "--key", "ABCD1234"])
-        self.assertEqual(args.command, "reconvert-math")
-        self.assertEqual(args.key, "ABCD1234")
-        self.assertEqual(args.config, resolve_config_path())
-        self.assertEqual(args.timeout_seconds, 5400)
-
-    def test_dispatch_calls_reconvert_with_marker_and_returns_zero_on_success(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            config_path = root / "config.json"
-            config_path.write_text(
-                '{"zotero_root": "%s", "zotero_data_directory": "%s", '
-                '"linked_attachments": "%s", "output_root": "%s"}'
-                % (root, root, root, root / "output"),
-                encoding="utf-8",
-            )
-            success = ReconvertResult(
-                ok=True,
-                attachment_key="ABCD1234",
-                previous_extraction_tool="pymupdf4llm.to_markdown",
-                new_extraction_tool="marker",
-                previous_char_count=10,
-                new_char_count=20,
-                markdown_path=str(root / "paper.md"),
-                source_path=str(root / "paper.pdf"),
-                reconverted_at="2026-07-05T00:00:00",
-                error="",
-            )
-            with patch("zotero_pdf_text.cli.load_config") as mock_load_config, patch(
-                "zotero_pdf_text.cli.validate_config"
-            ), patch("zotero_pdf_text.math_ocr.reconvert_with_marker", return_value=success) as mock_reconvert:
-                from zotero_pdf_text.config import ProjectConfig
-
-                mock_load_config.return_value = ProjectConfig(root, root, root, root / "output")
-                exit_code = main(["reconvert-math", "--key", "ABCD1234", "--config", str(config_path)])
-
-            self.assertEqual(exit_code, 0)
-            mock_reconvert.assert_called_once()
-            _, kwargs = mock_reconvert.call_args
-            self.assertEqual(kwargs["timeout_seconds"], 5400)
-
-    def test_dispatch_returns_nonzero_on_failure(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            failure = ReconvertResult(
-                ok=False,
-                attachment_key="ABCD1234",
-                previous_extraction_tool="",
-                new_extraction_tool="",
-                previous_char_count=0,
-                new_char_count=0,
-                markdown_path="",
-                source_path="",
-                reconverted_at="",
-                error="No indexed record found",
-            )
-            with patch("zotero_pdf_text.cli.load_config") as mock_load_config, patch(
-                "zotero_pdf_text.cli.validate_config"
-            ), patch("zotero_pdf_text.math_ocr.reconvert_with_marker", return_value=failure):
-                from zotero_pdf_text.config import ProjectConfig
-
-                mock_load_config.return_value = ProjectConfig(root, root, root, root / "output")
-                exit_code = main(["reconvert-math", "--key", "ABCD1234"])
-
-            self.assertEqual(exit_code, 1)
+class RemovedMarkerCliTests(unittest.TestCase):
+    def test_removed_marker_entry_points_are_rejected_before_loading_config(self):
+        for args in (["reconvert-math", "--key", "ABCD1234"], ["install-mcp", "--enable-reconvert"]):
+            with self.subTest(args=args), redirect_stderr(io.StringIO()), patch("zotero_pdf_text.cli.load_config") as load:
+                with self.assertRaises(SystemExit) as raised:
+                    main(args)
+                self.assertEqual(raised.exception.code, 2)
+                load.assert_not_called()
 
 
 class RetryTimeoutCliTests(unittest.TestCase):
@@ -723,7 +663,6 @@ class InstallMcpCliTests(unittest.TestCase):
         self.assertIsNone(args.config)
         self.assertIsNone(args.db)
         self.assertFalse(args.enable_bibtex)
-        self.assertFalse(args.enable_reconvert)
         self.assertIsNone(args.bibtex_endpoint)
         self.assertFalse(args.apply)
 
@@ -1035,145 +974,6 @@ class InstallMcpCliTests(unittest.TestCase):
             self.assertIn("--enable-bibtex", printed)
             self.assertIn("export_bibtex_entries_by_key", printed)
 
-    def test_optional_reconversion_registration_forwards_flag_and_tool(self):
-        import tomllib
-
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            config_path = root / "config.json"
-            (root / "zotero.sqlite").write_bytes(b"")
-            config_path.write_text(
-                json.dumps(
-                    {
-                        "zotero_root": str(root),
-                        "zotero_data_directory": str(root),
-                        "linked_attachments": str(root),
-                        "output_root": str(root / "converted_text"),
-                    }
-                ),
-                encoding="utf-8",
-            )
-            with patch("sys.executable", str(root / "Scripts" / "python.exe")), patch(
-                "zotero_pdf_text.cli.marker_dependency_available", return_value=True
-            ), patch("sys.stdout") as mock_stdout:
-                exit_code = main(["install-mcp", "--config", str(config_path), "--enable-reconvert"])
-            printed = "".join(call.args[0] for call in mock_stdout.write.call_args_list)
-            self.assertEqual(exit_code, 0)
-            self.assertIn("--enable-reconvert", printed)
-            self.assertIn("reconvert_with_math_ocr", printed)
-
-            toml_start = printed.index("[mcp_servers.zotero_fulltext]")
-            server = tomllib.loads(printed[toml_start:])["mcp_servers"]["zotero_fulltext"]
-            self.assertEqual(server["args"][-1], "--enable-reconvert")
-            self.assertEqual(server["tool_timeout_sec"], 6000)
-            self.assertEqual(
-                server["enabled_tools"],
-                [
-                    "search_fulltext",
-                    "search_within_fulltext",
-                    "get_fulltext_chunk",
-                    "get_page",
-                    "get_passage_image",
-                    "get_item_context",
-                    "lookup_citation_key",
-                    "list_timeout_candidates",
-                    "list_orphan_candidates",
-                    "library_status",
-                    "guide",
-                    "reconvert_with_math_ocr",
-                ],
-            )
-
-    def test_optional_reconversion_apply_forwards_exact_claude_arguments(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            (root / "zotero.sqlite").write_bytes(b"")
-            output_root = root / "converted_text"
-            config_path = root / "config.json"
-            config_path.write_text(
-                json.dumps(
-                    {
-                        "zotero_root": str(root),
-                        "zotero_data_directory": str(root),
-                        "linked_attachments": str(root),
-                        "output_root": str(output_root),
-                    }
-                ),
-                encoding="utf-8",
-            )
-            with patch("sys.executable", str(root / "Scripts" / "python.exe")), patch(
-                "zotero_pdf_text.cli.shutil.which", return_value="C:/fake/claude.cmd"
-            ), patch.dict(os.environ, {"CLAUDE_CONFIG_DIR": str(root)}), patch(
-                "zotero_pdf_text.cli.subprocess.run"
-            ) as mock_run, patch(
-                "zotero_pdf_text.cli.marker_dependency_available", return_value=True
-            ):
-                mock_run.return_value.returncode = 0
-                exit_code = main(
-                    ["install-mcp", "--config", str(config_path), "--enable-reconvert", "--apply"]
-                )
-            self.assertEqual(exit_code, 0)
-            exe_name = "zotero-fulltext-mcp.exe" if os.name == "nt" else "zotero-fulltext-mcp"
-            expected_exe = str(root / "Scripts" / exe_name)
-            expected_db = str(output_root / "index" / "zotero_text_index.sqlite")
-            self.assertEqual(
-                mock_run.call_args[0][0],
-                [
-                    "C:/fake/claude.cmd",
-                    "mcp", "add", "--scope", "user", "zotero-fulltext",
-                    expected_exe,
-                    "--", "--db", expected_db, "--config", str(config_path), "--enable-reconvert",
-                ],
-            )
-
-    def test_optional_reconversion_rejects_invalid_config_and_database_mismatch(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            config_path = root / "config.json"
-            config_path.write_text(
-                json.dumps(
-                    {
-                        "zotero_root": str(root),
-                        "zotero_data_directory": str(root),
-                        "linked_attachments": str(root),
-                        "output_root": str(root / "converted_text"),
-                    }
-                ),
-                encoding="utf-8",
-            )
-            self.assertEqual(main(["install-mcp", "--config", str(config_path), "--enable-reconvert"]), 2)
-
-            (root / "zotero.sqlite").write_bytes(b"")
-            self.assertEqual(
-                main(
-                    [
-                        "install-mcp",
-                        "--config", str(config_path),
-                        "--db", str(root / "different.sqlite"),
-                        "--enable-reconvert",
-                    ]
-                ),
-                2,
-            )
-
-    def test_optional_reconversion_rejects_missing_marker_dependency(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            config_path = root / "config.json"
-            (root / "zotero.sqlite").write_bytes(b"")
-            config_path.write_text(
-                json.dumps(
-                    {
-                        "zotero_root": str(root),
-                        "zotero_data_directory": str(root),
-                        "linked_attachments": str(root),
-                        "output_root": str(root / "converted_text"),
-                    }
-                ),
-                encoding="utf-8",
-            )
-            with patch("zotero_pdf_text.cli.marker_dependency_available", return_value=False):
-                self.assertEqual(main(["install-mcp", "--config", str(config_path), "--enable-reconvert"]), 2)
 
     def test_enable_retry_timeout_registration_forwards_flag_and_tools(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -1199,7 +999,7 @@ class InstallMcpCliTests(unittest.TestCase):
             self.assertIn("skip_timeout_extraction", printed)
             self.assertIn("retry_timeout_extraction", printed)
 
-    def test_enable_retry_timeout_does_not_require_marker_dependency(self):
+    def test_enable_retry_timeout_registration_succeeds(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             config_path = root / "config.json"
@@ -1215,9 +1015,7 @@ class InstallMcpCliTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
-            with patch("zotero_pdf_text.cli.marker_dependency_available", return_value=False), patch(
-                "sys.executable", str(root / "Scripts" / "python.exe")
-            ), patch("sys.stdout"):
+            with patch('sys.executable', str(root / 'Scripts' / 'python.exe')), patch('sys.stdout'):
                 exit_code = main(["install-mcp", "--config", str(config_path), "--enable-retry-timeout"])
             self.assertEqual(exit_code, 0)
 
@@ -1963,8 +1761,6 @@ class AuditLibraryCliTests(unittest.TestCase):
             text = output.getvalue()
             self.assertIn("- unindexed: 1", text)
             self.assertNotIn("AAAA1111", text)
-
-
 
 
 class IndexStatsCliTests(unittest.TestCase):

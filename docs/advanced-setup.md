@@ -37,7 +37,7 @@ Before running anything else, validate the config and environment:
 
 This is read-only and fast — it checks that the config parses, that `zotero_root`, `zotero_data_directory`,
 `linked_attachments`, and `zotero.sqlite` exist, that `output_root` exists (or is creatable) and
-is writable, and reports which optional extras (`mcp`, `zotero-write`, `marker`) are installed.
+is writable, and reports which optional extras (`mcp`, `zotero-write`) are installed.
 Catching a bad path or a missing extra here takes seconds; catching it 40 minutes into a `dry-run`
 or `convert-new` does not. Add `--require-mcp` before registering the MCP server: it also fails
 if the `mcp` extra isn't installed, if no index generation is published yet (run `convert-new`),
@@ -62,8 +62,7 @@ and `--apply`. Codex's
 does read it (`$CODEX_HOME/config.toml`, else `~/.codex/config.toml`, or `--codex-config PATH`)
 and reports whether the existing Codex entry is current, missing, or differs in executable,
 arguments, `enabled_tools`, `disabled_tools`, or `enabled`, including a second entry under the
-hyphenated name. With `--enable-reconvert` it also reports timeouts below what that mode
-needs; larger timeouts and per-tool approval overrides are yours and are not compared. A
+hyphenated name. Per-tool approval overrides are yours and are not compared. A
 project-scoped `.codex/config.toml` can override the user entry and is not checked; an
 `omit_tools_from` setting is shown as a note, not as drift. After
 changing the entry, restart Codex.
@@ -74,32 +73,17 @@ endpoint is fixed at server startup and must be a credential-free loopback HTTP 
 local port. The server itself enforces this boundary; the generated client tool list is only
 deployment hygiene.
 
-Math OCR is also absent by default because it overwrites one attachment's converted Markdown,
-extracted image assets, and index entry. Enable it only when that interactive repair workflow is
-wanted:
-
-```powershell
-& $python -m zotero_pdf_text install-mcp --config .\config.json --enable-reconvert
-```
-
-This requires the `[marker]` extra. The selected database must be the sidecar index governed by
-that config; startup rejects mismatched `--db`/`--config` pairs. The generated registration passes
-both paths and adds only `reconvert_with_math_ocr`. The generated Codex registration raises its
-tool timeout for the long GPU-bound operation. The tool still requires `confirm="reconvert"`, is
-blocking and rate-limited, and should be called only after the user approves reconverting that
-attachment.
-
 Conversion also records "timeout candidates" -- attachments whose primary extractor exceeded its
 scaled timeout budget and fell back to plain-text extraction (see [Timeout Candidates](operations.md#timeout-candidates)). Listing
 them (`list_timeout_candidates`) is always available; acting on one (skip permanently, or retry
-with a longer budget) is opt-in the same way math OCR is:
+with a longer budget) is opt-in:
 
 ```powershell
 & $python -m zotero_pdf_text install-mcp --config .\config.json --enable-retry-timeout
 ```
 
 This requires no optional extra -- retries use the same `pymupdf4llm`/`pymupdf` extractors as
-ordinary conversion, not marker-pdf. The selected database must likewise be the sidecar index
+ordinary conversion. The selected database must likewise be the sidecar index
 governed by that config. The generated registration adds `skip_timeout_extraction` and
 `retry_timeout_extraction`; both require their own literal `confirm` string and should be called
 only after the user approves that specific decision.
@@ -134,12 +118,11 @@ Check that `zotero-fulltext` is listed as connected. In other clients, inspect t
 ## Optional dependencies and upgrades
 
 The `[mcp]` extra installs the server. A base install provides conversion and the CLI only.
-Other extras are `[zotero-write]` for the audited write-plan workflow, `[marker]` for
-`reconvert-math` and the opt-in `reconvert_with_math_ocr` tool, and `[test]` for development.
+Other extras are `[zotero-write]` for the audited write-plan workflow and `[test]` for development.
 The ordinary `import-doi`, `find-pdf`, and `link-pdf` commands do not need `[zotero-write]`.
 To install an additional extra, use the README's tagged install command with, for example,
-`[mcp,marker]` in place of `[mcp]`. In a checkout, use
-`uv sync --extra mcp --extra test --extra marker --locked` as appropriate.
+`[mcp,zotero-write]` in place of `[mcp]`. In a checkout, use
+`uv sync --extra mcp --extra test --locked` as appropriate.
 Experimental `ocr-images` uses a local HTTP OCR service and needs no extra; see
 [Image OCR](operations.md#image-ocr-for-equations-tables-and-figures).
 

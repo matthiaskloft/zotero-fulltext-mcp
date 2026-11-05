@@ -20,7 +20,7 @@ def check_members(names: list[str], *, sdist: bool) -> None:
     if sdist:
         paths = [Path(*path.parts[1:]) for path in paths]
     for path in paths:
-        if any(part in {"test-results", ".git", "__pycache__"} or part.startswith(".venv")
+        if any(part in {"test-results", ".git", ".claude", ".codex", ".agents", "__pycache__"} or part.startswith(".venv")
                for part in path.parts):
             raise ValueError(f"Local runtime content in distribution: {path}")
         if path.name.startswith("config") and path.suffix == ".json" and path.name != "config.example.json":
