@@ -166,6 +166,44 @@ through `rebuild-index --manifest` or `update-index --manifest`; unaccepted file
 For interrupted runs, selective repairs, and index maintenance, see
 [Operations](docs/operations.md).
 
+### Full-library reconversion jobs
+
+Use a fresh `dry-run` mapping report to reconvert all verified PDFs in an isolated run.
+Existing timeout/skip policies still apply. Unverified PDFs are excluded.
+
+```powershell
+& $python -m zotero_pdf_text reconvert-library --config $config --mapping-report "path/to/mapping_report.csv" --background --publish
+# Use the run_dir printed by the start command:
+& $python -m zotero_pdf_text reconversion-status --run-dir "path/to/run"
+& $python -m zotero_pdf_text reconvert-library --config $config --run-dir "path/to/run" --resume --background --publish
+# Retry only index publication after a completed conversion:
+& $python -m zotero_pdf_text reconvert-library --config $config --run-dir "path/to/run" --publish-only --background
+```
+
+Each job stores its mapping and configuration snapshots, request settings, atomic `job.json`, append-only
+`progress.log`, and existing conversion checkpoints under `output_root/runs/`.
+Status reports the current attempt's processed count when available and recorded outcomes;
+live checkpoint outcomes cover successful conversions, while the final manifest includes
+failures and skips. A heartbeat older than 90 seconds is reported as `unresponsive`,
+including on another machine reading synced output. Background startup acknowledges launch;
+check status/logs for completion or failure. Foreground mode also logs to `progress.log`.
+
+Without `--publish`, the job ends as `converted` and leaves the index unchanged.
+Publication retains current records where the existing merge policy prefers them, preserves
+the current chunk settings, and atomically publishes validated files and the successor index.
+`--resume` uses the saved configuration, worker/timeout settings and validated checkpoints;
+conversion and publication use the configuration snapshot, so later edits to the original config
+cannot redirect a running job. The snapshot's checksum is checked at worker startup.
+For existing jobs, `--run-dir` identifies the saved configuration; the original config file is
+not required for resume or publication retry.
+`--publish-only` requires that the last attempt finalized its manifest and never extracts PDFs.
+An exclusive `attempt.lock` reserves a job before launch and prevents simultaneous resumes
+from overwriting status. After a killed worker, confirm no worker is still running before
+manually removing its stale `attempt.lock` and any shared pipeline lock to resume.
+These commands are CLI features; they do not add MCP write tools or adopt older custom jobs.
+If the child interpreter fails before the worker can initialize, status becomes `unresponsive`;
+inspect `progress.log` before removing its reservation and retrying.
+
 ## Connect your assistant
 
 Generate the registration after building the index:
