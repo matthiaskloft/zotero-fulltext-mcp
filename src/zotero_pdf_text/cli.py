@@ -85,13 +85,9 @@ from .mapper import run_dry_run
 from .mcp_contract import (
     BIBTEX_MCP_TOOL_NAME,
     DEFAULT_MCP_TOOL_NAMES,
-    RECONVERT_MCP_TOOL_NAME,
-    RECONVERT_STARTUP_TIMEOUT_SECONDS,
-    RECONVERT_TOOL_TIMEOUT_SECONDS,
     RETRY_TIMEOUT_MCP_TOOL_NAMES,
     ZOTERO_LAUNCH_MCP_TOOL_NAME,
     configured_index_path,
-    marker_dependency_available,
 )
 from .runtime import DEFAULT_ZOTERO_EXE, ensure_zotero_running
 from . import duplicate_attachments as duplicate_attachments_module
@@ -827,18 +823,6 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"Parallel conversion workers. Default: {default_worker_count()}.",
     )
     convert_new.add_argument("--timeout-seconds", type=int, default=600, help="Per-PDF timeout in seconds.")
-    reconvert_math = subparsers.add_parser(
-        "reconvert-math",
-        help=(
-            "Re-extract a single paper's markdown using marker-pdf (LaTeX-aware equation and "
-            "figure handling), overwriting the existing markdown file in place. Use when the "
-            "default pymupdf4llm extraction produced garbled or missing equations. Requires the "
-            "optional 'marker' extra (pip install -e .[marker])."
-        ),
-    )
-    reconvert_math.add_argument("--key", required=True, help="Zotero attachment key.")
-    reconvert_math.add_argument("--config", type=Path, default=resolve_config_path(), help="Path to project config JSON. Default: resolved for this machine.")
-    reconvert_math.add_argument("--timeout-seconds", type=int, default=5400, help="marker-pdf timeout in seconds.")
     ocr_images = subparsers.add_parser(
         "ocr-images",
         help=(
@@ -954,11 +938,6 @@ def build_parser() -> argparse.ArgumentParser:
     install_mcp.add_argument("--config", type=Path, default=None, help="Path to project config JSON. Default: resolved for this machine.")
     install_mcp.add_argument("--db", type=Path, default=None, help="SQLite FTS database path. Default: <output_root>/index/zotero_text_index.sqlite.")
     install_mcp.add_argument("--enable-bibtex", action="store_true", help="Enable the optional local Better BibTeX MCP integration.")
-    install_mcp.add_argument(
-        "--enable-reconvert",
-        action="store_true",
-        help="Enable single-attachment math OCR in MCP; the generated registration includes the explicit config.",
-    )
     install_mcp.add_argument(
         "--enable-retry-timeout",
         action="store_true",
@@ -1935,19 +1914,6 @@ def main(argv: list[str] | None = None) -> int:
         result["generation_id"] = info.generation_id
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0
-    if args.command == "reconvert-math":
-        from .math_ocr import reconvert_with_marker
-
-        config = load_config(args.config)
-        validate_config(config)
-        reconvert_result = reconvert_with_marker(
-            args.key,
-            index_root=config.output_root / "index",
-            lock_root=config.output_root,
-            timeout_seconds=args.timeout_seconds,
-        )
-        print(json.dumps(reconvert_result.to_dict(), ensure_ascii=False, indent=2))
-        return 0 if reconvert_result.ok else 1
     if args.command == "ocr-images":
         from .image_ocr import CropPlan, ocr_images_for_attachment
 
@@ -2063,18 +2029,6 @@ def _install_mcp(args: argparse.Namespace) -> int:
     config = load_config(config_path)
     expected_db_path = Path(os.path.abspath(configured_index_path(config)))
     db_path = Path(os.path.abspath(args.db)) if args.db is not None else expected_db_path
-    if args.enable_reconvert:
-        try:
-            validate_config(config)
-        except (OSError, TypeError, ValueError):
-            print("--enable-reconvert requires a valid project config.", file=sys.stderr)
-            return 2
-        if db_path.resolve(strict=False) != expected_db_path.resolve(strict=False):
-            print("--enable-reconvert requires --db to be the index governed by the project config.", file=sys.stderr)
-            return 2
-        if not marker_dependency_available():
-            print("--enable-reconvert requires the optional marker dependency (pip install -e .[marker]).", file=sys.stderr)
-            return 2
     if args.enable_retry_timeout:
         try:
             validate_config(config)
@@ -2097,8 +2051,6 @@ def _install_mcp(args: argparse.Namespace) -> int:
     server_args = ["--db", str(db_path), "--config", str(config_path)]
     if args.enable_bibtex:
         server_args.append("--enable-bibtex")
-    if args.enable_reconvert:
-        server_args.append("--enable-reconvert")
     if args.enable_retry_timeout:
         server_args.append("--enable-retry-timeout")
     if args.bibtex_endpoint:
@@ -2123,8 +2075,6 @@ def _install_mcp(args: argparse.Namespace) -> int:
     enabled_tools = list(DEFAULT_MCP_TOOL_NAMES)
     if args.enable_bibtex:
         enabled_tools.append(BIBTEX_MCP_TOOL_NAME)
-    if args.enable_reconvert:
-        enabled_tools.append(RECONVERT_MCP_TOOL_NAME)
     if args.enable_retry_timeout:
         enabled_tools.extend(RETRY_TIMEOUT_MCP_TOOL_NAMES)
     if args.enable_zotero_launch:
@@ -2140,8 +2090,8 @@ def _install_mcp(args: argparse.Namespace) -> int:
         f"command = {json.dumps(str(server_exe))}\n"
         f"args = [{toml_args}]\n"
         "enabled = true\n"
-        f"startup_timeout_sec = {RECONVERT_STARTUP_TIMEOUT_SECONDS if args.enable_reconvert else 30}\n"
-        f"tool_timeout_sec = {RECONVERT_TOOL_TIMEOUT_SECONDS if args.enable_reconvert else 120}\n"
+        "startup_timeout_sec = 30\n"
+        "tool_timeout_sec = 120\n"
         f"enabled_tools = [{toml_tools}]"
     )
 
@@ -2151,33 +2101,16 @@ def _install_mcp(args: argparse.Namespace) -> int:
     print()
     print("# Claude Code registration:")
     print(claude_cmd)
-    if args.enable_reconvert:
-        print()
-        print(
-            "# --enable-reconvert pulls in marker-pdf's torch/transformers dependencies, which "
-            f"cold-import in ~{RECONVERT_STARTUP_TIMEOUT_SECONDS}s on a typical machine -- longer than "
-            "Claude Code's default 30s MCP connection timeout. Before using this server, set (once, "
-            "persistently, e.g. via `setx MCP_TIMEOUT " f"{RECONVERT_STARTUP_TIMEOUT_SECONDS * 1000}` "
-            "on Windows or the shell-profile equivalent) so Claude Code waits long enough to connect:"
-        )
-        print(f"MCP_TIMEOUT={RECONVERT_STARTUP_TIMEOUT_SECONDS * 1000}")
     print()
     print("# Codex registration -- paste into your config.toml (this command does not edit it for you):")
     print(codex_block)
     print()
-    # Older reconvert entries kept the 30s startup timeout that marker's cold import overruns.
-    minimum_timeouts = (
-        {"startup_timeout_sec": RECONVERT_STARTUP_TIMEOUT_SECONDS, "tool_timeout_sec": RECONVERT_TOOL_TIMEOUT_SECONDS}
-        if args.enable_reconvert
-        else {}
-    )
     _print_codex_registration_drift(
         _codex_config_path(args.codex_config),
         (toml_name, server_name),
         str(server_exe),
         server_args,
         enabled_tools,
-        minimum_timeouts,
         explicit_path=args.codex_config is not None,
     )
 
@@ -2208,7 +2141,6 @@ def _print_codex_registration_drift(
     command: str,
     args: list[str],
     tools: list[str],
-    minimum_timeouts: dict[str, int],
     *,
     explicit_path: bool = False,
 ) -> None:
@@ -2260,7 +2192,7 @@ def _print_codex_registration_drift(
     omitted_from = entry.get("omit_tools_from")
     if omitted_from:
         print(f"# Codex registration check: note: [mcp_servers.{name}] omits its tools from {omitted_from!r}.")
-    differences = _codex_entry_differences(entry, command, args, tools, minimum_timeouts)
+    differences = _codex_entry_differences(entry, command, args, tools)
     if not differences:
         print(f"# Codex registration check: [mcp_servers.{name}] in {config_path} is current.")
         return
@@ -2271,7 +2203,7 @@ def _print_codex_registration_drift(
 
 
 def _codex_entry_differences(
-    entry: dict, command: str, args: list[str], tools: list[str], minimum_timeouts: dict[str, int]
+    entry: dict, command: str, args: list[str], tools: list[str]
 ) -> list[str]:
     differences = []
     existing_command = entry.get("command")
@@ -2304,11 +2236,6 @@ def _codex_entry_differences(
         differences.append("enabled = false")
     elif not isinstance(enabled, bool):
         differences.append(f"enabled: unexpected value {enabled!r} (Codex needs true or false)")
-    for key, minimum in minimum_timeouts.items():
-        value = entry.get(key)
-        # bool is an int subclass; Codex's own default applies when the key is absent.
-        if isinstance(value, bool) or not isinstance(value, (int, float)) or value < minimum:
-            differences.append(f"{key}: {value!r} is below the {minimum} this mode needs")
     return differences
 
 
@@ -2765,7 +2692,7 @@ def run_setup_checks(config_path: Path, *, require_mcp: bool = False) -> list[Se
     return results
 
 
-_EXTRA_MODULES = (("mcp", "mcp"), ("zotero-write", "pyzotero"), ("marker", "marker"))
+_EXTRA_MODULES = (("mcp", "mcp"), ("zotero-write", "pyzotero"))
 
 
 def _install_health_checks() -> list[SetupCheckResult]:

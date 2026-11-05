@@ -20,7 +20,7 @@ body:
     id: flags
     attributes:
       label: Enabled MCP flags
-      description: Optional server flags you started with (for example `--enable-bibtex`, `--enable-reconvert`), or "none".
+      description: Optional server flags you started with (for example `--enable-bibtex`, `--enable-retry-timeout`), or "none".
     validations:
       required: true
   - type: input

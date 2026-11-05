@@ -28,14 +28,9 @@ def main(argv: list[str] | None = None) -> int:
         "--config",
         type=Path,
         default=None,
-        help="Optional project config. Required with --enable-reconvert or when --db is omitted.",
+        help="Optional project config. Required when --db is omitted.",
     )
     parser.add_argument("--enable-bibtex", action="store_true", help="Expose the local Better BibTeX export integration.")
-    parser.add_argument(
-        "--enable-reconvert",
-        action="store_true",
-        help="Expose single-attachment math OCR; requires an explicit valid --config governing --db.",
-    )
     parser.add_argument(
         "--enable-retry-timeout",
         action="store_true",
@@ -59,13 +54,6 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    if args.enable_reconvert and args.config is None:
-        raise SystemExit(
-            _startup_error(
-                "config_required",
-                "--enable-reconvert requires an explicit valid --config.",
-            )
-        )
     if args.enable_retry_timeout and args.config is None:
         raise SystemExit(
             _startup_error(
@@ -98,7 +86,6 @@ def _serve(db_path: Path, config, args: argparse.Namespace, protocol) -> int:
             db_path,
             config=config,
             enable_bibtex=args.enable_bibtex,
-            enable_reconvert=args.enable_reconvert,
             enable_retry_timeout=args.enable_retry_timeout,
             enable_zotero_launch=args.enable_zotero_launch,
             **({"zotero_exe": args.zotero_exe} if args.zotero_exe else {}),
@@ -114,7 +101,7 @@ def _serve(db_path: Path, config, args: argparse.Namespace, protocol) -> int:
             )
         ) from exc
 
-    if args.enable_reconvert or args.enable_retry_timeout:
+    if args.enable_retry_timeout:
         _preload_write_tool_dependencies()
     logging.getLogger("mcp").setLevel(logging.WARNING)
     _run_stdio(mcp, protocol)
@@ -145,7 +132,7 @@ def _preload_write_tool_dependencies() -> None:
     On Windows, loading native extensions (numpy via pymupdf4llm) while the transport's reader
     thread blocks on the stdin pipe can deadlock the first tool call, so do it up front.
     """
-    from . import indexer, math_ocr, retry_timeout  # noqa: F401
+    from . import indexer, retry_timeout  # noqa: F401
 
 
 @contextmanager

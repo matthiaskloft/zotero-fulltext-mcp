@@ -1211,21 +1211,17 @@ class ProvenancePreservationTests(unittest.TestCase):
     correctly not read as drift, the loss is silent -- the attachment just moves into
     source_provenance_unknown with nothing recording why.
 
-    The two paths reach that guarantee differently, and the difference is not cosmetic.
-    `ocr-images` rewrites derived Markdown from images already extracted, so the recorded hash
-    still describes the PDF the text came from and is carried forward. `reconvert-math` re-runs
-    the extractor against whatever is at source_path now, so it must hash that file instead --
-    carrying the old hash forward would attribute new text to the wrong PDF. This test asserts
-    only that both supply the fields; see tests/test_math_ocr.py for the behaviour.
+    Image OCR rewrites derived Markdown from already extracted images, so its recorded source
+    hash must be carried forward with the index timestamp.
     """
 
-    def test_both_ocr_paths_supply_source_sha256_and_indexed_at(self):
+    def test_image_ocr_supplies_source_sha256_and_indexed_at(self):
         import ast
         import inspect
 
-        from zotero_pdf_text import image_ocr, math_ocr
+        from zotero_pdf_text import image_ocr
 
-        for module in (math_ocr, image_ocr):
+        for module in (image_ocr,):
             with self.subTest(module=module.__name__):
                 tree = ast.parse(inspect.getsource(module))
                 constructions = [

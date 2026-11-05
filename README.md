@@ -230,6 +230,11 @@ for local-file and direct-PDF-URL workflows.
 This server focuses on full-text search. For live collections, notes, and metadata editing,
 you can pair it with a separate Zotero metadata MCP server; that is optional for this setup.
 
+Marker-based whole-paper reconversion has been removed, including the `[marker]` extra,
+`reconvert-math` and `--enable-reconvert`. Existing conversions remain readable. If an older MCP
+registration includes that flag or tool, regenerate it with `install-mcp` and update your client.
+Normal PDF conversion, timeout retries and experimental local-service image OCR remain available.
+
 ## Further reading
 
 - [Troubleshooting](docs/troubleshooting.md) — setup failures, upgrades, and extraction problems.

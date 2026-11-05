@@ -47,10 +47,10 @@ this repo. Treat it accordingly:
 
 - Never move, delete, rename, or bulk-rewrite files under these paths unless a task explicitly
   asks for that operation.
-- Keep Zotero database access read-only. The opt-in `reconvert_with_math_ocr` MCP capability
-  intentionally writes only to converted-text output (Markdown + extracted images + index), requires explicit
-  startup enablement/config, and is documented as such — don't add other write paths without
-  equally clear capability separation, documentation, and user awareness.
+- Keep Zotero database access read-only. Opt-in timeout retries and local image OCR write only
+  derived conversion output and the sidecar index, never Zotero or source PDFs. Keep write
+  capabilities explicitly separated, documented and user-approved. Marker whole-paper
+  reconversion has been removed; do not reintroduce its optional ML dependency tree.
 - Never hardcode a real absolute path (a personal home directory, a specific hostname, a real
   library size or paper count) into source, docstrings, or the MCP server's `instructions`
   string — those are read by everyone who installs this project, not just the original author.
@@ -79,7 +79,7 @@ produced local-only failures that look like regressions and are not.
 
 If uv is unavailable, use Python 3.11+ and install dependencies from
 `pyproject.toml` (`pip install -e .[mcp,test]` for MCP support plus pytest, add
-`[zotero-write]`/`[marker]` as needed).
+`[zotero-write]` as needed).
 
 The reproducible install path is `uv sync --extra mcp --extra test --locked` followed by
 `uv run pytest -q` — this resolves the exact dependency versions pinned in `uv.lock`, the same

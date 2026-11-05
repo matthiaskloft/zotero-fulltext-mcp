@@ -109,7 +109,7 @@ ALL_STATUSES: tuple[str, ...] = (
 )
 
 # Identity states that may publish to the canonical library. Defined once here (plan step 3) so
-# migration, reconciliation, rebuild-index, update-index and reconvert-math share one predicate
+# migration, reconciliation, rebuild-index, update-index share one predicate
 # rather than each re-deriving eligibility slightly differently.
 ELIGIBLE_CLASSIFICATION = "mapped_verified"
 ELIGIBLE_IDENTITY_STATUSES = frozenset({"verified", "manual_accepted", "fulltext_verified"})

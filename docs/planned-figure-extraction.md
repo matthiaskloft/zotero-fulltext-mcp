@@ -115,13 +115,10 @@ never built as specified. Instead, a simpler just-in-time approach shipped 2026-
   (math-font substrings + Unicode math-symbol density) and stores it as a `has_math` boolean in
   the Markdown front matter, JSONL sidecar, and SQLite metadata (`by_has_math` in
   `index-stats`).
-- `reconvert-math --key <ATTACHMENT_KEY>` re-extracts **one paper at a time** with marker-pdf
-  (LaTeX-aware equation/figure handling), overwriting that paper's Markdown in place. Deliberately
-  just-in-time only, never bulk — marker-pdf runs at roughly 27s/page, so reconverting a whole
-  math-heavy subset in bulk would take on the order of weeks.
-- No separate equation index, no per-equation confidence/provenance records, and no dedicated
-  equation MCP tools were built — `has_math` is just a flag telling an LLM (or a human) "this one
-  might be worth `reconvert-math`-ing before trusting the notation."
+- Marker-based whole-paper reconversion was subsequently removed along with its optional ML
+  dependency tree. Existing converted records remain readable; inspect linked equation images
+  before treating notation as missing.
+- No separate equation index or per-equation confidence/provenance records were built.
 
 Worth revisiting before committing to the full figure-index design above: a similarly
 just-in-time approach (flag pages/PDFs likely to have extractable figures, extract on demand via

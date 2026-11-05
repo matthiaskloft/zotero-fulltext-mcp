@@ -2,8 +2,7 @@
 
 The comparison logic and the selection policy are pure and unit-tested offline in
 benchmarks/engines.py; this tool is the part that cannot be: it needs a served OCR model for the
-crop path, marker-pdf (and a GPU to make it worth running) for the whole-document path, and it
-measures wall time, which is a property of the machine rather than of the code.
+crop path and measures wall time, which is a property of the machine rather than of the code.
 
     python tools/compare_engines.py                          # every engine available here
     python tools/compare_engines.py --engine crop-mvp        # just one
@@ -34,7 +33,6 @@ sys.path.insert(0, str(REPO_ROOT / "benchmarks"))
 
 from engines import (  # noqa: E402  (path set up above)
     ENGINE_CROP_MVP,
-    ENGINE_MARKER,
     ENGINE_MINERU,
     EngineRun,
     Hardware,
@@ -45,9 +43,6 @@ from recognition import corpus_expected_tokens  # noqa: E402
 
 CORPUS_DIR = REPO_ROOT / "tests" / "fixtures" / "ocr_corpus"
 CORPUS_PDF = CORPUS_DIR / "corpus.pdf"
-
-# marker-pdf runs minutes per page on a real paper; the corpus is short, so this is generous.
-MARKER_TIMEOUT_SECONDS = 1800
 
 
 class EngineUnavailable(RuntimeError):
@@ -168,49 +163,6 @@ def run_crop_mvp(settings, hardware_mode: str):
     return EngineRun(ENGINE_CROP_MVP, document, time.monotonic() - started, hardware_mode)
 
 
-def run_marker(hardware_mode: str):
-    """Re-extract the whole corpus with marker-pdf, in the same subprocess shape reconvert-math uses.
-
-    The subprocess is not incidental: marker-pdf's torch/transformers import chain costs ~110s and
-    is why the shipped code never imports it in-process. Benchmarking it any other way would measure
-    a cost profile the pipeline does not have.
-    """
-    started = time.monotonic()
-    with tempfile.TemporaryDirectory() as tmp:
-        output = Path(tmp) / "output.md"
-        images_dir = Path(tmp) / "images"
-        images_dir.mkdir()
-        try:
-            subprocess.run(
-                [
-                    sys.executable, "-m", "zotero_pdf_text._extract_markdown_marker",
-                    str(CORPUS_PDF), str(output), "--image-dir", str(images_dir),
-                ],
-                check=True, capture_output=True, text=True, timeout=MARKER_TIMEOUT_SECONDS,
-            )
-        except FileNotFoundError as exc:  # no interpreter/module at all
-            raise EngineUnavailable(str(exc)) from exc
-        except subprocess.TimeoutExpired as exc:
-            raise EngineTimedOut(f"marker-pdf did not finish within {MARKER_TIMEOUT_SECONDS}s") from exc
-        except subprocess.CalledProcessError as exc:
-            stderr = (exc.stderr or "").strip()
-            # Match the missing module by name. Testing for "marker" anywhere in stderr cannot work:
-            # the subprocess IS zotero_pdf_text._extract_markdown_marker, so its own path appears in
-            # every traceback it raises -- an installed marker-pdf whose CUDA chain fails to load
-            # would be reported as not installed, advising the user to install what they already
-            # have. Anything else falls through to the failure branch, which reports the real stderr.
-            if "No module named 'marker" in stderr:
-                raise EngineUnavailable(
-                    "marker-pdf is not installed; install the reconvert extra to compare it"
-                ) from exc
-            # Present but broken is an ATTEMPT, not an absence: it stays in the comparison and
-            # scores zero. Filing it under "unavailable" would drop a failing engine from the
-            # ranking altogether, which flatters it.
-            raise EngineFailed(f"marker-pdf failed: {stderr[-500:] or exc}") from exc
-        document = output.read_text(encoding="utf-8")
-    return EngineRun(ENGINE_MARKER, document, time.monotonic() - started, hardware_mode)
-
-
 def run_mineru(hardware_mode: str):
     """MinerU is a candidate, not yet a runner.
 
@@ -243,7 +195,7 @@ def _ocr_settings(config_path: str | None):
 
 
 def main(argv: list[str] | None = None) -> int:
-    runners = {ENGINE_CROP_MVP: run_crop_mvp, ENGINE_MARKER: run_marker, ENGINE_MINERU: run_mineru}
+    runners = {ENGINE_CROP_MVP: run_crop_mvp, ENGINE_MINERU: run_mineru}
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--engine", action="append", choices=sorted(runners),

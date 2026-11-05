@@ -32,8 +32,8 @@ Environments: **host** (ordinary test suite, three-OS CI, or opt-in with the loc
 10. **Existing-OCR handling** (host): public-domain scans with noisy text layers.
 11. **OCR triggering** (host): image-only derivatives of corpus pages at several resolutions, with
     rotation, skew and noise variants.
-12. **Math OCR opt-in** (host): math-heavy entries (JMLR, EJS, LIPIcs, Bayesian Analysis) with
-    `reconvert_with_math_ocr`.
+12. **Image OCR opt-in** (host): equation crops from math-heavy entries (JMLR, EJS, LIPIcs,
+    Bayesian Analysis) with `ocr-images` and a separately served local model.
 13. **Crop and image classification** (host): figures and formulas extend the preprint crop
     benchmark, within the licences.
 14. **Language handling** (host): German, French and Spanish entries for diacritics, hyphenation

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import base64
-import importlib.metadata
 import importlib.util
 import ipaddress
 import json
@@ -129,12 +128,6 @@ MAX_RESPONSE_BYTES = 500_000
 MAX_IMAGE_BYTES = 360_000
 MAX_IMAGE_LINK_CHARS = 1_024
 MAX_BIBTEX_RESPONSE_BYTES = 500_000
-RECONVERT_COOLDOWN_SECONDS = 300
-RECONVERT_TOOL_TIMEOUT_SECONDS = 6000
-# marker-pdf pulls in torch/transformers, which cold-import in ~110s on a typical machine --
-# comfortably past clients' default ~30s MCP connection timeout, causing spurious "failed to
-# connect" errors on the first launch after enabling reconvert.
-RECONVERT_STARTUP_TIMEOUT_SECONDS = 180
 RETRY_TIMEOUT_COOLDOWN_SECONDS = 60
 MAX_REASON_CHARS = 500
 
@@ -165,7 +158,6 @@ LIBRARY_STATUS_MCP_TOOL_NAME = "library_status"
 # the cache age so a reused answer is never passed off as freshly measured.
 LIBRARY_STATUS_CACHE_SECONDS = 120
 BIBTEX_MCP_TOOL_NAME = "export_bibtex_entries_by_key"
-RECONVERT_MCP_TOOL_NAME = "reconvert_with_math_ocr"
 RETRY_TIMEOUT_MCP_TOOL_NAMES = ("skip_timeout_extraction", "retry_timeout_extraction")
 ZOTERO_LAUNCH_MCP_TOOL_NAME = "start_zotero"
 MAX_ZOTERO_LAUNCH_WAIT_SECONDS = 60
@@ -180,12 +172,6 @@ MATH_CAPABLE_EXTRACTION_TOOLS = frozenset({"marker", "glm-ocr"})
 READ_ONLY_TOOL_ANNOTATIONS = {
     "readOnlyHint": True,
     "destructiveHint": False,
-    "openWorldHint": False,
-}
-RECONVERT_TOOL_ANNOTATIONS = {
-    "readOnlyHint": False,
-    "destructiveHint": True,
-    "idempotentHint": False,
     "openWorldHint": False,
 }
 SKIP_TIMEOUT_TOOL_ANNOTATIONS = {
@@ -423,17 +409,6 @@ class BibtexResponse(TypedDict):
     provenance: BibliographyProvenance
 
 
-class ReconvertResponse(TypedDict):
-    ok: bool
-    attachment_key: str
-    previous_extraction_tool: str
-    new_extraction_tool: str
-    previous_char_count: int
-    new_char_count: int
-    reconverted_at: str
-    provenance: ReconvertProvenance
-
-
 class TimeoutCandidateRecord(TypedDict):
     attachment_key: str
     parent_key: str
@@ -632,7 +607,7 @@ class LibraryStatusCache:
     value rather than hidden: a cached answer stated as if freshly measured is the failure mode
     a cache introduces, and this step exists to stop status being overstated.
 
-    Locked for the same reason `ReconvertRateLimiter` is: stdio dispatches one call at a time
+    Locked for the same reason `RetryRateLimiter` is: stdio dispatches one call at a time
     today, and this stays correct if that ever stops being true.
     """
 
@@ -685,23 +660,21 @@ class LibraryStatusCache:
             return value, 0, False
 
 
-class ReconvertRateLimiter:
+class RetryRateLimiter:
     """Keep one MCP process from starting repeated heavy reconversions.
 
     FastMCP's stdio transport dispatches tool calls one at a time today, but the check-then-set
     below is guarded by a lock anyway so this stays correct if that ever changes to a threaded or
     concurrent-async transport -- two racing calls must not both observe an expired cooldown and
-    both start a reconversion before either write lands. Shared between math-OCR reconversion and
-    timeout retries (separate instances, separate cooldowns/messages) since both are the same
-    "don't let an MCP client hammer a heavy, blocking local operation" shape.
+    both start a timeout retry before either write lands.
     """
 
     def __init__(
         self,
-        cooldown_seconds: int = RECONVERT_COOLDOWN_SECONDS,
+        cooldown_seconds: int = RETRY_TIMEOUT_COOLDOWN_SECONDS,
         *,
-        error_code: str = "reconversion_rate_limited",
-        error_message: str = "A math reconversion was started recently. Wait before requesting another one.",
+        error_code: str = "timeout_retry_rate_limited",
+        error_message: str = "A timeout retry was started recently. Wait before requesting another one.",
     ) -> None:
         self.cooldown_seconds = cooldown_seconds
         self._error_code = error_code
@@ -724,7 +697,6 @@ def create_server(
     *,
     config: ProjectConfig | None = None,
     enable_bibtex: bool = False,
-    enable_reconvert: bool = False,
     enable_retry_timeout: bool = False,
     enable_zotero_launch: bool = False,
     zotero_exe: Path = DEFAULT_ZOTERO_EXE,
@@ -734,8 +706,6 @@ def create_server(
     """Build the bounded MCP surface without exposing maintenance DTOs or local paths."""
     if enable_bibtex:
         bibtex_endpoint = validate_bibtex_endpoint(bibtex_endpoint)
-    if enable_reconvert:
-        _validate_reconvert_setup(config, db_path)
     if enable_retry_timeout:
         _validate_retry_timeout_setup(config, db_path)
 
@@ -816,7 +786,6 @@ def create_server(
     mcp: Any = mcp_factory(
         "zotero-fulltext",
         instructions=build_mcp_instructions(
-            enable_reconvert=enable_reconvert,
             enable_retry_timeout=enable_retry_timeout,
             enable_bibtex=enable_bibtex,
             enable_zotero_launch=enable_zotero_launch,
@@ -1186,7 +1155,6 @@ def create_server(
         return _public_call(
             lambda: guide_response(
                 _validate_guide_topic(topic),
-                enable_reconvert=enable_reconvert,
                 enable_retry_timeout=enable_retry_timeout,
                 enable_bibtex=enable_bibtex,
                 enable_zotero_launch=enable_zotero_launch,
@@ -1209,34 +1177,8 @@ def create_server(
             """
             return _public_call(lambda: _start_zotero(wait_seconds, zotero_exe=zotero_exe))
 
-    if enable_reconvert:
-        limiter = ReconvertRateLimiter()
-
-        @mcp.tool(annotations=RECONVERT_TOOL_ANNOTATIONS)
-        def reconvert_with_math_ocr(
-            attachment_key: AttachmentKeyInput,
-            confirm: ConfirmationInput = "",
-        ) -> ReconvertResponse:
-            """Overwrite one attachment's converted Markdown, extracted images, and index entry.
-
-            Re-extracts the PDF with math OCR, for papers whose equations, formulas or math
-            notation came out garbled (math_extraction_may_be_lossy); equations that converted as
-            images are not garbled, so view them with get_passage_image first. This is blocking and
-            GPU-heavy, but never writes Zotero. Call it only after the user explicitly approves
-            reconverting this attachment; confirm="reconvert" is an additional capability check,
-            not evidence of user approval.
-            """
-            return _public_call(
-                lambda: _reconvert_with_math_ocr(
-                    attachment_key,
-                    confirm=confirm,
-                    config=config,
-                    limiter=limiter,
-                )
-            )
-
     if enable_retry_timeout:
-        retry_limiter = ReconvertRateLimiter(
+        retry_limiter = RetryRateLimiter(
             cooldown_seconds=RETRY_TIMEOUT_COOLDOWN_SECONDS,
             error_code="timeout_retry_rate_limited",
             error_message="A timeout retry was started recently. Wait before requesting another one.",
@@ -1342,8 +1284,8 @@ _GUIDE_RELATED_TOPICS = {
 }
 
 
-def _enabled_write_tools(*, enable_reconvert: bool, enable_retry_timeout: bool) -> list[str]:
-    names = [RECONVERT_MCP_TOOL_NAME] if enable_reconvert else []
+def _enabled_write_tools(*, enable_retry_timeout: bool) -> list[str]:
+    names: list[str] = []
     if enable_retry_timeout:
         names.extend(RETRY_TIMEOUT_MCP_TOOL_NAMES)
     return names
@@ -1351,7 +1293,6 @@ def _enabled_write_tools(*, enable_reconvert: bool, enable_retry_timeout: bool) 
 
 def build_mcp_instructions(
     *,
-    enable_reconvert: bool = False,
     enable_retry_timeout: bool = False,
     enable_bibtex: bool = False,
     enable_zotero_launch: bool = False,
@@ -1365,7 +1306,7 @@ def build_mcp_instructions(
 
     Only registered tools are named, so a client is never told to call one that is absent.
     """
-    write_tools = _enabled_write_tools(enable_reconvert=enable_reconvert, enable_retry_timeout=enable_retry_timeout)
+    write_tools = _enabled_write_tools(enable_retry_timeout=enable_retry_timeout)
     tool_map = [
         "search_fulltext and search_within_fulltext find hits",
         "get_fulltext_chunk reads a passage and get_page a whole PDF page",
@@ -1404,7 +1345,6 @@ MCP_INSTRUCTIONS = build_mcp_instructions()
 def guide_response(
     topic: str,
     *,
-    enable_reconvert: bool,
     enable_retry_timeout: bool,
     enable_bibtex: bool,
     enable_zotero_launch: bool = False,
@@ -1415,7 +1355,7 @@ def guide_response(
     name a tool this server did not register, and must never name a local path -- which is why
     the CLI invocation is explained rather than resolved.
     """
-    write_tools = _enabled_write_tools(enable_reconvert=enable_reconvert, enable_retry_timeout=enable_retry_timeout)
+    write_tools = _enabled_write_tools(enable_retry_timeout=enable_retry_timeout)
     bibtex = (
         f" {BIBTEX_MCP_TOOL_NAME} returns untrusted BibLaTeX entries for citation keys from "
         "Better BibTeX."
@@ -1529,7 +1469,7 @@ def guide_response(
         topic=topic,
         text=text,
         operations=(
-            _write_operations(enable_reconvert=enable_reconvert, enable_retry_timeout=enable_retry_timeout)
+            _write_operations(enable_retry_timeout=enable_retry_timeout)
             if topic == "writes"
             else []
         ),
@@ -1537,23 +1477,9 @@ def guide_response(
     )
 
 
-def _write_operations(*, enable_reconvert: bool, enable_retry_timeout: bool) -> list[WriteOperation]:
+def _write_operations(*, enable_retry_timeout: bool) -> list[WriteOperation]:
     """Every write path, including MCP tools this server has not enabled (marked disabled)."""
     return [
-        WriteOperation(
-            name=RECONVERT_MCP_TOOL_NAME,
-            surface="mcp",
-            enabled=enable_reconvert,
-            writes="converted_text",
-            purpose=(
-                "Re-extract one attachment with math OCR when equations or formulas came out "
-                "garbled; overwrites its Markdown, images and index entry, never Zotero."
-            ),
-            how_to_enable_or_run=(
-                f"{_CLI} install-mcp --config <config> --enable-reconvert (needs the [marker] "
-                f"extra), {_REREGISTER}"
-            ),
-        ),
         WriteOperation(
             name=RETRY_TIMEOUT_MCP_TOOL_NAMES[0],
             surface="mcp",
@@ -1641,17 +1567,6 @@ def _write_operations(*, enable_reconvert: bool, enable_retry_timeout: bool) -> 
                 "--plan <plan> --rows <rows>, validate --plan <plan> --require-approved, and "
                 "apply --plan <plan> --approve --out-script <script> [--no-auto-run]."
             ),
-        ),
-        WriteOperation(
-            name="reconvert-math",
-            surface="cli",
-            enabled=True,
-            writes="converted_text",
-            purpose=(
-                "CLI counterpart of reconvert_with_math_ocr: re-extract one paper with marker-pdf, "
-                "overwriting its converted Markdown in place. Blocking and GPU-heavy."
-            ),
-            how_to_enable_or_run=f"{_CLI} reconvert-math --key <attachment key> (needs the [marker] extra)",
         ),
         WriteOperation(
             name="retry-timeout",
@@ -2032,33 +1947,6 @@ def _managed_sidecar_jsonl(config: ProjectConfig) -> Path | None:
         return None
 
 
-def _validate_reconvert_setup(config: ProjectConfig | None, db_path: Path) -> None:
-    if config is None:
-        raise PublicMcpError(
-            "config_required",
-            "Math reconversion must be enabled with an explicit valid project config.",
-        )
-    try:
-        validate_config(config)
-    except (OSError, TypeError, ValueError) as exc:
-        raise PublicMcpError(
-            "config_unavailable",
-            "Math reconversion requires an explicit valid project config.",
-        ) from exc
-    if db_path.resolve(strict=False) != configured_index_path(config).resolve(strict=False):
-        raise PublicMcpError(
-            "database_config_mismatch",
-            "Math reconversion requires the selected database to be the index governed by the project config.",
-        )
-    # A published generation is required per call, not here, so the server can start before the
-    # first index is built (#131).
-    if not marker_dependency_available():
-        raise PublicMcpError(
-            "marker_dependency_missing",
-            "Math reconversion requires the optional marker dependency.",
-        )
-
-
 def _validate_retry_timeout_setup(config: ProjectConfig | None, db_path: Path) -> None:
     if config is None:
         raise PublicMcpError(
@@ -2078,19 +1966,6 @@ def _validate_retry_timeout_setup(config: ProjectConfig | None, db_path: Path) -
             "Timeout skip/retry requires the selected database to be the index governed by the project config.",
         )
     # A published generation is required per call, not here (#131).
-    # Deliberately no marker_dependency_available() check: retry-timeout reconverts with
-    # pymupdf4llm/pymupdf, the same extractors as ordinary conversion, not marker-pdf.
-
-
-def marker_dependency_available() -> bool:
-    try:
-        importlib.metadata.version("marker-pdf")
-        return all(
-            importlib.util.find_spec(module_name) is not None
-            for module_name in ("marker", "marker.converters.pdf", "marker.models", "marker.output")
-        )
-    except (ImportError, ValueError, importlib.metadata.PackageNotFoundError):
-        return False
 
 
 def validate_bibtex_endpoint(value: str) -> str:
@@ -2424,55 +2299,6 @@ def serialize_bibtex_export(export: BibtexExport) -> BibtexResponse:
     }
 
 
-def _reconvert_with_math_ocr(
-    attachment_key: object,
-    *,
-    confirm: object,
-    config: ProjectConfig | None,
-    limiter: ReconvertRateLimiter,
-) -> ReconvertResponse:
-    attachment_key = _validate_attachment_key(attachment_key)
-    if confirm != "reconvert":
-        raise PublicMcpError("confirmation_required", 'Set confirm to the exact literal "reconvert" to start math OCR.')
-    if config is None:
-        raise PublicMcpError("config_required", "Math reconversion requires an explicit valid project config.")
-    validate_config(config)
-    jsonl_path = _managed_sidecar_jsonl(config)
-    if jsonl_path is None:
-        raise PublicMcpError(
-            "sidecar_index_unavailable",
-            "Math reconversion publishes managed index generations and requires one to exist. "
-            "Run the CLI's rebuild-index command once to migrate the index.",
-        )
-    from .indexer import load_indexed_keys
-
-    if attachment_key not in load_indexed_keys(jsonl_path):
-        raise PublicMcpError("attachment_not_found", "No indexed record matches that attachment key.")
-    limiter.acquire()
-    from .math_ocr import reconvert_with_marker
-
-    try:
-        result = reconvert_with_marker(
-            attachment_key,
-            index_root=config.output_root / "index",
-            lock_root=config.output_root,
-        )
-    except RuntimeError:
-        raise PublicMcpError("reconversion_failed", "Math reconversion did not complete successfully.") from None
-    if not result.ok:
-        raise PublicMcpError("reconversion_failed", "Math reconversion did not complete successfully.")
-    return {
-        "ok": True,
-        "attachment_key": result.attachment_key,
-        "previous_extraction_tool": result.previous_extraction_tool,
-        "new_extraction_tool": result.new_extraction_tool,
-        "previous_char_count": result.previous_char_count,
-        "new_char_count": result.new_char_count,
-        "reconverted_at": result.reconverted_at,
-        "provenance": {"content_trust": "untrusted_source", "source_kind": "converted_pdf", "attachment_key": result.attachment_key},
-    }
-
-
 def _start_zotero(
     wait_seconds: object,
     *,
@@ -2606,7 +2432,7 @@ def _retry_timeout_extraction(
     timeout_seconds: object,
     multiplier: object,
     config: ProjectConfig | None,
-    limiter: ReconvertRateLimiter,
+    limiter: RetryRateLimiter,
 ) -> RetryTimeoutResponse:
     attachment_key = _validate_attachment_key(attachment_key)
     if confirm != "retry_timeout":

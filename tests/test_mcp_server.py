@@ -16,7 +16,6 @@ from unittest.mock import patch
 from zotero_pdf_text.bibtex import BibtexExport
 from zotero_pdf_text.config import ProjectConfig
 from zotero_pdf_text.fts import build_fts_index
-from zotero_pdf_text.math_ocr import ReconvertResult
 from zotero_pdf_text.mcp_contract import (
     BIBTEX_MCP_TOOL_NAME,
     DEFAULT_MCP_TOOL_NAMES,
@@ -27,8 +26,6 @@ from zotero_pdf_text.mcp_contract import (
     MCP_TEXT_LIMIT_CHARS,
     PublicMcpError,
     READ_ONLY_TOOL_ANNOTATIONS,
-    RECONVERT_MCP_TOOL_NAME,
-    RECONVERT_TOOL_ANNOTATIONS,
     RETRY_TIMEOUT_MCP_TOOL_NAMES,
     RETRY_TIMEOUT_TOOL_ANNOTATIONS,
     SKIP_TIMEOUT_TOOL_ANNOTATIONS,
@@ -90,7 +87,6 @@ class FakeFastMCP:
             return function
 
         return register
-
 
 
 class McpServerTests(unittest.TestCase):
@@ -210,7 +206,6 @@ class McpServerTests(unittest.TestCase):
                     self.assertEqual(
                         set(operations),
                         {
-                            "reconvert_with_math_ocr",
                             "skip_timeout_extraction",
                             "retry_timeout_extraction",
                             "import-doi",
@@ -218,7 +213,6 @@ class McpServerTests(unittest.TestCase):
                             "find-pdf",
                             "link-pdf",
                             "zotero-write",
-                            "reconvert-math",
                             "retry-timeout",
                             "apply-provenance-reconvert",
                         },
@@ -254,15 +248,13 @@ class McpServerTests(unittest.TestCase):
         # docstring: the client truncates what it receives.
         with tempfile.TemporaryDirectory() as tmp:
             _, sqlite_path, config = _build_index(Path(tmp))
-            with patch("zotero_pdf_text.mcp_contract.marker_dependency_available", return_value=True):
-                server = create_server(
-                    sqlite_path,
-                    config=config,
-                    enable_reconvert=True,
-                    enable_retry_timeout=True,
-                    enable_bibtex=True,
-                    enable_zotero_launch=True,
-                )
+            server = create_server(
+                sqlite_path,
+                config=config,
+                enable_retry_timeout=True,
+                enable_bibtex=True,
+                enable_zotero_launch=True,
+            )
 
             tools = asyncio.run(server.list_tools())
             self.assertEqual(
@@ -296,8 +288,7 @@ class McpServerTests(unittest.TestCase):
     def test_real_fastmcp_exposes_optional_tool_annotations_and_descriptions(self):
         with tempfile.TemporaryDirectory() as tmp:
             _, sqlite_path, config = _build_index(Path(tmp))
-            with patch("zotero_pdf_text.mcp_contract.marker_dependency_available", return_value=True):
-                server = create_server(sqlite_path, config=config, enable_bibtex=True, enable_reconvert=True)
+            server = create_server(sqlite_path, config=config, enable_bibtex=True)
 
             tools = {tool.name: tool for tool in server._tool_manager.list_tools()}
             self.assertEqual(
@@ -315,16 +306,8 @@ class McpServerTests(unittest.TestCase):
                     "library_status",
                     "guide",
                     "export_bibtex_entries_by_key",
-                    "reconvert_with_math_ocr",
                 },
             )
-            reconvert_annotations = tools["reconvert_with_math_ocr"].annotations
-            self.assertFalse(reconvert_annotations.readOnlyHint)
-            self.assertTrue(reconvert_annotations.destructiveHint)
-            self.assertFalse(reconvert_annotations.idempotentHint)
-            self.assertFalse(reconvert_annotations.openWorldHint)
-            self.assertIn("Overwrite", tools["reconvert_with_math_ocr"].description)
-            self.assertIn("never writes Zotero", tools["reconvert_with_math_ocr"].description)
             self.assertIn("optional", tools["export_bibtex_entries_by_key"].description)
 
     def test_image_destination_is_not_a_body_match_and_snippets_hide_its_path(self):
@@ -827,130 +810,6 @@ class McpServerTests(unittest.TestCase):
                     self.assertEqual(search_result["warnings"], expected)
                     self.assertEqual(passage["warnings"], expected)
 
-    def test_reconversion_requires_literal_confirmation_and_is_rate_limited(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root, sqlite_path, config = _build_index(Path(tmp))
-            with patch("zotero_pdf_text.mcp_contract.marker_dependency_available", return_value=True):
-                server = create_server(
-                    sqlite_path,
-                    config=config,
-                    enable_reconvert=True,
-                    mcp_factory=FakeFastMCP,
-                )
-            reconvert = server.tools["reconvert_with_math_ocr"]
-            self.assertEqual(
-                server.tool_metadata["reconvert_with_math_ocr"]["annotations"],
-                RECONVERT_TOOL_ANNOTATIONS,
-            )
-
-            _assert_tool_error(self, lambda: reconvert("ATTACH1", confirm="yes"), "confirmation_required")
-
-            success = ReconvertResult(
-                ok=True,
-                attachment_key="ATTACH1",
-                previous_extraction_tool="pymupdf4llm.to_markdown",
-                new_extraction_tool="marker",
-                previous_char_count=10,
-                new_char_count=20,
-                markdown_path=str(root / "secret.md"),
-                source_path=str(root / "secret.pdf"),
-                reconverted_at="2026-07-11T00:00:00",
-                error="",
-            )
-            with patch("zotero_pdf_text.math_ocr.reconvert_with_marker", return_value=success):
-                result = reconvert("ATTACH1", confirm="reconvert")
-            self.assertTrue(result["ok"])
-            assert_no_local_path(self, result, root)
-
-            _assert_tool_error(self, lambda: reconvert("ATTACH1", confirm="reconvert"), "reconversion_rate_limited")
-
-    def test_reconversion_is_opt_in_and_requires_an_explicit_valid_config(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root, sqlite_path, _ = _build_index(Path(tmp))
-            _, _, config = _build_index(root / "configured")
-            default_server = create_server(sqlite_path, config=config, mcp_factory=FakeFastMCP)
-            self.assertNotIn("reconvert_with_math_ocr", default_server.tools)
-
-            with self.assertRaisesRegex(PublicMcpError, "explicit valid project config") as missing:
-                create_server(sqlite_path, enable_reconvert=True, mcp_factory=FakeFastMCP)
-            self.assertEqual(missing.exception.code, "config_required")
-
-            invalid_config = ProjectConfig(root / "missing", root, root, root / "output")
-            with self.assertRaisesRegex(PublicMcpError, "explicit valid project config") as invalid:
-                create_server(
-                    sqlite_path,
-                    config=invalid_config,
-                    enable_reconvert=True,
-                    mcp_factory=FakeFastMCP,
-                )
-            self.assertEqual(invalid.exception.code, "config_unavailable")
-
-    def test_reconversion_rejects_database_config_mismatch_and_missing_marker(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root, sqlite_path, config = _build_index(Path(tmp))
-            with self.assertRaises(PublicMcpError) as mismatch:
-                create_server(
-                    root / "other.sqlite",
-                    config=config,
-                    enable_reconvert=True,
-                    mcp_factory=FakeFastMCP,
-                )
-            self.assertEqual(mismatch.exception.code, "database_config_mismatch")
-
-            with patch("zotero_pdf_text.mcp_contract.marker_dependency_available", return_value=False):
-                with self.assertRaises(PublicMcpError) as missing_marker:
-                    create_server(
-                        sqlite_path,
-                        config=config,
-                        enable_reconvert=True,
-                        mcp_factory=FakeFastMCP,
-                    )
-            self.assertEqual(missing_marker.exception.code, "marker_dependency_missing")
-
-            # Without a managed pointer the opt-in mutation tools still register (#131), but each
-            # call requires a managed generation, not the legacy JSONL.
-            (config.output_root / "index" / "current.json").unlink()
-            with patch("zotero_pdf_text.mcp_contract.marker_dependency_available", return_value=True):
-                server = create_server(
-                    sqlite_path,
-                    config=config,
-                    enable_reconvert=True,
-                    enable_retry_timeout=True,
-                    mcp_factory=FakeFastMCP,
-                )
-            for call in (
-                lambda: server.tools["reconvert_with_math_ocr"]("ABCD1234", confirm="reconvert"),
-                lambda: server.tools["retry_timeout_extraction"]("ABCD1234", confirm="retry_timeout"),
-                lambda: server.tools["skip_timeout_extraction"]("ABCD1234", reason="r", confirm="skip_timeout"),
-            ):
-                _assert_tool_error(self, call, "sidecar_index_unavailable")
-
-    def test_enable_reconvert_without_explicit_config_is_a_startup_error(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            _, sqlite_path, _ = _build_index(Path(tmp))
-            with self.assertRaises(SystemExit) as raised:
-                main(["--db", str(sqlite_path), "--enable-reconvert"])
-            error = json.loads(str(raised.exception))
-            self.assertEqual(error["error"]["code"], "config_required")
-            self.assertNotIn(str(sqlite_path), str(raised.exception))
-
-    def test_enable_reconvert_forwards_valid_config_to_server(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root, sqlite_path, config = _build_index(Path(tmp))
-            config_path = root / "config.json"
-            _write_config(config_path, config)
-            fake_server = FakeFastMCP("test", "test")
-            with (
-                patch("zotero_pdf_text.mcp_server.create_server", return_value=fake_server) as factory,
-                patch("zotero_pdf_text.mcp_server._run_stdio") as run_stdio,
-            ):
-                self.assertEqual(
-                    main(["--db", str(sqlite_path), "--config", str(config_path), "--enable-reconvert"]),
-                    0,
-                )
-            self.assertIs(run_stdio.call_args.args[0], fake_server)
-            self.assertTrue(factory.call_args.kwargs["enable_reconvert"])
-            self.assertEqual(factory.call_args.kwargs["config"], config)
 
     def test_write_tools_start_against_an_empty_output_root(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -959,39 +818,23 @@ class McpServerTests(unittest.TestCase):
             empty.output_root.mkdir()
             config_path = root / "config.json"
             _write_config(config_path, empty)
-            with (
-                patch("zotero_pdf_text.mcp_contract.marker_dependency_available", return_value=True),
-                patch("zotero_pdf_text.mcp_server._run_stdio") as run_stdio,
-            ):
+            with patch('zotero_pdf_text.mcp_server._run_stdio') as run_stdio:
                 self.assertEqual(
-                    main(["--config", str(config_path), "--enable-reconvert", "--enable-retry-timeout"]),
+                    main(["--config", str(config_path), "--enable-retry-timeout"]),
                     0,
                 )
             run_stdio.assert_called_once()
 
-    def test_enable_reconvert_rejects_database_config_mismatch_at_startup(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root, sqlite_path, config = _build_index(Path(tmp))
-            config_path = root / "config.json"
-            _write_config(config_path, config)
-            # A second, fully published managed index at a different root: startup validation
-            # resolves it fine, so the failure exercised here is specifically the
-            # config-governance mismatch, not index availability.
-            from zotero_pdf_text.artifacts import stage_and_publish, write_jsonl_from_existing
 
-            other_index = root / "other" / "index"
-            stage_and_publish(
-                other_index,
-                write_jsonl_from_existing(root / "output" / "index" / "zotero_text_index.jsonl"),
-                command="test",
-            )
-            other_db = other_index / "zotero_text_index.sqlite"
-            with patch("zotero_pdf_text.mcp_contract.marker_dependency_available", return_value=True):
-                with self.assertRaises(SystemExit) as raised:
-                    main(["--db", str(other_db), "--config", str(config_path), "--enable-reconvert"])
-            error = json.loads(str(raised.exception))
-            self.assertEqual(error["error"]["code"], "database_config_mismatch")
-            self.assertNotIn(str(root), str(raised.exception))
+    def test_removed_marker_flag_is_rejected_before_server_start(self):
+        import io
+        from contextlib import redirect_stderr
+
+        with redirect_stderr(io.StringIO()), patch("zotero_pdf_text.mcp_server.create_server") as factory:
+            with self.assertRaises(SystemExit) as raised:
+                main(["--enable-reconvert"])
+        self.assertEqual(raised.exception.code, 2)
+        factory.assert_not_called()
 
     def test_structurally_invalid_config_is_a_path_free_startup_error(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -1012,7 +855,7 @@ class McpServerTests(unittest.TestCase):
                 encoding="utf-8",
             )
             with self.assertRaises(SystemExit) as raised:
-                main(["--db", str(sqlite_path), "--config", str(config_path), "--enable-reconvert"])
+                main(["--db", str(sqlite_path), "--config", str(config_path)])
             error = json.loads(str(raised.exception))
             self.assertEqual(error["error"]["code"], "config_unavailable")
             self.assertNotIn(str(root), str(raised.exception))
@@ -1165,11 +1008,10 @@ class TimeoutCandidateMcpTests(unittest.TestCase):
                 create_server(sqlite_path, enable_retry_timeout=True, mcp_factory=FakeFastMCP)
             self.assertEqual(missing.exception.code, "config_required")
 
-    def test_retry_timeout_tools_do_not_require_marker_dependency(self):
+    def test_retry_timeout_tools_register(self):
         with tempfile.TemporaryDirectory() as tmp:
             _, sqlite_path, config = _build_index(Path(tmp))
-            with patch("zotero_pdf_text.mcp_contract.marker_dependency_available", return_value=False):
-                server = create_server(sqlite_path, config=config, enable_retry_timeout=True, mcp_factory=FakeFastMCP)
+            server = create_server(sqlite_path, config=config, enable_retry_timeout=True, mcp_factory=FakeFastMCP)
             self.assertIn("skip_timeout_extraction", server.tools)
             self.assertIn("retry_timeout_extraction", server.tools)
 
@@ -1289,16 +1131,16 @@ class OrphanCandidateMcpTests(unittest.TestCase):
             self.assertEqual(response["candidates"], [])
 
 
-class ReconvertRateLimiterConcurrencyTests(unittest.TestCase):
+class RetryRateLimiterConcurrencyTests(unittest.TestCase):
     def test_only_one_concurrent_acquire_succeeds(self):
         # Regression test: acquire() used to read-then-write _last_started_at as separate,
         # unguarded statements. Racing threads could both observe an expired cooldown and both
-        # start a GPU reconversion before either write landed.
+        # start a timeout retry before either write landed.
         import threading
 
-        from zotero_pdf_text.mcp_contract import PublicMcpError, ReconvertRateLimiter
+        from zotero_pdf_text.mcp_contract import PublicMcpError, RetryRateLimiter
 
-        limiter = ReconvertRateLimiter(cooldown_seconds=300)
+        limiter = RetryRateLimiter(cooldown_seconds=300)
         successes = []
         failures = []
         start_barrier = threading.Barrier(20)
@@ -1444,12 +1286,11 @@ class StartZoteroToolTests(unittest.TestCase):
 
 
 _FLAG_COMBINATIONS = [
-    {"enable_reconvert": reconvert, "enable_retry_timeout": retry, "enable_bibtex": bibtex, "enable_zotero_launch": launch}
-    for reconvert, retry, bibtex, launch in itertools.product((False, True), repeat=4)
+    {"enable_retry_timeout": retry, "enable_bibtex": bibtex, "enable_zotero_launch": launch}
+    for retry, bibtex, launch in itertools.product((False, True), repeat=3)
 ]
 _OPTIONAL_TOOL_NAMES = (
     BIBTEX_MCP_TOOL_NAME,
-    RECONVERT_MCP_TOOL_NAME,
     *RETRY_TIMEOUT_MCP_TOOL_NAMES,
     ZOTERO_LAUNCH_MCP_TOOL_NAME,
 )
@@ -1464,8 +1305,7 @@ def _named_tools(text: str) -> set[str]:
 
 
 def _server_for_flags(sqlite_path: Path, config: ProjectConfig, **flags: bool) -> FakeFastMCP:
-    with patch("zotero_pdf_text.mcp_contract.marker_dependency_available", return_value=True):
-        return create_server(sqlite_path, config=config, mcp_factory=FakeFastMCP, **flags)
+    return create_server(sqlite_path, config=config, mcp_factory=FakeFastMCP, **flags)
 
 
 def _assert_tool_error(

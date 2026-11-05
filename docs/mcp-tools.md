@@ -153,10 +153,6 @@ Optional tools:
 
 - `export_bibtex_entries_by_key(citation_keys)` — Better BibTeX/BibLaTeX entries by citation key
   (available only with `--enable-bibtex`; requires Zotero + Better BibTeX running locally).
-- `reconvert_with_math_ocr(attachment_key, confirm="reconvert")` — re-extract one paper with
-  marker-pdf when equations/figures look garbled (available only with `--enable-reconvert` and an
-  explicit valid config). It overwrites derived Markdown/image/index content, is blocking and GPU-bound,
-  and is rate-limited. The confirmation literal is an additional check, not user approval.
 - `skip_timeout_extraction(attachment_key, reason, confirm="skip_timeout")` — permanently skip the
   primary extractor for one timeout candidate (available only with `--enable-retry-timeout`).
   Writes a persisted skip-list entry; never touches Zotero, Markdown, or the sidecar index.
