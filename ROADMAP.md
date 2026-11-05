@@ -1,7 +1,7 @@
 # Development Roadmap
 
 What to work on next, and why. Reviewed against local code on **2026-11-05**;
-package version **0.15.2**. Status describes implementation, not live GitHub issue/alert state.
+prepared release **0.16.0** (latest published: 0.15.2). Status describes implementation, not live GitHub issue/alert state.
 
 ## Current capability
 
@@ -11,7 +11,7 @@ verified passage locators, passage images, library audits, crash-safe publicatio
 benchmark harnesses. Production chunks use structure-v1: 1500 characters with up to 150 overlap
 within split paragraphs. Semantic retrieval and automatic context assembly remain planned.
 
-Unreleased: Marker whole-paper reconversion and its ML dependencies removed; source distributions
+Prepared for 0.16.0: Marker whole-paper reconversion and its ML dependencies removed; source distributions
 exclude local agent directories. Existing Marker records remain readable. Remove obsolete
 `--enable-reconvert` registration flags. Normal conversion, timeout retries and opt-in local OCR remain.
 
@@ -97,7 +97,7 @@ Live collection/tag/note browsing belongs to the companion Zotero MCP server.
 
 | ID | Deliverable | Status | Dependencies | Issue |
 |---|---|---|---|---|
-| **M2** | Release merged Marker removal; security follow-up complete | Implemented, unreleased | Release; zero open alerts verified, #92 closed | [#92](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/92) |
+| **M2** | Release merged Marker removal; security follow-up complete | Implemented; 0.16.0 prepared | Release; zero open alerts verified, #92 closed | [#92](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/92) |
 | **M3** | Opt-in curation group on the existing server: state, jobs, review/approval and guarded apply; default remains read-only | Planned; #34 superseded | #134 WP0–WP6; coordinate Z5 before write implementation where practical | [#134](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/134) |
 | **M4** | Reader comments in a sidecar, linked to verified source passages | Planned | Stable locators/lifecycle across S4-structure; embeddings optional | [#2](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/2), [#3](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/3) |
 | **M5** | Large-library stress validation of opt-in image OCR and announcement decision | Validation pending: implementation packaged, unannounced | Reviewed stress run | [#168](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/168) |
