@@ -7,8 +7,9 @@ now 114 lines with four workstreams, five-column tables, split S4 responsibiliti
 dependencies. The recommendations below preserve the review rationale; the active roadmap
 and linked design plans define the current organization. Existing task IDs remain searchable.
 Release status comes from `pyproject.toml` and `CHANGELOG.md`; implementation status comes
-from source and tests. GitHub merge state, alert closure and private validation results were
-not independently audited in this pass.
+from source and tests. The initial audit did not inspect live issue dispositions. A subsequent live check found #34
+closed as superseded by #134: M3 now follows the existing-server opt-in curation design, not
+the older separate-server proposal. Alert closure and private validation remain unverified.
 
 ## Status audit
 
@@ -24,7 +25,7 @@ not independently audited in this pass.
 | Track 2 | Complete in retained scope | `artifacts.py`, `_library_publish.py`, library/publication and end-to-end tests; latency runner and recorded baselines. Layout migration was dropped, so its test cannot remain pending. Slow common-term queries are a recorded limitation, not evidence that the baseline harness is unfinished. |
 | M1 | Implemented, released | `pre_write_checks.py`: live bridge reads, verified-copy fallback and refusal on unavailable checks. WAL-aware snapshots exist. |
 | M2 | Implemented, unreleased | Marker commands/backend and dependency extra removed; current optional dependencies exclude Marker. Release/alert verification remains operational follow-up, not an unimplemented removal. |
-| M3 | Planned | CLI writes exist in `cli.py`, `zotero_write.py`, `bibtex.py`; separate MCP review/apply workflow does not. |
+| M3 | Planned | CLI writes exist in `cli.py`, `zotero_write.py`, `bibtex.py`; the MCP curation workflow remains planned under #134; #34 was superseded. |
 | M4 | Planned | No source-linked sidecar comment feature. Locator foundations exist. |
 | M5 | Implemented, validation pending | `image_ocr.py`, `_ollama_client.py`, CLI and crop/recognition tests exist. General-use stress validation and announcement decision remain. |
 | Z1 | Planned extension | `runtime.py` detects processes/connectivity, not a supported-version matrix. Container pins Zotero 9.0.6; multi-version compatibility remains unverified. |
@@ -49,7 +50,7 @@ plans and issues. Use four workstreams, displayed in pipeline order:
 | Extraction and reference quality | E1–E4 (S3a/S3b remain aliases) | Reviewed artifact schema, corpus baseline, extraction/cleanup comparisons and reference parsing. |
 | Chunking and retrieval | S1a, remaining S4, S4a, S5, S6–S7 | Frozen-text evaluation, source hierarchy, lexical features, context assembly, optional embeddings and citation graph queries. |
 | Zotero compatibility and evidence | Z1–Z5 | Supported-version tests, synced-text investigation, normalization, annotations and local-API adoption. |
-| Optional writes and user workflows | M3–M5; M2 release follow-up | MCP review/apply, sidecar comments, OCR validation and unreleased maintenance follow-up. |
+| Optional writes and user workflows | M3–M5; M2 release follow-up | Opt-in curation, sidecar comments, OCR validation and unreleased maintenance follow-up. |
 
 Retire Track 2 from the active list. Keep its completed/discarded disposition in history.
 Move M1, S1, S2 and S3 out of the open-work tables. Existing IDs remain searchable in the
