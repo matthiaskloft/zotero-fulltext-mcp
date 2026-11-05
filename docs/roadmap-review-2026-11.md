@@ -9,7 +9,8 @@ and linked design plans define the current organization. Existing task IDs remai
 Release status comes from `pyproject.toml` and `CHANGELOG.md`; implementation status comes
 from source and tests. The initial audit did not inspect live issue dispositions. A subsequent live check found #34
 closed as superseded by #134: M3 now follows the existing-server opt-in curation design, not
-the older separate-server proposal. Alert closure and private validation remain unverified.
+the older separate-server proposal. A follow-up API check found zero open Dependabot alerts and #92 was closed; package release
+and private validation remain pending. M5 stress validation is now tracked in #168.
 
 ## Status audit
 
@@ -86,7 +87,7 @@ The condensed file would contain:
   on embeddings by default.
 - Keep Z3 normalization separate from E3 transcription repair: matching normalization must not
   silently change authoritative scientific text. Coordinate rebuilds when useful.
-- Give M5 a validation checklist/issue if it becomes scheduled; it currently has no issue.
+- Give M5 a validation checklist/issue if it becomes scheduled; it was subsequently filed as #168.
   Do not open a new issue merely to rename a track.
 
 ## Where the removed detail goes

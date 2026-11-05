@@ -97,10 +97,10 @@ Live collection/tag/note browsing belongs to the companion Zotero MCP server.
 
 | ID | Deliverable | Status | Dependencies | Issue |
 |---|---|---|---|---|
-| **M2** | Release merged Marker removal and verify dependency-alert closure | Implemented, unreleased | Release and live alert verification | [#92](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/92) |
+| **M2** | Release merged Marker removal; security follow-up complete | Implemented, unreleased | Release; zero open alerts verified, #92 closed | [#92](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/92) |
 | **M3** | Opt-in curation group on the existing server: state, jobs, review/approval and guarded apply; default remains read-only | Planned; #34 superseded | #134 WP0–WP6; coordinate Z5 before write implementation where practical | [#134](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/134) |
 | **M4** | Reader comments in a sidecar, linked to verified source passages | Planned | Stable locators/lifecycle across S4-structure; embeddings optional | [#2](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/2), [#3](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/3) |
-| **M5** | Large-library stress validation of opt-in image OCR and announcement decision | Validation pending: implementation packaged, unannounced | Reviewed stress run; track a checklist if scheduled | No issue yet |
+| **M5** | Large-library stress validation of opt-in image OCR and announcement decision | Validation pending: implementation packaged, unannounced | Reviewed stress run | [#168](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/168) |
 
 ## Completed work and decision records
 
