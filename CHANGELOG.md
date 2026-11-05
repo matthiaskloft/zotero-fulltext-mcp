@@ -5,6 +5,8 @@ All notable changes to this project are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-11-05
+
 ### Removed
 
 - Optional Marker whole-paper reconversion: the `[marker]` extra, `reconvert-math` CLI command,
@@ -19,6 +21,12 @@ All notable changes to this project are documented here. Format loosely follows
 - Source distributions exclude local `.claude`, `.codex` and `.agents` directories, including
   nested agent worktrees that could otherwise carry old code or local state into an archive.
   Distribution inspection rejects these directories too.
+
+### Documentation
+
+- Condensed the roadmap into extraction, retrieval, compatibility and optional-workflow
+  workstreams; archived completed tasks and preserved detailed extraction/reference-validation
+  and chunking decisions in linked plans. Clarified remaining work and dependencies.
 
 ## [0.15.2] - 2026-10-28
 
@@ -1210,7 +1218,8 @@ author's own machine.
 
 Initial import of the Zotero full-text conversion pipeline, CLI, and MCP server. Not tagged.
 
-[Unreleased]: https://github.com/matthiaskloft/zotero-fulltext-mcp/compare/v0.15.2...HEAD
+[Unreleased]: https://github.com/matthiaskloft/zotero-fulltext-mcp/compare/v0.16.0...HEAD
+[0.16.0]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.16.0
 [0.15.2]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.15.2
 [0.15.1]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.15.1
 [0.15.0]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.15.0
