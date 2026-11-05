@@ -145,3 +145,14 @@ What the design above still describes and `ocr-images` does not provide: page re
 figure *images* addressable on their own, and caption/figure-label metadata as queryable fields.
 If those turn out to be needed, the artifact layer is still the right shape for them — but the
 searchable-text half of the problem is now solved without it.
+
+## Retrieval context follow-up (2026-11-05, planned)
+
+The [implementation review](chunking-research-proposal.md#open-source-implementation-review-2026-11-05)
+identified RAGFlow's bounded neighboring-sentence context for tables/images as a useful S4a
+experiment (#108). Associate each table, equation or figure description with its caption and
+eligible explanatory prose before assembling deduplicated evidence. Keep source locators for
+every component; repeated table headers and display separators are derived content, not new
+source text. Charge all displayed context to the returned-token budget and test captionless
+figures, misleading cross-references and oversized tables. This extends retrieval over existing
+artifacts; it does not require the separate figure index proposed above or a RAGFlow dependency.

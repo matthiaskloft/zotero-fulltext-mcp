@@ -41,6 +41,32 @@ Later real-paper Zotero tests can copy selected cached files into an isolated co
 inputs; they must not mount a private library. Possible corpus-based tests by stage and
 environment are listed in [`public-corpus-uses.md`](public-corpus-uses.md).
 
+## Extraction-validation pilot (decision 2026-11-05, planned)
+
+[Extraction workstream](../ROADMAP.md#extraction-and-reference-quality)
+and [#166](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/166) define a versioned
+internal JSON artifact schema. No evidence-ledger integration is planned for this pilot. Keep
+reviewed expectations separate from extractor observations and run/results; the schema and
+external adapter are not implemented yet.
+
+Start with 20 varied pages and a few complete papers for cross-page/reference behavior. Record
+PDF/render hashes, physical pages, dimensions, body start/end anchors, block types/boxes/order,
+text, table cells, equations, graphics and caption links with review provenance and uncertainty.
+Include expected raw bibliography entries, ordinals/pages, bibliographic fields and citation
+links. Evaluate reference segmentation, field parsing, printed identifier recovery and library
+resolution independently; an absent printed DOI is not extraction failure.
+
+Try an isolated pinned olmOCR-bench adapter for compatible presence/order/table/math checks,
+keeping one authoritative answer key. Internal checks retain exact values/signs, placement,
+source hashes and chunk coverage. OmniDocBench is a later option for richer table/formula metrics.
+A cheap visual reviewer may propose localized findings from page images plus Markdown; calibrate
+false passes/alarms against human labels and injected defects before using it for triage.
+
+Baseline current extraction before comparing isolated converter/cleanup candidates. Freeze
+Markdown per downstream chunking experiment (#107); do not confound extraction and retrieval
+gains. #115 owns reviewed labels/calibration; #111 owns source-preserving cleanup; #83 owns the
+GROBID/reference subtask. GROBID TEI offsets require verified alignment to stored Markdown.
+
 ## OCR cases still needed
 
 The historical scan already has an imperfect text layer. It tests handling of existing OCR,
