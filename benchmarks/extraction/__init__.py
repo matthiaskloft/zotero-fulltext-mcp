@@ -9,7 +9,7 @@ extra, not a runtime dependency. Three record kinds stay structurally separate (
 - ``run``: pinned configurations/inputs, per-result hashes, failures, costs and metric versions.
 
 Public API: ``load_record``, ``load_reviewed_expectation``, ``validate_record``, ``schema_path``,
-``sha256_bytes``/``sha256_text``/``options_sha256`` and ``RecordError``.
+``sha256_bytes``/``sha256_text``/``options_sha256``, ``verify_output_spans`` and ``RecordError``.
 """
 
 from .records import (
@@ -23,6 +23,7 @@ from .records import (
     sha256_bytes,
     sha256_text,
     validate_record,
+    verify_output_spans,
 )
 
 __all__ = [
@@ -36,4 +37,5 @@ __all__ = [
     "sha256_bytes",
     "sha256_text",
     "validate_record",
+    "verify_output_spans",
 ]

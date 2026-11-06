@@ -1583,6 +1583,7 @@ test = [
     { name = "jsonschema" },
     { name = "mypy" },
     { name = "pytest" },
+    { name = "referencing" },
     { name = "ruff" },
 ]
 zotero-write = [
@@ -1601,6 +1602,7 @@ requires-dist = [
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "pyzotero", marker = "extra == 'zotero-write'", specifier = ">=1.6" },
     { name = "rapidfuzz", specifier = ">=3.6" },
+    { name = "referencing", marker = "extra == 'test'", specifier = ">=0.30" },
     { name = "ruff", marker = "extra == 'test'", specifier = ">=0.15,<0.16" },
 ]
 provides-extras = ["mcp", "zotero-write", "test"]

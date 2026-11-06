@@ -90,9 +90,19 @@ required field bumps `schema_version`; the schemas reject versions they do not k
 | `observation` | `observation.schema.json` | Same layout/reference shape, produced by an extractor, model or heuristic | Never; carries `produced_by` and no review block |
 | `run` | `run.schema.json` | Configurations, inputs, per-result hashes, status, latency/resources, metrics | Holds hashes only, no content or truth |
 
-Automatic output cannot pass as an expectation: `record_kind` is a constant per schema, the
-`review` block is required in expectations and forbidden in observations, and the DOI vocabularies
-do not overlap. Promoting an observation means a human writing a new expectation record.
+The kinds are kept structurally apart: `record_kind` is a constant per schema, the `review` block
+exists only in expectations, and the DOI vocabularies do not overlap, so an observation never
+validates as an expectation by accident. This is not tamper-proof: a person can still hand-edit
+`status` to `reviewed`. Review is an attestation by the named reviewer, not something a schema can
+prove. Promoting an observation means a human writing a new expectation record.
+
+Reviewed expectations carry extra requirements that drafts and observations do not: a pseudonymous
+reviewer id (not the proposing tool or model), a valid `reviewed_at`, a `basis`, a
+`render.image_sha256` on every page when the basis is `page_image_inspection`, `text_sha256` on
+non-null block text and `raw_sha256` on reference entries, an explicit `text` key (value or null)
+on text-bearing blocks, and the table/graphic/equation payload matching the block type (a table
+needs at least one cell). Expectations also require `bbox` and `render`; observations from
+Markdown-only extractors may omit `bbox`, `page.render` and the entry `page`.
 
 Shared envelope (expectation and observation): `document` (PDF SHA-256, title, physical page count),
 `scope` (physical pages covered, or `complete_document`), `pages`, `blocks` and optional
@@ -100,25 +110,45 @@ Shared envelope (expectation and observation): `document` (PDF SHA-256, title, p
 
 - **Pages** use 1-based *physical* page numbers; `printed_label` is separate (string or null).
   Each page declares its `geometry` (`unit`: `pt`, `px` or `normalized`; `origin`: `top-left` or
-  `bottom-left`; width/height), its `render` identity (renderer, version, DPI, image hash) and
-  optional `body_start`/`body_end` anchors naming blocks on that page.
+  `bottom-left`; `box`: `cropbox` or `mediabox`; `rotation`: the `/Rotate` value 0/90/180/270;
+  width/height), its `render` identity (renderer, version, DPI, image hash) and optional
+  `body_start`/`body_end` anchors naming blocks on that page. Frame: for `pt` and `normalized` the
+  bboxes and width/height are in the *unrotated* named box (what PyMuPDF `get_text` returns; its
+  `page.rect` is the rotated box); `normalized` requires width = height = 1. For `px` the frame is
+  the render as displayed (rotation applied) and `render.dpi` is required. The render image is always
+  the displayed page, so `rotation` is what relates a pt/normalized box to it. Bbox bounds are strict
+  for expectations and `normalized`; observations in pt/px may overshoot the page by
+  `BBOX_TOLERANCE` (3 units) because extractors emit slightly negative coordinates near margins.
 - **Blocks** have stable IDs, a type, `page`, a bounding box `{x0,y0,x1,y1}` in the page's
   coordinate system, a document-wide `reading_order`, exact `text` plus optional `text_sha256`
   (UTF-8, unnormalized), and typed payloads: table cells with row/col spans, equations (LaTeX,
-  printed number, display flag) and graphics. Caption blocks link with `caption_for`.
+  printed number, display flag) and graphics. Caption blocks link with `caption_for`. A block lives
+  on one page; content that crosses a page break is a chain of blocks linked by `continues_from`
+  (same type, later page, one continuation per block). Table row indices restart at 0 in each
+  fragment, the logical table is the fragments' rows concatenated in chain order, `n_cols` must
+  agree, and a repeated header row is marked `is_header`. Observations may add `output_span`
+  (Markdown hash plus half-open character offsets and an optional slice hash) per block;
+  `verify_output_spans` checks the round trip against the Markdown text.
 - **References**: `entries` (ordinal, page, raw text as printed, reviewed `fields`, `doi`) and
-  `markers` linking printed citation markers to entry IDs (empty list = no resolvable target). In an
+  `markers` linking printed citation markers to entry IDs, with `target_status`: `resolved`,
+  `no_target` (the list has no matching entry) or `out_of_scope` (target on a page outside a
+  page-scoped record). An entry crossing a page break gives its first block, `page`, and `end_page`.
+  Reviewed fields include `year` and the as-printed `year_raw`. Reference-to-library resolution
+  (matching entries to Zotero items) is deliberately deferred: no field exists for it yet and it
+  will be added with the scorer. In an
   expectation the DOI status is `present`, `absent_in_source` or `not_assessed`; in an observation
   `present`, `not_found` or `parse_failed`. A source that prints no DOI is therefore never scored as
   a parse failure.
 - **Runs**: `metric_versions` pins every metric; each result reports `ok`, `failed`, `timeout`,
-  `missing_backend` or `skipped`. `ok` requires an output hash; every other status requires an
-  error and carries no metrics. Strict and tolerant metrics are separate entries (`mode`).
+  `missing_backend` or `skipped`. Every (configuration, input) pair must have a result; pairs that
+  were not run are recorded as `skipped`, never omitted. `ok` requires an output hash; every other
+  status requires an error and carries no metrics. Strict and tolerant metrics are separate entries
+  (`mode`), each reported at most once per result.
 
 The loader (`benchmarks/extraction/records.py`: `load_record`, `load_reviewed_expectation`,
 `validate_record`) adds checks JSON Schema cannot express: unique block IDs and reading order,
 caption links resolving to table/figure blocks, page numbers within `page_count` and `scope`,
-bounding boxes inside the page geometry, table cells inside and not overlapping in the grid, anchors
+bounding boxes inside the page geometry (with the tolerance above), continuation chains, table cells inside and not overlapping in the grid, anchors
 on their own page, marker and entry links resolving, text/raw/options hash round-trips, and run
 cross-references and metric version pins. Scorers should load truth through
 `load_reviewed_expectation`, which refuses drafts. No scorer, adapter or sampling tool exists yet.

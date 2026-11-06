@@ -24,11 +24,12 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["id", "ordinal", "page", "raw", "doi"],
+            "required": ["id", "ordinal", "raw", "doi"],
             "properties": {
               "id": {"$ref": "common.schema.json#/$defs/id"},
               "ordinal": {"type": "integer", "minimum": 1},
-              "page": {"$ref": "common.schema.json#/$defs/page_number"},
+              "page": {"$ref": "common.schema.json#/$defs/page_number", "description": "Optional: a Markdown-only extractor may not know the page."},
+              "end_page": {"$ref": "common.schema.json#/$defs/page_number"},
               "block_id": {"$ref": "common.schema.json#/$defs/id"},
               "raw": {"type": "string"},
               "raw_sha256": {"$ref": "common.schema.json#/$defs/sha256"},

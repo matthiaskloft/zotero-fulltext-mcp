@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://zotero-fulltext-mcp.invalid/extraction/expectation.schema.json",
   "title": "Reviewed extraction expectation",
-  "description": "Ground truth for a PDF (or set of its pages), established by a human inspecting the page images. Automatic extractor output must be recorded as an observation instead; this schema has no field through which it can become ground truth, and record_kind and the review block are mandatory here and forbidden there.",
+  "description": "Ground truth for a PDF (or set of its pages), established by a human inspecting the page images. Automatic extractor output belongs in an observation record instead. The schemas keep the kinds structurally apart (different record_kind, review block only here), but a person can still hand-edit status to reviewed: review is an attestation by the named reviewer, not something a schema can prove.",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema_version", "record_kind", "record_id", "document", "scope", "pages", "blocks", "provenance"],
@@ -12,8 +12,8 @@
     "record_id": {"$ref": "common.schema.json#/$defs/id"},
     "document": {"$ref": "common.schema.json#/$defs/document"},
     "scope": {"$ref": "common.schema.json#/$defs/scope"},
-    "pages": {"type": "array", "minItems": 1, "items": {"$ref": "common.schema.json#/$defs/page"}},
-    "blocks": {"type": "array", "items": {"$ref": "common.schema.json#/$defs/block"}},
+    "pages": {"type": "array", "minItems": 1, "items": {"$ref": "common.schema.json#/$defs/page", "required": ["physical_page", "geometry", "render"]}},
+    "blocks": {"type": "array", "items": {"$ref": "common.schema.json#/$defs/block", "required": ["id", "type", "page", "bbox", "reading_order"], "not": {"required": ["output_span"]}}},
     "references": {
       "type": "object",
       "additionalProperties": false,
@@ -28,7 +28,8 @@
             "properties": {
               "id": {"$ref": "common.schema.json#/$defs/id"},
               "ordinal": {"type": "integer", "minimum": 1, "description": "Position of the entry within the printed reference list."},
-              "page": {"$ref": "common.schema.json#/$defs/page_number"},
+              "page": {"$ref": "common.schema.json#/$defs/page_number", "description": "Physical page on which the entry starts."},
+              "end_page": {"$ref": "common.schema.json#/$defs/page_number", "description": "Page on which an entry that crosses a page break ends; required exactly when the entry's block continues onto a later page."},
               "block_id": {"$ref": "common.schema.json#/$defs/id"},
               "raw": {"type": "string", "description": "Raw entry text exactly as printed."},
               "raw_sha256": {"$ref": "common.schema.json#/$defs/sha256"},
@@ -65,7 +66,7 @@
           "required": ["status"],
           "properties": {
             "status": {"enum": ["draft", "reviewed"], "description": "Only 'reviewed' records are ground truth; scorers must skip drafts."},
-            "reviewer": {"$ref": "common.schema.json#/$defs/nonblank", "description": "Opaque reviewer handle; use a pseudonymous id, not a personal name."},
+            "reviewer": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$", "description": "Opaque pseudonymous reviewer id (letters, digits, dot, underscore, hyphen); not a personal name or address, and not the proposing tool."},
             "reviewed_at": {"$ref": "common.schema.json#/$defs/timestamp"},
             "basis": {"enum": ["page_image_inspection", "pdf_inspection"], "description": "What the human compared against. Extractor output alone is not a basis."}
           },
