@@ -1039,3 +1039,13 @@ def test_missing_frame_is_rejected():
     record = _layout("expectation")
     del record["pages"][0]["geometry"]["frame"]
     _rejected(record, "'frame' is a required property")
+
+
+def test_free_form_run_options_may_use_integer_field_names():
+    record = _run()
+    options = {"start": 0.5, "rotation": True, "nested": [{"page": 1.5}]}
+    record["configurations"][0]["options"] = options
+    record["configurations"][0]["options_sha256"] = options_sha256(options)
+    validate_record(record)
+    options["nested"][0]["page"] = float("nan")
+    _rejected(record, "non-finite")

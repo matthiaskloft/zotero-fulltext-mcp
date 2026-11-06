@@ -103,24 +103,24 @@ def validate_record(record: Any) -> str:
     return kind
 
 
-def _check_numbers(node: Any, path: str, errors: list[str]) -> None:
-    """Reject NaN/Infinity anywhere and non-int values (e.g. 1.0, true) for integer fields."""
+def _check_numbers(node: Any, path: str, errors: list[str], integers: bool = True) -> None:
+    """Reject NaN/Infinity anywhere and, outside free-form run ``options``, non-int integer fields."""
     if isinstance(node, float) and (node != node or node in (float("inf"), float("-inf"))):
         errors.append(f"{path}: non-finite number is not valid")
     elif isinstance(node, dict):
         for key, value in node.items():
             child = f"{path}/{key}"
-            if key in _INTEGER_KEYS and isinstance(value, (float, bool)):
+            if integers and key in _INTEGER_KEYS and isinstance(value, (float, bool)):
                 errors.append(f"{child}: must be an integer, got {value!r}")
-            elif key == "physical_pages" and isinstance(value, list):
+            elif integers and key == "physical_pages" and isinstance(value, list):
                 for item in value:
                     if isinstance(item, (float, bool)):
                         errors.append(f"{child}: must contain integers, got {item!r}")
             else:
-                _check_numbers(value, child, errors)
+                _check_numbers(value, child, errors, integers and key != "options")
     elif isinstance(node, list):
         for index, item in enumerate(node):
-            _check_numbers(item, f"{path}/{index}", errors)
+            _check_numbers(item, f"{path}/{index}", errors, integers)
 
 
 def _reject_constant(name: str) -> Any:
