@@ -155,10 +155,12 @@ def _launch(args, run: Path, token: str) -> None:
             command.append("--publish")
         if args.publish_only:
             command.append("--publish-only")
-        options = ({"creationflags": subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS}
-                   if os.name == "nt" else {"start_new_session": True})
+        creationflags = 0
+        if sys.platform == "win32":
+            creationflags = subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS
         with (run / "progress.log").open("a", encoding="utf-8") as log:
-            subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=log, stderr=log, **options)
+            subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=log, stderr=log,
+                             creationflags=creationflags, start_new_session=sys.platform != "win32")
     else:
         with (run / "progress.log").open("a", encoding="utf-8") as log:
             with contextlib.redirect_stdout(log), contextlib.redirect_stderr(log):
