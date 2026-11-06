@@ -22,10 +22,16 @@ from referencing import Registry, Resource
 SCHEMA_VERSION = 1
 RECORD_KINDS = ("expectation", "observation", "run")
 
-# Extractors emit boxes that overshoot the page box slightly (PyMuPDF reports y0 of about -2 for
-# near-margin text). Observations in pt/px units may overshoot by this many units; expectations and
-# normalized coordinates are always strict.
-BBOX_TOLERANCE = 3.0
+# Extractors emit odd boxes (PyMuPDF reports y0 of about -2 near margins; some tools invert or
+# overshoot). Observations stay recordable and scorable unless a box leaves the page by more than
+# this fraction of the page dimension; expectations are always strict, and observation boxes are not
+# rejected for being inverted.
+BBOX_MARGIN_FRACTION = 0.5
+
+_INTEGER_KEYS = frozenset({
+    "schema_version", "page", "physical_page", "page_count", "reading_order", "ordinal", "end_page",
+    "rotation", "row", "col", "rowspan", "colspan", "n_rows", "n_cols", "start", "end", "year", "n",
+})
 
 _TEXT_FREE_TYPES = ("table", "figure", "equation")
 _SCHEMA_DIR = Path(__file__).resolve().parent / "schemas"
@@ -82,6 +88,10 @@ def validate_record(record: Any) -> str:
     kind = record.get("record_kind")
     if kind not in RECORD_KINDS:
         raise RecordError([f"record_kind must be one of {list(RECORD_KINDS)}, got {kind!r}"])
+    pre: list[str] = []
+    _check_numbers(record, "<root>", pre)
+    if pre:
+        raise RecordError(pre)
     errors = [
         f"{'/'.join(str(part) for part in error.absolute_path) or '<root>'}: {error.message}"
         for error in sorted(_validator(kind).iter_errors(record), key=lambda e: list(map(str, e.absolute_path)))
@@ -91,6 +101,26 @@ def validate_record(record: Any) -> str:
     if errors:
         raise RecordError(errors)
     return kind
+
+
+def _check_numbers(node: Any, path: str, errors: list[str]) -> None:
+    """Reject NaN/Infinity anywhere and non-int values (e.g. 1.0, true) for integer fields."""
+    if isinstance(node, float) and (node != node or node in (float("inf"), float("-inf"))):
+        errors.append(f"{path}: non-finite number is not valid")
+    elif isinstance(node, dict):
+        for key, value in node.items():
+            child = f"{path}/{key}"
+            if key in _INTEGER_KEYS and isinstance(value, (float, bool)):
+                errors.append(f"{child}: must be an integer, got {value!r}")
+            elif key == "physical_pages" and isinstance(value, list):
+                for item in value:
+                    if isinstance(item, (float, bool)):
+                        errors.append(f"{child}: must contain integers, got {item!r}")
+            else:
+                _check_numbers(value, child, errors)
+    elif isinstance(node, list):
+        for index, item in enumerate(node):
+            _check_numbers(item, f"{path}/{index}", errors)
 
 
 def _reject_constant(name: str) -> Any:
@@ -131,6 +161,8 @@ def verify_output_spans(observation: dict[str, Any], markdown: str) -> list[str]
             continue
         if span["markdown_sha256"] != digest:
             findings.append(f"block {block['id']!r} output_span hash does not match the supplied Markdown")
+        elif span["end"] < span["start"]:
+            findings.append(f"block {block['id']!r} output_span ends before it starts")
         elif span["end"] > len(markdown):
             findings.append(f"block {block['id']!r} output_span ends beyond the Markdown")
         elif "span_sha256" in span and sha256_text(markdown[span["start"]:span["end"]]) != span["span_sha256"]:
@@ -191,11 +223,13 @@ def _check_layout(record: dict[str, Any]) -> list[str]:
             errors.append(f"block {bid!r} is on page {block['page']}, outside the scope")
         elif "bbox" in block:
             box, geo = block["bbox"], page["geometry"]
-            tol = 0 if strict or geo["unit"] == "normalized" else BBOX_TOLERANCE
-            if box["x0"] > box["x1"] or box["y0"] > box["y1"]:
+            if strict and (box["x0"] > box["x1"] or box["y0"] > box["y1"]):
                 errors.append(f"block {bid!r} bbox has x0>x1 or y0>y1")
-            elif min(box["x0"], box["y0"]) < -tol or box["x1"] > geo["width"] + tol or box["y1"] > geo["height"] + tol:
-                errors.append(f"block {bid!r} bbox lies outside the page geometry")
+            else:
+                mx, my = (0, 0) if strict else (BBOX_MARGIN_FRACTION * geo["width"], BBOX_MARGIN_FRACTION * geo["height"])
+                xs, ys = (box["x0"], box["x1"]), (box["y0"], box["y1"])
+                if min(xs) < -mx or max(xs) > geo["width"] + mx or min(ys) < -my or max(ys) > geo["height"] + my:
+                    errors.append(f"block {bid!r} bbox lies outside the page geometry")
         text = block.get("text")
         if "text_sha256" in block:
             if not isinstance(text, str):
@@ -208,6 +242,8 @@ def _check_layout(record: dict[str, Any]) -> list[str]:
         if "caption_for" in block and block["type"] != "caption":
             errors.append(f"block {bid!r} has caption_for but type {block['type']!r}")
         errors.extend(_check_table(block))
+        if "truncated" in block and record["scope"]["kind"] == "complete_document":
+            errors.append(f"block {bid!r} is truncated but the record covers the complete document")
         if "output_span" in block:
             span = block["output_span"]
             spans.add(span["markdown_sha256"])
@@ -239,14 +275,18 @@ def _check_layout(record: dict[str, Any]) -> list[str]:
             errors.append(f"page {number} body_start follows body_end in reading order")
 
     if "references" in record:
-        errors.extend(_check_references(record["references"], blocks, continued_by, scope, record["scope"]["kind"]))
+        errors.extend(_check_references(record["references"], blocks, continued_by, scope, record["scope"]["kind"], strict))
     if strict and record["provenance"]["review"]["status"] == "reviewed":
         errors.extend(_check_reviewed(record, pages))
     return errors
 
 
 def _check_continuations(block_list: list[dict[str, Any]], blocks: dict[str, dict[str, Any]], errors: list[str]) -> dict[str, str]:
-    """Validate continues_from links; return the map target id -> id of the block continuing it."""
+    """Validate continues_from links; return the map target id -> id of the block continuing it.
+
+    Only valid links are recorded. A valid link strictly increases reading_order, so the recorded
+    map is acyclic and chains can be walked safely.
+    """
     continued_by: dict[str, str] = {}
     for block in block_list:
         if "continues_from" not in block:
@@ -255,12 +295,18 @@ def _check_continuations(block_list: list[dict[str, Any]], blocks: dict[str, dic
         if target is None:
             errors.append(f"block {bid!r} continues unknown block {block['continues_from']!r}")
             continue
+        valid = True
         if target["type"] != block["type"]:
             errors.append(f"block {bid!r} continues a block of a different type")
-        if target["page"] >= block["page"]:
-            errors.append(f"block {bid!r} must continue a block on an earlier page")
+            valid = False
+        if target["reading_order"] >= block["reading_order"] or target["page"] > block["page"]:
+            errors.append(f"block {bid!r} must continue a block earlier in reading order, on the same or an earlier page")
+            valid = False
         if target["id"] in continued_by:
             errors.append(f"block {target['id']!r} is continued by more than one block")
+            valid = False
+        if not valid:
+            continue
         continued_by[target["id"]] = bid
         if block["type"] == "table" and "table" in block and "table" in target:
             if block["table"]["n_cols"] != target["table"]["n_cols"]:
@@ -287,15 +333,20 @@ def _check_table(block: dict[str, Any]) -> list[str]:
     return errors
 
 
-def _check_references(refs: dict[str, Any], blocks: dict[str, dict[str, Any]], continued_by: dict[str, str], scope: set[int], scope_kind: str) -> list[str]:
+def _check_references(refs: dict[str, Any], blocks: dict[str, dict[str, Any]], continued_by: dict[str, str], scope: set[int], scope_kind: str, strict: bool) -> list[str]:
     errors: list[str] = []
     entries = refs["entries"]
     for dup in _duplicates([e["id"] for e in entries]):
         errors.append(f"duplicate reference entry id {dup!r}")
     for dup in _duplicates([e["ordinal"] for e in entries]):
         errors.append(f"duplicate reference ordinal {dup}")
+    if strict:
+        for dup in _duplicates([e["block_id"] for e in entries if "block_id" in e]):
+            errors.append(f"block {dup!r} is used by more than one reference entry")
     for entry in entries:
         eid = entry["id"]
+        if "truncated" in entry and scope_kind == "complete_document":
+            errors.append(f"reference entry {eid!r} is truncated but the record covers the complete document")
         page = entry.get("page")
         if page is not None and page not in scope:
             errors.append(f"reference entry {eid!r} is on page {page}, outside the scope")
@@ -312,13 +363,17 @@ def _check_references(refs: dict[str, Any], blocks: dict[str, dict[str, Any]], c
             else:
                 if page is not None and block["page"] != page:
                     errors.append(f"reference entry {eid!r} page differs from its block's page")
+                if strict and block["type"] != "reference_entry":
+                    errors.append(f"reference entry {eid!r} must link a reference_entry block")
+                if strict and "continues_from" in block:
+                    errors.append(f"reference entry {eid!r} must link the first block of a chain")
                 last = block
                 while last["id"] in continued_by:
                     last = blocks[continued_by[last["id"]]]
-                if last is not block and end_page != last["page"]:
+                if last["page"] != block["page"] and end_page != last["page"]:
                     errors.append(f"reference entry {eid!r} continues across pages; end_page must be {last['page']}")
-                if last is block and end_page is not None:
-                    errors.append(f"reference entry {eid!r} has end_page but its block has no continuation")
+                if last["page"] == block["page"] and end_page is not None:
+                    errors.append(f"reference entry {eid!r} has end_page but its block chain ends on the same page")
         if "raw_sha256" in entry and sha256_text(entry["raw"]) != entry["raw_sha256"]:
             errors.append(f"reference entry {eid!r} raw_sha256 does not match raw")
     entry_ids = {e["id"] for e in entries}
@@ -361,14 +416,28 @@ def _check_reviewed(record: dict[str, Any], pages: dict[int, dict[str, Any]]) ->
             errors.append(f"block {bid!r} needs text_sha256 in a reviewed record")
         if kind == "table" and not block.get("table", {}).get("cells"):
             errors.append(f"table block {bid!r} needs a table payload with at least one cell")
+        elif kind == "table" and _grid_cells(block["table"]) != block["table"]["n_rows"] * block["table"]["n_cols"]:
+            errors.append(f"table block {bid!r} must cover its full grid (use empty-string cells)")
         if kind == "figure" and "graphic" not in block:
             errors.append(f"figure block {bid!r} needs a graphic payload")
         if kind == "equation" and "equation" not in block:
             errors.append(f"equation block {bid!r} needs an equation payload")
+        elif kind == "equation" and "latex" not in block["equation"]:
+            errors.append(f"equation block {bid!r} must state latex (a value or explicit null)")
     for entry in record.get("references", {}).get("entries", []):
         if "raw_sha256" not in entry:
             errors.append(f"reference entry {entry['id']!r} needs raw_sha256 in a reviewed record")
     return errors
+
+
+def _grid_cells(table: dict[str, Any]) -> int:
+    """Number of distinct grid positions the cells occupy, spans included."""
+    return len({
+        (r, c)
+        for cell in table["cells"]
+        for r in range(cell["row"], cell["row"] + cell.get("rowspan", 1))
+        for c in range(cell["col"], cell["col"] + cell.get("colspan", 1))
+    })
 
 
 def _check_run(record: dict[str, Any]) -> list[str]:

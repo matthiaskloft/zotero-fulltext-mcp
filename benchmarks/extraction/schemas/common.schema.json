@@ -52,18 +52,21 @@
     "coordinate_system": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["unit", "origin", "box", "rotation", "width", "height"],
-      "description": "Frame of this page's bounding boxes. For unit 'pt' and 'normalized' the frame is the UNROTATED page box named by 'box' (the PDF /Rotate entry is not applied; this is what PyMuPDF get_text bboxes use, whereas page.rect is the rotated box), and width/height are that box's unrotated dimensions. For unit 'px' the frame is the identified render as displayed (rotation applied) and width/height are its pixel dimensions. 'rotation' records the /Rotate value so a viewer can relate the two frames.",
+      "required": ["unit", "origin", "frame", "box", "rotation", "width", "height"],
+      "description": "Frame of this page's bounding boxes. 'frame' says which orientation they use. 'unrotated': the named page box before the PDF /Rotate entry is applied (what PyMuPDF get_text returns on a page whose rotation has not been removed; page.rect is then the rotated box); width/height are the unrotated box dimensions. 'displayed': the page as shown, rotation applied (what pymupdf4llm yields, because to_markdown calls page.remove_rotation() and page.rotation then reads 0); width/height are the displayed dimensions. Read geometry from a separately opened document, or declare 'displayed'. 'rotation' is always the PDF's stored /Rotate value (0/90/180/270, clockwise), read from a separately opened document, so a viewer can relate the frames. Unit 'px' is always the displayed render.",
       "properties": {
-        "unit": {"enum": ["pt", "px", "normalized"], "description": "pt = PDF points (1/72 in); px = pixels of the identified render (render.dpi required); normalized = fractions of the unrotated box, so width and height are exactly 1."},
+        "unit": {"enum": ["pt", "px", "normalized"], "description": "pt = PDF points (1/72 in); px = pixels of the identified render (page.render with dpi required); normalized = fractions of the frame, so width and height are exactly 1."},
         "origin": {"enum": ["top-left", "bottom-left"], "description": "Corner at which x=0,y=0; y increases away from the origin."},
+        "frame": {"enum": ["unrotated", "displayed"]},
         "box": {"enum": ["cropbox", "mediabox"], "description": "PDF page box the frame is measured against."},
-        "rotation": {"enum": [0, 90, 180, 270], "description": "The page's /Rotate value in degrees, clockwise."},
+        "rotation": {"enum": [0, 90, 180, 270]},
         "width": {"type": "number", "exclusiveMinimum": 0},
         "height": {"type": "number", "exclusiveMinimum": 0}
       },
-      "if": {"properties": {"unit": {"const": "normalized"}}},
-      "then": {"properties": {"width": {"const": 1}, "height": {"const": 1}}}
+      "allOf": [
+        {"if": {"properties": {"unit": {"const": "normalized"}}}, "then": {"properties": {"width": {"const": 1}, "height": {"const": 1}}}},
+        {"if": {"properties": {"unit": {"const": "px"}}}, "then": {"properties": {"frame": {"const": "displayed"}}}}
+      ]
     },
     "render": {
       "type": "object",
@@ -88,7 +91,7 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["physical_page", "geometry"],
-      "description": "'render' is required in expectations and optional in observations (a Markdown-only extractor has no render).",
+      "description": "'render' is required in expectations and, for observations, whenever geometry.unit is px; otherwise optional (a Markdown-only extractor has no render). Observations still need geometry and page attribution.",
       "properties": {
         "physical_page": {"$ref": "#/$defs/page_number"},
         "printed_label": {"type": ["string", "null"], "description": "Page label printed on the page (e.g. 'iv', '17'); null when the page shows none. Distinct from physical_page."},
@@ -98,7 +101,7 @@
         "body_end": {"$ref": "#/$defs/anchor"}
       },
       "if": {"properties": {"geometry": {"properties": {"unit": {"const": "px"}}}}},
-      "then": {"properties": {"render": {"required": ["dpi"]}}}
+      "then": {"required": ["render"], "properties": {"render": {"required": ["dpi"]}}}
     },
     "bbox": {
       "type": "object",
@@ -129,7 +132,8 @@
       "required": ["id", "type", "page", "reading_order"],
       "description": "'bbox' is required in expectations and optional in observations. A block lives on one page; content spanning pages is a chain of blocks linked by continues_from.",
       "properties": {
-        "continues_from": {"$ref": "#/$defs/id", "description": "Id of the block this one continues from: same type, on an earlier page, at most one continuation per block. For a table chain, cell row indices restart at 0 in each fragment, the logical table is the fragments' rows concatenated in chain order, n_cols must be equal across fragments, and a header row repeated on a continuation page is marked is_header."},
+        "truncated": {"enum": ["start", "end", "both"], "description": "Content cut off at the scope boundary of a page-scoped record (the block starts before or ends after the sampled pages)."},
+        "continues_from": {"$ref": "#/$defs/id", "description": "Id of the block this one continues from: same type, later in reading order and on the same or a later page, at most one continuation per block. For a table chain, cell row indices restart at 0 in each fragment, the logical table is the fragments' rows concatenated in chain order, n_cols must be equal across fragments, and a header row repeated on a continuation page is marked is_header."},
         "output_span": {
           "type": "object",
           "additionalProperties": false,

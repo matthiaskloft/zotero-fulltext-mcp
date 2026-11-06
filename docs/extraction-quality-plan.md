@@ -101,7 +101,8 @@ reviewer id (not the proposing tool or model), a valid `reviewed_at`, a `basis`,
 `render.image_sha256` on every page when the basis is `page_image_inspection`, `text_sha256` on
 non-null block text and `raw_sha256` on reference entries, an explicit `text` key (value or null)
 on text-bearing blocks, and the table/graphic/equation payload matching the block type (a table
-needs at least one cell). Expectations also require `bbox` and `render`; observations from
+needs at least one cell and must cover its whole grid, spans included, with empty cells as `""`;
+an equation states `latex` as a value or explicit null). Expectations also require `bbox` and `render`; observations from
 Markdown-only extractors may omit `bbox`, `page.render` and the entry `page`.
 
 Shared envelope (expectation and observation): `document` (PDF SHA-256, title, physical page count),
@@ -110,21 +111,27 @@ Shared envelope (expectation and observation): `document` (PDF SHA-256, title, p
 
 - **Pages** use 1-based *physical* page numbers; `printed_label` is separate (string or null).
   Each page declares its `geometry` (`unit`: `pt`, `px` or `normalized`; `origin`: `top-left` or
-  `bottom-left`; `box`: `cropbox` or `mediabox`; `rotation`: the `/Rotate` value 0/90/180/270;
-  width/height), its `render` identity (renderer, version, DPI, image hash) and optional
-  `body_start`/`body_end` anchors naming blocks on that page. Frame: for `pt` and `normalized` the
-  bboxes and width/height are in the *unrotated* named box (what PyMuPDF `get_text` returns; its
-  `page.rect` is the rotated box); `normalized` requires width = height = 1. For `px` the frame is
-  the render as displayed (rotation applied) and `render.dpi` is required. The render image is always
-  the displayed page, so `rotation` is what relates a pt/normalized box to it. Bbox bounds are strict
-  for expectations and `normalized`; observations in pt/px may overshoot the page by
-  `BBOX_TOLERANCE` (3 units) because extractors emit slightly negative coordinates near margins.
+  `bottom-left`; `frame`: `unrotated` or `displayed`; `box`: `cropbox` or `mediabox`; `rotation`:
+  the PDF's stored `/Rotate` value 0/90/180/270; width/height), its `render` identity (renderer,
+  version, DPI, image hash) and optional `body_start`/`body_end` anchors naming blocks on that page.
+  Frames: `unrotated` is the named box before `/Rotate` (PyMuPDF `get_text` on a page whose rotation
+  was not removed; its `page.rect` is the rotated box). `displayed` is the page as shown. pymupdf4llm
+  yields `displayed` coordinates, because `to_markdown` calls `page.remove_rotation()` and the open
+  page then reports rotation 0, so read `rotation`/box geometry from a separately opened document
+  or declare `displayed`. `px` is always `displayed` (and then page `render` with `dpi` is required);
+  `normalized` requires width = height = 1. Bbox bounds are strict for expectations. Observations are
+  kept recordable: they may overshoot the page by up to `BBOX_MARGIN_FRACTION` (half a page
+  dimension) and may have inverted corners, so extractor quirks are scorable; only absurd boxes are
+  rejected. Observations still need `geometry`, block `page` and marker `page` (page attribution);
+  adapters for Markdown-only tools derive it from page maps. Only `bbox`, the page `render` (unless
+  `px`) and the entry `page` may be omitted.
 - **Blocks** have stable IDs, a type, `page`, a bounding box `{x0,y0,x1,y1}` in the page's
   coordinate system, a document-wide `reading_order`, exact `text` plus optional `text_sha256`
   (UTF-8, unnormalized), and typed payloads: table cells with row/col spans, equations (LaTeX,
   printed number, display flag) and graphics. Caption blocks link with `caption_for`. A block lives
   on one page; content that crosses a page break is a chain of blocks linked by `continues_from`
-  (same type, later page, one continuation per block). Table row indices restart at 0 in each
+  (same type, later in reading order, same or later page, one continuation per block; only valid
+  links are recorded, so chains are acyclic). Table row indices restart at 0 in each
   fragment, the logical table is the fragments' rows concatenated in chain order, `n_cols` must
   agree, and a repeated header row is marked `is_header`. Observations may add `output_span`
   (Markdown hash plus half-open character offsets and an optional slice hash) per block;
@@ -132,7 +139,10 @@ Shared envelope (expectation and observation): `document` (PDF SHA-256, title, p
 - **References**: `entries` (ordinal, page, raw text as printed, reviewed `fields`, `doi`) and
   `markers` linking printed citation markers to entry IDs, with `target_status`: `resolved`,
   `no_target` (the list has no matching entry) or `out_of_scope` (target on a page outside a
-  page-scoped record). An entry crossing a page break gives its first block, `page`, and `end_page`.
+  page-scoped record). An entry crossing a page break gives its first block, `page` and, when the chain ends on a different page, `end_page` (never
+  without `page`). In an expectation the entry's block must be a `reference_entry` chain head used
+  by one entry. `truncated` (`start`, `end`, `both`) on blocks and entries records content cut off
+  at the boundary of a page-scoped record; it is rejected in `complete_document` records.
   Reviewed fields include `year` and the as-printed `year_raw`. Reference-to-library resolution
   (matching entries to Zotero items) is deliberately deferred: no field exists for it yet and it
   will be added with the scorer. In an

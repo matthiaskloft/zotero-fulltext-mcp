@@ -25,7 +25,7 @@ def _page(number: int, **extra):
     page = {
         "physical_page": number,
         "printed_label": "iv" if number == 1 else None,
-        "geometry": {"unit": "pt", "origin": "top-left", "box": "cropbox", "rotation": 0, "width": 600, "height": 800},
+        "geometry": {"unit": "pt", "origin": "top-left", "frame": "unrotated", "box": "cropbox", "rotation": 0, "width": 600, "height": 800},
         "render": {"renderer": "synthetic-renderer", "renderer_version": "1.0", "dpi": 144, "image_sha256": IMAGE_HASH},
     }
     page.update(extra)
@@ -438,8 +438,8 @@ def _chain_other_type(r):
     _chain(r, continues_from="b2")
 
 
-def _chain_same_page(r):
-    _chain(r, page=1)
+def _chain_backwards(r):
+    _chain(r, reading_order=2)
 
 
 def _chain_forked(r):
@@ -485,7 +485,7 @@ def _chain_ncols(r):
     _m(_entry_unknown_block, "unknown block 'nope'"),
     _m(_entry_block_page_mismatch, "page differs from its block"),
     _m(_entry_off_scope, "outside the scope"),
-    _m(_entry_end_page_without_chain, "no continuation"),
+    _m(_entry_end_page_without_chain, "chain ends on the same page"),
     _m(_complete_but_partial, "must list every physical page"),
     _m(_pages_scope_mismatch, "pages must cover exactly"),
     _m(_present_doi_without_value, "'value' is a required property"),
@@ -514,7 +514,7 @@ def _chain_ncols(r):
     _m(_no_text_key, "must state text"),
     _m(_chain_unknown, "continues unknown block"),
     _m(_chain_other_type, "different type"),
-    _m(_chain_same_page, "earlier page"),
+    _m(_chain_backwards, "earlier in reading order"),
     _m(_chain_forked, "more than one block"),
     _m(_chain_ncols, "differ in n_cols"),
 ])
@@ -558,10 +558,15 @@ def test_valid_continuation_chains_and_page_crossing_entries():
     _rejected(no_end, "end_page must be 3")
 
 
-def test_geometry_frames_and_tolerance():
-    # Rotated page: dimensions are the unrotated box; bboxes use that frame.
+def test_geometry_frames_and_observation_margin():
+    # Frame and rotation are explicit; a displayed frame is a distinct declaration.
     rotated = _layout("expectation")
-    rotated["pages"][0]["geometry"].update(rotation=90, box="mediabox", width=600, height=800)
+    rotated["pages"][0]["geometry"].update(rotation=90, box="mediabox", frame="displayed", width=800, height=600)
+    for block in rotated["blocks"]:
+        if block["page"] == 1:
+            block["bbox"]["x1"] = 500
+            block["bbox"]["y1"] = min(block["bbox"]["y1"], 590)
+            block["bbox"]["y0"] = min(block["bbox"]["y0"], 580)
     validate_record(rotated)
     normalized = _layout("expectation")
     normalized["pages"][0]["geometry"].update(unit="normalized", width=1, height=1)
@@ -569,21 +574,77 @@ def test_geometry_frames_and_tolerance():
         if block["page"] == 1:
             block["bbox"] = {"x0": 0.1, "y0": 0.1, "x1": 0.9, "y1": 0.2}
     validate_record(normalized)
-    # Observations tolerate small overshoot in pt/px, expectations and normalized stay strict.
+    # Observations stay recordable: small overshoot and inverted boxes pass, absurd ones do not.
     observation = _layout("observation")
     _bbox_slight_overshoot(observation)
     validate_record(observation)
-    observation["blocks"][0]["bbox"]["y0"] = -5
+    observation["blocks"][0]["bbox"].update(x0=400, x1=100)
+    validate_record(observation)
+    observation["blocks"][0]["bbox"].update(x0=10, x1=500, y0=-500)
     _rejected(observation, "outside the page geometry")
-    strict_norm = _layout("observation")
-    strict_norm["pages"][0]["geometry"].update(unit="normalized", width=1, height=1)
-    for block in strict_norm["blocks"]:
-        block["bbox"] = {"x0": 0.1, "y0": 0.1, "x1": 0.9, "y1": 0.2}
-    for page in strict_norm["pages"]:
+    norm_obs = _layout("observation")
+    for page in norm_obs["pages"]:
         page["geometry"].update(unit="normalized", width=1, height=1)
-    validate_record(strict_norm)
-    strict_norm["blocks"][0]["bbox"]["y0"] = -0.001
-    _rejected(strict_norm, "outside the page geometry")
+    for block in norm_obs["blocks"]:
+        block["bbox"] = {"x0": 0.1, "y0": 0.1, "x1": 0.9, "y1": 0.2}
+    norm_obs["blocks"][0]["bbox"]["y0"] = -0.01
+    validate_record(norm_obs)
+    norm_obs["blocks"][0]["bbox"]["y0"] = -0.6
+    _rejected(norm_obs, "outside the page geometry")
+
+
+def test_px_requires_displayed_frame_and_page_render():
+    record = _layout("expectation")
+    for page in record["pages"]:
+        page["geometry"].update(unit="px", frame="displayed", width=1200, height=1600)
+    for block in record["blocks"]:
+        block["bbox"] = {"x0": 10, "y0": 10, "x1": 500, "y1": 40}
+    validate_record(record)
+    record["pages"][0]["geometry"]["frame"] = "unrotated"
+    _rejected(record, "'displayed' was expected")
+    observation = _layout("observation")
+    for page in observation["pages"]:
+        page["geometry"].update(unit="px", frame="displayed", width=1200, height=1600)
+        del page["render"]
+    _rejected(observation, "'render' is a required property")
+
+
+def test_real_rotated_pdf_frames():
+    pymupdf = pytest.importorskip("pymupdf")
+    doc = pymupdf.open()
+    page = doc.new_page(width=600, height=800)
+    page.insert_text((500, 700), "corner")
+    page.set_rotation(90)
+    data = doc.tobytes()
+    doc.close()
+
+    # Separately opened document: /Rotate is visible and get_text is in the unrotated box.
+    page = pymupdf.open("pdf", data)[0]
+    assert (page.rotation, page.rect.width, page.rect.height) == (90, 800, 600)
+    assert (page.mediabox.width, page.mediabox.height) == (600, 800)
+    word = page.get_text("words")[0]
+    unrotated = _layout("observation")
+    unrotated["document"]["page_count"] = 1
+    unrotated["scope"]["physical_pages"] = [1]
+    unrotated["pages"] = [_page(1)]
+    unrotated["pages"][0]["geometry"].update(
+        rotation=page.rotation, width=page.mediabox.width, height=page.mediabox.height)
+    unrotated["blocks"] = [_block("w1", "paragraph", 1, 0, "corner")]
+    unrotated["blocks"][0]["bbox"] = dict(zip(("x0", "y0", "x1", "y1"), word[:4]))
+    del unrotated["references"]
+    validate_record(unrotated)
+    box = unrotated["blocks"][0]["bbox"]
+    assert box["x1"] <= 600 and box["y1"] <= 800
+
+    # After remove_rotation (as pymupdf4llm does) the open page is displayed-frame and reads 0.
+    page.remove_rotation()
+    assert (page.rotation, page.rect.width, page.rect.height) == (0, 800, 600)
+    word = page.get_text("words")[0]
+    displayed = copy.deepcopy(unrotated)
+    displayed["pages"][0]["geometry"].update(frame="displayed", rotation=90, width=800, height=600)
+    displayed["blocks"][0]["bbox"] = dict(zip(("x0", "y0", "x1", "y1"), word[:4]))
+    validate_record(displayed)
+    assert displayed["blocks"][0]["bbox"] != unrotated["blocks"][0]["bbox"]
 
 
 def test_markdown_only_observation_may_omit_geometry_details():
@@ -835,3 +896,146 @@ def test_further_invalid_expectations_are_rejected(mutate, match):
     record = _layout("expectation")
     mutate(record)
     _rejected(record, match)
+
+
+def _validates_within(record, seconds=10):
+    import threading
+
+    outcome = {}
+
+    def run():
+        try:
+            validate_record(record)
+            outcome["result"] = "valid"
+        except RecordError as exc:
+            outcome["result"] = exc
+
+    worker = threading.Thread(target=run, daemon=True)
+    worker.start()
+    worker.join(seconds)
+    assert not worker.is_alive(), "validator did not terminate"
+    return outcome["result"]
+
+
+@pytest.mark.parametrize("kind", ["expectation", "observation"])
+def test_continuation_cycles_terminate_and_are_rejected(kind):
+    self_loop = _layout(kind)
+    self_loop["blocks"][-1]["continues_from"] = "b7"
+    result = _validates_within(self_loop)
+    assert isinstance(result, RecordError) and "earlier in reading order" in str(result)
+
+    two_cycle = _layout(kind)
+    two_cycle["blocks"].append(_block("b8", "reference_entry", 2, 7, "tail"))
+    two_cycle["blocks"][-1]["continues_from"] = "b7"
+    two_cycle["blocks"][-2]["continues_from"] = "b8"
+    result = _validates_within(two_cycle)
+    assert isinstance(result, RecordError) and "earlier in reading order" in str(result)
+
+
+def test_same_page_continuation_is_valid_without_end_page():
+    record = _layout("expectation")
+    record["blocks"].append(_block("b8", "reference_entry", 2, 7, "tail", continues_from="b7"))
+    validate_record(record)
+    record["references"]["entries"][0]["end_page"] = 2
+    _rejected(record, "end_page")
+
+
+def test_expectation_entry_block_rules():
+    wrong_type = _layout("expectation")
+    wrong_type["references"]["entries"][0]["block_id"] = "b2"
+    wrong_type["references"]["entries"][0]["page"] = 1
+    _rejected(wrong_type, "must link a reference_entry block")
+    not_head = _layout("expectation")
+    not_head["blocks"].append(_block("b8", "reference_entry", 2, 7, "tail", continues_from="b7"))
+    not_head["references"]["entries"][1]["block_id"] = "b8"
+    _rejected(not_head, "first block of a chain")
+    shared = _layout("expectation")
+    shared["references"]["entries"][1]["block_id"] = "b7"
+    _rejected(shared, "used by more than one reference entry")
+    # Observations may be looser.
+    observation = _layout("observation")
+    observation["references"]["entries"][1]["block_id"] = "b7"
+    validate_record(observation)
+
+
+def test_entry_end_page_requires_page():
+    observation = _layout("observation")
+    del observation["references"]["entries"][0]["page"]
+    observation["references"]["entries"][0]["end_page"] = 2
+    _rejected(observation, "end_page must come after")
+
+
+def test_observations_keep_page_attribution_required():
+    observation = _layout("observation")
+    del observation["blocks"][0]["page"]
+    _rejected(observation, "'page' is a required property")
+    observation = _layout("observation")
+    del observation["pages"][0]["geometry"]
+    _rejected(observation, "'geometry' is a required property")
+    observation = _layout("observation")
+    del observation["references"]["markers"][0]["page"]
+    _rejected(observation, "'page' is a required property")
+
+
+@pytest.mark.parametrize("mutate,match", [
+    (lambda r: r["document"].update(page_count=3.0), "must be an integer"),
+    (lambda r: r.update(schema_version=1.0), "must be an integer"),
+    (lambda r: r["pages"][0]["geometry"].update(rotation=90.0), "must be an integer"),
+    (lambda r: r["scope"].update(physical_pages=[1.0, 2]), "must contain integers"),
+    (lambda r: r["blocks"][0].update(reading_order=True), "must be an integer"),
+    (lambda r: r["pages"][0]["geometry"].update(width=float("nan")), "non-finite"),
+    (lambda r: r["pages"][0]["geometry"].update(height=float("inf")), "non-finite"),
+])
+@pytest.mark.parametrize("kind", ["expectation", "observation"])
+def test_non_integer_and_non_finite_numbers_are_rejected(kind, mutate, match):
+    record = _layout(kind)
+    mutate(record)
+    _rejected(record, match)
+
+
+def test_verify_output_spans_reports_inverted_span():
+    markdown = "abc"
+    observation = _layout("observation")
+    observation["blocks"][0]["output_span"] = {"markdown_sha256": sha256_text(markdown), "start": 2, "end": 1}
+    assert "before it starts" in verify_output_spans(observation, markdown)[0]
+
+
+def test_reviewed_table_grid_and_equation_latex():
+    partial = _layout("expectation")
+    partial["blocks"][2]["table"]["cells"].pop()
+    _rejected(partial, "full grid")
+    spanned = _layout("expectation")
+    spanned["blocks"][2]["table"]["cells"] = [
+        {"row": 0, "col": 0, "colspan": 2, "text": "head"},
+        {"row": 1, "col": 0, "text": "-1.0"},
+        {"row": 1, "col": 1, "text": ""},
+    ]
+    validate_record(spanned)
+    no_latex = _layout("expectation")
+    no_latex["blocks"][4]["equation"] = {"number": "(1)"}
+    _rejected(no_latex, "must state latex")
+    no_latex["blocks"][4]["equation"] = {"latex": None}
+    validate_record(no_latex)
+
+
+def test_truncated_content_in_page_scoped_records():
+    record = _layout("expectation")
+    record["blocks"][6]["truncated"] = "end"
+    record["references"]["entries"][0]["truncated"] = "start"
+    validate_record(record)
+    record["blocks"][6]["truncated"] = "middle"
+    _rejected(record, "is not one of")
+    record["blocks"][6]["truncated"] = "both"
+    record["scope"] = {"kind": "complete_document", "physical_pages": [1, 2, 3]}
+    record["pages"].append(_page(3))
+    entry_flag = record["references"]["entries"][0].pop("truncated")
+    _rejected(record, "block 'b7' is truncated")
+    del record["blocks"][6]["truncated"]
+    record["references"]["entries"][0]["truncated"] = entry_flag
+    _rejected(record, "reference entry 'r1' is truncated")
+
+
+def test_missing_frame_is_rejected():
+    record = _layout("expectation")
+    del record["pages"][0]["geometry"]["frame"]
+    _rejected(record, "'frame' is a required property")

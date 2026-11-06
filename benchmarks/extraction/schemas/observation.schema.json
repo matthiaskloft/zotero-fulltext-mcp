@@ -29,6 +29,7 @@
               "id": {"$ref": "common.schema.json#/$defs/id"},
               "ordinal": {"type": "integer", "minimum": 1},
               "page": {"$ref": "common.schema.json#/$defs/page_number", "description": "Optional: a Markdown-only extractor may not know the page."},
+              "truncated": {"enum": ["start", "end", "both"], "description": "Entry cut off at the scope boundary of a page-scoped record."},
               "end_page": {"$ref": "common.schema.json#/$defs/page_number"},
               "block_id": {"$ref": "common.schema.json#/$defs/id"},
               "raw": {"type": "string"},
