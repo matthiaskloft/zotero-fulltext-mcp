@@ -5,6 +5,13 @@ All notable changes to this project are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Added
+
+- Internal extraction-evaluation artifact schemas (roadmap E1, package A): versioned JSON Schemas
+  for reviewed expectations, automatic observations and evaluation runs, plus a loader/validator
+  with cross-record checks, under `benchmarks/extraction/`. Benchmark-side only; `jsonschema` was
+  added to the `test` extra. See `docs/extraction-quality-plan.md`.
+
 ## [0.16.0] - 2026-11-05
 
 ### Removed

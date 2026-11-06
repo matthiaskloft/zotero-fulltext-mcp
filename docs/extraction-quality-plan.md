@@ -76,3 +76,49 @@ title/abstract/keywords; passage title/heading prefixes are ablations. Reference
 S7's explicit graph, not wholesale bibliography prefixes on every passage. Distinguish shared
 authorship, shared references (bibliographic coupling), and being cited together (co-citation);
 future graph-assisted ranking must be separately measured and return verified source links.
+
+## Artifact schema contract (E1, package A)
+
+Implemented under `benchmarks/extraction/` (benchmark-side only: not in the wheel, no CLI command;
+`jsonschema` is a `test` extra). Three JSON Schemas (draft 2020-12, `schema_version: 1`) in
+`benchmarks/extraction/schemas/` share definitions from `common.schema.json`. A change to any
+required field bumps `schema_version`; the schemas reject versions they do not know.
+
+| Record kind | Schema | Holds | Authority |
+| --- | --- | --- | --- |
+| `expectation` | `expectation.schema.json` | Reviewed layout/block and reference ground truth | Ground truth only when `provenance.review.status` is `reviewed` with reviewer, timestamp and basis (`page_image_inspection` or `pdf_inspection`) |
+| `observation` | `observation.schema.json` | Same layout/reference shape, produced by an extractor, model or heuristic | Never; carries `produced_by` and no review block |
+| `run` | `run.schema.json` | Configurations, inputs, per-result hashes, status, latency/resources, metrics | Holds hashes only, no content or truth |
+
+Automatic output cannot pass as an expectation: `record_kind` is a constant per schema, the
+`review` block is required in expectations and forbidden in observations, and the DOI vocabularies
+do not overlap. Promoting an observation means a human writing a new expectation record.
+
+Shared envelope (expectation and observation): `document` (PDF SHA-256, title, physical page count),
+`scope` (physical pages covered, or `complete_document`), `pages`, `blocks` and optional
+`references`.
+
+- **Pages** use 1-based *physical* page numbers; `printed_label` is separate (string or null).
+  Each page declares its `geometry` (`unit`: `pt`, `px` or `normalized`; `origin`: `top-left` or
+  `bottom-left`; width/height), its `render` identity (renderer, version, DPI, image hash) and
+  optional `body_start`/`body_end` anchors naming blocks on that page.
+- **Blocks** have stable IDs, a type, `page`, a bounding box `{x0,y0,x1,y1}` in the page's
+  coordinate system, a document-wide `reading_order`, exact `text` plus optional `text_sha256`
+  (UTF-8, unnormalized), and typed payloads: table cells with row/col spans, equations (LaTeX,
+  printed number, display flag) and graphics. Caption blocks link with `caption_for`.
+- **References**: `entries` (ordinal, page, raw text as printed, reviewed `fields`, `doi`) and
+  `markers` linking printed citation markers to entry IDs (empty list = no resolvable target). In an
+  expectation the DOI status is `present`, `absent_in_source` or `not_assessed`; in an observation
+  `present`, `not_found` or `parse_failed`. A source that prints no DOI is therefore never scored as
+  a parse failure.
+- **Runs**: `metric_versions` pins every metric; each result reports `ok`, `failed`, `timeout`,
+  `missing_backend` or `skipped`. `ok` requires an output hash; every other status requires an
+  error and carries no metrics. Strict and tolerant metrics are separate entries (`mode`).
+
+The loader (`benchmarks/extraction/records.py`: `load_record`, `load_reviewed_expectation`,
+`validate_record`) adds checks JSON Schema cannot express: unique block IDs and reading order,
+caption links resolving to table/figure blocks, page numbers within `page_count` and `scope`,
+bounding boxes inside the page geometry, table cells inside and not overlapping in the grid, anchors
+on their own page, marker and entry links resolving, text/raw/options hash round-trips, and run
+cross-references and metric version pins. Scorers should load truth through
+`load_reviewed_expectation`, which refuses drafts. No scorer, adapter or sampling tool exists yet.

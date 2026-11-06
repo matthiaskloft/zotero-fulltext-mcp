@@ -1580,6 +1580,7 @@ mcp = [
     { name = "pyjwt" },
 ]
 test = [
+    { name = "jsonschema" },
     { name = "mypy" },
     { name = "pytest" },
     { name = "ruff" },
@@ -1590,6 +1591,7 @@ zotero-write = [
 
 [package.metadata]
 requires-dist = [
+    { name = "jsonschema", marker = "extra == 'test'", specifier = ">=4.21,<5" },
     { name = "mcp", marker = "extra == 'mcp'", specifier = ">=1.28,<2" },
     { name = "mypy", marker = "extra == 'test'", specifier = ">=1.19,<2" },
     { name = "pyjwt", marker = "extra == 'mcp'", specifier = ">=2.14.0" },

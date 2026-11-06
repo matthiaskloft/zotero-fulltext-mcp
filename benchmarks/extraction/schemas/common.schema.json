@@ -1,0 +1,182 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zotero-fulltext-mcp.invalid/extraction/common.schema.json",
+  "title": "Shared definitions for extraction-evaluation records",
+  "description": "Definitions referenced by the expectation, observation and run schemas. Not a record kind itself.",
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "nonblank": {"type": "string", "pattern": "\\S"},
+    "id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$", "maxLength": 128},
+    "timestamp": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$"},
+    "page_number": {"type": "integer", "minimum": 1, "description": "1-based physical page index within the PDF. Never a printed label."},
+    "uncertainty": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["level"],
+      "properties": {
+        "level": {"enum": ["low", "medium", "high"], "description": "Uncertainty about the stated value; 'high' means the value should not be scored strictly."},
+        "note": {"type": "string"}
+      }
+    },
+    "tool_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tool", "version"],
+      "properties": {
+        "tool": {"$ref": "#/$defs/nonblank"},
+        "version": {"$ref": "#/$defs/nonblank"},
+        "model": {"type": "string"},
+        "options_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "document": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pdf_sha256", "title", "page_count"],
+      "properties": {
+        "pdf_sha256": {"$ref": "#/$defs/sha256"},
+        "title": {"type": "string", "description": "Document title as printed; empty only when the document has none."},
+        "page_count": {"type": "integer", "minimum": 1, "description": "Physical page count of the PDF."},
+        "corpus_id": {"$ref": "#/$defs/id", "description": "Optional id of the pinned corpus entry (benchmarks/public_pdfs/sources.json)."}
+      }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "physical_pages"],
+      "properties": {
+        "kind": {"enum": ["pages", "complete_document"]},
+        "physical_pages": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/page_number"}, "description": "The physical pages this record covers. A complete document lists every page."}
+      }
+    },
+    "coordinate_system": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["unit", "origin", "width", "height"],
+      "properties": {
+        "unit": {"enum": ["pt", "px", "normalized"], "description": "pt = PDF points (1/72 in, unrotated page box); px = pixels of the identified render; normalized = fractions of width/height in [0, 1]."},
+        "origin": {"enum": ["top-left", "bottom-left"], "description": "Corner at which x=0,y=0; y increases away from the origin."},
+        "width": {"type": "number", "exclusiveMinimum": 0},
+        "height": {"type": "number", "exclusiveMinimum": 0}
+      }
+    },
+    "render": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["renderer", "renderer_version"],
+      "properties": {
+        "renderer": {"$ref": "#/$defs/nonblank"},
+        "renderer_version": {"$ref": "#/$defs/nonblank"},
+        "dpi": {"type": "number", "exclusiveMinimum": 0},
+        "image_sha256": {"$ref": "#/$defs/sha256", "description": "Hash of the rendered page image the record was derived from or reviewed against."}
+      }
+    },
+    "anchor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["block_id"],
+      "properties": {
+        "block_id": {"$ref": "#/$defs/id", "description": "Block that starts (or ends) the meaningful body on this page."}
+      }
+    },
+    "page": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["physical_page", "geometry", "render"],
+      "properties": {
+        "physical_page": {"$ref": "#/$defs/page_number"},
+        "printed_label": {"type": ["string", "null"], "description": "Page label printed on the page (e.g. 'iv', '17'); null when the page shows none. Distinct from physical_page."},
+        "geometry": {"$ref": "#/$defs/coordinate_system"},
+        "render": {"$ref": "#/$defs/render"},
+        "body_start": {"$ref": "#/$defs/anchor"},
+        "body_end": {"$ref": "#/$defs/anchor"}
+      }
+    },
+    "bbox": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x0", "y0", "x1", "y1"],
+      "description": "Interpreted in the coordinate_system of the block's page; x0<=x1 and y0<=y1 in that system.",
+      "properties": {
+        "x0": {"type": "number"}, "y0": {"type": "number"},
+        "x1": {"type": "number"}, "y1": {"type": "number"}
+      }
+    },
+    "table_cell": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["row", "col", "text"],
+      "properties": {
+        "row": {"type": "integer", "minimum": 0},
+        "col": {"type": "integer", "minimum": 0},
+        "rowspan": {"type": "integer", "minimum": 1},
+        "colspan": {"type": "integer", "minimum": 1},
+        "text": {"type": "string"},
+        "is_header": {"type": "boolean"}
+      }
+    },
+    "block": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "page", "bbox", "reading_order"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id", "description": "Stable within the record; never reused for a different block."},
+        "type": {"enum": ["heading", "paragraph", "list_item", "table", "figure", "equation", "caption", "footnote", "header", "footer", "page_number", "reference_entry", "other"]},
+        "page": {"$ref": "#/$defs/page_number"},
+        "bbox": {"$ref": "#/$defs/bbox"},
+        "reading_order": {"type": "integer", "minimum": 0, "description": "Position in the document-wide reading order; unique per record. Blocks outside the reading flow (running headers) still receive one."},
+        "text": {"type": ["string", "null"], "description": "Exact text, verbatim: signs, decimals, operators and case preserved. null = block has no textual content to compare."},
+        "text_sha256": {"$ref": "#/$defs/sha256", "description": "SHA-256 of the UTF-8 bytes of text, no normalization."},
+        "table": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["n_rows", "n_cols", "cells"],
+          "properties": {
+            "n_rows": {"type": "integer", "minimum": 1},
+            "n_cols": {"type": "integer", "minimum": 1},
+            "cells": {"type": "array", "items": {"$ref": "#/$defs/table_cell"}}
+          }
+        },
+        "equation": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "latex": {"type": ["string", "null"]},
+            "number": {"type": ["string", "null"], "description": "Printed equation number, e.g. '(3)'."},
+            "display": {"type": "boolean", "description": "true = display equation, false = inline."}
+          }
+        },
+        "graphic": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind"],
+          "properties": {"kind": {"enum": ["figure", "chart", "image", "decoration"]}}
+        },
+        "caption_for": {"$ref": "#/$defs/id", "description": "Only on type 'caption': id of the table/figure block it captions."},
+        "uncertainty": {"$ref": "#/$defs/uncertainty"}
+      }
+    },
+    "reference_fields": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "title": {"type": "string"},
+        "authors": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["family"], "properties": {"family": {"type": "string"}, "given": {"type": "string"}}}},
+        "year": {"type": "integer"},
+        "venue": {"type": "string"}
+      }
+    },
+    "marker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "page", "text", "entry_ids"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "page": {"$ref": "#/$defs/page_number"},
+        "block_id": {"$ref": "#/$defs/id"},
+        "text": {"type": "string", "description": "Marker as printed, e.g. '[12]' or '(Author, 2020)'."},
+        "entry_ids": {"type": "array", "items": {"$ref": "#/$defs/id"}, "description": "Reference entries the marker points to; empty = no resolvable target in this document."}
+      }
+    }
+  }
+}

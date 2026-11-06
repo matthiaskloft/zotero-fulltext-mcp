@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zotero-fulltext-mcp.invalid/extraction/observation.schema.json",
+  "title": "Automatic extraction observation",
+  "description": "Structured output proposed by an extractor, model or heuristic. Never ground truth: record_kind is 'observation', provenance has no review block, and an observation does not validate as an expectation. Turning one into an expectation means a human reviewing it against the page images and writing a new expectation record.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "record_kind", "record_id", "document", "scope", "pages", "blocks", "provenance"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "record_kind": {"const": "observation"},
+    "record_id": {"$ref": "common.schema.json#/$defs/id"},
+    "document": {"$ref": "common.schema.json#/$defs/document"},
+    "scope": {"$ref": "common.schema.json#/$defs/scope"},
+    "pages": {"type": "array", "minItems": 1, "items": {"$ref": "common.schema.json#/$defs/page"}},
+    "blocks": {"type": "array", "items": {"$ref": "common.schema.json#/$defs/block"}},
+    "references": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entries", "markers"],
+      "properties": {
+        "entries": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "ordinal", "page", "raw", "doi"],
+            "properties": {
+              "id": {"$ref": "common.schema.json#/$defs/id"},
+              "ordinal": {"type": "integer", "minimum": 1},
+              "page": {"$ref": "common.schema.json#/$defs/page_number"},
+              "block_id": {"$ref": "common.schema.json#/$defs/id"},
+              "raw": {"type": "string"},
+              "raw_sha256": {"$ref": "common.schema.json#/$defs/sha256"},
+              "fields": {"$ref": "common.schema.json#/$defs/reference_fields"},
+              "doi": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["status"],
+                "properties": {
+                  "status": {"enum": ["present", "not_found", "parse_failed"], "description": "not_found = the parser ran and reported no DOI; parse_failed = the parser could not process the entry."},
+                  "value": {"type": "string"}
+                },
+                "if": {"properties": {"status": {"const": "present"}}},
+                "then": {"required": ["value"]},
+                "else": {"not": {"required": ["value"]}}
+              }
+            }
+          }
+        },
+        "markers": {"type": "array", "items": {"$ref": "common.schema.json#/$defs/marker"}}
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["produced_by", "created_at"],
+      "properties": {
+        "produced_by": {"$ref": "common.schema.json#/$defs/tool_identity"},
+        "created_at": {"$ref": "common.schema.json#/$defs/timestamp"},
+        "uncertainty": {"$ref": "common.schema.json#/$defs/uncertainty"}
+      }
+    }
+  }
+}
