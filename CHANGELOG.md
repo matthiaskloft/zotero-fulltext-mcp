@@ -19,6 +19,11 @@ All notable changes to this project are documented here. Format loosely follows
   text (never in expected text); segmentation and the byte-exact hash are separate non-deciding
   metrics. The run schema gained two optional result fields,
   `verdict` and `unscored_items`. Benchmark-side only; no runtime dependency.
+- olmOCR-bench export adapter (roadmap E1, package C): `extraction.olmocr_export` turns a reviewed
+  expectation into presence/order/table/math checks, reporting every element it cannot express as
+  skipped. A one-off run of the pinned scorer (`v0.4.27`, isolated environment, no OCR model or
+  project dependency) on the synthetic corpus passed a correct Markdown and failed a defective one;
+  pin, commands, costs and limits are in `docs/olmocr-bench-feasibility.md`.
 
 ## [0.16.0] - 2026-11-05
 

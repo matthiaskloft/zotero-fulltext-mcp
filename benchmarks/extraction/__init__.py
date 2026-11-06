@@ -8,6 +8,10 @@ extra, not a runtime dependency. Three record kinds stay structurally separate (
 - ``observation``: automatic extractor output; never ground truth.
 - ``run``: pinned configurations/inputs, per-result hashes, failures, costs and metric versions.
 
+``olmocr_export`` is a thin one-way adapter that turns a reviewed expectation into olmOCR-bench
+checks; it imports nothing from olmOCR (``docs/olmocr-bench-feasibility.md``). It is deliberately
+not re-exported here so that ``python -m extraction.olmocr_export`` runs cleanly.
+
 Public API: ``load_record``, ``load_reviewed_expectation``, ``validate_record``, ``schema_path``,
 ``sha256_bytes``/``sha256_text``/``options_sha256``, ``verify_output_spans`` and ``RecordError``.
 """
