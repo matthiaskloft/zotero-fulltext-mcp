@@ -1,0 +1,210 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zotero-fulltext-mcp.invalid/extraction/common.schema.json",
+  "title": "Shared definitions for extraction-evaluation records",
+  "description": "Definitions referenced by the expectation, observation and run schemas. Not a record kind itself.",
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "nonblank": {"type": "string", "pattern": "\\S"},
+    "id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$", "maxLength": 128},
+    "timestamp": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$"},
+    "page_number": {"type": "integer", "minimum": 1, "description": "1-based physical page index within the PDF. Never a printed label."},
+    "uncertainty": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["level"],
+      "properties": {
+        "level": {"enum": ["low", "medium", "high"], "description": "Uncertainty about the stated value; 'high' means the value should not be scored strictly."},
+        "note": {"type": "string"}
+      }
+    },
+    "tool_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tool", "version"],
+      "properties": {
+        "tool": {"$ref": "#/$defs/nonblank"},
+        "version": {"$ref": "#/$defs/nonblank"},
+        "model": {"type": "string"},
+        "options_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "document": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pdf_sha256", "title", "page_count"],
+      "properties": {
+        "pdf_sha256": {"$ref": "#/$defs/sha256"},
+        "title": {"type": "string", "description": "Document title as printed; empty only when the document has none."},
+        "page_count": {"type": "integer", "minimum": 1, "description": "Physical page count of the PDF."},
+        "corpus_id": {"$ref": "#/$defs/id", "description": "Optional id of the pinned corpus entry (benchmarks/public_pdfs/sources.json)."}
+      }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "physical_pages"],
+      "properties": {
+        "kind": {"enum": ["pages", "complete_document"]},
+        "physical_pages": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/page_number"}, "description": "The physical pages this record covers. A complete document lists every page."}
+      }
+    },
+    "coordinate_system": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["unit", "origin", "frame", "box", "rotation", "width", "height"],
+      "description": "Frame of this page's bounding boxes. 'frame' says which orientation they use. 'unrotated': the named page box before the PDF /Rotate entry is applied (what PyMuPDF get_text returns on a page whose rotation has not been removed; page.rect is then the rotated box); width/height are the unrotated box dimensions. 'displayed': the page as shown, rotation applied (what pymupdf4llm yields, because to_markdown calls page.remove_rotation() and page.rotation then reads 0); width/height are the displayed dimensions. Read geometry from a separately opened document, or declare 'displayed'. 'rotation' is always the PDF's stored /Rotate value (0/90/180/270, clockwise), read from a separately opened document, so a viewer can relate the frames. Unit 'px' is always the displayed render.",
+      "properties": {
+        "unit": {"enum": ["pt", "px", "normalized"], "description": "pt = PDF points (1/72 in); px = pixels of the identified render (page.render with dpi required); normalized = fractions of the frame, so width and height are exactly 1."},
+        "origin": {"enum": ["top-left", "bottom-left"], "description": "Corner at which x=0,y=0; y increases away from the origin."},
+        "frame": {"enum": ["unrotated", "displayed"]},
+        "box": {"enum": ["cropbox", "mediabox"], "description": "PDF page box the frame is measured against."},
+        "rotation": {"enum": [0, 90, 180, 270]},
+        "width": {"type": "number", "exclusiveMinimum": 0},
+        "height": {"type": "number", "exclusiveMinimum": 0}
+      },
+      "allOf": [
+        {"if": {"properties": {"unit": {"const": "normalized"}}}, "then": {"properties": {"width": {"const": 1}, "height": {"const": 1}}}},
+        {"if": {"properties": {"unit": {"const": "px"}}}, "then": {"properties": {"frame": {"const": "displayed"}}}}
+      ]
+    },
+    "render": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["renderer", "renderer_version"],
+      "properties": {
+        "renderer": {"$ref": "#/$defs/nonblank"},
+        "renderer_version": {"$ref": "#/$defs/nonblank"},
+        "dpi": {"type": "number", "exclusiveMinimum": 0},
+        "image_sha256": {"$ref": "#/$defs/sha256", "description": "Hash of the rendered page image the record was derived from or reviewed against."}
+      }
+    },
+    "anchor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["block_id"],
+      "properties": {
+        "block_id": {"$ref": "#/$defs/id", "description": "Block that starts (or ends) the meaningful body on this page."}
+      }
+    },
+    "page": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["physical_page", "geometry"],
+      "description": "'render' is required in expectations and, for observations, whenever geometry.unit is px; otherwise optional (a Markdown-only extractor has no render). Observations still need geometry and page attribution.",
+      "properties": {
+        "physical_page": {"$ref": "#/$defs/page_number"},
+        "printed_label": {"type": ["string", "null"], "description": "Page label printed on the page (e.g. 'iv', '17'); null when the page shows none. Distinct from physical_page."},
+        "geometry": {"$ref": "#/$defs/coordinate_system"},
+        "render": {"$ref": "#/$defs/render", "description": "The displayed (rotation applied) page image. pt/normalized boxes map onto it through geometry.rotation."},
+        "body_start": {"$ref": "#/$defs/anchor"},
+        "body_end": {"$ref": "#/$defs/anchor"}
+      },
+      "if": {"properties": {"geometry": {"properties": {"unit": {"const": "px"}}}}},
+      "then": {"required": ["render"], "properties": {"render": {"required": ["dpi"]}}}
+    },
+    "bbox": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x0", "y0", "x1", "y1"],
+      "description": "Interpreted in the coordinate_system of the block's page; x0<=x1 and y0<=y1 in that system.",
+      "properties": {
+        "x0": {"type": "number"}, "y0": {"type": "number"},
+        "x1": {"type": "number"}, "y1": {"type": "number"}
+      }
+    },
+    "table_cell": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["row", "col", "text"],
+      "properties": {
+        "row": {"type": "integer", "minimum": 0},
+        "col": {"type": "integer", "minimum": 0},
+        "rowspan": {"type": "integer", "minimum": 1},
+        "colspan": {"type": "integer", "minimum": 1},
+        "text": {"type": "string"},
+        "is_header": {"type": "boolean"}
+      }
+    },
+    "block": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "page", "reading_order"],
+      "description": "'bbox' is required in expectations and optional in observations. A block lives on one page; content spanning pages is a chain of blocks linked by continues_from.",
+      "properties": {
+        "truncated": {"enum": ["start", "end", "both"], "description": "Content cut off at the scope boundary of a page-scoped record (the block starts before or ends after the sampled pages)."},
+        "continues_from": {"$ref": "#/$defs/id", "description": "Id of the block this one continues from: same type, later in reading order and on the same or a later page, at most one continuation per block. For a table chain, cell row indices restart at 0 in each fragment, the logical table is the fragments' rows concatenated in chain order, n_cols must be equal across fragments, and a header row repeated on a continuation page is marked is_header."},
+        "output_span": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["markdown_sha256", "start", "end"],
+          "description": "Observations only. Where this block landed in the extractor's Markdown output: half-open character offsets (Unicode code points) into the text whose SHA-256 is markdown_sha256. span_sha256 is the hash of that slice, for exact round-trip checks.",
+          "properties": {
+            "markdown_sha256": {"$ref": "#/$defs/sha256"},
+            "start": {"type": "integer", "minimum": 0},
+            "end": {"type": "integer", "minimum": 0},
+            "span_sha256": {"$ref": "#/$defs/sha256"}
+          }
+        },
+        "id": {"$ref": "#/$defs/id", "description": "Stable within the record; never reused for a different block."},
+        "type": {"enum": ["heading", "paragraph", "list_item", "table", "figure", "equation", "caption", "footnote", "header", "footer", "page_number", "reference_entry", "other"]},
+        "page": {"$ref": "#/$defs/page_number"},
+        "bbox": {"$ref": "#/$defs/bbox"},
+        "reading_order": {"type": "integer", "minimum": 0, "description": "Position in the document-wide reading order; unique per record. Blocks outside the reading flow (running headers) still receive one."},
+        "text": {"type": ["string", "null"], "description": "Exact text, verbatim: signs, decimals, operators and case preserved. null = block has no textual content to compare."},
+        "text_sha256": {"$ref": "#/$defs/sha256", "description": "SHA-256 of the UTF-8 bytes of text, no normalization."},
+        "table": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["n_rows", "n_cols", "cells"],
+          "properties": {
+            "n_rows": {"type": "integer", "minimum": 1},
+            "n_cols": {"type": "integer", "minimum": 1},
+            "cells": {"type": "array", "items": {"$ref": "#/$defs/table_cell"}}
+          }
+        },
+        "equation": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "latex": {"type": ["string", "null"]},
+            "number": {"type": ["string", "null"], "description": "Printed equation number, e.g. '(3)'."},
+            "display": {"type": "boolean", "description": "true = display equation, false = inline."}
+          }
+        },
+        "graphic": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind"],
+          "properties": {"kind": {"enum": ["figure", "chart", "image", "decoration"]}}
+        },
+        "caption_for": {"$ref": "#/$defs/id", "description": "Only on type 'caption': id of the table/figure block it captions."},
+        "uncertainty": {"$ref": "#/$defs/uncertainty"}
+      }
+    },
+    "reference_fields": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "title": {"type": "string"},
+        "authors": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["family"], "properties": {"family": {"type": "string"}, "given": {"type": "string"}}}},
+        "year": {"type": "integer"},
+        "year_raw": {"type": "string", "description": "Year exactly as printed (e.g. '2020a', 'in press'); year holds the numeric reading, if any."},
+        "venue": {"type": "string"}
+      }
+    },
+    "marker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "page", "text", "target_status", "entry_ids"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "page": {"$ref": "#/$defs/page_number"},
+        "block_id": {"$ref": "#/$defs/id"},
+        "text": {"type": "string", "description": "Marker as printed, e.g. '[12]' or '(Author, 2020)'."},
+        "target_status": {"enum": ["resolved", "no_target", "out_of_scope"], "description": "resolved = entry_ids lists the targets; no_target = the document's reference list has no matching entry; out_of_scope = the target lies on a page outside this page-scoped record, so it cannot be judged here."},
+        "entry_ids": {"type": "array", "items": {"$ref": "#/$defs/id"}, "description": "Reference entries the marker points to; non-empty exactly when target_status is resolved."}
+      }
+    }
+  }
+}

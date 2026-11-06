@@ -1580,8 +1580,10 @@ mcp = [
     { name = "pyjwt" },
 ]
 test = [
+    { name = "jsonschema" },
     { name = "mypy" },
     { name = "pytest" },
+    { name = "referencing" },
     { name = "ruff" },
 ]
 zotero-write = [
@@ -1590,6 +1592,7 @@ zotero-write = [
 
 [package.metadata]
 requires-dist = [
+    { name = "jsonschema", marker = "extra == 'test'", specifier = ">=4.21,<5" },
     { name = "mcp", marker = "extra == 'mcp'", specifier = ">=1.28,<2" },
     { name = "mypy", marker = "extra == 'test'", specifier = ">=1.19,<2" },
     { name = "pyjwt", marker = "extra == 'mcp'", specifier = ">=2.14.0" },
@@ -1599,6 +1602,7 @@ requires-dist = [
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "pyzotero", marker = "extra == 'zotero-write'", specifier = ">=1.6" },
     { name = "rapidfuzz", specifier = ">=3.6" },
+    { name = "referencing", marker = "extra == 'test'", specifier = ">=0.30" },
     { name = "ruff", marker = "extra == 'test'", specifier = ">=0.15,<0.16" },
 ]
 provides-extras = ["mcp", "zotero-write", "test"]
