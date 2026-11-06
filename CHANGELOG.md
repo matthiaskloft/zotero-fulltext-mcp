@@ -11,6 +11,14 @@ All notable changes to this project are documented here. Format loosely follows
   for reviewed expectations, automatic observations and evaluation runs, plus a loader/validator
   with cross-record checks, under `benchmarks/extraction/`. Benchmark-side only; `jsonschema`
   and `referencing` were added to the `test` extra. See `docs/extraction-quality-plan.md`.
+- E2 pilot tooling (roadmap E2, no labels): a deterministic, seeded pilot/held-out manifest pinned
+  by SHA-256 (`benchmarks/extraction/pilot_manifest.json`, `tools/build_pilot_manifest.py`) with a
+  licence gate that excludes non-CC BY/CC0/public-domain entries and reports them by id and reason,
+  and an opt-in host tool (`tools/draft_pilot_pages.py`) that renders pages from hash-verified
+  cached PDFs and writes draft `expectation` proposals outside the repository. Drafts are refused
+  by `load_reviewed_expectation`. Stratum assignment beyond `styles`/`language` is an unverified
+  assumption, checked per page by the host step. Review procedure: `docs/extraction-pilot-review.md`.
+  E2 stays partial until reviewed labels exist.
 
 ## [0.16.0] - 2026-11-05
 

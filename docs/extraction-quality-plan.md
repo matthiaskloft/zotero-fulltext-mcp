@@ -162,3 +162,5 @@ bounding boxes inside the page geometry (with the tolerance above), continuation
 on their own page, marker and entry links resolving, text/raw/options hash round-trips, and run
 cross-references and metric version pins. Scorers should load truth through
 `load_reviewed_expectation`, which refuses drafts. No scorer, adapter or sampling tool exists yet.
+
+Pilot selection and draft tooling (E2, no labels): see [extraction-pilot-review.md](extraction-pilot-review.md).
