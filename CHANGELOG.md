@@ -15,8 +15,9 @@ All notable changes to this project are documented here. Format loosely follows
   a reviewed expectation (text, order, tables, equations, captions, references) with a tri-state
   verdict (`passed`, `failed`, `incomplete`), versioned run metrics, and defect injectors proving the
   strict checks fail on missing signs, swapped values, omitted text and reordered columns. Strict
-  transcription ignores wraps, whitespace runs and block boundaries; segmentation and the byte-exact
-  hash are separate non-deciding metrics. The run schema gained two optional result fields,
+  transcription ignores wraps, whitespace runs, block boundaries and Markdown markup in observed
+  text (never in expected text); segmentation and the byte-exact hash are separate non-deciding
+  metrics. The run schema gained two optional result fields,
   `verdict` and `unscored_items`. Benchmark-side only; no runtime dependency.
 
 ## [0.16.0] - 2026-11-05

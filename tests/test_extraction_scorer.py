@@ -9,7 +9,10 @@ from extraction import defects, options_sha256, sha256_bytes, sha256_text, valid
 from extraction.scorer import (
     METRIC_VERSIONS,
     _assign,
+    _assign_groups,
     _Checks,
+    _strip_markup,
+    _verdict,
     ScoringError,
     failure_result,
     score_files,
@@ -258,7 +261,7 @@ def test_high_uncertainty_items_are_listed_not_scored(exp, obs):
     score = _rescore(exp, defects.omit_text(obs, "p2"))
     assert score["strict_failures"] == 0
     assert score["verdict"] == "incomplete" and not score["strict_passed"]  # unscored items: not a pass
-    assert score["unscored_items"] == len(score["not_scored"]) >= 1
+    assert score["unscored_items"] == len([n for n in score["not_scored"] if n["metric"] != "text_span_hash"]) >= 1
     assert {"metric": "text_presence", "subject": "p2",
             "reason": "expected block marked high uncertainty"} in score["not_scored"]
 
@@ -559,9 +562,11 @@ def test_truncated_expected_items_are_not_compared_and_say_why(exp, obs):
     damaged["references"]["entries"][1]["raw"] = "garbled"
     damaged["references"]["entries"][1]["raw_sha256"] = sha256_text("garbled")
     score = _rescore(exp, damaged)
-    # No truncated item is scored; only the observation's now-unmatched extra entry still counts
-    # against segmentation precision.
-    assert _failed(score) == {("reference_segmentation_precision", "<all>")}
+    # No truncated item is scored, and the garbled entry on the truncated entry's page is not
+    # charged as an extra either: it is listed instead.
+    assert not _failed(score) and score["verdict"] == "incomplete"
+    assert any(n["metric"] == "reference_segmentation_precision" and n["subject"] == "r2"
+               for n in score["not_scored"])
     reasons = {(n["metric"], n["subject"]): n["reason"] for n in score["not_scored"]}
     assert reasons[("text_presence", "p2")].startswith("expected block truncated at the scope boundary (start)")
     assert "(end)" in reasons[("table_cell_match", "t1")]
@@ -704,6 +709,7 @@ def test_verdict_is_incomplete_when_nothing_decisive_ran(exp):
     exp["blocks"] = [_block("hd", "header", 1, 0, "Running header")]
     del exp["references"]
     obs = _observation_of(exp)
+    obs["blocks"] = []
     score = _rescore(exp, obs)
     assert score["strict_checks"] == 0 and score["verdict"] == "incomplete" and not score["strict_passed"]
 
@@ -982,3 +988,222 @@ def test_reference_end_page_must_agree_when_stated(chain_exp):
     del entry["block_id"]
     entry["end_page"] = 4
     assert ("reference_segmentation_recall", "r3") in _failed(_rescore(chain_exp, obs))
+
+
+# --- second review round -----------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("raw,expected", [
+    ("## **Alpha Heading**", "Alpha Heading"),
+    ("# of trials was 5", "of trials was 5"),
+    ("## 1. Introduction", "1. Introduction"),
+    ("1. Introduction", "1. Introduction"),
+    ("- first item", "first item"),
+    ("- a\n- b", "a\nb"),
+    ("text\n- 5", "text\n- 5"),
+    ("see # of trials", "see # of trials"),
+    ("The **effect** is __large__", "The effect is large"),
+    ("**Alpha\nHeading** done", "Alpha\nHeading done"),
+    ("a * b", "a * b"),
+    ("x**2 + y**2", "x**2 + y**2"),
+    ("x**2 and y** z", "x**2 and y** z"),
+    ("a ** b ** c", "a ** b ** c"),
+    ("2 * 3 * 4", "2 * 3 * 4"),
+    ("snake_case_name and __init__x", "snake_case_name and __init__x"),
+    ("_italic_ and *italic*", "_italic_ and *italic*"),
+    ("**bold**text", "**bold**text"),
+    ("- 5 apples", "5 apples"),
+])
+def test_markup_stripping_is_narrow(raw, expected):
+    assert _strip_markup(raw) == expected
+
+
+def test_real_pymupdf4llm_output_passes_strict(exp):
+    exp["blocks"].append(_block("li", "list_item", 1, 20, "first item", bbox=dict(BOX)))
+    obs = _observation_of(exp)
+    _set_text(obs, "h1", "## **Alpha Heading**")
+    _set_text(obs, "li", "- first item")
+    _set_text(obs, "p1", "The **effect** is -0.5 at p < .05 for Group A.")
+    score = _rescore(exp, obs)
+    assert score["verdict"] == "passed", _decisive(score)
+    # Markup is not a licence to change content: a lost sign or wrong digit still fails.
+    _set_text(obs, "p1", "The **effect** is 0.5 at p < .05 for Group A.")
+    assert ("text_presence", "p1") in _decisive(_rescore(exp, obs))
+
+
+def test_expected_text_and_cells_are_never_stripped(exp, obs):
+    _set_text(exp, "p2", "# of trials was 5")
+    obs = _observation_of(exp)
+    _set_text(obs, "p2", "of trials was 5")
+    assert ("text_presence", "p2") in _decisive(_rescore(exp, obs))
+    exp2 = _expectation()
+    table = next(b for b in exp2["blocks"] if b["id"] == "t1")["table"]
+    next(c for c in table["cells"] if (c["row"], c["col"]) == (1, 1))["text"] = "# 7"
+    obs2 = _observation_of(exp2)
+    _cell_of(obs2, 1, 1)["text"] = "7"
+    assert ("table_exact", "t1") in _decisive(_rescore(exp2, obs2))
+
+
+def test_arithmetic_survives_markup_stripping(exp):
+    _set_text(exp, "p2", "Compute a * b and x**2 + y**2 here.")
+    obs = _observation_of(exp)
+    assert _rescore(exp, obs)["verdict"] == "passed"
+    _set_text(obs, "p2", "Compute a b and x2 + y2 here.")
+    assert ("text_presence", "p2") in _decisive(_rescore(exp, obs))
+
+
+def _paged(exp):
+    exp["scope"] = {"kind": "pages", "physical_pages": [2]}
+    exp["pages"] = [_page(2)]
+    exp["blocks"] = [b for b in exp["blocks"] if b["page"] == 2]
+
+
+def test_ordinals_need_one_constant_offset_in_page_scoped_records(exp):
+    _paged(exp)
+    obs = _observation_of(exp)
+    obs["scope"] = {"kind": "pages", "physical_pages": [2]}
+    obs["pages"] = [_page(2)]
+    for entry in obs["references"]["entries"]:
+        entry["ordinal"] += 10
+    assert _rescore(exp, obs)["verdict"] == "passed"
+    obs["references"]["entries"][1]["ordinal"] += 3
+    assert len({sub for name, sub in _decisive(_rescore(exp, obs)) if name == "reference_ordinal"}) == 1
+
+
+def test_ordinals_are_absolute_in_complete_document_records(exp, obs):
+    for entry in obs["references"]["entries"]:
+        entry["ordinal"] += 10
+    assert {("reference_ordinal", "r1"), ("reference_ordinal", "r2")} <= _decisive(_rescore(exp, obs))
+
+
+def test_extra_copies_joined_words_and_appended_text_count_as_invented(exp, obs):
+    exp["blocks"].append(_block("d1", "paragraph", 1, 20, "Repeated sentence.", bbox=dict(BOX)))
+    obs = _observation_of(exp)
+    obs["blocks"].append(_block("dup", "paragraph", 1, 21, "Repeated sentence.", bbox={"x0": 10, "y0": 650, "x1": 500, "y1": 690}))
+    failed = {sub for name, sub in _decisive(_rescore(exp, obs)) if name == "text_precision"}
+    assert len(failed) == 1 and failed <= {"d1", "dup"}
+    for text in ("Alpha Heading2", "xAlpha Heading", "Alpha Headings"):
+        bad = _observation_of(exp)
+        _set_text(bad, "h1", text)
+        assert ("text_presence", "h1") in _decisive(_rescore(exp, bad)), text
+
+
+def test_every_observed_block_counts_for_precision_including_unrecorded_headers(exp, obs):
+    obs["blocks"].append(_block("hd", "header", 1, 20, "Journal of Things 12", bbox=dict(BOX)))
+    score = _rescore(exp, obs)
+    assert ("text_precision", "hd") in _decisive(score) and score["verdict"] == "failed"
+    exp["blocks"].append(_block("hd", "header", 1, 20, "Journal of Things 12", bbox=dict(BOX)))
+    assert _rescore(exp, _observation_of(exp))["verdict"] == "passed"
+
+
+def test_explicit_null_text_is_listed_not_silently_passed(exp):
+    exp["blocks"].append(_block("pn", "paragraph", 1, 20, None, bbox=dict(BOX)))
+    exp["blocks"][-1]["text"] = None
+    score = _rescore(exp, _observation_of(exp))
+    assert any(n["subject"] == "pn" and "no text" in n["reason"] for n in score["not_scored"])
+    assert score["verdict"] == "incomplete"
+
+
+def test_expected_figures_are_checked_for_presence(exp):
+    exp["blocks"].append(_block("fa", "figure", 1, 20, None, graphic={"kind": "chart"}, bbox=dict(BOX)))
+    obs = _observation_of(exp)
+    assert _rescore(exp, obs)["verdict"] == "passed"
+    obs["blocks"] = [b for b in obs["blocks"] if b["id"] != "fa"]
+    score = _rescore(exp, obs)
+    assert ("figure_match", "fa") in _decisive(score) and score["verdict"] == "failed"
+
+
+def test_not_assessed_doi_is_exempt_but_citation_markers_are_listed(exp):
+    _entry(exp, "r2")["doi"] = {"status": "not_assessed"}
+    assert _rescore(exp, _observation_of(exp))["verdict"] == "passed"
+    exp["references"]["markers"] = [{"id": "m1", "page": 1, "text": "[1]", "target_status": "resolved",
+                                     "entry_ids": ["r1"]}]
+    score = _rescore(exp, _observation_of(exp))
+    assert {"metric": "reference_markers", "subject": "<all>",
+            "reason": "citation-marker links are not scored"} in score["not_scored"]
+    assert score["verdict"] == "incomplete"
+
+
+def test_extra_observed_tables_equations_and_captions_fail(exp, obs):
+    base = _rescore(exp, obs)
+    assert base["verdict"] == "passed"
+    extra_table = copy.deepcopy(obs)
+    extra_table["blocks"].append(_block("tx", "table", 1, 20, None, bbox=dict(BOX),
+                                        table={"n_rows": 1, "n_cols": 1, "cells": [_cell(0, 0, "Zed")]}))
+    assert ("table_precision", "tx") in _decisive(_rescore(exp, extra_table))
+    extra_eq = copy.deepcopy(obs)
+    extra_eq["blocks"].append(_block("ex", "equation", 2, 20, None, bbox=dict(BOX),
+                                     equation={"latex": "z=1", "number": "(9)", "display": True}))
+    assert ("equation_precision", "ex") in _decisive(_rescore(exp, extra_eq))
+    extra_cap = copy.deepcopy(obs)
+    extra_cap["blocks"].append(_block("cx", "caption", 1, 20, "Table 9. Invented.", bbox=dict(BOX)))
+    assert ("caption_precision", "cx") in _decisive(_rescore(exp, extra_cap))
+
+
+def test_unscored_informational_items_do_not_make_the_verdict_incomplete():
+    checks = _Checks()
+    checks.add("text_presence", "x", (1, 1), (1, 1))
+    checks.skip("text_span_hash", "x", "chain has unscored or textless fragments")
+    assert _verdict(checks)[0] == "passed"
+    checks.skip("text_presence", "y", "expected block marked high uncertainty")
+    assert _verdict(checks)[0] == "incomplete"
+
+
+def test_equal_cell_matches_prefer_the_identical_grid(exp, obs):
+    table = next(b for b in obs["blocks"] if b["id"] == "t1")
+    wider = copy.deepcopy(table)
+    wider.update(id="t1w", reading_order=20, bbox=dict(BOX))
+    wider["table"]["n_rows"] = 4
+    wider["table"]["cells"] += [_cell(3, 0, "Extra"), _cell(3, 1, "1"), _cell(3, 2, "2")]
+    for block in obs["blocks"]:
+        if block["reading_order"] >= 2 and block is not wider:
+            block["reading_order"] += 1
+    wider["reading_order"] = 2  # earlier than the exact copy, so a first-found tie-break would pick it
+    obs["blocks"].append(wider)
+    score = _rescore(exp, obs)
+    assert ("table_exact", "t1") not in _failed(score)
+
+
+def test_assignment_runs_per_page_group_and_stays_optimal():
+    n = 20
+    scores = [[(5 if i == j else 1) if i // 10 == j // 10 else None for j in range(n)] for i in range(n)]
+    assert _assign_groups(scores) == list(range(n))
+    assert _assign_groups([]) == []
+
+
+def test_score_files_keeps_crlf_in_the_markdown_text(exp, obs, tmp_path):
+    markdown = "# Alpha Heading\r\nbody\r\n"
+    spanned = _with_spans(obs, markdown)
+    (tmp_path / "e.json").write_text(json.dumps(exp), encoding="utf-8")
+    (tmp_path / "o.json").write_text(json.dumps(spanned), encoding="utf-8")
+    (tmp_path / "m.md").write_bytes(markdown.encode("utf-8"))
+    score = score_files(tmp_path / "e.json", tmp_path / "o.json", markdown_path=tmp_path / "m.md")
+    assert score["verdict"] == "passed", _decisive(score)
+
+
+def test_merged_block_attributed_to_the_later_page_still_passes(chain_exp, chain_obs):
+    merged = _merged(chain_obs)
+    block = next(b for b in merged["blocks"] if b["id"] == "pa")
+    block["page"] = 2
+    score = _rescore(chain_exp, merged)
+    assert ("text_presence", "pa") not in _failed(score) and ("text_presence", "pb") not in _failed(score)
+    assert ("reading_order", "pb") not in _failed(score)
+
+
+def test_one_of_two_identical_paragraphs_dropped_is_missing_not_displaced(exp):
+    for name, order in (("d1", 20), ("d2", 21)):
+        exp["blocks"].append(_block(name, "paragraph", 1, order, "Repeated sentence.",
+                                    bbox={"x0": 10, "y0": 600 + 40 * (order - 20), "x1": 500, "y1": 630 + 40 * (order - 20)}))
+    obs = _observation_of(exp)
+    assert _rescore(exp, obs)["verdict"] == "passed"
+    score = _rescore(exp, defects.omit_text(obs, "d2"))
+    assert ("text_presence", "d2") in _failed(score)
+    assert not [c for c in score["checks"] if c["name"] == "reading_order" and not c["passed"]]
+
+
+def test_identical_expected_captions_need_two_observed_captions(exp):
+    exp["blocks"].append(_block("c2", "caption", 1, 20, "Table 1. Synthetic group means.", bbox=dict(BOX)))
+    obs = _observation_of(exp)
+    assert _rescore(exp, obs)["verdict"] == "passed"
+    obs["blocks"] = [b for b in obs["blocks"] if b["id"] != "c2"]
+    assert ("caption_match", "c2") in _decisive(_rescore(exp, obs))

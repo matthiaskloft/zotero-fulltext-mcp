@@ -4,8 +4,10 @@ Benchmark-side only: not shipped, no dependency beyond package A. Every check is
 
 - ``strict``: exact characters. Signs, decimal points, operators, case and page numbers must
   survive, and tables must match cell by cell at the same grid position. Strict *transcription*
-  does treat line wraps and runs of whitespace as equal and ignores block boundaries and Markdown
-  heading markers: those are layout, scored separately (``text_segmentation``).
+  does treat line wraps and runs of whitespace as equal, ignores block boundaries, and strips
+  Markdown markup from the *observed* text only (a heading marker at block start, bullet markers,
+  paired ``**``/``__`` emphasis). Expected text, table cells, LaTeX and raw references are never
+  stripped. Block segmentation is scored separately (``text_segmentation``).
 - ``tolerant``: the same check after NFKC and case folding as well (DOIs also lose their
   ``doi:``/URL prefix; table header flags are ignored). Labelled as such, reported as separate
   metrics, and never able to turn a strict failure into a pass.
@@ -13,11 +15,13 @@ Benchmark-side only: not shipped, no dependency beyond package A. Every check is
 The verdict is tri-state and decided by strict checks alone: ``failed`` when a deciding strict check
 fails; else ``incomplete`` when any expected item or family went unscored (listed in ``not_scored``)
 or no strict check ran; else ``passed``. ``text_span_hash`` (byte-exact hash of a block) and
-``text_segmentation`` (block boundaries) are reported but never decide the verdict.
+``text_segmentation`` (block boundaries) are reported but never decide the verdict, and unscored
+items of those two metrics do not make it incomplete.
 
 Check families: text presence, precision (invented content) and segmentation, reading order,
-tables (cells, exactness, order), equations, captions, and references (segmentation, ordinals,
-field parsing, identifier recovery, scored separately). Library resolution is out of scope.
+tables (cells, exactness, order, extras), equations, captions, figures, and references
+(segmentation, ordinals, field parsing, identifier recovery, scored separately). Library
+resolution and citation-marker links are out of scope (markers are listed as not scored).
 
 Public API: ``score_records``, ``score_files``, ``ScoringError``, ``METRIC_VERSIONS``,
 ``score_to_result``, ``failure_result``.
@@ -27,7 +31,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from collections import defaultdict
+from collections import Counter, defaultdict
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -41,10 +45,11 @@ from .records import (
     verify_output_spans,
 )
 
-SCORER_VERSION = "2"
+SCORER_VERSION = "3"
 _METRICS = (
     "text_presence", "text_precision", "text_segmentation", "text_span_hash", "reading_order",
-    "table_cell_match", "table_exact", "table_order", "equation_match", "caption_match",
+    "table_cell_match", "table_exact", "table_order", "table_precision", "equation_match",
+    "equation_precision", "caption_match", "caption_precision", "figure_match",
     "reference_segmentation_recall", "reference_segmentation_precision", "reference_ordinal",
     "reference_field_accuracy", "reference_doi_recovery", "reference_doi_absent_correct",
     "output_span_roundtrip",
@@ -61,7 +66,11 @@ _TEXT_TYPES = frozenset({"heading", "paragraph", "list_item", "footnote", "other
 # Separators an extractor may legitimately put between the fragments of a merged block.
 _JOINERS = ("", " ", "\n", "\n\n")
 
-_HEADING_MARK = re.compile(r"(?m)^[ \t]{0,3}#{1,6}[ \t]+")
+_HEADING_START = re.compile(r"\A\s*#{1,6}[ \t]+")
+_BULLET = re.compile(r"^[ \t]*[-*+\u2022][ \t]+")
+# Paired strong emphasis only. The markers must not touch a word character on the outside and must
+# hug non-space text on the inside, so ``x**2 + y**2``, ``a ** b`` and ``a * b`` are left alone.
+_STRONG = re.compile(r"(?<![\w*])(\*\*|__)(?=[^\s*_])(.+?)(?<=[^\s*_])\1(?![\w*])", re.S)
 
 Norm = Callable[[str], str]
 Pair = tuple[int, int]
@@ -72,8 +81,8 @@ class ScoringError(ValueError):
 
 
 def _strict(text: str) -> str:
-    """Strict transcription view: exact characters, wraps/whitespace runs equal, no heading markup."""
-    return " ".join(_HEADING_MARK.sub("", text).split())
+    """Strict transcription view: exact characters, runs of whitespace (and line wraps) equal."""
+    return " ".join(text.split())
 
 
 def _loose(text: str) -> str:
@@ -86,7 +95,32 @@ def _loose_doi(text: str) -> str:
     return value.rstrip(".,;")
 
 
+def _strip_markup(text: str) -> str:
+    """Markdown markup an extractor adds to *observed* block text: a heading marker at the start of
+    the block, bullet markers (``-``, ``*``, ``+``, bullet) when the block's first line is a list
+    item, and paired ``**``/``__`` emphasis. Ordered-list numbers are kept (they are printed text,
+    like section numbers), single ``*``/``_`` are kept, and expected text is never passed through
+    here. An expected text that itself starts with ``#`` or a bullet therefore cannot match."""
+    heading = _HEADING_START.sub("", text, count=1)
+    if heading != text:
+        text = heading
+    else:
+        lines = text.split("\n")
+        if _BULLET.match(lines[0]):
+            text = "\n".join(_BULLET.sub("", line, count=1) for line in lines)
+    return _STRONG.sub(r"\2", text)
+
+
 _MODES: tuple[tuple[str, Norm], ...] = (("strict", _strict), ("tolerant", _loose))
+# The same normalizations for observed block text, after markup stripping.
+def _observed(norm: Norm) -> Norm:
+    def view(text: str) -> str:
+        return norm(_strip_markup(text))
+
+    return view
+
+
+_OBS_NORMS: dict[str, Norm] = {mode: _observed(norm) for mode, norm in _MODES}
 
 
 class _Checks:
@@ -187,6 +221,31 @@ def _chain_id(chain: list[dict[str, Any]]) -> str:
     return "+".join(b["id"] for b in chain)
 
 
+def _bounded(hay: str, needle: str, i: int) -> bool:
+    """A match may not start or end inside a word: if the match edge is alphanumeric, the character
+    next to it must not be (so ``5`` is not found in ``51`` and ``cat`` not in ``concat``)."""
+    j = i + len(needle)
+    before = i == 0 or not (needle[0].isalnum() and hay[i - 1].isalnum())
+    after = j >= len(hay) or not (needle[-1].isalnum() and hay[j].isalnum())
+    return before and after
+
+
+def _search(hay: str, needle: str, start: int = 0, end: int | None = None,
+            taken: list[tuple[int, int]] | None = None, pages: Callable[[int, int], bool] | None = None) -> int | None:
+    """First word-bounded occurrence of ``needle`` in ``hay[start:end]`` that overlaps no ``taken``
+    interval (and satisfies ``pages``, if given)."""
+    if not needle:
+        return None
+    limit = len(hay) if end is None else end
+    i = hay.find(needle, start)
+    while i >= 0 and i + len(needle) <= limit:
+        if _bounded(hay, needle, i) and not any(i < b and i + len(needle) > a for a, b in taken or ()):
+            if pages is None or pages(i, i + len(needle)):
+                return i
+        i = hay.find(needle, i + 1)
+    return None
+
+
 class _Stream:
     """The observed text of all pages in reading order under one normalization: blocks are joined
     by a single space, so block boundaries and line wraps do not matter when searching."""
@@ -212,77 +271,84 @@ class _Stream:
                 return page
         return None
 
-    def find(self, text: str, start: int, pages: set[int]) -> int | None:
-        """First occurrence at or after ``start`` lying entirely on ``pages``."""
-        if not text:
-            return None
-        i = self.text.find(text, start)
-        while i >= 0:
-            if {self._page_at(i), self._page_at(i + len(text) - 1)} <= pages:
-                return i
-            i = self.text.find(text, i + 1)
-        return None
+    def find(self, text: str, start: int, pages: set[int], taken: list[tuple[int, int]]) -> int | None:
+        """First unconsumed occurrence at or after ``start`` lying entirely on ``pages``."""
+        return _search(self.text, text, start, None, taken,
+                       lambda a, b: {self._page_at(a), self._page_at(b - 1)} <= pages)
 
-    def find_merged(self, text: str, previous: str, pages: set[int]) -> int | None:
-        """Position of ``text`` inside an observed block (on ``pages``) that also holds the chain's
-        previous fragment: the allowance for a block merged across a page or column break."""
+    def find_merged(self, text: str, neighbour: str, pages: set[int], taken: list[tuple[int, int]]) -> int | None:
+        """Unconsumed occurrence of ``text`` inside an observed block (on ``pages``) that also holds
+        the chain neighbour's text: the allowance for a block merged across a page or column break,
+        wherever the extractor attributed it."""
         for start, end, page, _ in self.spans:
-            block = self.text[start:end]
-            if page in pages and previous in block and text in block:
-                return start + block.index(text)
+            if page in pages and _search(self.text, neighbour, start, end) is not None:
+                found = _search(self.text, text, start, end, taken)
+                if found is not None:
+                    return found
         return None
 
 
 def _fragments(exp: dict[str, Any], out: _Checks) -> list[dict[str, Any]]:
-    """Scorable expected text fragments in reading order, each with its chain predecessor."""
+    """Scorable expected text fragments in reading order, each with its chain neighbours."""
     result = []
     for chain in _chains(exp):
         if chain[0]["type"] not in _TEXT_TYPES:
             continue
-        previous: dict[str, Any] | None = None
+        last: dict[str, Any] | None = None
         for block in chain:
-            if not isinstance(block.get("text"), str) or not block["text"]:
-                previous = None
-                continue
             reason = _skip_reason(block, "block")
-            if reason:
+            if not isinstance(block.get("text"), str) or not block["text"]:
+                out.skip("text_presence", block["id"], reason or "expected block states no text (explicit null); not compared")
+            elif reason:
                 out.skip("text_presence", block["id"], reason)
-                previous = None
+            else:
+                entry = {"block": block, "chain": chain, "previous": last["block"] if last else None, "next": None}
+                if last is not None:
+                    last["next"] = block
+                result.append(entry)
+                last = entry
                 continue
-            result.append({"block": block, "chain": chain, "previous": previous})
-            previous = block
+            last = None
     return sorted(result, key=lambda f: f["block"]["reading_order"])
 
 
-def _place(frag: dict[str, Any], stream: _Stream, norm: Norm, cursor: int) -> tuple[str, int, int | None]:
+def _place(frag: dict[str, Any], stream: _Stream, norm: Norm, cursor: int,
+           taken: list[tuple[int, int]]) -> tuple[str, int, int | None]:
     """Locate one fragment: (status, new cursor, offset). Status is ``ok`` (found, and in order),
     ``displaced`` (found, but only before the previous match) or ``missing``. The fragment must lie
-    on its own page; only a block that merges it with its chain predecessor may sit elsewhere."""
+    on its own page; only a block that merges it with a chain neighbour may sit elsewhere. Each
+    occurrence in the observed text is consumed by one fragment, so a duplicated expected
+    paragraph needs two observed ones."""
     block = frag["block"]
     text, pages = norm(block["text"]), {block["page"]}
-    forward = stream.find(text, cursor, pages)
+    forward = stream.find(text, cursor, pages, taken)
     if forward is not None:
+        taken.append((forward, forward + len(text)))
         return "ok", forward + len(text), forward
-    if frag["previous"] is not None:
-        merged = stream.find_merged(text, norm(frag["previous"]["text"]), _chain_pages(frag["chain"]))
-        if merged is not None:
-            return "ok", cursor, merged
-    anywhere = stream.find(text, 0, pages)
+    for neighbour in (frag["previous"], frag["next"]):
+        if neighbour is not None:
+            merged = stream.find_merged(text, norm(neighbour["text"]), _chain_pages(frag["chain"]), taken)
+            if merged is not None:
+                taken.append((merged, merged + len(text)))
+                return "ok", cursor, merged
+    anywhere = stream.find(text, 0, pages, taken)
     if anywhere is not None:
+        taken.append((anywhere, anywhere + len(text)))
         return "displaced", cursor, anywhere
     return "missing", cursor, None
 
 
 def _check_text(exp: dict[str, Any], obs: dict[str, Any], out: _Checks) -> None:
     observed = _page_blocks(obs)
-    streams = {mode: _Stream(observed, norm) for mode, norm in _MODES}
+    streams = {mode: _Stream(observed, _OBS_NORMS[mode]) for mode, _ in _MODES}
     frags = _fragments(exp, out)
 
     placements: dict[str, dict[str, tuple[str, int | None]]] = {mode: {} for mode, _ in _MODES}
     for mode, norm in _MODES:
         cursor = 0
+        taken: list[tuple[int, int]] = []
         for frag in frags:
-            status, cursor, offset = _place(frag, streams[mode], norm, cursor)
+            status, cursor, offset = _place(frag, streams[mode], norm, cursor, taken)
             placements[mode][frag["block"]["id"]] = (status, offset)
 
     for frag in frags:
@@ -293,7 +359,7 @@ def _check_text(exp: dict[str, Any], obs: dict[str, Any], out: _Checks) -> None:
         if not found["strict"]:
             text = _strict(block["text"])
             elsewhere = sorted(p for p in observed if p != block["page"]
-                               and streams["strict"].find(text, 0, {p}) is not None)
+                               and streams["strict"].find(text, 0, {p}, []) is not None)
             detail = f"found only on page(s) {elsewhere}" if elsewhere else "not found on the expected page"
         out.add("text_presence", bid, _ok(found["strict"]), _ok(found["tolerant"]), detail)
 
@@ -314,7 +380,8 @@ def _check_segmentation(frags: list[dict[str, Any]], observed: dict[int, list[di
             if len(chain) > 1 and all(isinstance(b.get("text"), str) for b in chain):
                 wanted.add(norm(" ".join(b["text"] for b in chain)))
             pages = _chain_pages(chain)
-            results[mode] = _ok(any(isinstance(b.get("text"), str) and norm(b["text"]) in wanted
+            seen = _OBS_NORMS[mode]
+            results[mode] = _ok(any(isinstance(b.get("text"), str) and seen(b["text"]) in wanted
                                     for p in pages for b in observed.get(p, [])))
         out.add("text_segmentation", block["id"], results["strict"], results["tolerant"],
                 "an observed block holds exactly this text (boundaries differ otherwise)")
@@ -365,23 +432,27 @@ def _check_order(frags: list[dict[str, Any]], placements: dict[str, dict[str, tu
 
 
 def _check_precision(exp: dict[str, Any], obs: dict[str, Any], streams: dict[str, _Stream], out: _Checks) -> None:
-    """Invented content: observed body text not accounted for by any expected text. Pages where the
-    expectation has truncated or uncertain text are not assessed (the unmatched text may be real)."""
+    """Invented content: observed text, in every block that has text, that no expected text accounts
+    for. Each expected text (block text and raw reference entries) covers one word-bounded occurrence,
+    so extra copies, joined words and appended digits count as invented. Reviewed expectations must
+    record every printed header, footer and page number on in-scope pages: there is no exemption for
+    them here. Pages where the expectation has truncated or uncertain text are not assessed."""
     scope = set(exp["scope"]["physical_pages"])
     unsure = {b["page"] for b in exp["blocks"] if isinstance(b.get("text"), str) and _skip_reason(b, "block")}
+    texts = [b["text"] for b in exp["blocks"] if isinstance(b.get("text"), str)]
+    texts += [e["raw"] for e in exp.get("references", {}).get("entries", [])]
     covered: dict[str, dict[str, Pair]] = {}
     for mode, norm in _MODES:
         stream = streams[mode]
         mask = bytearray(len(stream.text))
-        for block in exp["blocks"]:
-            if isinstance(block.get("text"), str) and block["text"]:
-                text = norm(block["text"])
-                i = stream.text.find(text)
-                while i >= 0 and text:
-                    mask[i:i + len(text)] = b"\x01" * len(text)
-                    i = stream.text.find(text, i + 1)
+        taken: list[tuple[int, int]] = []
+        for text in sorted((norm(t) for t in texts if t), key=len, reverse=True):
+            i = _search(stream.text, text, 0, None, taken)
+            if i is not None:
+                mask[i:i + len(text)] = b"\x01" * len(text)
+                taken.append((i, i + len(text)))
         for start, end, page, block in stream.spans:
-            if block["type"] not in _TEXT_TYPES or page not in scope:
+            if page not in scope:
                 continue
             letters = [k for k in range(start, end) if stream.text[k] != " "]
             covered.setdefault(block["id"], {})[mode] = (sum(mask[k] for k in letters), len(letters))
@@ -393,6 +464,19 @@ def _check_precision(exp: dict[str, Any], obs: dict[str, Any], streams: dict[str
         if modes["strict"][1]:
             out.add("text_precision", bid, modes["strict"], modes["tolerant"],
                     "observed text with no counterpart in the expected text (invented content)")
+
+
+def _precision(name: str, observed: list[tuple[str, set[int]]], matched: dict[str, set[str]], scope: set[int],
+               unsure: set[int], out: _Checks) -> None:
+    """One check per observed item in scope that no expected item accounts for (extras fail)."""
+    for ident, pages in observed:
+        if not pages & scope:
+            continue
+        if pages & unsure:
+            out.skip(name, ident, "page has an unscored expected item of this kind; not assessed")
+            continue
+        out.add(name, ident, _ok(ident in matched["strict"]), _ok(ident in matched["tolerant"]),
+                "observed item with no counterpart in the expectation")
 
 
 # --- tables, equations, captions ----------------------------------------------------------------
@@ -483,33 +567,70 @@ def _assign(scores: list[list[int | None]]) -> list[int | None]:
     return list(best(0, 0)[1])
 
 
+def _assign_groups(scores: list[list[int | None]]) -> list[int | None]:
+    """``_assign`` run separately on each group of expected tables and candidates linked by a
+    shared page, so the exhaustive solver only ever sees a handful of candidates."""
+    n, m = len(scores), len(scores[0]) if scores else 0
+    parent = list(range(n + m))
+
+    def root(x: int) -> int:
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    for i, row in enumerate(scores):
+        for j, value in enumerate(row):
+            if value is not None:
+                parent[root(i)] = root(n + j)
+    groups: dict[int, tuple[list[int], list[int]]] = defaultdict(lambda: ([], []))
+    for i in range(n):
+        groups[root(i)][0].append(i)
+    for j in range(m):
+        groups[root(n + j)][1].append(j)
+    result: list[int | None] = [None] * n
+    for rows, cols in groups.values():
+        if rows and cols:
+            for i, pick in zip(rows, _assign([[scores[i][j] for j in cols] for i in rows]), strict=True):
+                result[i] = None if pick is None else cols[pick]
+    return result
+
+
 def _check_tables(exp: dict[str, Any], obs: dict[str, Any], out: _Checks) -> dict[str, dict[str, str]]:
     """Score tables; return, per mode, the observed table chain id matched to each expected one."""
     candidates = _table_chains(obs)
+    scope = set(exp["scope"]["physical_pages"])
     wanted = []
+    unsure: set[int] = set()
     for ident, chain, pages, table in _table_chains(exp):
         reasons = [r for r in (_skip_reason(b, "table") for b in chain) if r]
         if reasons:
             out.skip("table_cell_match", ident, reasons[0])
+            unsure |= pages
         else:
             wanted.append((ident, chain, pages, table))
     matched_ids: dict[str, dict[str, str]] = {"strict": {}, "tolerant": {}}
     results: dict[str, dict[str, tuple[int, bool, str]]] = {"strict": {}, "tolerant": {}}
     for mode, norm in _MODES:
         headers = mode == "strict"
-        scores = [[_table_match(table, c[3], norm, headers) if c[2] & pages else None for c in candidates]
+
+        def rank(table: dict[str, Any], got: dict[str, Any]) -> int:
+            """Cell matches first, an identical grid as the tie-break."""
+            same = (got["n_rows"], got["n_cols"], len(got["cells"])) == (
+                table["n_rows"], table["n_cols"], len(table["cells"]))
+            return 2 * _table_match(table, got, norm, headers) + int(same)
+
+        scores = [[rank(table, c[3]) if c[2] & pages else None for c in candidates]
                   for _, _, pages, table in wanted]
-        for i, ((ident, _, _, table), pick) in enumerate(zip(wanted, _assign(scores), strict=True)):
+        for i, ((ident, _, _, table), pick) in enumerate(zip(wanted, _assign_groups(scores), strict=True)):
             if pick is None:
                 results[mode][ident] = (0, False, "no unclaimed observed table on the page(s)")
                 continue
             cand = candidates[pick]
             matched_ids[mode][ident] = cand[0]
-            got = cand[3]
-            same_grid = (got["n_rows"], got["n_cols"], len(got["cells"])) == (
-                table["n_rows"], table["n_cols"], len(table["cells"]))
-            score = scores[i][pick] or 0
-            results[mode][ident] = (score, score == len(table["cells"]) and same_grid,
+            value = scores[i][pick] or 0
+            cells = value // 2
+            results[mode][ident] = (cells, cells == len(table["cells"]) and bool(value % 2),
                                     f"matched observed table {cand[0]!r}")
     for ident, _, _, table in wanted:
         total = len(table["cells"])
@@ -517,6 +638,8 @@ def _check_tables(exp: dict[str, Any], obs: dict[str, Any], out: _Checks) -> dic
         out.add("table_cell_match", ident, (s[0], total), (t[0], total), s[2])
         out.add("table_exact", ident, _ok(s[1]), _ok(t[1]), "grid and every cell identical")
     _check_table_order(wanted, candidates, matched_ids, out)
+    _precision("table_precision", [(c[0], c[2]) for c in candidates],
+               {m: set(matched_ids[m].values()) for m in matched_ids}, scope, unsure, out)
     return matched_ids
 
 
@@ -538,6 +661,7 @@ def _norm_latex(mode: str, latex: str) -> str:
 def _check_equations(exp: dict[str, Any], obs: dict[str, Any], out: _Checks) -> None:
     observed = _page_blocks(obs)
     used: dict[str, set[str]] = {"strict": set(), "tolerant": set()}
+    unsure: set[int] = set()
     for block in sorted(exp["blocks"], key=lambda b: b["reading_order"]):
         want = block.get("equation")
         if want is None:
@@ -545,9 +669,11 @@ def _check_equations(exp: dict[str, Any], obs: dict[str, Any], out: _Checks) -> 
         reason = _skip_reason(block, "equation")
         if reason:
             out.skip("equation_match", block["id"], reason)
+            unsure.add(block["page"])
             continue
         if want.get("latex") is None and want.get("number") is None:
             out.skip("equation_match", block["id"], "expectation records neither LaTeX nor a number")
+            unsure.add(block["page"])
             continue
         results = {}
         for mode, _ in _MODES:
@@ -569,6 +695,9 @@ def _check_equations(exp: dict[str, Any], obs: dict[str, Any], out: _Checks) -> 
             results[mode] = _ok(hit)
         out.add("equation_match", block["id"], results["strict"], results["tolerant"],
                 "LaTeX, printed number and display flag must agree (each observed equation used once)")
+    _precision("equation_precision",
+               [(b["id"], {b["page"]}) for b in obs["blocks"] if b.get("equation") is not None],
+               used, set(exp["scope"]["physical_pages"]), unsure, out)
 
 
 def _chain_index(chains: list[list[dict[str, Any]]], block_id: str) -> list[dict[str, Any]]:
@@ -601,6 +730,8 @@ def _check_captions(exp: dict[str, Any], obs: dict[str, Any], out: _Checks,
     exp_by_id = {b["id"]: b for b in exp["blocks"]}
     obs_by_id = {b["id"]: b for b in obs["blocks"]}
     continued = {b["continues_from"] for b in exp["blocks"] if "continues_from" in b}
+    used: dict[str, set[str]] = {"strict": set(), "tolerant": set()}
+    unsure: set[int] = set()
     for block in sorted(exp["blocks"], key=lambda b: b["reading_order"]):
         if block["type"] != "caption":
             continue
@@ -608,9 +739,11 @@ def _check_captions(exp: dict[str, Any], obs: dict[str, Any], out: _Checks,
             None if isinstance(block.get("text"), str) else "caption has no text")
         if reason:
             out.skip("caption_match", block["id"], reason)
+            unsure.add(block["page"])
             continue
         if "continues_from" in block or block["id"] in continued:
             out.skip("caption_match", block["id"], "caption itself spans pages; not compared")
+            unsure.add(block["page"])
             continue
         target = exp_by_id.get(block.get("caption_for", ""))
         results = {}
@@ -619,7 +752,7 @@ def _check_captions(exp: dict[str, Any], obs: dict[str, Any], out: _Checks,
             for cand in obs["blocks"]:
                 if cand["type"] != "caption" or cand["page"] != block["page"] or not isinstance(cand.get("text"), str):
                     continue
-                if norm(cand["text"]) != norm(block["text"]):
+                if cand["id"] in used[mode] or _OBS_NORMS[mode](cand["text"]) != norm(block["text"]):
                     continue
                 if target is not None:
                     linked = obs_by_id.get(cand.get("caption_for", ""))
@@ -627,11 +760,33 @@ def _check_captions(exp: dict[str, Any], obs: dict[str, Any], out: _Checks,
                             _chain_index(exp_chains, target["id"]), _chain_index(obs_chains, linked["id"]),
                             mode, exp_chains, obs_chains, table_match):
                         continue
+                used[mode].add(cand["id"])
                 hit = True
                 break
             results[mode] = _ok(hit)
         out.add("caption_match", block["id"], results["strict"], results["tolerant"],
                 "caption text exact, on the same page, and linked to the corresponding table/figure")
+    _precision("caption_precision", [(b["id"], {b["page"]}) for b in obs["blocks"] if b["type"] == "caption"],
+               used, set(exp["scope"]["physical_pages"]), unsure, out)
+
+
+def _check_figures(exp: dict[str, Any], obs: dict[str, Any], out: _Checks) -> None:
+    """Presence only: each expected figure needs an observed figure block on its page (each used
+    once). Content, placement and graphic kind are not compared."""
+    taken: set[str] = set()
+    for block in sorted(exp["blocks"], key=lambda b: b["reading_order"]):
+        if block["type"] != "figure":
+            continue
+        reason = _skip_reason(block, "figure")
+        if reason:
+            out.skip("figure_match", block["id"], reason)
+            continue
+        cand = next((b for b in obs["blocks"] if b["type"] == "figure" and b["page"] == block["page"]
+                     and b["id"] not in taken), None)
+        if cand is not None:
+            taken.add(cand["id"])
+        out.add("figure_match", block["id"], _ok(cand is not None), _ok(cand is not None),
+                "an observed figure block on the same page (presence only)")
 
 
 # --- references ---------------------------------------------------------------------------------
@@ -683,49 +838,70 @@ def _check_references(exp: dict[str, Any], obs: dict[str, Any], out: _Checks) ->
     if "references" not in exp:
         return
     scope = set(exp["scope"]["physical_pages"])
+    if exp["references"]["markers"]:
+        out.skip("reference_markers", "<all>", "citation-marker links are not scored")
     # A missing observed section is an empty list: the expected entries were not recovered.
     observed_entries = obs.get("references", {}).get("entries", [])
     obs_entries = [e for e in observed_entries if e.get("page") is None or e["page"] in scope]
     expected = sorted(exp["references"]["entries"], key=lambda e: e["ordinal"])
     skipped = {}
+    skipped_pages: set[int] = set()
     for entry in expected:
         reason = _skip_reason(entry, "entry")
         if reason:
             skipped[entry["id"]] = reason
+            skipped_pages |= set(range(entry["page"], entry.get("end_page", entry["page"]) + 1))
             out.skip("reference_segmentation_recall", entry["id"], reason)
     scored = [e for e in expected if e["id"] not in skipped]
     # Align against every expected entry, skipped ones too, so a correct observed entry whose
     # expected twin is unscored is neither a hit nor an "extra" that lowers precision.
     aligned = {m: _align(expected, obs_entries, n, m == "tolerant") for m, n in _MODES}
 
+    pairs: dict[str, list[tuple[dict[str, Any], dict[str, Any]]]] = {m: [] for m, _ in _MODES}
     for entry in scored:
-        s, t = (aligned[m].get(entry["id"]) is not None for m in ("strict", "tolerant"))
-        out.add("reference_segmentation_recall", entry["id"], _ok(s), _ok(t), "raw text and start/end page identical")
+        s_hit, t_hit = (aligned[m].get(entry["id"]) is not None for m in ("strict", "tolerant"))
+        out.add("reference_segmentation_recall", entry["id"], _ok(s_hit), _ok(t_hit),
+                "raw text and start/end page identical")
         for m, _ in _MODES:
-            got_entry = aligned[m].get(entry["id"])
-            if got_entry is not None:
-                out.add_mode("reference_ordinal", m, entry["id"], _ok(got_entry["ordinal"] == entry["ordinal"]),
-                             "printed list position")
+            if aligned[m].get(entry["id"]) is not None:
+                pairs[m].append((entry, aligned[m][entry["id"]]))
+    # The ordinal is the printed list position. A complete-document record must reproduce it; a
+    # page-scoped one may number from a different start, so it needs one constant offset.
+    for m, _ in _MODES:
+        offsets = [got["ordinal"] - entry["ordinal"] for entry, got in pairs[m]]
+        base = Counter(offsets).most_common(1)[0][0] if offsets and exp["scope"]["kind"] == "pages" else 0
+        for (entry, got), offset in zip(pairs[m], offsets, strict=True):
+            out.add_mode("reference_ordinal", m, entry["id"], _ok(offset == base),
+                         f"printed list position (offset {offset}, expected {base})")
     totals, hits_ = {}, {}
     for m, _ in _MODES:
+        matched_obs = {id(e) for e in aligned[m].values()}
         to_skipped = sum(1 for e_id in skipped if e_id in aligned[m])
-        totals[m] = len(obs_entries) - to_skipped
+        # An observed entry matching nothing, on a page where an expected entry is unscored, may
+        # be that very entry with different text: it leaves the denominator and is listed.
+        excluded = [e for e in obs_entries if id(e) not in matched_obs and e.get("page") in skipped_pages]
+        if m == "strict":
+            for e in excluded:
+                out.skip("reference_segmentation_precision", e["id"],
+                         "observed entry on a page with an unscored expected entry; not counted as extra")
+        totals[m] = len(obs_entries) - to_skipped - len(excluded)
         hits_[m] = sum(1 for e in scored if e["id"] in aligned[m])
     if totals["strict"] > 0:
         out.add("reference_segmentation_precision", "<all>", (hits_["strict"], totals["strict"]),
                 (hits_["tolerant"], totals["tolerant"]),
-                "observed entries that align with an expected entry (those matching an unscored expected entry excluded)")
+                "observed entries that align with an expected entry (matches of unscored expected entries "
+                "and unmatched entries on their pages excluded)")
 
     # Parsing and identifier checks cover an entry only in the modes where it was segmented. Every
     # other (entry, mode) is listed in not_scored, so these metrics never silently describe survivors.
     for entry in scored:
         if entry.get("fields"):
             for mode, norm in _MODES:
-                got = aligned[mode].get(entry["id"])
-                if got is None:
+                seg = aligned[mode].get(entry["id"])
+                if seg is None:
                     out.skip("reference_field_accuracy", entry["id"], f"{mode} mode: entry not segmented; fields not scored")
                     continue
-                hits = _field_hits(entry["fields"], got.get("fields", {}), norm)
+                hits = _field_hits(entry["fields"], seg.get("fields", {}), norm)
                 if hits:
                     bad = sorted(k for k, ok in hits.items() if not ok)
                     out.add_mode("reference_field_accuracy", mode, entry["id"], (sum(hits.values()), len(hits)),
@@ -735,11 +911,11 @@ def _check_references(exp: dict[str, Any], obs: dict[str, Any], out: _Checks) ->
             continue
         metric = "reference_doi_recovery" if status == "present" else "reference_doi_absent_correct"
         for mode, _ in _MODES:
-            got = aligned[mode].get(entry["id"])
-            if got is None:
+            seg = aligned[mode].get(entry["id"])
+            if seg is None:
                 out.skip(metric, entry["id"], f"{mode} mode: entry not segmented; identifier not scored")
                 continue
-            doi = got["doi"]
+            doi = seg["doi"]
             if status == "present":
                 canon = _loose_doi if mode == "tolerant" else str
                 ok = doi["status"] == "present" and canon(doi["value"]) == canon(entry["doi"]["value"])
@@ -762,12 +938,17 @@ def _check_spans(obs: dict[str, Any], markdown: str | None, out: _Checks) -> Non
     out.add("output_span_roundtrip", "<all>", _ok(not findings), _ok(not findings), "; ".join(findings), strict_only=True)
 
 
+def _unscored(out: _Checks) -> list[dict[str, str]]:
+    """Unscored items that bear on the verdict: those of informational metrics do not."""
+    return [n for n in out.not_scored if n["metric"] not in _INFORMATIONAL]
+
+
 def _verdict(out: _Checks) -> tuple[str, int, int]:
     deciding = [c for c in out.checks if c["decides"]]
     failures = sum(1 for c in deciding if not c["passed"])
     if failures:
         return "failed", failures, len(deciding)
-    if not deciding or out.not_scored:
+    if not deciding or _unscored(out):
         return "incomplete", 0, len(deciding)
     return "passed", 0, len(deciding)
 
@@ -780,6 +961,7 @@ def _score_validated(exp: dict[str, Any], obs: dict[str, Any], markdown: str | N
     table_match = _check_tables(exp, obs, out)
     _check_equations(exp, obs, out)
     _check_captions(exp, obs, out, table_match)
+    _check_figures(exp, obs, out)
     _check_references(exp, obs, out)
     _check_spans(obs, markdown, out)
     out.mark_tolerant_only()
@@ -794,7 +976,7 @@ def _score_validated(exp: dict[str, Any], obs: dict[str, Any], markdown: str | N
         "strict_failures": failures,
         "strict_checks": n_deciding,
         "tolerant_only_matches": sum(1 for c in out.checks if c.get("tolerant_only")),
-        "unscored_items": len(out.not_scored),
+        "unscored_items": len(_unscored(out)),
         "checks": out.checks,
         "metrics": out.metrics(),
         "not_scored": out.not_scored,
@@ -831,7 +1013,8 @@ def score_files(expectation_path: str | Path, observation_path: str | Path, *,
         obs = load_record(observation_path, kind="observation")
     except RecordError as err:
         raise ScoringError(f"invalid record: {err}") from err
-    markdown = Path(markdown_path).read_text(encoding="utf-8") if markdown_path is not None else None
+    # read_bytes keeps CRLF: the text is compared (and hashed) exactly as the extractor wrote it.
+    markdown = Path(markdown_path).read_bytes().decode("utf-8") if markdown_path is not None else None
     return _score_validated(exp, obs, markdown)
 
 
