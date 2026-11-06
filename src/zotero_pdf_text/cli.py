@@ -234,6 +234,18 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"Number of parallel Markdown conversion workers. Default: max(1, CPU cores - 4), currently {default_worker_count()}.",
     )
     sample.add_argument("--timeout-seconds", type=int, default=600, help="Per-PDF extraction timeout in seconds.")
+    reconvert = subparsers.add_parser("reconvert-library", help="Run a resumable, isolated full reconversion job.")
+    reconvert.add_argument("--config", type=Path, default=resolve_config_path())
+    reconvert.add_argument("--mapping-report", type=Path, help="Verified mapping CSV from dry-run; required for a new job.")
+    reconvert.add_argument("--run-dir", type=Path, help="Run directory beneath output_root/runs; required for resume/publication retry.")
+    reconvert.add_argument("--background", action="store_true", help="Detach the worker and append output to progress.log.")
+    reconvert.add_argument("--resume", action="store_true", help="Resume an existing job using its saved request and checkpoints.")
+    reconvert.add_argument("--publish", action="store_true", help="Publish a successor index after conversion, retaining existing records on failure.")
+    reconvert.add_argument("--publish-only", action="store_true", help="Retry publication from a completed manifest without conversion.")
+    reconvert.add_argument("--workers", type=int, default=None)
+    reconvert.add_argument("--timeout-seconds", type=int, default=600)
+    status = subparsers.add_parser("reconversion-status", help="Read job status and recorded conversion outcomes as JSON.")
+    status.add_argument("--run-dir", type=Path, required=True)
     verified = subparsers.add_parser("convert-verified", help="Convert mapped_verified PDFs to Markdown.")
     verified.add_argument("--config", type=Path, default=resolve_config_path(), help="Path to project config JSON. Default: resolved for this machine.")
     verified.add_argument("--mapping-report", type=Path, required=True, help="Path to mapping_report.csv from a dry-run.")
@@ -1139,6 +1151,21 @@ def main(argv: list[str] | None = None) -> int:
             print(str(exc), file=sys.stderr)
             return 2
         print(f"Sample conversion complete: {run_dir}")
+        return 0
+    if args.command in {"reconvert-library", "reconversion-status"}:
+        from .reconversion import read_status, start_job
+
+        try:
+            if args.command == "reconversion-status":
+                print(json.dumps(read_status(args.run_dir), indent=2))
+            else:
+                if (args.resume or args.publish_only) and args.run_dir is None:
+                    raise ValueError("--run-dir is required for --resume or --publish-only")
+                run = start_job(args)
+                print(json.dumps({"run_id": run.name, "run_dir": str(run), "background": args.background}, indent=2))
+        except (OSError, ValueError, KeyError, RuntimeError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
         return 0
     if args.command == "convert-verified":
         config = load_config(args.config)
