@@ -51,10 +51,13 @@ WHOLE_PAPER_PAGES = (8, 30)  # annotating a whole paper is costly: keep them sho
 SCAN_STYLES = frozenset({"scanned pages", "noisy existing OCR", "no text layer"})
 ASSUMED_FIELDS: dict[str, tuple[str, ...]] = {
     "two-column": ("physics", "chemistry", "materials-engineering", "computer-science"),
+    # Any journal paper may hold tables; the detector-independent caption check decides.
     "tables": ("clinical-medicine", "ecology-biology", "psychology", "economics", "education",
-               "sociology-politics", "psychometrics", "statistics"),
+               "sociology-politics", "psychometrics", "statistics", "physics", "chemistry",
+               "materials-engineering", "computer-science", "law", "humanities-linguistics"),
     "equations": ("physics", "statistics", "psychometrics", "computer-science",
-                  "materials-engineering", "economics"),
+                  "materials-engineering", "economics", "chemistry", "ecology-biology",
+                  "psychology", "sociology-politics", "education"),
     "references": ("clinical-medicine", "physics", "chemistry", "ecology-biology", "statistics",
                    "psychometrics", "computer-science", "economics", "materials-engineering",
                    "psychology", "education", "sociology-politics", "law", "humanities-linguistics"),
@@ -62,7 +65,7 @@ ASSUMED_FIELDS: dict[str, tuple[str, ...]] = {
 ASSUMED_MIN_PAGES = {"references": 8}
 # `styles` entries that verify a stratum at document level (gaussian-coresets: equations; data-sharing: tables, two columns).
 STYLE_STRATA = {"two columns": "two-column", "tables": "tables", "equations": "equations", "references": "references"}
-PAGE_CHECK_VERSION = 2
+PAGE_CHECK_VERSION = 3
 
 # Placeholder wording written into drafts; a reviewed record must not still carry it.
 DRAFT_NOTE = "draft proposal; becomes ground truth only through human review (docs/extraction-pilot-review.md)"
@@ -86,15 +89,25 @@ ASSUMPTIONS = [
 ]
 
 # --- licence gate ----------------------------------------------------------------------------
-# Case-insensitive allowlist of exact forms (as recorded in sources.json). Anything else, however
-# close, is excluded and goes to maintainer review: "CC BY 4.0, copyright Elsevier" or "CC BY-nd"
-# must never slip through a prefix match.
-_BASE = (r"(?:CC[ -]BY(?:[ -]\d\.\d)?|Creative Commons Attribution(?: \d\.\d)?|CC0(?: 1\.0)?"
+# Exact allowlist, case-insensitive, for the licence form AND its parenthetical note (the notes
+# below are the ones present in sources.json). Anything else, however close, is excluded and goes
+# to maintainer review: "CC BY 4.0, copyright Elsevier" or "CC BY 4.0 (except third-party
+# material)" must never slip through a prefix match. Extending the allowlist is a reviewed change.
+_VERSION = r"(?:1\.0|2\.0|2\.5|3\.0|4\.0)"
+_BASE = (rf"(?:CC[ -]BY(?:[ -]{_VERSION})?|Creative Commons Attribution(?: {_VERSION})?|CC0(?: 1\.0)?"
          r"|Public domain(?: in the United States)?)")
+_NOTES = (
+    r"notice in PDF",
+    r"version not stated(?: in inspected notice)?(?:; notice in PDF)?",
+    rf"article page; the PDF notice says CC BY {_VERSION}",
+    rf"article licence line; the journal policy text cites CC BY {_VERSION}",
+    r"US federal publication, \d{4}",
+)
 _LICENCE_FORM = re.compile(
     _BASE + r"(?: \(([^()]*)\))?(?:; (?:see rights source for jurisdiction details|NTRS: public use permitted))?",
     re.IGNORECASE,
 )
+_NOTE_FORM = re.compile("|".join(f"(?:{n})" for n in _NOTES), re.IGNORECASE)
 _NOTE_REJECT = re.compile(
     r"(?<![A-Za-z])(?:NC|ND|SA)(?![A-Za-z])|non[ -]?commercial|no[ -]?deriv|share[ -]?alike|all rights reserved|publisher",
     re.IGNORECASE,
@@ -102,21 +115,21 @@ _NOTE_REJECT = re.compile(
 
 
 def license_gate(license_text: Any) -> tuple[bool, str]:
-    """Corpus rule: CC BY (any version), CC0, public domain pass; NC/ND/SA/publisher/unverifiable fail.
-
-    Only exact allowlisted forms pass (case-insensitive, optional parenthetical note). A note that
-    mentions NC/ND/SA/publisher terms (for example a described dataset) is rejected as ambiguous.
-    """
+    """Corpus rule: CC BY (any version), CC0, public domain pass; NC/ND/SA/publisher/unverifiable fail."""
     if not isinstance(license_text, str) or not license_text.strip():
         return False, "no licence recorded (unverifiable)"
     text = " ".join(license_text.split())
     match = _LICENCE_FORM.fullmatch(text)
     if match is None:
         return False, "licence form is not on the allowlist (unverifiable); maintainer review required"
-    note = match.group(1) or ""
+    note = match.group(1)
+    if note is None:
+        return True, "ok"
     hit = _NOTE_REJECT.search(note)
     if hit:
         return False, f"licence note mentions {hit.group(0)!r}; NC/ND/SA/publisher terms are rejected (needs maintainer confirmation)"
+    if not _NOTE_FORM.fullmatch(note):
+        return False, "licence note is not on the allowlist (unverifiable); maintainer review required"
     return True, "ok"
 
 
@@ -190,8 +203,12 @@ def _doc(entry: dict[str, Any], role: str, stratum: str | None, basis: str | Non
 class PageChecks:
     """Page-level checks the manifest builder needs; the real one reads cached PDFs (drafts.py)."""
 
-    def pages(self, entry: dict[str, Any], stratum: str, wanted: int) -> tuple[list[int], int]:
-        """Up to ``wanted`` candidate pages for ``stratum`` and the number of supported pages."""
+    def pages(self, entry: dict[str, Any], stratum: str, wanted: int, prefer: str | None = None) -> tuple[list[int], int, dict[int, str]]:
+        """Up to ``wanted`` candidate pages, the number of supported pages and a geometry attribute per page.
+
+        For tables the attribute is ``ruled`` or ``unruled`` and ``prefer`` orders pages with that
+        attribute first; other strata report no attributes.
+        """
         raise NotImplementedError
 
     def reference_list_found(self, entry: dict[str, Any]) -> bool:
@@ -203,31 +220,25 @@ class ReplayMiss(LookupError):
 
 
 class ReplayChecks(PageChecks):
-    """Replays the page-check results recorded in a committed manifest, so it can be regenerated without PDFs."""
+    """Replays the page-check calls logged in a committed manifest, so it can be regenerated without PDFs."""
 
     def __init__(self, manifest: dict[str, Any]):
-        self.pages_by_key: dict[tuple[str, str], tuple[list[int], int]] = {}
+        self.queues: dict[tuple[str, str], list[dict[str, Any]]] = {}
         self.whole: dict[str, bool] = {}
-        for name in ("pilot", "held_out"):
-            for doc in manifest[name]:
-                if doc["role"] == "stratum_pages":
-                    # Held-out documents record only a count; a placeholder page stands in for "supported".
-                    pages = list(doc.get("candidate_pages") or ([0] if doc["supported_pages"] else []))
-                    self.pages_by_key[(doc["id"], doc["stratum"])] = (pages, doc["supported_pages"])
-                else:
-                    self.whole[doc["id"]] = True
-        for item in manifest.get("page_check_rejected", []):
-            if item["stratum"] == "whole_paper":
-                self.whole[item["id"]] = False
+        for entry in manifest.get("page_check_log", []):
+            if entry["stratum"] == "whole_paper":
+                self.whole[entry["id"]] = entry["reference_list_found"]
             else:
-                self.pages_by_key[(item["id"], item["stratum"])] = ([], 0)
+                self.queues.setdefault((entry["id"], entry["stratum"]), []).append(entry)
 
-    def pages(self, entry: dict[str, Any], stratum: str, wanted: int) -> tuple[list[int], int]:
-        try:
-            pages, supported = self.pages_by_key[(entry["id"], stratum)]
-        except KeyError:
-            raise ReplayMiss(f"{entry['id']!r} / {stratum!r} has no recorded page check") from None
-        return pages[:wanted], supported
+    def pages(self, entry: dict[str, Any], stratum: str, wanted: int, prefer: str | None = None) -> tuple[list[int], int, dict[int, str]]:
+        queue = self.queues.get((entry["id"], stratum))
+        if not queue:
+            raise ReplayMiss(f"{entry['id']!r} / {stratum!r} has no (further) recorded page check")
+        logged = queue.pop(0)
+        if logged["wanted"] != wanted:
+            raise ReplayMiss(f"{entry['id']!r} / {stratum!r} was checked for {logged['wanted']} page(s), selection now asks for {wanted}")
+        return list(logged["candidate_pages"]), logged["supported_pages"], {int(k): v for k, v in logged["page_geometry"].items()}
 
     def reference_list_found(self, entry: dict[str, Any]) -> bool:
         try:
@@ -266,6 +277,7 @@ def build_manifest(sources: list[dict[str, Any]], seed: str = DEFAULT_SEED, chec
     picked: dict[str, dict[str, list[dict[str, Any]]]] = {"pilot": {}, "held_out": {}}
     unfilled: list[dict[str, Any]] = []
     rejected: list[dict[str, str]] = []
+    check_log: list[dict[str, Any]] = []
 
     def take(subset: str, entry: dict[str, Any]) -> None:
         used_keys.update(identity_keys(entry))
@@ -282,12 +294,17 @@ def build_manifest(sources: list[dict[str, Any]], seed: str = DEFAULT_SEED, chec
         cap = -(-PILOT_QUOTAS[stratum]["pages"] // PILOT_QUOTAS[stratum]["documents"])
         chosen: list[dict[str, Any]] = []
         skipped: set[str] = set()
+        parked: dict[str, tuple[list[int], int, dict[int, str]]] = {}  # tables: lack the table geometry still needed
+        balance = {"ruled": 0, "unruled": 0}
         # Pilot: keep taking documents until the stratum's pages are covered (with page checks a
         # document may support fewer pages than its share); without checks stop at the document quota.
         while (remaining > 0 and (checks is not None or len(chosen) < wanted_docs)) if pilot_set else len(chosen) < wanted_docs:
-            pool = [i for i, c in candidates.items() if stratum in c and i not in skipped and free(i)]
+            pool = [i for i, c in candidates.items() if stratum in c and i not in skipped and i not in parked and free(i)]
+            from_parked = False
             if not pool:
-                break
+                if not parked:
+                    break
+                pool, from_parked = sorted(parked), True
 
             def rank(i: str) -> tuple[int, int, str]:
                 entry = by_id[i]
@@ -300,16 +317,31 @@ def build_manifest(sources: list[dict[str, Any]], seed: str = DEFAULT_SEED, chec
             share = min(cap, remaining) if pilot_set else 1
             extra: dict[str, Any] = {}
             if checks is not None:
-                pages, supported = checks.pages(by_id[best], stratum, share)
-                if not pages:
-                    rejected.append({"set": subset, "stratum": stratum, "id": best, "reason": "page check supports no page for this stratum"})
-                    skipped.add(best)
-                    continue
+                prefer = "unruled" if balance["ruled"] > balance["unruled"] else "ruled"
+                if from_parked:
+                    pages, supported, geometry = parked.pop(best)
+                    pages = pages[:share]
+                    geometry = {n: geometry[n] for n in pages if n in geometry}
+                else:
+                    pages, supported, geometry = checks.pages(by_id[best], stratum, share, prefer)
+                    check_log.append({
+                        "stratum": stratum, "id": best, "wanted": share, "candidate_pages": pages,
+                        "supported_pages": supported, "page_geometry": {str(n): k for n, k in geometry.items()},
+                    })
+                    if not pages:
+                        rejected.append({"set": subset, "stratum": stratum, "id": best, "reason": "page check supports no page for this stratum"})
+                        skipped.add(best)
+                        continue
+                    if stratum == "tables" and chosen and not balance[prefer] and prefer not in geometry.values():
+                        parked[best] = (pages, supported, geometry)  # take it only if no document with the missing kind turns up
+                        continue
                 if pilot_set:
                     share = len(pages)
-                    extra = {"candidate_pages": pages, "supported_pages": supported}
-                else:
-                    extra = {"supported_pages": supported}
+                extra = {"candidate_pages": pages, "supported_pages": supported}
+                if geometry:
+                    extra["page_geometry"] = {str(n): geometry[n] for n in pages}
+                    for kind in geometry.values():
+                        balance[kind] += 1
             take(subset, by_id[best])
             if pilot_set:
                 extra["page_quota"] = share
@@ -342,7 +374,9 @@ def build_manifest(sources: list[dict[str, Any]], seed: str = DEFAULT_SEED, chec
             best = min(pool, key=lambda e: (counts[subset].get(f"field:{e.get('field')}", 0), _rank(seed, subset, "whole", e["id"])))
             extra: dict[str, Any] = {}
             if checks is not None:
-                if not checks.reference_list_found(best):
+                found_refs = checks.reference_list_found(best)
+                check_log.append({"stratum": "whole_paper", "id": best["id"], "reference_list_found": found_refs})
+                if not found_refs:
                     rejected.append({"set": subset, "stratum": "whole_paper", "id": best["id"], "reason": "no reference list found"})
                     skipped.add(best["id"])
                     continue
@@ -365,6 +399,7 @@ def build_manifest(sources: list[dict[str, Any]], seed: str = DEFAULT_SEED, chec
         "seed": seed,
         "selection_inputs_sha256": selection_inputs_sha256(sources),
         "page_check_version": PAGE_CHECK_VERSION if checks is not None else None,
+        "page_check_source_sha256": _check_source_sha256() if checks is not None else None,
         "note": "Document-level selection plus crude page-level checks; no labels. candidate_pages are "
                 "pages that passed a heuristic check and still need a human look, not confirmed layouts. "
                 "The held-out set is fixed now and must not be used for tuning, threshold calibration or "
@@ -376,8 +411,15 @@ def build_manifest(sources: list[dict[str, Any]], seed: str = DEFAULT_SEED, chec
         "held_out": held_docs,
         "excluded": excluded,
         "page_check_rejected": rejected,
+        "page_check_log": check_log,
         "unfilled": unfilled,
     }
+
+
+def _check_source_sha256() -> str:
+    from .page_checks import source_sha256
+
+    return source_sha256()
 
 
 def render_manifest(manifest: dict[str, Any]) -> bytes:
@@ -419,6 +461,11 @@ def validate_manifest(manifest: dict[str, Any], sources: list[dict[str, Any]]) -
                 problems.append(f"{name}: {doc['id']!r} fails the licence gate: {reason}")
             if entry["sha256"] != doc["pdf_sha256"]:
                 problems.append(f"{name}: {doc['id']!r} pdf_sha256 differs from sources.json")
+            pages = doc.get("candidate_pages")
+            if pages is not None and (
+                len(set(pages)) != len(pages) or any(not isinstance(n, int) or not 1 <= n <= entry["pages"] for n in pages)
+            ):
+                problems.append(f"{name}: {doc['id']!r} candidate_pages must be unique pages within 1..{entry['pages']}")
     for key in sorted(set(keys["pilot"]) & set(keys["held_out"])):
         if keys["pilot"][key] != keys["held_out"][key]:
             problems.append(
@@ -449,6 +496,8 @@ def check_manifest(
     problems.extend(validate_manifest(manifest, sources))
     if manifest.get("selection_inputs_sha256") != selection_inputs_sha256(sources):
         problems.append("sources.json selection inputs changed since the manifest was generated; regenerate and review the diff")
+    if manifest.get("page_check_source_sha256") is not None and manifest["page_check_source_sha256"] != _check_source_sha256():
+        problems.append("page-check heuristics (page_checks.py) changed since the manifest was built; rebuild it with --cache and review the diff")
     replay = ReplayChecks(manifest) if manifest.get("page_check_version") is not None else None
     try:
         regenerated = render_manifest(build_manifest(sources, manifest.get("seed", DEFAULT_SEED), replay))
@@ -471,7 +520,8 @@ def summary_lines(manifest: dict[str, Any]) -> list[str]:
                     continue
                 label = f"{d['id']}[{d['basis'] or 'whole'}]"
                 if d.get("candidate_pages"):
-                    label += f" pages {d['candidate_pages']}"
+                    geometry = d.get("page_geometry") or {}
+                    label += " pages " + ",".join(f"{n}{'(' + geometry[str(n)] + ')' if str(n) in geometry else ''}" for n in d["candidate_pages"])
                 elif d.get("page_quota"):
                     label += f" x{d['page_quota']}p"
                 ids.append(label)
@@ -512,7 +562,7 @@ def main(argv: list[str] | None = None) -> int:
 
     sources = load_sources(args.sources)
     if args.cache is not None:
-        from .drafts import CachedPageChecks, PdfProblem
+        from .page_checks import CachedPageChecks, PdfProblem
 
         try:
             manifest = build_manifest(sources, args.seed, CachedPageChecks(args.cache, seed=args.seed))

@@ -2,7 +2,8 @@
   "manifest_version": 1,
   "seed": "e2-pilot-2026-11",
   "selection_inputs_sha256": "8c60ec03a9724c855b2cafca0870f78b9b41dd96409552894e1c7dc6917b84ac",
-  "page_check_version": 2,
+  "page_check_version": 3,
+  "page_check_source_sha256": "816239d42b1871b0603d07a6bfaf5fc4d575f03cf289735ff3f784b86e6d7282",
   "note": "Document-level selection plus crude page-level checks; no labels. candidate_pages are pages that passed a heuristic check and still need a human look, not confirmed layouts. The held-out set is fixed now and must not be used for tuning, threshold calibration or the design of injected defects.",
   "strata": [
     "two-column",
@@ -70,23 +71,31 @@
         5
       ],
       "supported_pages": 3,
+      "page_geometry": {
+        "3": "unruled",
+        "5": "ruled"
+      },
       "page_quota": 2
     },
     {
-      "id": "elife-relion-3",
+      "id": "stam-iron-pnictides",
       "role": "stratum_pages",
       "stratum": "tables",
       "basis": "assumed",
-      "field": "ecology-biology",
+      "field": "materials-engineering",
       "language": "en",
-      "license": "CC BY 4.0",
-      "pdf_pages": 22,
-      "pdf_sha256": "581c153d73db9e0173d9cd6ca93dc539aa46d223b1701fecf342af73b2b28a23",
+      "license": "CC BY 3.0",
+      "pdf_pages": 87,
+      "pdf_sha256": "c7007d53b733728558d9e72ce64b4aab4aa6c1483ca9d72896da80f55ed9d496",
       "candidate_pages": [
-        10,
-        12
+        6,
+        8
       ],
-      "supported_pages": 2,
+      "supported_pages": 16,
+      "page_geometry": {
+        "6": "ruled",
+        "8": "ruled"
+      },
       "page_quota": 2
     },
     {
@@ -100,10 +109,10 @@
       "pdf_pages": 25,
       "pdf_sha256": "f0b882dbb00daf24a4fed8f4d4e21cfa44138404388dfa8a75354c89e3b57717",
       "candidate_pages": [
-        8,
-        15
+        18,
+        20
       ],
-      "supported_pages": 15,
+      "supported_pages": 2,
       "page_quota": 2
     },
     {
@@ -117,10 +126,10 @@
       "pdf_pages": 23,
       "pdf_sha256": "61e261d346501213f1a1f521b5623e2ad84912606381a1ab74f9b6c66bfb8287",
       "candidate_pages": [
-        6,
-        15
+        7,
+        8
       ],
-      "supported_pages": 14,
+      "supported_pages": 4,
       "page_quota": 2
     },
     {
@@ -237,6 +246,18 @@
       "page_quota": 1
     },
     {
+      "id": "natcomm-metascape",
+      "role": "whole_paper",
+      "stratum": null,
+      "basis": null,
+      "field": "ecology-biology",
+      "language": "en",
+      "license": "CC BY 4.0",
+      "pdf_pages": 10,
+      "pdf_sha256": "18a91dd8f78d73c48f53400b76ed7cdc50e4f334007c97d3c8e4bf0be2f7bc12",
+      "reference_list_found": true
+    },
+    {
       "id": "ap-high-q-nanocavity",
       "role": "whole_paper",
       "stratum": null,
@@ -259,18 +280,6 @@
       "pdf_pages": 20,
       "pdf_sha256": "d5052a0f969cd97ba3d520062238278cbb6314c41259cd8ed6d29fb761b58920",
       "reference_list_found": true
-    },
-    {
-      "id": "laws-disability-human-rights",
-      "role": "whole_paper",
-      "stratum": null,
-      "basis": null,
-      "field": "law",
-      "language": "en",
-      "license": "CC BY 4.0",
-      "pdf_pages": 24,
-      "pdf_sha256": "c515b824e59a931178038db3fbc55c2f43edb1d84a5354b445d33a77e0e43680",
-      "reference_list_found": true
     }
   ],
   "held_out": [
@@ -284,6 +293,9 @@
       "license": "CC BY 3.0",
       "pdf_pages": 13,
       "pdf_sha256": "1330c1821104053cd42f27ba2fcbc1065f2e22fde1625e7b68d8b13c8f46a2db",
+      "candidate_pages": [
+        5
+      ],
       "supported_pages": 10
     },
     {
@@ -296,31 +308,46 @@
       "license": "CC BY 4.0",
       "pdf_pages": 36,
       "pdf_sha256": "5c17928080442c6a4a9d3dc3ac52db870c999a59843a6fc72311ef736a6b22ca",
+      "candidate_pages": [
+        18
+      ],
       "supported_pages": 21
     },
     {
-      "id": "pag-policy-portfolios",
+      "id": "bjoc-heterocycle-drugs",
       "role": "stratum_pages",
       "stratum": "tables",
       "basis": "assumed",
-      "field": "sociology-politics",
+      "field": "chemistry",
       "language": "en",
-      "license": "CC BY 4.0 (article page; the PDF notice says CC BY 3.0)",
-      "pdf_pages": 14,
-      "pdf_sha256": "826c9918f0ced5c3a9871173d1e4599f4c1cfe8de6e7028a45fd72bc70208780",
-      "supported_pages": 2
+      "license": "CC BY 2.0",
+      "pdf_pages": 55,
+      "pdf_sha256": "73589abce332f40b4dc454198d645b06116b5d6837012e8b74146d9762148b95",
+      "candidate_pages": [
+        7
+      ],
+      "supported_pages": 6,
+      "page_geometry": {
+        "7": "ruled"
+      }
     },
     {
-      "id": "plosbio-cells-in-body",
+      "id": "ijstem-k12-integration",
       "role": "stratum_pages",
       "stratum": "tables",
       "basis": "assumed",
-      "field": "ecology-biology",
+      "field": "education",
       "language": "en",
       "license": "CC BY 4.0",
-      "pdf_pages": 14,
-      "pdf_sha256": "23a547d8c8c95a665e6d2f8b7bdea4d1b0369b8273db5b13fd2b01a3f2b2f09b",
-      "supported_pages": 3
+      "pdf_pages": 8,
+      "pdf_sha256": "b007b668b99ca780a42dd41107b4ac958a197e72fc6bf25a7d83f45332b52ef1",
+      "candidate_pages": [
+        5
+      ],
+      "supported_pages": 2,
+      "page_geometry": {
+        "5": "unruled"
+      }
     },
     {
       "id": "jss-lme4",
@@ -332,19 +359,25 @@
       "license": "CC BY 3.0",
       "pdf_pages": 48,
       "pdf_sha256": "a9ae8934fbe46ac4c3a6d333a75c2c815f9d2ed7725d7613ddce1d5a5244bbff",
-      "supported_pages": 18
+      "candidate_pages": [
+        17
+      ],
+      "supported_pages": 9
     },
     {
-      "id": "psych-bootstrap-ega",
+      "id": "jair-dp-fy-ml",
       "role": "stratum_pages",
       "stratum": "equations",
       "basis": "assumed",
-      "field": "psychometrics",
+      "field": "computer-science",
       "language": "en",
       "license": "CC BY 4.0",
-      "pdf_pages": 22,
-      "pdf_sha256": "186cb55420ce124a6c4020dece1642c45d9b64534dcd4e5a7f2730262b2db9ff",
-      "supported_pages": 3
+      "pdf_pages": 89,
+      "pdf_sha256": "93a11d38274be47d6e0f95fc8e982264d14e3cf1ed014ecec16c6ed7500ac913",
+      "candidate_pages": [
+        10
+      ],
+      "supported_pages": 2
     },
     {
       "id": "origin-of-species-scan",
@@ -356,6 +389,9 @@
       "license": "Public domain in the United States; see rights source for jurisdiction details",
       "pdf_pages": 532,
       "pdf_sha256": "75cec7723d7d20cf7234b91c40e06f3c82e11db5f59b7eba0ee428a268f94b16",
+      "candidate_pages": [
+        483
+      ],
       "supported_pages": 532
     },
     {
@@ -368,6 +404,9 @@
       "license": "CC BY 4.0",
       "pdf_pages": 22,
       "pdf_sha256": "4860c740d91ca68e88d2cb7cf633ed59fd388af5b2785d4c0aa8a42800733cb6",
+      "candidate_pages": [
+        22
+      ],
       "supported_pages": 21
     },
     {
@@ -380,6 +419,9 @@
       "license": "CC BY 4.0",
       "pdf_pages": 10,
       "pdf_sha256": "53db8dcd09e49ecb19f7d3705f70fcf6ac321079c80447a8d4fcbf027fcdbff6",
+      "candidate_pages": [
+        7
+      ],
       "supported_pages": 10
     },
     {
@@ -392,6 +434,9 @@
       "license": "CC BY 2.0",
       "pdf_pages": 9,
       "pdf_sha256": "f2fb6dc5ac22f4a58e32a6eb47c7fd5c21b14bcf2676a6eccdf2ce9f09886e09",
+      "candidate_pages": [
+        9
+      ],
       "supported_pages": 1
     },
     {
@@ -404,30 +449,33 @@
       "license": "CC BY 4.0",
       "pdf_pages": 23,
       "pdf_sha256": "429b789bbc1bbc4441e43d2efe667581728e6f4071b794daf6f47e32deaedb0d",
+      "candidate_pages": [
+        21
+      ],
       "supported_pages": 2
     },
     {
-      "id": "glossa-phylogenetic-signal",
+      "id": "plosbio-cells-in-body",
       "role": "whole_paper",
       "stratum": null,
       "basis": null,
-      "field": "humanities-linguistics",
+      "field": "ecology-biology",
       "language": "en",
       "license": "CC BY 4.0",
-      "pdf_pages": 25,
-      "pdf_sha256": "7be60bad1c8491fd849db942cb887f62ca8a48afedd00ad30e122008b6f345f3",
+      "pdf_pages": 14,
+      "pdf_sha256": "23a547d8c8c95a665e6d2f8b7bdea4d1b0369b8273db5b13fd2b01a3f2b2f09b",
       "reference_list_found": true
     },
     {
-      "id": "bjoc-friedel-crafts",
+      "id": "bjpols-media-platforming",
       "role": "whole_paper",
       "stratum": null,
       "basis": null,
-      "field": "chemistry",
+      "field": "sociology-politics",
       "language": "en",
-      "license": "CC BY 2.0",
-      "pdf_pages": 24,
-      "pdf_sha256": "9c62d6c21f89a557197a1e57a18d5f2bbe831e32cafc92bf634dba7676f77fae",
+      "license": "CC BY 4.0",
+      "pdf_pages": 25,
+      "pdf_sha256": "2c68666ac2cebdb96bccf9191c28c154b66f1cfffdf302788d4943574294c58f",
       "reference_list_found": true
     }
   ],
@@ -447,92 +495,38 @@
     },
     {
       "set": "pilot",
-      "stratum": "tables",
-      "id": "izajle-parental-income-schooling",
+      "stratum": "equations",
+      "id": "ijstem-integrated-framework",
       "reason": "page check supports no page for this stratum"
     },
     {
       "set": "pilot",
-      "stratum": "tables",
-      "id": "elife-human-cell-atlas",
-      "reason": "page check supports no page for this stratum"
-    },
-    {
-      "set": "pilot",
-      "stratum": "tables",
-      "id": "socsci-no-religious-preference",
+      "stratum": "equations",
+      "id": "pag-policy-portfolios",
       "reason": "page check supports no page for this stratum"
     },
     {
       "set": "held_out",
-      "stratum": "tables",
-      "id": "plosmed-prisma-2009",
-      "reason": "page check supports no page for this stratum"
-    },
-    {
-      "set": "held_out",
-      "stratum": "tables",
+      "stratum": "equations",
       "id": "natcomm-medsam",
       "reason": "page check supports no page for this stratum"
     },
     {
       "set": "held_out",
-      "stratum": "tables",
-      "id": "ijstem-k12-integration",
+      "stratum": "equations",
+      "id": "psych-bootstrap-ega",
       "reason": "page check supports no page for this stratum"
     },
     {
       "set": "held_out",
-      "stratum": "tables",
-      "id": "collabra-sample-size",
-      "reason": "page check supports no page for this stratum"
-    },
-    {
-      "set": "held_out",
-      "stratum": "tables",
-      "id": "fpsyg-hrv-recommendations",
-      "reason": "page check supports no page for this stratum"
-    },
-    {
-      "set": "held_out",
-      "stratum": "tables",
-      "id": "econ-digital-literacy",
-      "reason": "page check supports no page for this stratum"
-    },
-    {
-      "set": "held_out",
-      "stratum": "tables",
-      "id": "collabra-self-control-inhibition",
-      "reason": "page check supports no page for this stratum"
-    },
-    {
-      "set": "held_out",
-      "stratum": "tables",
-      "id": "izajle-parental-income-schooling",
-      "reason": "page check supports no page for this stratum"
-    },
-    {
-      "set": "held_out",
-      "stratum": "tables",
-      "id": "sle-chatgpt-chatbots",
-      "reason": "page check supports no page for this stratum"
-    },
-    {
-      "set": "held_out",
-      "stratum": "tables",
-      "id": "natcomm-metascape",
-      "reason": "page check supports no page for this stratum"
-    },
-    {
-      "set": "held_out",
-      "stratum": "tables",
+      "stratum": "equations",
       "id": "jlmr-onet-content-model",
       "reason": "page check supports no page for this stratum"
     },
     {
       "set": "held_out",
-      "stratum": "tables",
-      "id": "npjdm-clinical-decision-support",
+      "stratum": "equations",
+      "id": "metapsych-prereg-secondary",
       "reason": "page check supports no page for this stratum"
     },
     {
@@ -548,6 +542,12 @@
       "reason": "page check supports no page for this stratum"
     },
     {
+      "set": "held_out",
+      "stratum": "tables",
+      "id": "natcomm-medsam",
+      "reason": "page check supports no page for this stratum"
+    },
+    {
       "set": "pilot",
       "stratum": "whole_paper",
       "id": "glj-border-justice",
@@ -558,6 +558,392 @@
       "stratum": "whole_paper",
       "id": "glj-border-justice",
       "reason": "no reference list found"
+    }
+  ],
+  "page_check_log": [
+    {
+      "stratum": "scans",
+      "id": "naca-lifting-surfaces-scan",
+      "wanted": 2,
+      "candidate_pages": [
+        5,
+        7
+      ],
+      "supported_pages": 10,
+      "page_geometry": {}
+    },
+    {
+      "stratum": "scans",
+      "id": "origin-of-species-scan",
+      "wanted": 1,
+      "candidate_pages": [
+        483
+      ],
+      "supported_pages": 532,
+      "page_geometry": {}
+    },
+    {
+      "stratum": "non-english",
+      "id": "ecoaustral-vegetation-argentina",
+      "wanted": 1,
+      "candidate_pages": [
+        6
+      ],
+      "supported_pages": 23,
+      "page_geometry": {}
+    },
+    {
+      "stratum": "non-english",
+      "id": "fqs-participatory-health-research",
+      "wanted": 1,
+      "candidate_pages": [
+        25
+      ],
+      "supported_pages": 29,
+      "page_geometry": {}
+    },
+    {
+      "stratum": "non-english",
+      "id": "crbiol-penicillium-domestication",
+      "wanted": 1,
+      "candidate_pages": [
+        5
+      ],
+      "supported_pages": 22,
+      "page_geometry": {}
+    },
+    {
+      "stratum": "non-english",
+      "id": "crmeca-damage-mechanics",
+      "wanted": 1,
+      "candidate_pages": [
+        22
+      ],
+      "supported_pages": 21,
+      "page_geometry": {}
+    },
+    {
+      "stratum": "non-english",
+      "id": "csp-covid-stress-spain",
+      "wanted": 1,
+      "candidate_pages": [
+        7
+      ],
+      "supported_pages": 10,
+      "page_geometry": {}
+    },
+    {
+      "stratum": "two-column",
+      "id": "data-sharing",
+      "wanted": 2,
+      "candidate_pages": [
+        1,
+        2
+      ],
+      "supported_pages": 5,
+      "page_geometry": {}
+    },
+    {
+      "stratum": "two-column",
+      "id": "chemsci-sers-review",
+      "wanted": 2,
+      "candidate_pages": [
+        5,
+        8
+      ],
+      "supported_pages": 11,
+      "page_geometry": {}
+    },
+    {
+      "stratum": "two-column",
+      "id": "prx-quantum-simulation",
+      "wanted": 1,
+      "candidate_pages": [
+        5
+      ],
+      "supported_pages": 10,
+      "page_geometry": {}
+    },
+    {
+      "stratum": "two-column",
+      "id": "stam-graphene-disorders",
+      "wanted": 1,
+      "candidate_pages": [
+        18
+      ],
+      "supported_pages": 21,
+      "page_geometry": {}
+    },
+    {
+      "stratum": "equations",
+      "id": "gaussian-coresets",
+      "wanted": 2,
+      "candidate_pages": [
+        18,
+        20
+      ],
+      "supported_pages": 2,
+      "page_geometry": {}
+    },
+    {
+      "stratum": "equations",
+      "id": "psych-nvivo-guide",
+      "wanted": 2,
+      "candidate_pages": [],
+      "supported_pages": 0,
+      "page_geometry": {}
+    },
+    {
+      "stratum": "equations",
+      "id": "ijstem-integrated-framework",
+      "wanted": 2,
+      "candidate_pages": [],
+      "supported_pages": 0,
+      "page_geometry": {}
+    },
+    {
+      "stratum": "equations",
+      "id": "pag-policy-portfolios",
+      "wanted": 2,
+      "candidate_pages": [],
+      "supported_pages": 0,
+      "page_geometry": {}
+    },
+    {
+      "stratum": "equations",
+      "id": "pmet-srmr-covariates",
+      "wanted": 2,
+      "candidate_pages": [
+        7,
+        8
+      ],
+      "supported_pages": 4,
+      "page_geometry": {}
+    },
+    {
+      "stratum": "equations",
+      "id": "jss-lme4",
+      "wanted": 1,
+      "candidate_pages": [
+        17
+      ],
+      "supported_pages": 9,
+      "page_geometry": {}
+    },
+    {
+      "stratum": "equations",
+      "id": "natcomm-medsam",
+      "wanted": 1,
+      "candidate_pages": [],
+      "supported_pages": 0,
+      "page_geometry": {}
+    },
+    {
+      "stratum": "equations",
+      "id": "psych-bootstrap-ega",
+      "wanted": 1,
+      "candidate_pages": [],
+      "supported_pages": 0,
+      "page_geometry": {}
+    },
+    {
+      "stratum": "equations",
+      "id": "jlmr-onet-content-model",
+      "wanted": 1,
+      "candidate_pages": [],
+      "supported_pages": 0,
+      "page_geometry": {}
+    },
+    {
+      "stratum": "equations",
+      "id": "metapsych-prereg-secondary",
+      "wanted": 1,
+      "candidate_pages": [],
+      "supported_pages": 0,
+      "page_geometry": {}
+    },
+    {
+      "stratum": "equations",
+      "id": "jair-dp-fy-ml",
+      "wanted": 1,
+      "candidate_pages": [
+        10
+      ],
+      "supported_pages": 2,
+      "page_geometry": {}
+    },
+    {
+      "stratum": "references",
+      "id": "crowdsourcing-survey",
+      "wanted": 1,
+      "candidate_pages": [
+        33
+      ],
+      "supported_pages": 16,
+      "page_geometry": {}
+    },
+    {
+      "stratum": "references",
+      "id": "sle-blockchain-education",
+      "wanted": 1,
+      "candidate_pages": [
+        10
+      ],
+      "supported_pages": 1,
+      "page_geometry": {}
+    },
+    {
+      "stratum": "references",
+      "id": "prx-weyl-semimetal",
+      "wanted": 1,
+      "candidate_pages": [],
+      "supported_pages": 0,
+      "page_geometry": {}
+    },
+    {
+      "stratum": "references",
+      "id": "metapsych-lavaan-invariance",
+      "wanted": 1,
+      "candidate_pages": [
+        18
+      ],
+      "supported_pages": 3,
+      "page_geometry": {}
+    },
+    {
+      "stratum": "references",
+      "id": "jmir-law-of-attrition",
+      "wanted": 1,
+      "candidate_pages": [
+        9
+      ],
+      "supported_pages": 1,
+      "page_geometry": {}
+    },
+    {
+      "stratum": "references",
+      "id": "ulr-political-microtargeting",
+      "wanted": 1,
+      "candidate_pages": [],
+      "supported_pages": 0,
+      "page_geometry": {}
+    },
+    {
+      "stratum": "references",
+      "id": "econ-sdg-systems",
+      "wanted": 1,
+      "candidate_pages": [
+        21
+      ],
+      "supported_pages": 2,
+      "page_geometry": {}
+    },
+    {
+      "stratum": "tables",
+      "id": "plosmed-research-findings-false",
+      "wanted": 2,
+      "candidate_pages": [
+        3,
+        5
+      ],
+      "supported_pages": 3,
+      "page_geometry": {
+        "3": "unruled",
+        "5": "ruled"
+      }
+    },
+    {
+      "stratum": "tables",
+      "id": "stam-iron-pnictides",
+      "wanted": 2,
+      "candidate_pages": [
+        6,
+        8
+      ],
+      "supported_pages": 16,
+      "page_geometry": {
+        "6": "ruled",
+        "8": "ruled"
+      }
+    },
+    {
+      "stratum": "tables",
+      "id": "bjoc-heterocycle-drugs",
+      "wanted": 1,
+      "candidate_pages": [
+        7
+      ],
+      "supported_pages": 6,
+      "page_geometry": {
+        "7": "ruled"
+      }
+    },
+    {
+      "stratum": "tables",
+      "id": "glossa-phylogenetic-signal",
+      "wanted": 1,
+      "candidate_pages": [
+        7
+      ],
+      "supported_pages": 1,
+      "page_geometry": {
+        "7": "ruled"
+      }
+    },
+    {
+      "stratum": "tables",
+      "id": "natcomm-medsam",
+      "wanted": 1,
+      "candidate_pages": [],
+      "supported_pages": 0,
+      "page_geometry": {}
+    },
+    {
+      "stratum": "tables",
+      "id": "ijstem-k12-integration",
+      "wanted": 1,
+      "candidate_pages": [
+        5
+      ],
+      "supported_pages": 2,
+      "page_geometry": {
+        "5": "unruled"
+      }
+    },
+    {
+      "stratum": "whole_paper",
+      "id": "glj-border-justice",
+      "reference_list_found": false
+    },
+    {
+      "stratum": "whole_paper",
+      "id": "natcomm-metascape",
+      "reference_list_found": true
+    },
+    {
+      "stratum": "whole_paper",
+      "id": "ap-high-q-nanocavity",
+      "reference_list_found": true
+    },
+    {
+      "stratum": "whole_paper",
+      "id": "jlmr-onet-content-model",
+      "reference_list_found": true
+    },
+    {
+      "stratum": "whole_paper",
+      "id": "plosbio-cells-in-body",
+      "reference_list_found": true
+    },
+    {
+      "stratum": "whole_paper",
+      "id": "glj-border-justice",
+      "reference_list_found": false
+    },
+    {
+      "stratum": "whole_paper",
+      "id": "bjpols-media-platforming",
+      "reference_list_found": true
     }
   ],
   "unfilled": []

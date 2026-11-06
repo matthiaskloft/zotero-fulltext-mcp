@@ -38,15 +38,29 @@ dataset.
 
 `sources.json` has no page-level layout. Only `styles` and `language` are inspection metadata.
 Each selected document is marked `basis: metadata` (a verified document-level property) or
-`basis: assumed` (inferred from its `field`, unverified). Candidate pages passed crude heuristics
-(column blocks, a ruled grid of at least 3 x 3 cells with text in over a third of them and little
-image area, math characters, a full-page image, text length, reference-list pages from the last
-heading on, year or numbered lines). They are candidates that need a human look, not confirmed
-layouts. Known blind spots: tables without ruling lines are not detected, so such papers drop out of
-the tables stratum; equations set in private font encodings are missed. Pages of rotated documents
-are judged as displayed, and rotated pages with a CropBox different from the MediaBox are refused.
-Whole papers are accepted only if a reference-list heading was found; the draft report says
-whether one was found.
+`basis: assumed` (inferred from its `field`, unverified). Candidate pages passed crude heuristics in
+`benchmarks/extraction/page_checks.py`; they are candidates that need a human look, not confirmed
+layouts. The SHA-256 of that file is stored in the manifest, so changing a heuristic fails `--check`
+until the manifest is rebuilt. The checks:
+
+- **tables:** a printed table caption at the start of a text block ("Table 2.", "Tabelle 3:"; a
+  cross-reference such as "Table 3 shows" is not a caption) on a page that is not mostly image. This
+  is deliberately independent of any grid detector, so it is not biased toward the tables an
+  extractor can already find. Ruled versus unruled geometry (a full rule grid, 3+ horizontal and 3+ vertical rules read from the
+  page's drawing commands; booktabs-style rules and white-space tables count as unruled) is reported per page as `page_geometry`, and selection prefers
+  to include both kinds in the pilot and in the held-out set. A caption does not prove the page holds
+  a table (a caption over a figure, or a table that continues on the next page, can slip through).
+- **equations:** at least two display-math rows (short rows with operators or math symbols and few
+  words, numbered at the right or set apart by white space and indented), so pseudocode and inline
+  math in prose do not count. Private font encodings that hide math glyphs are missed, so some
+  equation-heavy papers drop out.
+- **two-column, scans, non-English, references:** column blocks, a full-page image, text length, and
+  pages from the last reference-list heading on with year or numbered lines.
+
+Pages of rotated documents are judged as displayed; rotated pages with a CropBox different from the
+MediaBox are refused. Whole papers are accepted only if a reference-list heading was found. Held-out
+documents get one seeded page number each, pinned in the manifest (no text, no images), and the
+loader enforces that a held-out record stays within it.
 
 ## Preparing drafts (host, opt-in)
 
@@ -95,17 +109,21 @@ placeholder uncertainty note and any text-proposal notes, keep `proposed_by`, an
 Then confirm the pilot loader accepts it (it wraps `load_reviewed_expectation`):
 
 ```console
-uv run python -c "import sys, json; sys.path.insert(0, 'benchmarks'); from extraction.pilot_records import load_pilot_expectation as l; l(sys.argv[1], json.load(open('benchmarks/extraction/pilot_manifest.json')))" <file>
+uv run python -c "import sys, json, pathlib; sys.path.insert(0, 'benchmarks'); from extraction.pilot_records import load_pilot_expectation as l; l(sys.argv[1], json.load(open('benchmarks/extraction/pilot_manifest.json')), pathlib.Path(sys.argv[2]))" <file> benchmarks/public_pdfs/.cache
 ```
 
-`load_pilot_expectation` additionally rejects a record that still carries the draft wording, that
-has no blocks or only `other` blocks (unless `provenance.uncertainty.note` starts with the explicit
-attestation `reviewed: scoped pages contain no content blocks`, for genuinely empty pages), whose
-document hash, page count or scope differs from the manifest, and, given the PDF cache, whose PDF
-or render hashes do not reproduce.
-
-Changing the status alone fails: the schema demands reviewer, timestamp, basis and the hashes above.
-The status is still an attestation by the reviewer, not something the schema can prove.
+Pass the PDF cache (as above) whenever you can; without it the hash checks cannot run.
+`load_pilot_expectation` additionally rejects a record that still carries the draft wording or a
+text-proposal note, and a record with no blocks or only `other` blocks. There is one narrow
+exception for a genuinely empty scan page: `provenance.uncertainty.note` starting with
+`reviewed: scoped pages contain no content blocks`, with no blocks at all, accepted only for a
+scan-stratum record, only with the cache, and only if the scoped pages have no text layer (it cannot
+see whether the image is blank, so that remains your attestation). It is refused for every other
+stratum and for whole papers. The loader also rejects a document hash, page count or scope that
+differs from the manifest's pinned pages, and, with the cache, a PDF whose hash differs, page
+geometry (size, rotation) that differs from the PDF, a render hash that does not reproduce, and a
+render that cannot be reproduced here at all (another renderer or PyMuPDF version is reported as a
+finding, not skipped).
 
 ## Where reviewed records go
 

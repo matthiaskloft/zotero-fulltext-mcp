@@ -18,8 +18,9 @@ All notable changes to this project are documented here. Format loosely follows
   cached PDFs and writes draft `expectation` proposals outside the repository. Drafts are refused
   by `load_reviewed_expectation`; `load_pilot_expectation` additionally rejects mechanically
   promoted drafts and records that disagree with the manifest. Stratum assignment beyond
-  `styles`/`language` is an assumption, checked per page by heuristics whose passing pages are
-  recorded in the manifest as candidates. Review procedure: `docs/extraction-pilot-review.md`.
+  `styles`/`language` is an assumption, checked per page by heuristics (table captions, display
+  math, ...) whose passing pages are pinned in the manifest as candidates, with a hash of the
+  heuristics so changes fail `--check`. Review procedure: `docs/extraction-pilot-review.md`.
   E2 stays partial until reviewed labels exist.
 
 ## [0.16.0] - 2026-11-05
