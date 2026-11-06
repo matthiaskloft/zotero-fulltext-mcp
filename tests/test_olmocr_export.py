@@ -603,3 +603,65 @@ def test_feasibility_inputs_script_builds_the_benchmark_directory(tmp_path):
     # render comparison rather than upstream's exact-string shortcut.
     fixture_latex = next(b["equation"]["latex"] for b in load_record(EXAMPLE, kind="expectation")["blocks"] if b["id"] == "p1-eq1")
     assert fixture_latex not in control
+
+
+def test_pipe_row_shifts_cells_to_its_right_so_their_vertical_relations_are_dropped():
+    # Verified against upstream tests.py v0.4.27: before this rule, 'fine', 'ok', 'x' and 'y' all
+    # failed on a correct Markdown table because the '|' splits 'a|b' into two upstream cells.
+    cells = [
+        _cell(0, 0, "a|b"), _cell(0, 1, "fine"), _cell(0, 2, "ok"),
+        _cell(1, 0, "head", is_header=True), _cell(1, 1, "x"), _cell(1, 2, "y"),
+    ]
+    exp = _expectation([_block("t", "table", 1, 0, None, table=_table(cells, 2, 3))])
+    result = export_checks(exp, pdf_name="doc.pdf")
+    tests = {t["cell"]: t for t in _by_type(result, "table")}
+    for name in ("fine", "ok"):
+        assert "down" not in tests[name] and "top_heading" not in tests[name]
+    for name in ("x", "y"):
+        assert "up" not in tests[name]
+    # Horizontal relations among the shifted cells and relations of the unshifted cell stay.
+    assert tests["fine"]["right"] == "ok" and tests["ok"]["left"] == "fine"
+    assert tests["x"]["left"] == "head" and tests["x"]["right"] == "y" and tests["x"]["left_heading"] == "head"
+    reasons = {(p["row"], p["col"], p["relation"]): p["reason"] for p in result.partial}
+    assert "splits into several cells" in reasons[(0, 1, "down")]
+    assert "splits into several cells" in reasons[(1, 2, "up")]
+
+
+def test_headings_are_dropped_when_the_target_row_or_the_header_row_is_shifted():
+    # Upstream keys column headers by unshifted column but positions cells after a colspan: in a
+    # data row with a colspan, 'd' is paired with 'H2' and a correct top_heading 'H3' fails
+    # (verified against upstream tests.py v0.4.27).
+    data_shift = [
+        _cell(0, 0, "H1", is_header=True), _cell(0, 1, "H2", is_header=True), _cell(0, 2, "H3", is_header=True),
+        _cell(1, 0, "wide", colspan=2), _cell(1, 2, "d"),
+    ]
+    exp = _expectation([_block("t", "table", 1, 0, None, table=_table(data_shift, 2, 3))])
+    result = export_checks(exp, pdf_name="doc.pdf")
+    tests = {t["cell"]: t for t in _by_type(result, "table")}
+    assert "top_heading" not in tests["d"]
+    assert any(
+        p["relation"] == "top_heading" and p["row"] == 1 and p["col"] == 2 and "colspan" in p["reason"]
+        for p in result.partial
+    )
+    # A colspan in the header row, followed by an ordinary header, shifts the header positions.
+    head_shift = [
+        _cell(0, 0, "G", colspan=2, is_header=True), _cell(0, 2, "H", is_header=True),
+        _cell(1, 0, "a"), _cell(1, 1, "b"), _cell(1, 2, "c"),
+    ]
+    exp = _expectation([_block("t", "table", 1, 0, None, table=_table(head_shift, 2, 3))])
+    result = export_checks(exp, pdf_name="doc.pdf")
+    assert all("top_heading" not in t for t in _by_type(result, "table"))
+    assert any(p["relation"] == "top_heading" and p["col"] == 2 and "colspan" in p["reason"] for p in result.partial)
+
+
+def test_pipe_in_a_header_cell_shifts_the_headings_to_its_right():
+    cells = [
+        _cell(0, 0, "H|1", is_header=True), _cell(0, 1, "H2", is_header=True),
+        _cell(1, 0, "v1"), _cell(1, 1, "v2"),
+    ]
+    exp = _expectation([_block("t", "table", 1, 0, None, table=_table(cells, 2, 2))])
+    result = export_checks(exp, pdf_name="doc.pdf")
+    tests = {t["cell"]: t for t in _by_type(result, "table")}
+    assert "top_heading" not in tests["v1"] and "top_heading" not in tests["v2"]
+    reasons = {(p["col"], p["relation"]): p["reason"] for p in result.partial if p["row"] == 1}
+    assert "'|'" in reasons[(0, "top_heading")] and "splits into several cells" in reasons[(1, "top_heading")]

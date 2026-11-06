@@ -65,7 +65,8 @@ NOT_VERIFIABLE = (
     "text containing '_' or '*' in a text block (olmOCR strips emphasis page-wide with a lazy regex, so"
     " any such marker can pair with one elsewhere on the page); such blocks are skipped, not checked",
     "table cells containing '|' (upstream's Markdown table parser splits on every '|'); such cells are skipped",
-    "vertical relations across a colspan row (upstream's HTML parser shifts the rest of the row); dropped",
+    "vertical and column-heading relations across a colspan row or a row with a '|' cell (upstream shifts"
+    " the rest of the row); dropped",
     "relations at table edges: olmOCR ignores a neighbour relation where the table has no neighbour",
 )
 
@@ -305,15 +306,25 @@ def _export_table(block: dict[str, Any], rid: str, emit: Any, skip: Any, result:
     def spanned(cell: dict[str, Any]) -> bool:
         return cell.get("rowspan", 1) > 1 or cell.get("colspan", 1) > 1
 
-    # First column of a colspan cell, per row: upstream's HTML parser shifts everything to its right.
-    shifted_from: dict[int, int] = {}
+    # Per row, the first column from which upstream parses later cells at shifted positions, and why:
+    # a colspan cell (HTML parser) or a '|' inside a cell (Markdown parser splits it into several).
+    shifted_from: dict[int, tuple[int, str]] = {}
     for cell in table["cells"]:
         if cell.get("colspan", 1) > 1:
-            for r in range(cell["row"], cell["row"] + cell.get("rowspan", 1)):
-                shifted_from[r] = min(cell["col"], shifted_from.get(r, cell["col"]))
+            why = "colspan in this or the adjacent row shifts the row in upstream's HTML parsing"
+        elif "|" in cell["text"]:
+            why = "a '|' cell in this or the adjacent row splits into several cells and shifts the row in upstream's Markdown parsing"
+        else:
+            continue
+        for r in range(cell["row"], cell["row"] + cell.get("rowspan", 1)):
+            if r not in shifted_from or cell["col"] < shifted_from[r][0]:
+                shifted_from[r] = (cell["col"], why)
 
-    def shifted(row: int, col: int) -> bool:
-        return row in shifted_from and col > shifted_from[row]
+    def shifted(row: int, col: int) -> str | None:
+        """Reason cell positions in ``row`` at column ``col`` differ upstream, or None."""
+        if row in shifted_from and col > shifted_from[row][0]:
+            return shifted_from[row][1]
+        return None
 
     def partial(where: dict[str, int], relation: str, reason: str) -> None:
         result.partial.append({"block_id": block["id"], "page": block["page"], "relation": relation, "reason": reason, **where})
@@ -333,8 +344,8 @@ def _export_table(block: dict[str, Any], rid: str, emit: Any, skip: Any, result:
             neighbour = grid.get((r + dr, c + dc))
             if neighbour is None:
                 continue  # edge of the table: olmOCR ignores the relation there too
-            if dr and (shifted(r, c) or shifted(r + dr, c)):
-                partial(where, name, "colspan in this or the adjacent row shifts the row in upstream's HTML parsing")
+            if dr and (why := shifted(r, c) or shifted(r + dr, c)):
+                partial(where, name, why)
             elif spanned(neighbour):
                 partial(where, name, "spanned neighbour")
             elif (why := _unusable_cell(neighbour["text"])) is not None:
@@ -343,11 +354,11 @@ def _export_table(block: dict[str, Any], rid: str, emit: Any, skip: Any, result:
                 fields[name] = neighbour["text"]
         if not cell.get("is_header"):
             for vertical in (True, False):
-                _add_heading(fields, grid, cell, vertical, partial, spanned)
+                _add_heading(fields, grid, cell, vertical, partial, spanned, shifted)
         emit(f"{rid}.{block['id']}.table.r{r}c{c}", block, "table", **fields)
 
 
-def _add_heading(fields: dict[str, Any], grid: dict[tuple[int, int], dict[str, Any]], cell: dict[str, Any], vertical: bool, partial: Any, spanned: Any) -> None:
+def _add_heading(fields: dict[str, Any], grid: dict[tuple[int, int], dict[str, Any]], cell: dict[str, Any], vertical: bool, partial: Any, spanned: Any, shifted: Any) -> None:
     """Add ``top_heading`` (header in row 0) or ``left_heading`` (header in column 0).
 
     Upstream's Markdown parser treats only row 0 as the header row, so a header elsewhere, a
@@ -365,7 +376,12 @@ def _add_heading(fields: dict[str, Any], grid: dict[tuple[int, int], dict[str, A
         return  # the cell has no header: nothing to assert
     where = {"row": r, "col": c}
     index, first = headers[0]
-    if index != 0:
+    # Column headers are keyed by unshifted column but cells are positioned after the shift, so a
+    # shifted header row or target row can pair a cell with the wrong column's headers.
+    shift = (shifted(r, c) or shifted(0, c)) if vertical else None
+    if shift:
+        partial(where, name, shift)
+    elif index != 0:
         partial(where, name, "header is not in the first row/column: olmOCR only treats row 0 as header")
     elif spanned(first):
         partial(where, name, "spanned header")

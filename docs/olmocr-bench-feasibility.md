@@ -47,8 +47,14 @@ strict within that normalisation. Elements that cannot be expressed are listed i
   characters;
 - table cells containing `|`: upstream's Markdown table parser splits on every `|` (such cells are
   skipped; as neighbours or headings they are listed under `partial`);
-- vertical (`up`/`down`) relations for cells to the right of a colspan in their own or the adjacent
-  row: upstream's HTML parser shifts the rest of that row, so they are listed under `partial`;
+- vertical (`up`/`down`) and `top_heading` relations for cells to the right of a colspan, or of a
+  cell containing `|`, in their own, the adjacent or (for headings) the header row: upstream's
+  HTML parser shifts the rest of a colspan row, and its Markdown parser splits a `|` cell into several
+  cells, so cell positions no longer match column positions. They are listed under `partial`.
+  Horizontal relations among the shifted cells stay (both sides shift together); the relation to the
+  pipe cell itself is dropped. Checked against upstream `tests.py` v0.4.27 on small tables: the
+  pipe-row case and a heading under a data-row colspan failed correct output before this rule and
+  pass after it;
 - table cells that are spanned or have no text, and neighbours that are spanned or empty;
 - headings: upstream's Markdown parser treats only row 0 as the header row, so `top_heading` is
   asserted only for an unspanned header in row 0 and `left_heading` only for one in column 0; other
