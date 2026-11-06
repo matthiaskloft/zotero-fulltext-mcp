@@ -161,4 +161,49 @@ caption links resolving to table/figure blocks, page numbers within `page_count`
 bounding boxes inside the page geometry (with the tolerance above), continuation chains, table cells inside and not overlapping in the grid, anchors
 on their own page, marker and entry links resolving, text/raw/options hash round-trips, and run
 cross-references and metric version pins. Scorers should load truth through
-`load_reviewed_expectation`, which refuses drafts. No scorer, adapter or sampling tool exists yet.
+`load_reviewed_expectation`, which refuses drafts. No external-benchmark adapter or sampling tool
+exists yet.
+
+## Extraction scorer (E1, package B)
+
+`benchmarks/extraction/scorer.py` (`score_records`, `score_files`; benchmark-side, no new
+dependency) compares a reviewed expectation with an observation. It refuses a mismatched
+`pdf_sha256`, an unreviewed expectation and wrongly typed records before scoring anything.
+
+- **Two modes, never merged.** Every check is evaluated `strict` (exact: signs, decimals, operators,
+  case, pages, table positions, hashes) and `tolerant` (NFKC, case folding, whitespace collapse;
+  DOIs also lose `doi:`/URL prefixes). `strict_passed` is computed from strict checks only, tolerant
+  metrics are separate entries, and a check that only the tolerant mode accepts is flagged
+  `tolerant_only` and counted. A normalized match is never evidence of transcription fidelity.
+- **Families.** Text presence per body block (an expected block must occur verbatim on its own
+  physical page; `text_span_hash` additionally needs an observed block that round-trips to the
+  expected hash, strict only), reading order (adjacent expected blocks, a pair fails if either is
+  missing), table cells (same grid position, spans and text; `table_exact` per table), equations
+  (LaTeX, printed number, display flag), captions (text plus link to the same table/figure by
+  type, page and order), and references: segmentation recall/precision (raw text + page), field
+  accuracy and DOI recovery on segmented entries only, and `reference_doi_absent_correct` for
+  entries whose source prints no DOI (a missing DOI is correct, an invented one fails). Citation
+  markers and library resolution are not scored.
+- **Cross-page chains.** Blocks linked by `continues_from` are scored as one logical item, so a
+  correct merged extraction passes as well as a fragment-per-page one. A fragment's text must be
+  found verbatim on any page of its chain (a merged block lives on the first page);
+  `text_span_hash` accepts each fragment's own hash or the fragments joined by `""`, `" "`, a newline
+  or a blank line. A table chain is compared as the fragments' rows concatenated in chain order; a
+  repeated header row on a continuation page is dropped first, so keeping it is a strict failure.
+  A reference entry that crosses a page is judged on raw text and start page, and an observed
+  `end_page`, if present, must agree. Chained captions are not compared.
+- **Truncation.** Expected blocks and entries marked `truncated` (cut off at the scope boundary of a
+  page-scoped record) are not compared at all, not even on their visible part: they go to
+  `not_scored` with the reason. Same-page continuations (column breaks) are chains like any other.
+- **Markdown-only observations.** Missing bounding boxes and renders are fine; an entry with no page
+  can match only in tolerant mode, so it cannot pass strict. With `markdown=` / `markdown_path=` the
+  observation's `output_span` hashes are verified (`output_span_roundtrip`, strict only); without
+  the text they are listed in `not_scored`.
+- **Output.** `score["metrics"]` entries (`name`, `version`, `mode`, `value`, `n`) fit the run
+  schema; `METRIC_VERSIONS` pins them. `score_to_result` and `failure_result` build run `results`
+  entries; failures, timeouts and missing backends carry an error and no metrics, so they can
+  neither pass nor read as zero. High-uncertainty expected items, and an observation without a
+  `references` section, are listed in `not_scored` rather than scored.
+- **Sensitivity.** `benchmarks/extraction/defects.py` injects missing signs, swapped table values,
+  omitted text, reordered columns and swapped reading order; `tests/test_extraction_scorer.py`
+  proves each makes the relevant strict check fail on synthetic records while the clean case passes.

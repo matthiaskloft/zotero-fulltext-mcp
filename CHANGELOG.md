@@ -11,6 +11,10 @@ All notable changes to this project are documented here. Format loosely follows
   for reviewed expectations, automatic observations and evaluation runs, plus a loader/validator
   with cross-record checks, under `benchmarks/extraction/`. Benchmark-side only; `jsonschema`
   and `referencing` were added to the `test` extra. See `docs/extraction-quality-plan.md`.
+- Extraction scorer (roadmap E1, package B): strict and tolerant checks of an observation against
+  a reviewed expectation (text, order, tables, equations, captions, references), versioned run
+  metrics, and defect injectors proving the strict checks fail on missing signs, swapped values,
+  omitted text and reordered columns. Benchmark-side only; no runtime dependency.
 
 ## [0.16.0] - 2026-11-05
 
