@@ -176,8 +176,8 @@ def test_table_left_heading_and_empty_or_spanned_cells_are_reported():
     assert tests["7"]["left_heading"] == "Row A"
     # The empty neighbour at (0,2) cannot be asserted; the spanned neighbour below (0,1) neither.
     relations = {(p["row"], p["col"], p["relation"], p["reason"]) for p in result.partial}
-    assert (0, 1, "right", "empty or unusable neighbour text") in relations
-    assert (0, 1, "down", "spanned neighbour") in relations
+    assert (0, 1, "right", "neighbour text has fewer than 1 alphanumeric character(s)") in relations
+    assert (0, 1, "down", "colspan in this or the adjacent row shifts the row in upstream's HTML parsing") in relations
     skipped = {(s["row"], s["col"]): s["reason"] for s in result.skipped if s["kind"] == "table"}
     assert "spanned cell" in skipped[(1, 0)]
     assert "alphanumeric" in skipped[(0, 2)]
@@ -487,28 +487,77 @@ def test_order_is_skipped_when_one_text_contains_the_other():
     pairs = [(t["before"], t["after"]) for t in _by_type(result, "order")]
     assert pairs == [("was large and significant", "Closing remarks follow here.")]
     assert any(s["kind"] == "order" and "contains the other" in s["reason"] for s in result.skipped)
-    # Containment is judged on normalised text, so emphasis markers do not hide it.
-    exp = _expectation([
-        _block("a", "paragraph", 1, 0, "A **bold** claim stands here"),
-        _block("b", "paragraph", 1, 1, "bold claim"),
-    ])
-    assert _by_type(export_checks(exp, pdf_name="doc.pdf"), "order") == []
+    # Containment is judged on normalised text: dashes, quotes, micro sign and <br> do not hide it.
+    for outer, inner in (
+        ("Dose was 5 \u2212 3 units here", "5 - 3 units"),
+        ("He said \u201cstop\u201d twice", 'said "stop"'),
+        ("Dose 5 \u00b5g per day", "5 \u03bcg per"),
+        ("First line<br>second line follows", "line second line"),
+    ):
+        exp = _expectation([_block("a", "paragraph", 1, 0, outer), _block("b", "paragraph", 1, 1, inner)])
+        assert _by_type(export_checks(exp, pdf_name="doc.pdf"), "order") == [], outer
 
 
-def test_unbalanced_emphasis_markers_skip_blocks_and_cells():
-    cells = [_cell(0, 0, "snake_case"), _cell(0, 1, "fine"), _cell(0, 2, "a*b*c")]
+def test_any_underscore_or_asterisk_in_a_text_block_is_skipped_but_not_in_cells():
+    cells = [_cell(0, 0, "0.42*"), _cell(0, 1, "snake_case"), _cell(0, 2, "plain")]
     exp = _expectation([
         _block("p", "paragraph", 1, 0, "x_i and a lone marker here"),
         _block("q", "paragraph", 1, 1, "balanced _emphasis_ text"),
-        _block("t", "table", 1, 2, None, table=_table(cells, 1, 3)),
+        _block("r", "paragraph", 1, 2, "a **bold** claim stands"),
+        _block("s", "paragraph", 1, 3, "plain text without markers"),
+        _block("t", "table", 1, 4, None, table=_table(cells, 1, 3)),
     ])
     result = export_checks(exp, pdf_name="doc.pdf")
-    assert [t["text"] for t in _by_type(result, "present")] == ["balanced _emphasis_ text"]
-    reasons = [s["reason"] for s in result.skipped if "unbalanced" in s["reason"]]
-    assert len(reasons) == 2  # block p, cell snake_case
-    assert {t["cell"] for t in _by_type(result, "table")} == {"fine", "a*b*c"}
-    # The unusable neighbour is reported, not silently omitted.
-    assert any(p["relation"] == "left" for p in result.partial)
+    assert [t["text"] for t in _by_type(result, "present")] == ["plain text without markers"]
+    skipped = {s["block_id"]: s["reason"] for s in result.skipped if s["kind"] == "present"}
+    assert set(skipped) == {"p", "q", "r"} and all("page-wide" in r for r in skipped.values())
+    # Cells are normalised one by one upstream, so emphasis characters are exported.
+    tests = {t["cell"]: t for t in _by_type(result, "table")}
+    assert set(tests) == {"0.42*", "snake_case", "plain"}
+    assert tests["0.42*"]["right"] == "snake_case"
+
+
+def test_pipe_in_a_cell_or_neighbour_is_not_asserted():
+    cells = [
+        _cell(0, 0, "a|b"), _cell(0, 1, "fine"), _cell(0, 2, "ok"),
+        _cell(1, 0, "head", is_header=True), _cell(1, 1, "x"), _cell(1, 2, "y"),
+    ]
+    exp = _expectation([_block("t", "table", 1, 0, None, table=_table(cells, 2, 3))])
+    result = export_checks(exp, pdf_name="doc.pdf")
+    tests = {t["cell"]: t for t in _by_type(result, "table")}
+    assert "a|b" not in tests
+    assert any(s["kind"] == "table" and "'|'" in s["reason"] and s["col"] == 0 and s["row"] == 0 for s in result.skipped)
+    assert "left" not in tests["fine"] and "up" not in tests["head"]
+    reasons = {(p["row"], p["col"], p["relation"]): p["reason"] for p in result.partial}
+    assert "'|'" in reasons[(0, 1, "left")] and "'|'" in reasons[(1, 0, "up")]
+    # A pipe in the header cell is dropped from the heading, not asserted.
+    hdr = [_cell(0, 0, "H|1", is_header=True), _cell(1, 0, "val")]
+    exp = _expectation([_block("t", "table", 1, 0, None, table=_table(hdr, 2, 1))])
+    result = export_checks(exp, pdf_name="doc.pdf")
+    assert all("top_heading" not in t for t in _by_type(result, "table"))
+    assert any(p["relation"] == "top_heading" and "'|'" in p["reason"] for p in result.partial)
+
+
+def test_vertical_relations_across_a_colspan_row_are_dropped_to_partial():
+    cells = [
+        _cell(0, 0, "A"), _cell(0, 1, "B"), _cell(0, 2, "C"),
+        _cell(1, 0, "wide", colspan=2), _cell(1, 2, "D"),
+        _cell(2, 0, "E"), _cell(2, 1, "F"), _cell(2, 2, "G"),
+    ]
+    exp = _expectation([_block("t", "table", 1, 0, None, table=_table(cells, 3, 3))])
+    result = export_checks(exp, pdf_name="doc.pdf")
+    tests = {t["cell"]: t for t in _by_type(result, "table")}
+    # Cells right of the span lose up/down relations that cross the colspan row.
+    assert "down" not in tests["C"] and "up" not in tests["D"] and "down" not in tests["D"] and "up" not in tests["G"]
+    # Cells left of the span are unaffected, and horizontal relations stay.
+    assert tests["A"]["right"] == "B" and tests["E"]["right"] == "F"
+    assert tests["C"]["left"] == "B" and tests["G"]["left"] == "F"
+    # Rows without any colspan neighbour keep vertical relations.
+    reasons = {(p["row"], p["col"], p["relation"]) for p in result.partial if "colspan" in p["reason"]}
+    assert {(0, 2, "down"), (1, 2, "up"), (1, 2, "down"), (2, 2, "up")} <= reasons
+    plain = [_cell(0, 0, "A"), _cell(0, 1, "B"), _cell(1, 0, "C"), _cell(1, 1, "D")]
+    exp = _expectation([_block("t", "table", 1, 0, None, table=_table(plain, 2, 2))])
+    assert _by_type(export_checks(exp, pdf_name="doc.pdf"), "table")[3]["up"] == "B"
 
 
 def test_too_little_alphanumeric_content_is_skipped():
@@ -542,9 +591,15 @@ def test_feasibility_inputs_script_builds_the_benchmark_directory(tmp_path):
     bench = tmp_path / "bench"
     assert (bench / "pdfs" / "corpus.pdf").read_bytes() == CORPUS_PDF.read_bytes()
     assert counts["total"] == len((bench / "ocr_corpus.jsonl").read_text(encoding="ascii").splitlines())
-    for name in ("pymupdf4llm", "defective", "mathcontrol"):
+    for name in ("pymupdf4llm", "defective", "mathcontrol", "mathwrong"):
         assert sorted(f.name for f in (bench / name).iterdir()) == [f"corpus_pg{n}_repeat1.md" for n in range(1, 7)]
     good = (bench / "pymupdf4llm" / "corpus_pg3_repeat1.md").read_text(encoding="utf-8")
     bad = (bench / "defective" / "corpus_pg3_repeat1.md").read_text(encoding="utf-8")
     assert "|Baseline|12.40|1.15|" in good and "|Baseline|15.82|1.15|" in bad and "1640" in bad
-    assert "$$" in (bench / "mathcontrol" / "corpus_pg1_repeat1.md").read_text(encoding="utf-8")
+    control = (bench / "mathcontrol" / "corpus_pg1_repeat1.md").read_text(encoding="utf-8")
+    wrong = (bench / "mathwrong" / "corpus_pg1_repeat1.md").read_text(encoding="utf-8")
+    assert "$$" in control and "$$" in wrong and control != wrong
+    # The control must differ textually from the fixture's LaTeX so that it exercises KaTeX
+    # render comparison rather than upstream's exact-string shortcut.
+    fixture_latex = next(b["equation"]["latex"] for b in load_record(EXAMPLE, kind="expectation")["blocks"] if b["id"] == "p1-eq1")
+    assert fixture_latex not in control

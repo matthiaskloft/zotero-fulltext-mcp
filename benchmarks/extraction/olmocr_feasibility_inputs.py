@@ -6,7 +6,8 @@ Writes an olmOCR benchmark directory under ``WORK``::
     WORK/bench/ocr_corpus.jsonl                       exported checks
     WORK/bench/pymupdf4llm/corpus_pg<N>_repeat1.md    the repository's own Markdown, split by page
     WORK/bench/defective/...                          same, with four injected defects
-    WORK/bench/mathcontrol/...                        same, plus the equation as $$...$$
+    WORK/bench/mathcontrol/...                        same, plus a equivalent equation as $$...$$
+    WORK/bench/mathwrong/...                          same, plus a wrong equation as $$...$$
     WORK/export_report.json
 
 It needs the project environment (pymupdf4llm) but not olmOCR; scoring is a separate step in the
@@ -32,7 +33,11 @@ CORPUS_PDF = REPO_ROOT / "tests" / "fixtures" / "ocr_corpus" / "corpus.pdf"
 EXPECTATION = Path(__file__).resolve().parent / "examples" / "ocr_corpus_synthetic_example.draft_expectation.json"
 PDF_NAME = "corpus.pdf"
 
+# Deliberately not the fixture's string (which has ``\,`` after ``w_i``): the control must pass
+# through upstream's KaTeX render comparison, not its exact-string shortcut. The wrong variant
+# changes a product to a sum and must fail the same comparison.
 _EQUATION = r"$$\bar{x}_{w} = \frac{\sum_{i=1}^{n} w_i x_i}{\sum_{i=1}^{n} w_i}$$"
+_WRONG_EQUATION = r"$$\bar{x}_{w} = \frac{\sum_{i=1}^{n} w_i + x_i}{\sum_{i=1}^{n} w_i}$$"
 _INTRO = (
     "This document exists to be converted, not read. Prose paragraphs are present so that crops have "
     "neighbouring text to be located by, mirroring how a real article reads around its display elements."
@@ -92,7 +97,10 @@ def build(work: Path) -> dict[str, int]:
     pages = extract_pages(work)
     control = dict(pages)
     control[1] = pages[1] + "\n" + _EQUATION + "\n"
-    for name, candidate in (("pymupdf4llm", pages), ("defective", defective_pages(pages)), ("mathcontrol", control)):
+    wrong = dict(pages)
+    wrong[1] = pages[1] + "\n" + _WRONG_EQUATION + "\n"
+    candidates = (("pymupdf4llm", pages), ("defective", defective_pages(pages)), ("mathcontrol", control), ("mathwrong", wrong))
+    for name, candidate in candidates:
         folder = bench / name
         folder.mkdir(exist_ok=True)
         for number, text in candidate.items():

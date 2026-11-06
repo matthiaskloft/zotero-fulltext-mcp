@@ -62,8 +62,10 @@ NOT_VERIFIABLE = (
     "figure/graphic content and caption-to-figure links (only the caption text is checked)",
     "order when one text occurs inside the other, or when the later text also occurs earlier on the page"
     " (olmOCR accepts any pair of matches; contained-text pairs are skipped, earlier duplicates are not detected)",
-    "text containing unbalanced '_' or '*' (olmOCR's page-wide emphasis stripping can pair them with"
-    " other markers); such blocks and cells are skipped",
+    "text containing '_' or '*' in a text block (olmOCR strips emphasis page-wide with a lazy regex, so"
+    " any such marker can pair with one elsewhere on the page); such blocks are skipped, not checked",
+    "table cells containing '|' (upstream's Markdown table parser splits on every '|'); such cells are skipped",
+    "vertical relations across a colspan row (upstream's HTML parser shifts the rest of the row); dropped",
     "relations at table edges: olmOCR ignores a neighbour relation where the table has no neighbour",
 )
 
@@ -114,32 +116,44 @@ def _has_content(text: Any, minimum: int = 1) -> bool:
     return isinstance(text, str) and sum(ch.isalnum() for ch in text) >= minimum
 
 
-def _unbalanced_emphasis(text: str) -> bool:
-    """olmOCR strips ``_x_`` / ``*x*`` page-wide with a lazy regex; an odd marker count can pair
-    with a marker elsewhere on the page and corrupt the match."""
-    return text.count("_") % 2 == 1 or text.count("*") % 2 == 1
-
-
 _DASHES_QUOTES = str.maketrans(
     {
-        "\u2018": "'", "\u2019": "'", "\u201c": '"', "\u201d": '"',
-        "\u2013": "-", "\u2014": "-", "\u2212": "-", "\u2011": "-", "\u2012": "-",
+        "\u2018": "'", "\u2019": "'", "\u201a": "'", "\u201c": '"', "\u201d": '"', "\u201e": '"',
+        "\u2013": "-", "\u2014": "-", "\u2011": "-", "\u2012": "-", "\u2212": "-", "\u00b5": "\u03bc",
     }
 )
 
 
 def _comparable(text: str) -> str:
-    """Rough stand-in for olmOCR's normalisation, used only to detect one text inside another."""
+    """Stand-in for olmOCR's normalisation, used only to detect one text inside another."""
+    text = re.sub(r"<br/?>", " ", text)
     text = unicodedata.normalize("NFC", text).translate(_DASHES_QUOTES)
     return re.sub(r"\s+", " ", text.replace("*", "").replace("_", "")).strip()
 
 
 def _unusable(text: Any, minimum: int) -> str | None:
-    """Reason a text cannot become a check, or None."""
+    """Reason a text *block* cannot become a check, or None.
+
+    olmOCR strips ``_x_`` / ``*x*`` over the whole page with a lazy regex, so a block's own marker
+    balance protects nothing: any ``_`` or ``*`` can pair with one elsewhere on the page.
+    """
     if not _has_content(text, minimum):
         return f"text has fewer than {minimum} alphanumeric character(s)"
-    if _unbalanced_emphasis(text):
-        return "text has unbalanced '_' or '*': olmOCR's emphasis stripping could pair it with other markers on the page"
+    if "_" in text or "*" in text:
+        return "text contains '_' or '*': olmOCR's page-wide emphasis stripping could pair it with markers elsewhere on the page"
+    return None
+
+
+def _unusable_cell(text: Any) -> str | None:
+    """Reason a table cell (or neighbour/header text) cannot be asserted, or None.
+
+    Cells are normalised one by one upstream, so emphasis characters are fine here; a ``|`` is not,
+    because the Markdown table parser splits on every one.
+    """
+    if not _has_content(text, 1):
+        return "text has fewer than 1 alphanumeric character(s)"
+    if "|" in text:
+        return "text contains '|', which upstream's Markdown table parser splits on"
     return None
 
 
@@ -291,13 +305,23 @@ def _export_table(block: dict[str, Any], rid: str, emit: Any, skip: Any, result:
     def spanned(cell: dict[str, Any]) -> bool:
         return cell.get("rowspan", 1) > 1 or cell.get("colspan", 1) > 1
 
+    # First column of a colspan cell, per row: upstream's HTML parser shifts everything to its right.
+    shifted_from: dict[int, int] = {}
+    for cell in table["cells"]:
+        if cell.get("colspan", 1) > 1:
+            for r in range(cell["row"], cell["row"] + cell.get("rowspan", 1)):
+                shifted_from[r] = min(cell["col"], shifted_from.get(r, cell["col"]))
+
+    def shifted(row: int, col: int) -> bool:
+        return row in shifted_from and col > shifted_from[row]
+
     def partial(where: dict[str, int], relation: str, reason: str) -> None:
         result.partial.append({"block_id": block["id"], "page": block["page"], "relation": relation, "reason": reason, **where})
 
     for cell in sorted(table["cells"], key=lambda c: (c["row"], c["col"])):
         r, c = cell["row"], cell["col"]
         where = {"row": r, "col": c}
-        reason = _unusable(cell["text"], 1)
+        reason = _unusable_cell(cell["text"])
         if reason is not None:
             skip("table", f"cell {reason}", block=block, **where)
             continue
@@ -309,10 +333,12 @@ def _export_table(block: dict[str, Any], rid: str, emit: Any, skip: Any, result:
             neighbour = grid.get((r + dr, c + dc))
             if neighbour is None:
                 continue  # edge of the table: olmOCR ignores the relation there too
-            if spanned(neighbour):
+            if dr and (shifted(r, c) or shifted(r + dr, c)):
+                partial(where, name, "colspan in this or the adjacent row shifts the row in upstream's HTML parsing")
+            elif spanned(neighbour):
                 partial(where, name, "spanned neighbour")
-            elif _unusable(neighbour["text"], 1) is not None:
-                partial(where, name, "empty or unusable neighbour text")
+            elif (why := _unusable_cell(neighbour["text"])) is not None:
+                partial(where, name, f"neighbour {why}")
             else:
                 fields[name] = neighbour["text"]
         if not cell.get("is_header"):
@@ -343,8 +369,8 @@ def _add_heading(fields: dict[str, Any], grid: dict[tuple[int, int], dict[str, A
         partial(where, name, "header is not in the first row/column: olmOCR only treats row 0 as header")
     elif spanned(first):
         partial(where, name, "spanned header")
-    elif _unusable(first["text"], 1) is not None:
-        partial(where, name, "empty or unusable header text")
+    elif (why := _unusable_cell(first["text"])) is not None:
+        partial(where, name, f"header {why}")
     else:
         fields[name] = first["text"]
         if len(headers) > 1:

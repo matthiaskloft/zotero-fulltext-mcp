@@ -41,8 +41,14 @@ strict within that normalisation. Elements that cannot be expressed are listed i
   and equation numbers (item-level entries), equations without LaTeX, blocks marked high uncertainty;
 - text with fewer than 3 alphanumeric characters (table cells: fewer than 1), which would match
   almost anywhere on a page;
-- text with an odd number of `_` or `*`: olmOCR strips emphasis page-wide with a lazy regex, so such
-  markers can pair with markers elsewhere and fail correct Markdown (blocks and cells are skipped);
+- text blocks containing any `_` or `*`: olmOCR strips emphasis over the whole page with a lazy
+  regex, so a block's own marker balance protects nothing (any marker can pair with one elsewhere
+  and fail correct Markdown). Table cells are normalised one by one upstream, so cells keep these
+  characters;
+- table cells containing `|`: upstream's Markdown table parser splits on every `|` (such cells are
+  skipped; as neighbours or headings they are listed under `partial`);
+- vertical (`up`/`down`) relations for cells to the right of a colspan in their own or the adjacent
+  row: upstream's HTML parser shifts the rest of that row, so they are listed under `partial`;
 - table cells that are spanned or have no text, and neighbours that are spanned or empty;
 - headings: upstream's Markdown parser treats only row 0 as the header row, so `top_heading` is
   asserted only for an unspanned header in row 0 and `left_heading` only for one in column 0; other
@@ -107,7 +113,7 @@ python -m extraction.olmocr_feasibility_inputs "$WORK/inputs"
 inputs/bench/pdfs/corpus.pdf                        copy of tests/fixtures/ocr_corpus/corpus.pdf
 inputs/bench/ocr_corpus.jsonl                       exporter output
 inputs/bench/<candidate>/corpus_pg<N>_repeat1.md    one Markdown file per page; candidates
-                                                    pymupdf4llm, defective, mathcontrol
+                                                    pymupdf4llm, defective, mathcontrol, mathwrong
 inputs/export_report.json                           counts, skipped items, check-to-block links
 ```
 
@@ -144,11 +150,15 @@ one cross-page order pair, one caption link, one equation number), 0 partial tab
 | Candidate | Checks passed | By type |
 | --- | --- | --- |
 | Repo pymupdf4llm Markdown | 24 of 25, plus baseline | present 7/7, order 5/5, table 12/12, math 0/1 |
-| Same plus the equation as `$$...$$` (positive control) | 25 of 25, plus baseline | math 1/1 |
+| Same plus an equivalent equation as `$$...$$` (positive control) | 25 of 25, plus baseline | math 1/1 |
+| Same plus a wrong equation (product changed to sum) | 24 of 25, plus baseline | math 0/1 |
 | Deliberately defective Markdown | 12 of 25, plus baseline | present 6/7, order 3/5, table 3/12, math 0/1 |
 
 - The only pymupdf4llm failure is the equation: its Markdown carries no LaTeX for it, so no check
   can match. That is the expected limit of the default path, and it is what the control isolates.
+- The control's LaTeX deliberately differs from the fixture's (no `\,` after `w_i`), so it passes
+  through upstream's KaTeX render comparison and not the exact-string shortcut, and the wrong
+  variant fails the same comparison. Both were run with real KaTeX in headless Chromium.
 - The defective Markdown carried four injected defects: two table values swapped, a decimal point
   dropped (`1.640` to `1640`), one sentence omitted and two paragraphs swapped. All four were
   detected, and the failure messages name the offending cell relation or text, for example
@@ -172,8 +182,8 @@ Cannot, so these stay as internal checks:
 - **Order is weaker than it looks.** olmOCR passes an order check if any match of `before` precedes
   any match of `after`, so it passes vacuously when one text contains the other (such pairs are
   skipped) and when the later text also occurs earlier on the page (not detected).
-- **Emphasis characters.** Text with unbalanced `_`/`*` is skipped; balanced text is still
-  stripped of emphasis markers on both sides, so such characters are not checked exactly.
+- **Emphasis characters.** Text blocks containing `_` or `*` are skipped, so such characters in
+  body text are not checked at all; other text is still stripped of emphasis markers on both sides.
 - **Chunk coverage.** It scores one page's Markdown, not passage or chunk boundaries.
 - **Cross-page order.** Order checks relate two texts on a single page.
 - **Absence of extra or invented text.** Only `absent` checks test this, and none is exported.
