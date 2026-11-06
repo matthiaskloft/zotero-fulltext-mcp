@@ -11,6 +11,11 @@ All notable changes to this project are documented here. Format loosely follows
   for reviewed expectations, automatic observations and evaluation runs, plus a loader/validator
   with cross-record checks, under `benchmarks/extraction/`. Benchmark-side only; `jsonschema`
   and `referencing` were added to the `test` extra. See `docs/extraction-quality-plan.md`.
+- olmOCR-bench export adapter (roadmap E1, package C): `extraction.olmocr_export` turns a reviewed
+  expectation into presence/order/table/math checks, reporting every element it cannot express as
+  skipped. A one-off run of the pinned scorer (`v0.4.27`, isolated environment, no OCR model or
+  project dependency) on the synthetic corpus passed a correct Markdown and failed a defective one;
+  pin, commands, costs and limits are in `docs/olmocr-bench-feasibility.md`.
 
 ## [0.16.0] - 2026-11-05
 

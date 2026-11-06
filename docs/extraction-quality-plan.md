@@ -31,7 +31,9 @@ from the internal artifact. Do not duplicate answer keys or adopt its OCR model 
 scorer. Its tolerant page-level checks do not verify exact location, our hashes or chunk coverage;
 retain those internally. Consider [OmniDocBench](https://github.com/opendatalab/OmniDocBench#evaluation)
 later for richer table/formula metrics; its full formula evaluation adds system dependencies.
-Neither evaluator has been installed or validated here, so adapter feasibility is an E1 deliverable.
+olmOCR-bench was installed in an isolated environment and run once through the exporter in
+`benchmarks/extraction/olmocr_export.py`; see [olmocr-bench-feasibility.md](olmocr-bench-feasibility.md)
+for the pin, commands, results and limits. OmniDocBench has not been installed or validated.
 
 A cheap visual model may compare page images with corresponding Markdown and propose localized
 omission/addition/order/table/equation/caption findings or abstain. Calibrate false passes and
