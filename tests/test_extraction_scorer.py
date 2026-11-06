@@ -1207,3 +1207,38 @@ def test_identical_expected_captions_need_two_observed_captions(exp):
     assert _rescore(exp, obs)["verdict"] == "passed"
     obs["blocks"] = [b for b in obs["blocks"] if b["id"] != "c2"]
     assert ("caption_match", "c2") in _decisive(_rescore(exp, obs))
+
+
+# --- review of PR 173 --------------------------------------------------------------------------
+
+
+def test_merged_block_with_fragments_in_reverse_order_fails(chain_exp, chain_obs):
+    for later_page in (False, True):
+        merged = _merged(chain_obs)
+        block = next(b for b in merged["blocks"] if b["id"] == "pa")
+        _set_text(merged, "pa", PB + "\n" + PA)
+        if later_page:
+            block["page"] = 2
+        score = _rescore(chain_exp, merged)
+        assert score["verdict"] == "failed", later_page
+        assert {("text_presence", "pa"), ("text_presence", "pb")} & _decisive(score), later_page
+
+
+def test_reference_recorded_as_block_and_entry_is_covered_once(exp, obs):
+    obs["blocks"].append(_block("pz", "paragraph", 2, 20, RAW1, bbox=dict(BOX)))
+    score = _rescore(exp, obs)
+    assert {("text_precision", "r1b"), ("text_precision", "pz")} & _decisive(score)
+    assert score["verdict"] == "failed"
+    assert _rescore(exp, _observation_of(exp))["verdict"] == "passed"
+
+
+def test_out_of_scope_copy_cannot_use_up_an_expected_occurrence(exp):
+    _paged(exp)
+    exp["blocks"].append(_block("hd", "header", 2, 20, "Journal of Things 12", bbox=dict(BOX)))
+    obs = _observation_of(exp)
+    obs["scope"] = {"kind": "pages", "physical_pages": [1, 2]}
+    obs["pages"] = [_page(1), _page(2)]
+    obs["blocks"].append(_block("hd1", "header", 1, 21, "Journal of Things 12", bbox=dict(BOX)))
+    score = _rescore(exp, obs)
+    assert ("text_precision", "hd") not in _decisive(score), _decisive(score)
+    assert score["verdict"] == "passed"

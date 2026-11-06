@@ -276,15 +276,22 @@ class _Stream:
         return _search(self.text, text, start, None, taken,
                        lambda a, b: {self._page_at(a), self._page_at(b - 1)} <= pages)
 
-    def find_merged(self, text: str, neighbour: str, pages: set[int], taken: list[tuple[int, int]]) -> int | None:
+    def find_merged(self, text: str, neighbour: str, pages: set[int], taken: list[tuple[int, int]],
+                    before: bool) -> int | None:
         """Unconsumed occurrence of ``text`` inside an observed block (on ``pages``) that also holds
         the chain neighbour's text: the allowance for a block merged across a page or column break,
-        wherever the extractor attributed it."""
+        wherever the extractor attributed it. Inside the block the fragments must keep their order
+        (``before``: ``text`` must precede the neighbour, else follow it), so the allowance cannot
+        hide a reordering."""
         for start, end, page, _ in self.spans:
-            if page in pages and _search(self.text, neighbour, start, end) is not None:
-                found = _search(self.text, text, start, end, taken)
-                if found is not None:
-                    return found
+            if page not in pages:
+                continue
+            where = _search(self.text, neighbour, start, end)
+            if where is None:
+                continue
+            found = _search(self.text, text, start, end, taken)
+            if found is not None and (found < where if before else found > where):
+                return found
         return None
 
 
@@ -325,9 +332,9 @@ def _place(frag: dict[str, Any], stream: _Stream, norm: Norm, cursor: int,
     if forward is not None:
         taken.append((forward, forward + len(text)))
         return "ok", forward + len(text), forward
-    for neighbour in (frag["previous"], frag["next"]):
+    for neighbour, before in ((frag["previous"], False), (frag["next"], True)):
         if neighbour is not None:
-            merged = stream.find_merged(text, norm(neighbour["text"]), _chain_pages(frag["chain"]), taken)
+            merged = stream.find_merged(text, norm(neighbour["text"]), _chain_pages(frag["chain"]), taken, before)
             if merged is not None:
                 taken.append((merged, merged + len(text)))
                 return "ok", cursor, merged
@@ -439,18 +446,41 @@ def _check_precision(exp: dict[str, Any], obs: dict[str, Any], streams: dict[str
     them here. Pages where the expectation has truncated or uncertain text are not assessed."""
     scope = set(exp["scope"]["physical_pages"])
     unsure = {b["page"] for b in exp["blocks"] if isinstance(b.get("text"), str) and _skip_reason(b, "block")}
-    texts = [b["text"] for b in exp["blocks"] if isinstance(b.get("text"), str)]
-    texts += [e["raw"] for e in exp.get("references", {}).get("entries", [])]
+    # A reference recorded both as a block and as a linked entry is one printed text: the entry's raw
+    # text covers it, and the block texts of its chain are the fallback if the raw text is not
+    # contiguous in the observation. Counting both would pay for two occurrences.
+    chains = _chains(exp)
+    linked: set[str] = set()
+    items: list[tuple[str, list[str]]] = []
+    for entry in exp.get("references", {}).get("entries", []):
+        fallback: list[str] = []
+        if "block_id" in entry:
+            chain = _chain_index(chains, entry["block_id"])
+            linked |= {b["id"] for b in chain}
+            fallback = [b["text"] for b in chain if isinstance(b.get("text"), str)]
+        items.append((entry["raw"], fallback))
+    items += [(b["text"], []) for b in exp["blocks"] if isinstance(b.get("text"), str) and b["id"] not in linked]
     covered: dict[str, dict[str, Pair]] = {}
     for mode, norm in _MODES:
         stream = streams[mode]
         mask = bytearray(len(stream.text))
         taken: list[tuple[int, int]] = []
-        for text in sorted((norm(t) for t in texts if t), key=len, reverse=True):
-            i = _search(stream.text, text, 0, None, taken)
-            if i is not None:
-                mask[i:i + len(text)] = b"\x01" * len(text)
-                taken.append((i, i + len(text)))
+
+        def cover(text: str) -> bool:
+            # Only in-scope observed text can be accounted for: an out-of-scope copy must not use
+            # up the expected occurrence.
+            i = stream.find(text, 0, scope, taken)
+            if i is None:
+                return False
+            mask[i:i + len(text)] = b"\x01" * len(text)
+            taken.append((i, i + len(text)))
+            return True
+
+        for text, fallback in sorted(((norm(t), f) for t, f in items if t), key=lambda it: len(it[0]), reverse=True):
+            if not cover(text):
+                for part in fallback:
+                    if part:
+                        cover(norm(part))
         for start, end, page, block in stream.spans:
             if page not in scope:
                 continue
