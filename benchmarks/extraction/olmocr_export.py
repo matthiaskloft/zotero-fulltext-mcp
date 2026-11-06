@@ -148,11 +148,20 @@ def export_checks(expectation: dict[str, Any], *, pdf_name: str, allow_unreviewe
     eligible: list[dict[str, Any]] = []
     for block in ordered:
         btype = block["type"]
+        if "truncated" in block:
+            skip(
+                "truncated",
+                "content cut off at the scope boundary: the expected text is a fragment of the block,"
+                " so no check is exported that could be false for the whole",
+                block=block,
+                truncated=block["truncated"],
+            )
+            continue
         if "continues_from" in block:
             skip(
                 "continuation",
-                "block continues one on an earlier page: olmOCR scores one page, so this fragment is"
-                " checked on its own page and the cross-page chain itself is not checked",
+                "block continues an earlier block (same or earlier page): olmOCR scores one page, so"
+                " this fragment is checked on its own and the chain itself is not checked",
                 block=block,
                 continues_from=block["continues_from"],
             )

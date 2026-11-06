@@ -39,8 +39,10 @@ strict within that normalisation. Elements that cannot be expressed are listed i
   blocks marked high uncertainty;
 - table cells that are spanned or have no text, and neighbours that are spanned or empty;
 - order pairs across pages or with identical text on both sides;
-- cross-page `continues_from` chains: each fragment is checked on its own page, the chain itself is
-  reported as skipped;
+- `continues_from` chains (same or earlier page): each fragment is checked on its own, the chain
+  itself is reported as skipped;
+- `truncated` blocks (cut at the scope boundary of a page-scoped record): skipped whole, because the
+  expected text is only a fragment of the block;
 - page body anchors, reference entries and citation markers (with their `target_status`).
 
 A JSONL line may carry only fields of its olmOCR test class (the loader calls the dataclass with

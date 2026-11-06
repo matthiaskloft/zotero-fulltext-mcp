@@ -42,7 +42,7 @@ def _page(number):
     return {
         "physical_page": number,
         "printed_label": None,
-        "geometry": {"unit": "pt", "origin": "top-left", "box": "cropbox", "rotation": 0, "width": 600, "height": 800},
+        "geometry": {"unit": "pt", "origin": "top-left", "frame": "unrotated", "box": "cropbox", "rotation": 0, "width": 600, "height": 800},
         "render": {"renderer": "synthetic-renderer", "renderer_version": "1.0"},
     }
 
@@ -187,7 +187,7 @@ def test_equations_export_latex_or_report_skip():
     exp = _expectation([
         _block("e1", "equation", 1, 0, None, equation={"latex": "a=-b", "number": "(1)", "display": True}),
         _block("e2", "equation", 1, 1, None, equation={"latex": None}),
-        _block("e3", "equation", 1, 2, "x = y", equation={}),
+        _block("e3", "equation", 1, 2, "x = y", equation={"latex": None}),
     ])
     result = export_checks(exp, pdf_name="doc.pdf")
     [math] = _by_type(result, "math")
@@ -332,6 +332,37 @@ def test_cross_page_continuations_are_reported_not_exported_as_chains():
     assert [t["text"] for t in _by_type(result, "present")] == ["Text that runs on", "onto the next page"]
     [item] = [s for s in result.skipped if s["kind"] == "continuation"]
     assert item["block_id"] == "b" and item["continues_from"] == "a" and "one page" in item["reason"]
+
+
+def test_same_page_continuations_are_exported_per_fragment_and_chain_reported():
+    exp = _expectation([
+        _block("a", "paragraph", 1, 0, "Text before a figure"),
+        _block("f", "figure", 1, 1, None, graphic={"kind": "image"}),
+        _block("b", "paragraph", 1, 2, "and text after it", continues_from="a"),
+    ])
+    result = export_checks(exp, pdf_name="doc.pdf")
+    assert len(_by_type(result, "present")) == 2 and len(_by_type(result, "order")) == 1
+    [item] = [s for s in result.skipped if s["kind"] == "continuation"]
+    assert item["block_id"] == "b" and "same or earlier page" in item["reason"]
+
+
+def test_truncated_blocks_are_skipped_with_a_reason_and_leave_no_checks():
+    cells = [_cell(0, 0, "h", is_header=True), _cell(1, 0, "v")]
+    exp = _expectation(
+        [
+            _block("a", "paragraph", 1, 0, "Cut off start of a paragraph", truncated="start"),
+            _block("m", "paragraph", 1, 1, "Whole paragraph"),
+            _block("t", "table", 1, 2, None, table=_table(cells, 2, 1), truncated="end"),
+        ],
+        pages=(1, 2),
+        scope={"kind": "pages", "physical_pages": [1, 2]},
+    )
+    exp["pages"] = [_page(1), _page(2)]
+    exp["document"]["page_count"] = 3
+    result = export_checks(exp, pdf_name="doc.pdf")
+    assert [t["text"] for t in result.tests] == ["Whole paragraph"]
+    skipped = {s["block_id"]: s for s in result.skipped if s["kind"] == "truncated"}
+    assert set(skipped) == {"a", "t"} and skipped["a"]["truncated"] == "start"
 
 
 def test_unreviewed_export_is_only_possible_for_the_synthetic_example():

@@ -21,6 +21,7 @@
       "geometry": {
         "unit": "pt",
         "origin": "top-left",
+        "frame": "unrotated",
         "box": "cropbox",
         "rotation": 0,
         "width": 595.276,
@@ -38,6 +39,7 @@
       "geometry": {
         "unit": "pt",
         "origin": "top-left",
+        "frame": "unrotated",
         "box": "cropbox",
         "rotation": 0,
         "width": 595.276,
