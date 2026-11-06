@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "record_kind": "expectation",
-  "record_id": "ocr-corpus-olmocr-feasibility",
+  "record_id": "synthetic-example-ocr-corpus-not-reviewed",
   "document": {
     "pdf_sha256": "eeb0b7f3716e738e03f623090f95d12cc368c87f592c7c6340d2bb199c1473eb",
     "title": "Synthetic OCR Validation Corpus",
@@ -21,6 +21,8 @@
       "geometry": {
         "unit": "pt",
         "origin": "top-left",
+        "box": "cropbox",
+        "rotation": 0,
         "width": 595.276,
         "height": 841.89
       },
@@ -36,6 +38,8 @@
       "geometry": {
         "unit": "pt",
         "origin": "top-left",
+        "box": "cropbox",
+        "rotation": 0,
         "width": 595.276,
         "height": 841.89
       },
@@ -58,7 +62,8 @@
         "x1": 312.2,
         "y1": 84.6
       },
-      "text": "Synthetic OCR Validation Corpus"
+      "text": "Synthetic OCR Validation Corpus",
+      "text_sha256": "c32ea85b827bad0c09cd517101bf8eb45eacf08d4e3453bc6362d05078d85b72"
     },
     {
       "id": "p1-intro",
@@ -71,7 +76,8 @@
         "x1": 524.4,
         "y1": 135.4
       },
-      "text": "This document exists to be converted, not read. Prose paragraphs are present so that crops have neighbouring text to be located by, mirroring how a real article reads around its display elements."
+      "text": "This document exists to be converted, not read. Prose paragraphs are present so that crops have neighbouring text to be located by, mirroring how a real article reads around its display elements.",
+      "text_sha256": "730bfb1c877c1cebd5f4e2462b34c510cdf746bdb89bd6c7ccf37c1b87d343b5"
     },
     {
       "id": "p1-eq1-lead",
@@ -84,7 +90,8 @@
         "x1": 524.4,
         "y1": 162.5
       },
-      "text": "CORPUSMARK-EQ-001 A numbered display equation, the standard weighted arithmetic mean:"
+      "text": "CORPUSMARK-EQ-001 A numbered display equation, the standard weighted arithmetic mean:",
+      "text_sha256": "35ef16878f7a70aab9af33c64ac2eba0956057f597f4b9474330448c0dc54bf4"
     },
     {
       "id": "p1-eq1",
@@ -115,7 +122,8 @@
         "x1": 363.1,
         "y1": 205.2
       },
-      "text": "The weights are normalised so that the result stays bounded."
+      "text": "The weights are normalised so that the result stays bounded.",
+      "text_sha256": "7bc3d5f37f9849ed19502ea139aac43df4e41c3f58cb7e68231a63a86fb21997"
     },
     {
       "id": "p1-folio",
@@ -128,7 +136,8 @@
         "x1": 300.4,
         "y1": 803.3
       },
-      "text": "1"
+      "text": "1",
+      "text_sha256": "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b"
     },
     {
       "id": "p3-tbl1-lead",
@@ -141,7 +150,8 @@
         "x1": 326.2,
         "y1": 277.0
       },
-      "text": "CORPUSMARK-TBL-001 A ruled numeric table:"
+      "text": "CORPUSMARK-TBL-001 A ruled numeric table:",
+      "text_sha256": "e8d6899622790d2b517f595fd2b674c51d9a1fd2381ba32e5e9947e077146602"
     },
     {
       "id": "p3-tbl1",
@@ -236,7 +246,8 @@
         "x1": 524.4,
         "y1": 378.0
       },
-      "text": "The table above reports descriptive statistics."
+      "text": "The table above reports descriptive statistics.",
+      "text_sha256": "5288acf62200abe2e18cb8319c474eebf9f532031c96c382bb3bc46cc4314d25"
     },
     {
       "id": "p3-fig1",
@@ -270,7 +281,8 @@
         "y1": 530.4
       },
       "text": "Fig. 1 Line segments and plotted points, captioned in the style a converted article uses.",
-      "caption_for": "p3-fig1"
+      "caption_for": "p3-fig1",
+      "text_sha256": "63ad959dcb1aaf6e28d01b5dbd9d072a57cb94af40516a1176a1605d495fc80e"
     },
     {
       "id": "p3-folio",
@@ -283,19 +295,18 @@
         "x1": 300.4,
         "y1": 803.3
       },
-      "text": "3"
+      "text": "3",
+      "text_sha256": "4e07408562bedb8b60ce05c1decfe3ad16b72230967de01f640b7e4729b49fce"
     }
   ],
   "provenance": {
     "review": {
-      "status": "reviewed",
-      "reviewer": "e1-feasibility-fixture",
-      "reviewed_at": "2026-11-06T00:00:00Z",
-      "basis": "pdf_inspection"
+      "status": "draft",
+      "reviewer": "synthetic-example-not-a-reviewer"
     },
     "uncertainty": {
       "level": "medium",
-      "note": "Feasibility fixture, not a human-reviewed baseline. Hand-written by the E1 package C implementer from the known content of corpus.tex and the PDF text layer; bounding boxes come from the PDF text layer and are approximate. The 'reviewed' status exists only so the exporter accepts the record."
+      "note": "SYNTHETIC EXAMPLE, NOT REVIEWED TRUTH. Hand-written by the E1 package C implementer from the known content of corpus.tex and the PDF text layer; no human inspected page images. Bounding boxes come from the PDF text layer and are approximate. It is a draft because no review basis value honestly describes this, and the exporter accepts it only through an explicit synthetic-example path. Never use it as baseline data."
     }
   }
 }

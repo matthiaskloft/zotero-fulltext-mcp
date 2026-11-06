@@ -15,7 +15,9 @@ answer key; nothing in the JSONL is stored anywhere else, and drafts are refused
 python -m extraction.olmocr_export EXPECTATION.json --pdf PDF --out checks.jsonl --report report.json
 ```
 
-Run it with `benchmarks` on `PYTHONPATH` (as pytest does). `--pdf` is hashed and must match the
+Run it with `benchmarks` on `PYTHONPATH` (as pytest does). A reviewed expectation is required; the
+committed synthetic example is a draft and is accepted only with `--allow-synthetic-example` (and
+only if its record id starts with `synthetic-example-`). `--pdf` is hashed and must match the
 expectation's `pdf_sha256`, so checks cannot be scored against the wrong file.
 
 | Expectation element | olmOCR-bench check |
@@ -37,7 +39,9 @@ strict within that normalisation. Elements that cannot be expressed are listed i
   blocks marked high uncertainty;
 - table cells that are spanned or have no text, and neighbours that are spanned or empty;
 - order pairs across pages or with identical text on both sides;
-- page body anchors, reference entries and citation markers.
+- cross-page `continues_from` chains: each fragment is checked on its own page, the chain itself is
+  reported as skipped;
+- page body anchors, reference entries and citation markers (with their `target_status`).
 
 A JSONL line may carry only fields of its olmOCR test class (the loader calls the dataclass with
 `**data`), so links back to blocks live in the test `id` (`<record>.<block>.<kind>`) and the report.
@@ -102,10 +106,15 @@ output), split into pages with the `.pages.json` it writes.
 ## Run
 
 Input: `tests/fixtures/ocr_corpus/corpus.pdf`, pages 1 and 3, with the expectation committed as
-`benchmarks/extraction/examples/ocr_corpus_olmocr_feasibility.expectation.json`. It is a
-**hand-written feasibility fixture** (text taken from `corpus.tex` and the PDF text layer; bounding
-boxes approximate; one equation with its LaTeX from the source). Its `reviewed` status is nominal
-so the exporter accepts it; it is not a human-reviewed baseline and must not be reused as one.
+`benchmarks/extraction/examples/ocr_corpus_synthetic_example.draft_expectation.json`.
+
+**This is not reviewed truth and not baseline data.** It is a synthetic example written by the
+implementer from `corpus.tex` and the PDF text layer; no human inspected page images, and the
+bounding boxes are approximate. Its review status is `draft`, its reviewer id is
+`synthetic-example-not-a-reviewer`, no `basis` is stated (no schema value honestly describes it)
+and its record id starts with `synthetic-example-`. The exporter accepts it only through the
+explicit `--allow-synthetic-example` path, and every report carries
+`expectation_review_status: draft`. It exists so the run is reproducible and for tests.
 
 Export: 25 checks (7 present, 5 order, 12 table, 1 math), 4 skipped (two page numbers, one figure,
 one cross-page order pair), 0 partial table relations.

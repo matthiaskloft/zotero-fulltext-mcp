@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from extraction import RecordError, load_reviewed_expectation
+from extraction import RecordError, load_record, load_reviewed_expectation, sha256_text
 from extraction.olmocr_export import (
     NOT_VERIFIABLE,
     OLMOCR_REFERENCE,
@@ -18,7 +18,7 @@ from extraction.olmocr_export import (
 )
 
 REPO = Path(__file__).resolve().parent.parent
-EXAMPLE = REPO / "benchmarks" / "extraction" / "examples" / "ocr_corpus_olmocr_feasibility.expectation.json"
+EXAMPLE = REPO / "benchmarks" / "extraction" / "examples" / "ocr_corpus_synthetic_example.draft_expectation.json"
 CORPUS_PDF = REPO / "tests" / "fixtures" / "ocr_corpus" / "corpus.pdf"
 
 # Fields each olmOCR test class accepts, copied from olmocr/bench/tests.py at OLMOCR_REFERENCE's
@@ -42,7 +42,7 @@ def _page(number):
     return {
         "physical_page": number,
         "printed_label": None,
-        "geometry": {"unit": "pt", "origin": "top-left", "width": 600, "height": 800},
+        "geometry": {"unit": "pt", "origin": "top-left", "box": "cropbox", "rotation": 0, "width": 600, "height": 800},
         "render": {"renderer": "synthetic-renderer", "renderer_version": "1.0"},
     }
 
@@ -52,8 +52,9 @@ def _block(block_id, kind, page, order, text=None, **extra):
         "id": block_id, "type": kind, "page": page, "reading_order": order,
         "bbox": {"x0": 10, "y0": 10 + 20 * order, "x1": 500, "y1": 25 + 20 * order},
     }
+    block["text"] = text
     if text is not None:
-        block["text"] = text
+        block["text_sha256"] = sha256_text(text)
     block.update(extra)
     return block
 
@@ -186,7 +187,7 @@ def test_equations_export_latex_or_report_skip():
     exp = _expectation([
         _block("e1", "equation", 1, 0, None, equation={"latex": "a=-b", "number": "(1)", "display": True}),
         _block("e2", "equation", 1, 1, None, equation={"latex": None}),
-        _block("e3", "equation", 1, 2, "x = y"),
+        _block("e3", "equation", 1, 2, "x = y", equation={}),
     ])
     result = export_checks(exp, pdf_name="doc.pdf")
     [math] = _by_type(result, "math")
@@ -209,8 +210,8 @@ def test_everything_inexpressible_is_reported_as_skipped():
         pages=(1,),
         references={
             "entries": [{"id": "r1", "ordinal": 1, "page": 1, "block_id": "ref", "raw": "[1] A. Author. Title. 2020.",
-                         "doi": {"status": "absent_in_source"}}],
-            "markers": [{"id": "m1", "page": 1, "text": "[1]", "entry_ids": ["r1"]}],
+                         "raw_sha256": sha256_text("[1] A. Author. Title. 2020."), "doi": {"status": "absent_in_source"}}],
+            "markers": [{"id": "m1", "page": 1, "text": "[1]", "target_status": "resolved", "entry_ids": ["r1"]}],
         },
     )
     exp["pages"][0]["body_start"] = {"block_id": "ref"}
@@ -319,12 +320,55 @@ def test_cli_refuses_draft_expectations(tmp_path, capsys):
     assert "not reviewed" in capsys.readouterr().err
 
 
-def test_committed_feasibility_expectation_matches_the_corpus_and_exports():
-    expectation = load_reviewed_expectation(EXAMPLE)
+def test_cross_page_continuations_are_reported_not_exported_as_chains():
+    exp = _expectation(
+        [
+            _block("a", "paragraph", 1, 0, "Text that runs on"),
+            _block("b", "paragraph", 2, 1, "onto the next page", continues_from="a"),
+        ],
+        pages=(1, 2),
+    )
+    result = export_checks(exp, pdf_name="doc.pdf")
+    assert [t["text"] for t in _by_type(result, "present")] == ["Text that runs on", "onto the next page"]
+    [item] = [s for s in result.skipped if s["kind"] == "continuation"]
+    assert item["block_id"] == "b" and item["continues_from"] == "a" and "one page" in item["reason"]
+
+
+def test_unreviewed_export_is_only_possible_for_the_synthetic_example():
+    draft = _expectation([_block("p", "paragraph", 1, 0, "Text")], status="draft")
+    with pytest.raises(RecordError, match="not reviewed"):
+        export_checks(draft, pdf_name="doc.pdf")
+    with pytest.raises(RecordError, match="synthetic-example-"):
+        export_checks(draft, pdf_name="doc.pdf", allow_unreviewed_example=True)
+    draft["record_id"] = "synthetic-example-draft"
+    report = export_checks(draft, pdf_name="doc.pdf", allow_unreviewed_example=True).report()
+    assert report["expectation_review_status"] == "draft"
+
+
+def test_committed_example_is_an_unmistakable_unreviewed_synthetic_draft():
+    assert "synthetic_example" in EXAMPLE.name and "draft" in EXAMPLE.name
+    expectation = load_record(EXAMPLE, kind="expectation")
+    review = expectation["provenance"]["review"]
+    assert review["status"] == "draft" and "basis" not in review
+    assert review["reviewer"].startswith("synthetic-example-")
+    assert expectation["record_id"].startswith("synthetic-example-")
+    assert "NOT REVIEWED TRUTH" in expectation["provenance"]["uncertainty"]["note"]
+    with pytest.raises(RecordError, match="not reviewed"):
+        load_reviewed_expectation(EXAMPLE)
+    with pytest.raises(RecordError, match="not reviewed"):
+        export_checks(expectation, pdf_name="corpus.pdf")
     assert hashlib.sha256(CORPUS_PDF.read_bytes()).hexdigest() == expectation["document"]["pdf_sha256"]
-    # A hand-written feasibility record must say so; it is not a reviewed baseline.
-    assert expectation["provenance"]["uncertainty"]["note"].startswith("Feasibility fixture")
-    result = export_checks(expectation, pdf_name="corpus.pdf")
+    result = export_checks(expectation, pdf_name="corpus.pdf", allow_unreviewed_example=True)
     counts = result.counts()
     assert (counts["present"], counts["order"], counts["table"], counts["math"]) == (7, 5, 12, 1)
     assert counts["skipped"] == 4 and counts["partial_table_relations"] == 0
+    assert result.report()["expectation_review_status"] == "draft"
+
+
+def test_cli_exports_the_example_only_with_the_explicit_flag(tmp_path, capsys):
+    out = tmp_path / "checks.jsonl"
+    args = [str(EXAMPLE), "--pdf", str(CORPUS_PDF), "--out", str(out)]
+    assert main(args) == 1
+    assert "not reviewed" in capsys.readouterr().err and not out.exists()
+    assert main([*args, "--allow-synthetic-example"]) == 0
+    assert len(out.read_text(encoding="utf-8").splitlines()) == 25

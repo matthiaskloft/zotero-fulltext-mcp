@@ -26,9 +26,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from .records import RecordError, load_reviewed_expectation, sha256_bytes, validate_record
+from .records import RecordError, load_record, load_reviewed_expectation, sha256_bytes, validate_record
 
 EXPORTER_VERSION = "1"
+SYNTHETIC_EXAMPLE_PREFIX = "synthetic-example-"
 
 OLMOCR_REFERENCE = {
     "repository": "https://github.com/allenai/olmocr",
@@ -62,6 +63,7 @@ class ExportResult:
 
     record_id: str
     pdf_name: str
+    review_status: str = "reviewed"
     tests: list[dict[str, Any]] = field(default_factory=list)
     sources: dict[str, str] = field(default_factory=dict)  # test id -> expectation block id
     skipped: list[dict[str, Any]] = field(default_factory=list)
@@ -81,6 +83,7 @@ class ExportResult:
             "exporter_version": EXPORTER_VERSION,
             "olmocr_reference": OLMOCR_REFERENCE,
             "record_id": self.record_id,
+            "expectation_review_status": self.review_status,
             "pdf_name": self.pdf_name,
             "counts": self.counts(),
             "tests": [
@@ -104,21 +107,28 @@ def _has_content(text: Any) -> bool:
     return isinstance(text, str) and any(ch.isalnum() for ch in text)
 
 
-def export_checks(expectation: dict[str, Any], *, pdf_name: str) -> ExportResult:
+def export_checks(expectation: dict[str, Any], *, pdf_name: str, allow_unreviewed_example: bool = False) -> ExportResult:
     """Derive olmOCR-bench checks from a validated, reviewed expectation.
 
     ``pdf_name`` is the name of the PDF inside the benchmark's ``pdfs/`` folder; it is the
     ``pdf`` field of every check.
+
+    ``allow_unreviewed_example`` lets a ``draft`` expectation through, solely for the committed
+    synthetic example (no schema ``basis`` value honestly describes a hand-written fixture, so it
+    is a draft rather than a falsely "reviewed" record). The report then says it is not truth.
     """
     kind = validate_record(expectation)
     if kind != "expectation":
         raise RecordError([f"expected an expectation record, got {kind}"])
-    if expectation["provenance"]["review"]["status"] != "reviewed":
+    status = expectation["provenance"]["review"]["status"]
+    if status != "reviewed" and not allow_unreviewed_example:
         raise RecordError(["expectation is not reviewed; drafts are not ground truth"])
+    if status != "reviewed" and not expectation["record_id"].startswith(SYNTHETIC_EXAMPLE_PREFIX):
+        raise RecordError([f"only records whose id starts with {SYNTHETIC_EXAMPLE_PREFIX!r} may be exported unreviewed"])
     if not pdf_name or "/" in pdf_name or "\\" in pdf_name:
         raise ValueError("pdf_name must be a bare file name")
 
-    result = ExportResult(record_id=expectation["record_id"], pdf_name=pdf_name)
+    result = ExportResult(record_id=expectation["record_id"], pdf_name=pdf_name, review_status=status)
     rid = result.record_id
 
     def skip(kind: str, reason: str, *, block: dict[str, Any] | None = None, **extra: Any) -> None:
@@ -138,6 +148,14 @@ def export_checks(expectation: dict[str, Any], *, pdf_name: str) -> ExportResult
     eligible: list[dict[str, Any]] = []
     for block in ordered:
         btype = block["type"]
+        if "continues_from" in block:
+            skip(
+                "continuation",
+                "block continues one on an earlier page: olmOCR scores one page, so this fragment is"
+                " checked on its own page and the cross-page chain itself is not checked",
+                block=block,
+                continues_from=block["continues_from"],
+            )
         if block.get("uncertainty", {}).get("level") == "high":
             skip("block", "high uncertainty: the expectation says not to score this strictly", block=block)
         elif btype == "table":
@@ -179,7 +197,7 @@ def export_checks(expectation: dict[str, Any], *, pdf_name: str) -> ExportResult
         for entry in refs["entries"]:
             skip("reference_entry", "reference parsing and identifier recovery are not olmOCR-bench checks", block_id=entry.get("block_id"), page=entry["page"], entry_id=entry["id"])
         for marker in refs["markers"]:
-            skip("citation_marker", "citation-marker links are not olmOCR-bench checks", block_id=marker.get("block_id"), page=marker["page"], marker_id=marker["id"])
+            skip("citation_marker", "citation-marker links are not olmOCR-bench checks", block_id=marker.get("block_id"), page=marker["page"], marker_id=marker["id"], target_status=marker["target_status"])
 
     ids = [t["id"] for t in result.tests]
     if len(set(ids)) != len(ids):  # unreachable for validated records; olmOCR rejects duplicates outright
@@ -262,16 +280,24 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("expectation", type=Path, help="reviewed expectation record (JSON)")
     parser.add_argument("--pdf", type=Path, required=True, help="the PDF the expectation describes; its SHA-256 must match")
     parser.add_argument("--pdf-name", help="name of the PDF in the benchmark's pdfs/ folder (default: the --pdf file name)")
+    parser.add_argument(
+        "--allow-synthetic-example",
+        action="store_true",
+        help="accept a draft expectation; only for the committed synthetic example, never for baseline data",
+    )
     parser.add_argument("--out", type=Path, required=True, help="output checks file (.jsonl)")
     parser.add_argument("--report", type=Path, help="output report (JSON): counts, skipped elements, check-to-block links")
     args = parser.parse_args(argv)
 
     try:
-        expectation = load_reviewed_expectation(args.expectation)
+        if args.allow_synthetic_example:
+            expectation = load_record(args.expectation, kind="expectation")
+        else:
+            expectation = load_reviewed_expectation(args.expectation)
         actual = sha256_bytes(args.pdf.read_bytes())
         if actual != expectation["document"]["pdf_sha256"]:
             raise RecordError([f"--pdf hash {actual} does not match the expectation's pdf_sha256"])
-        result = export_checks(expectation, pdf_name=args.pdf_name or args.pdf.name)
+        result = export_checks(expectation, pdf_name=args.pdf_name or args.pdf.name, allow_unreviewed_example=args.allow_synthetic_example)
     except (RecordError, ValueError, OSError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
