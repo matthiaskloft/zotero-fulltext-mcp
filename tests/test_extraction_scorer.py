@@ -8,6 +8,8 @@ import pytest
 from extraction import defects, options_sha256, sha256_bytes, sha256_text, validate_record
 from extraction.scorer import (
     METRIC_VERSIONS,
+    _assign,
+    _Checks,
     ScoringError,
     failure_result,
     score_files,
@@ -64,7 +66,7 @@ def _expectation():
             _block("p2", "paragraph", 1, 2, "Second paragraph with Mixed Case and x = 3.14."),
             _block("t1", "table", 1, 3, None, table=table),
             _block("c1", "caption", 1, 4, "Table 1. Synthetic group means.", caption_for="t1"),
-            _block("e1", "equation", 2, 5, None, equation={"latex": "y=-x+1", "number": "(1)", "display": True}),
+            _block("e1", "equation", 2, 5, None, equation={"latex": "y=-0.5x+1", "number": "(1)", "display": True}),
             _block("r1b", "reference_entry", 2, 6, RAW1),
             _block("r2b", "reference_entry", 2, 7, RAW2),
         ],
@@ -92,7 +94,7 @@ def _observation_of(expectation):
     obs["record_id"] = "obs-1"
     obs["provenance"] = {"produced_by": {"tool": "synthetic-extractor", "version": "0.1"},
                          "created_at": "2026-01-01T00:00:00Z"}
-    for entry in obs["references"]["entries"]:
+    for entry in obs.get("references", {}).get("entries", []):
         if entry["doi"]["status"] != "present":
             entry["doi"] = {"status": "not_found"}
     return obs
@@ -176,7 +178,7 @@ def test_omitted_caption_fails_strict(exp, obs):
 def test_swapped_reading_order_fails_strict(exp, obs):
     score = _rescore(exp, defects.swap_reading_order(obs, "p1", "p2"))
     assert not score["strict_passed"]
-    assert {("reading_order", "h1->p1"), ("reading_order", "p1->p2")} & _failed(score)
+    assert ("reading_order", "p2") in _failed(score)
 
 
 def test_caption_linked_to_wrong_target_fails(exp, obs):
@@ -254,7 +256,9 @@ def test_score_files_round_trip(exp, obs, tmp_path):
 def test_high_uncertainty_items_are_listed_not_scored(exp, obs):
     next(b for b in exp["blocks"] if b["id"] == "p2")["uncertainty"] = {"level": "high"}
     score = _rescore(exp, defects.omit_text(obs, "p2"))
-    assert score["strict_passed"]
+    assert score["strict_failures"] == 0
+    assert score["verdict"] == "incomplete" and not score["strict_passed"]  # unscored items: not a pass
+    assert score["unscored_items"] == len(score["not_scored"]) >= 1
     assert {"metric": "text_presence", "subject": "p2",
             "reason": "expected block marked high uncertainty"} in score["not_scored"]
 
@@ -316,11 +320,14 @@ def test_field_parsing_errors_are_reported(exp, obs):
     assert "year" in check["detail"] and "authors" in check["detail"]
 
 
-def test_observation_without_references_is_not_scored_as_zero(exp, obs):
+def test_observation_without_references_is_an_empty_list_where_references_are_expected(exp, obs):
     del obs["references"]
     score = _rescore(exp, obs)
-    assert not [c for c in score["checks"] if c["name"].startswith("reference_")]
-    assert score["not_scored"][0]["metric"] == "reference_*"
+    assert score["verdict"] == "failed"
+    assert {("reference_segmentation_recall", "r1"), ("reference_segmentation_recall", "r2")} <= _failed(score)
+    # Where the expectation has no references, a missing section costs nothing.
+    del exp["references"]
+    assert _rescore(exp, obs)["verdict"] == "passed"
 
 
 # --- run output ----------------------------------------------------------------------------------
@@ -572,3 +579,406 @@ def test_same_page_chain_is_scored_as_one_item(chain_exp, chain_obs):
     merged = _merged(chain_obs)
     assert score_records(chain_exp, merged)["strict_passed"]
     assert ("text_presence", "pb") in _failed(score_records(chain_exp, defects.drop_sign(merged, "pa")))
+
+
+# --- strict transcription vs layout, order, verdict, tables, captions, references ---------------------
+
+BOX = {"x0": 10, "y0": 700, "x1": 500, "y1": 740}
+
+
+def _set_text(obs, block_id, text):
+    block = next(b for b in obs["blocks"] if b["id"] == block_id)
+    block["text"], block["text_sha256"] = text, sha256_text(text)
+
+
+def _metric(score, name, mode="strict"):
+    return next((m for m in score["metrics"] if m["name"] == name and m["mode"] == mode), None)
+
+
+def _decisive(score):
+    return {(c["name"], c["subject"]) for c in score["checks"] if c["decides"] and not c["passed"]}
+
+
+def test_strict_transcription_ignores_wraps_whitespace_heading_markup_and_block_boundaries(exp, obs):
+    _set_text(obs, "h1", "# Alpha Heading")
+    _set_text(obs, "p2", "Second paragraph\nwith Mixed   Case and\nx = 3.14.")
+    for block in obs["blocks"]:
+        if block["reading_order"] >= 2:
+            block["reading_order"] += 1
+    p1 = next(b for b in obs["blocks"] if b["id"] == "p1")
+    _set_text(obs, "p1", "The effect is -0.5 at")
+    second = _block("p1b", "paragraph", 1, 2, "p < .05 for Group A.")
+    obs["blocks"].append(second)
+    score = _rescore(exp, obs)
+    assert score["verdict"] == "passed", _decisive(score)
+    # Layout and byte-exactness are reported, but do not decide the verdict.
+    assert _metric(score, "text_segmentation")["value"] < 1
+    assert _metric(score, "text_span_hash")["value"] < 1
+    assert p1["text"] == "The effect is -0.5 at"
+
+
+@pytest.mark.parametrize("target,mutate,expected", [
+    ("p2", lambda o: _set_text(o, "p2", "Second paragraph with Mixed Case and x = 314."), ("text_presence", "p2")),
+    ("p1", lambda o: _set_text(o, "p1", "The effect is -0.5 at p > .05 for Group A."), ("text_presence", "p1")),
+    ("p1", lambda o: _set_text(o, "p1", "The effect is -0.5 at p < 05 for Group A."), ("text_presence", "p1")),
+    ("p1-case", lambda o: _set_text(o, "p1", "the effect is -0.5 at p < .05 for group a."), ("text_presence", "p1")),
+    ("t1", lambda o: _cell_of(o, 1, 1).update(text="425"), ("table_exact", "t1")),
+    ("t1", lambda o: _cell_of(o, 2, 2).update(text="1.25"), ("table_exact", "t1")),
+    ("e1", lambda o: _equation_of(o).update(latex="y=-05x+1"), ("equation_match", "e1")),
+    ("e1", lambda o: _equation_of(o).update(latex="y=-0.5x-1"), ("equation_match", "e1")),
+    ("e1", lambda o: _equation_of(o).update(latex="y-0.5x+1"), ("equation_match", "e1")),
+])
+def test_strict_keeps_decimals_operators_signs_and_case(exp, obs, target, mutate, expected):
+    mutate(obs)
+    score = _rescore(exp, obs)
+    assert expected in _decisive(score) and score["verdict"] == "failed"
+    if "case" not in target:
+        assert expected in _failed(score, "tolerant")  # tolerant never restores digits, signs or operators
+
+
+def _cell_of(obs, row, col):
+    table = next(b for b in obs["blocks"] if b["id"] == "t1")["table"]
+    return next(c for c in table["cells"] if (c["row"], c["col"]) == (row, col))
+
+
+def _equation_of(obs):
+    return next(b for b in obs["blocks"] if b["id"] == "e1")["equation"]
+
+
+def _order_expectation():
+    record = _chain_expectation()
+    record["record_id"] = "exp-order"
+    order = {"h1": 0, "pa": 1, "ta": 3, "pb": 5, "tb": 6, "ra": 8, "rb": 9}
+    for block in record["blocks"]:
+        block["reading_order"] = order[block["id"]]
+    record["blocks"] += [
+        _block("d1", "paragraph", 1, 2, "Repeated sentence.", bbox=BOX),
+        _block("dx", "paragraph", 2, 4, "Interleaved paragraph.", bbox=BOX),
+        _block("d2", "paragraph", 2, 7, "Repeated sentence.", bbox=BOX),
+    ]
+    return record
+
+
+def test_identical_clone_passes_reading_order_with_repeats_and_interleaved_chains():
+    exp = _order_expectation()
+    clone = _observation_of(exp)
+    score = _rescore(exp, clone)
+    assert score["verdict"] == "passed", _decisive(score)
+    assert _metric(score, "reading_order")["value"] == 1.0
+    merged = _merged(clone)
+    assert _rescore(exp, merged)["verdict"] == "passed"
+
+
+def test_displaced_block_fails_order_but_a_missing_block_does_not_cascade():
+    exp = _order_expectation()
+    clone = _observation_of(exp)
+    displaced = _rescore(exp, defects.swap_reading_order(clone, "pa", "d1"))
+    assert ("reading_order", "d1") in _failed(displaced)
+    missing = _rescore(exp, defects.omit_text(clone, "dx"))
+    assert _decisive(missing) == {("text_presence", "dx")}
+    assert any(n["metric"] == "reading_order" and n["subject"] == "dx" for n in missing["not_scored"])
+
+
+def test_split_fragment_must_sit_on_its_own_page_only_merged_blocks_may_move(chain_exp, chain_obs):
+    pb = next(b for b in chain_obs["blocks"] if b["id"] == "pb")
+    pb["page"] = 1
+    pb["bbox"] = dict(BOX)
+    score = _rescore(chain_exp, chain_obs)
+    assert ("text_presence", "pb") in _failed(score) and "page(s) [1]" in next(
+        c for c in score["checks"] if c["subject"] == "pb" and c["mode"] == "strict")["detail"]
+
+
+def test_invented_content_lowers_text_precision(exp, obs):
+    obs["blocks"].append(_block("pz", "paragraph", 1, 20, "An entirely invented claim.", bbox=BOX))
+    score = _rescore(exp, obs)
+    assert ("text_precision", "pz") in _decisive(score) and score["verdict"] == "failed"
+    assert _failed(score, "tolerant") >= {("text_precision", "pz")}
+    clean = _rescore(exp, _observation_of(exp))
+    assert _metric(clean, "text_precision")["value"] == 1.0
+
+
+# --- verdict ------------------------------------------------------------------------------------
+
+
+def test_verdict_is_incomplete_when_nothing_decisive_ran(exp):
+    exp["blocks"] = [_block("hd", "header", 1, 0, "Running header")]
+    del exp["references"]
+    obs = _observation_of(exp)
+    score = _rescore(exp, obs)
+    assert score["strict_checks"] == 0 and score["verdict"] == "incomplete" and not score["strict_passed"]
+
+
+def test_mostly_unscored_expectation_is_incomplete_not_passed(exp, obs):
+    for block in exp["blocks"]:
+        if block["id"] in ("h1", "p1"):
+            block["uncertainty"] = {"level": "high"}
+    score = _rescore(exp, obs)
+    assert score["strict_failures"] == 0 and score["verdict"] == "incomplete"
+    assert score["unscored_items"] >= 2
+
+
+def test_run_result_carries_verdict_and_unscored_count(exp, obs):
+    next(b for b in exp["blocks"] if b["id"] == "p2")["uncertainty"] = {"level": "high"}
+    score = _rescore(exp, obs)
+    result = score_to_result("c1", "i1", score, "e" * 64)
+    assert result["verdict"] == "incomplete" and result["unscored_items"] == score["unscored_items"] >= 1
+    options = {}
+    run = {
+        "schema_version": 1, "record_kind": "run", "record_id": "run-2", "started_at": "2026-01-01T00:00:00Z",
+        "metric_versions": METRIC_VERSIONS,
+        "configurations": [{"id": "c1", "tool": "t", "version": "1", "options": options,
+                            "options_sha256": options_sha256(options)}],
+        "inputs": [{"id": "i1", "pdf_sha256": PDF_HASH, "expectation_sha256": "d" * 64}],
+        "results": [result],
+    }
+    validate_record(run)
+
+
+# --- tables -------------------------------------------------------------------------------------
+
+
+def test_assignment_is_optimal_not_greedy():
+    assert _assign([[6, 5], [6, None]]) == [1, 0]
+    assert _assign([[None, None]]) == [None]
+    assert _assign([[3], [4]]) == [None, 0]
+
+
+def _second_table(exp_or_obs, block_id="t2", order=20):
+    cells = [_cell(0, 0, "K", True), _cell(0, 1, "V", True), _cell(1, 0, "u"), _cell(1, 1, "7.5")]
+    exp_or_obs["blocks"].append(_block(block_id, "table", 1, order, None, bbox=BOX,
+                                       table={"n_rows": 2, "n_cols": 2, "cells": cells}))
+
+
+def test_one_observed_table_cannot_satisfy_two_expected_tables(exp):
+    exp["blocks"].append(copy.deepcopy(next(b for b in exp["blocks"] if b["id"] == "t1")))
+    exp["blocks"][-1].update(id="t1b", reading_order=20, bbox=dict(BOX))
+    obs = _observation_of(exp)
+    obs["blocks"] = [b for b in obs["blocks"] if b["id"] != "t1b"]
+    failed = {sub for name, sub in _failed(_rescore(exp, obs)) if name == "table_exact"}
+    assert len(failed) == 1
+
+
+def test_table_order_on_a_page_is_checked(exp):
+    _second_table(exp)
+    obs = _observation_of(exp)
+    assert _rescore(exp, obs)["verdict"] == "passed"
+    score = _rescore(exp, defects.swap_reading_order(obs, "t1", "t2"))
+    assert ("table_order", "t1->t2") in _failed(score)
+    assert not [c for c in score["checks"] if c["name"] == "table_exact" and not c["passed"]]
+
+
+def test_extra_cells_or_rows_fail_table_exact_even_when_every_expected_cell_matches(exp, obs):
+    table = next(b for b in obs["blocks"] if b["id"] == "t1")["table"]
+    table["n_rows"] = 4
+    table["cells"] += [_cell(3, 0, "Extra"), _cell(3, 1, "9.9"), _cell(3, 2, "9.9")]
+    score = _rescore(exp, obs)
+    assert ("table_cell_match", "t1") not in _failed(score) and ("table_exact", "t1") in _failed(score)
+
+
+def test_header_flag_is_compared_strictly_only(exp, obs):
+    _cell_of(obs, 0, 0).pop("is_header")
+    score = _rescore(exp, obs)
+    assert ("table_exact", "t1") in _failed(score) and ("table_exact", "t1") not in _failed(score, "tolerant")
+    assert score["tolerant_only_matches"] >= 1
+
+
+def test_continuation_without_a_repeated_header_keeps_its_first_row(chain_exp):
+    tb = next(b for b in chain_exp["blocks"] if b["id"] == "tb")["table"]
+    tb["n_rows"] = 2
+    tb["cells"] = [_cell(0, 0, "B"), _cell(0, 1, "+1.25"), _cell(1, 0, "C"), _cell(1, 1, "2.00")]
+    obs = _observation_of(chain_exp)
+    assert _rescore(chain_exp, obs)["verdict"] == "passed"
+    assert _rescore(chain_exp, _merged(obs))["verdict"] == "passed"
+
+
+# --- equations and captions ---------------------------------------------------------------------
+
+
+def test_each_observed_equation_matches_one_expected_equation(exp):
+    exp["blocks"].append(copy.deepcopy(next(b for b in exp["blocks"] if b["id"] == "e1")))
+    exp["blocks"][-1].update(id="e2", reading_order=20, bbox=dict(BOX))
+    obs = _observation_of(exp)
+    assert _rescore(exp, obs)["verdict"] == "passed"
+    obs["blocks"] = [b for b in obs["blocks"] if b["id"] != "e2"]
+    assert len({sub for name, sub in _failed(_rescore(exp, obs)) if name == "equation_match"}) == 1
+
+
+def test_equation_number_and_display_flag_must_agree(exp, obs):
+    _equation_of(obs)["number"] = "(2)"
+    assert ("equation_match", "e1") in _failed(_rescore(exp, obs))
+    obs = _observation_of(exp)
+    _equation_of(obs)["display"] = False
+    assert ("equation_match", "e1") in _failed(_rescore(exp, obs))
+
+
+def test_caption_survives_an_extra_earlier_table_but_not_a_wrong_link_or_page(exp, obs):
+    for block in obs["blocks"]:
+        if block["reading_order"] >= 2:
+            block["reading_order"] += 1
+    extra = _block("t0", "table", 1, 2, None, bbox=BOX, table={"n_rows": 1, "n_cols": 1, "cells": [_cell(0, 0, "Zed")]})
+    obs["blocks"].append(extra)
+    assert ("caption_match", "c1") not in _failed(_rescore(exp, obs))
+    next(b for b in obs["blocks"] if b["id"] == "c1")["caption_for"] = "t0"
+    assert ("caption_match", "c1") in _failed(_rescore(exp, obs))
+    moved = _observation_of(exp)
+    next(b for b in moved["blocks"] if b["id"] == "c1")["page"] = 2
+    assert ("caption_match", "c1") in _failed(_rescore(exp, moved))
+
+
+# --- references ---------------------------------------------------------------------------------
+
+
+def test_correct_entry_matching_an_unscored_expected_entry_does_not_lower_precision(exp, obs):
+    exp["scope"]["kind"] = obs["scope"]["kind"] = "pages"
+    exp["references"]["entries"][1]["truncated"] = "end"
+    score = _rescore(exp, obs)
+    precision = _metric(score, "reference_segmentation_precision")
+    assert (precision["value"], precision["n"]) == (1.0, 1)
+    assert score["verdict"] == "incomplete"
+
+
+def test_unaligned_entries_are_listed_and_tolerant_mode_uses_its_own_alignment(exp, obs):
+    entry = _entry(obs, "r1")
+    entry["raw"] = RAW1.upper()
+    entry["raw_sha256"] = sha256_text(entry["raw"])
+    score = _rescore(exp, obs)
+    reasons = {(n["metric"], n["subject"]): n["reason"] for n in score["not_scored"]}
+    assert "strict mode" in reasons[("reference_field_accuracy", "r1")]
+    assert "strict mode" in reasons[("reference_doi_absent_correct", "r1")]
+    tolerant = {(c["name"], c["subject"]) for c in score["checks"] if c["mode"] == "tolerant"}
+    assert {("reference_field_accuracy", "r1"), ("reference_doi_absent_correct", "r1")} <= tolerant
+    assert score["verdict"] == "failed"
+
+
+def test_reference_ordinals_year_raw_and_empty_fields(exp, obs):
+    _entry(exp, "r1")["fields"]["year_raw"] = "2020"
+    _entry(exp, "r2")["fields"] = {}
+    obs = _observation_of(exp)
+    assert _rescore(exp, obs)["verdict"] == "passed"
+    assert all(c["total"] > 0 for c in _rescore(exp, obs)["checks"])  # no vacuous 0/0 checks
+    _entry(obs, "r1")["fields"]["year_raw"] = "2020a"
+    check = next(c for c in _rescore(exp, obs)["checks"] if c["name"] == "reference_field_accuracy"
+                 and c["mode"] == "strict")
+    assert (check["matched"], check["total"]) == (3, 4) and "year_raw" in check["detail"]
+    obs = _observation_of(exp)
+    _entry(obs, "r1")["ordinal"] = 3
+    assert ("reference_ordinal", "r1") in _failed(_rescore(exp, obs))
+
+
+def test_expected_entries_with_identical_raw_text_need_two_observed_entries(exp):
+    twin = copy.deepcopy(_entry(exp, "r1"))
+    twin.update(id="r9", ordinal=3)
+    del twin["block_id"]
+    exp["references"]["entries"].append(twin)
+    obs = _observation_of(exp)
+    assert _rescore(exp, obs)["verdict"] == "passed"
+    obs["references"]["entries"] = [e for e in obs["references"]["entries"] if e["id"] != "r9"]
+    assert len({sub for name, sub in _failed(_rescore(exp, obs)) if name == "reference_segmentation_recall"}) == 1
+
+
+def test_observed_entries_outside_the_expectation_scope_are_ignored(exp):
+    exp["scope"] = {"kind": "pages", "physical_pages": [2]}
+    exp["pages"] = [_page(2)]
+    exp["blocks"] = [b for b in exp["blocks"] if b["page"] == 2]
+    obs = _observation_of(exp)
+    obs["scope"] = {"kind": "pages", "physical_pages": [1, 2]}
+    obs["pages"] = [_page(1), _page(2)]
+    obs["references"]["entries"].append({"id": "r7", "ordinal": 3, "page": 1, "raw": "[0] Elsewhere.",
+                                         "doi": {"status": "not_found"}})
+    score = _rescore(exp, obs)
+    assert _metric(score, "reference_segmentation_precision")["value"] == 1.0
+    assert score["verdict"] == "passed"
+
+
+def test_score_files_refuses_a_pdf_hash_mismatch(exp, obs, tmp_path):
+    obs["document"]["pdf_sha256"] = "c" * 64
+    (tmp_path / "e.json").write_text(json.dumps(exp), encoding="utf-8")
+    (tmp_path / "o.json").write_text(json.dumps(obs), encoding="utf-8")
+    with pytest.raises(ScoringError, match="pdf_sha256 mismatch"):
+        score_files(tmp_path / "e.json", tmp_path / "o.json")
+
+
+def test_chain_with_an_uncertain_fragment_is_not_hash_scored(chain_exp, chain_obs):
+    next(b for b in chain_exp["blocks"] if b["id"] == "pb")["uncertainty"] = {"level": "high"}
+    score = _rescore(chain_exp, _merged(chain_obs))
+    assert not [c for c in score["checks"] if c["name"] == "text_span_hash" and c["subject"] == "pa+pb"]
+    assert score["strict_failures"] == 0 and score["verdict"] == "incomplete"
+
+
+def test_defects_reject_hyphens_and_identical_columns(obs):
+    _set_text(obs, "p2", "A well-known fact, 3-4 times.")
+    with pytest.raises(ValueError):
+        defects.drop_sign(obs, "p2")
+    table = next(b for b in obs["blocks"] if b["id"] == "t1")["table"]
+    for cell in table["cells"]:
+        if cell["col"] == 2:
+            cell["text"] = next(c["text"] for c in table["cells"] if c["col"] == 1 and c["row"] == cell["row"])
+    with pytest.raises(ValueError):
+        defects.reorder_columns(obs, "t1", [0, 2, 1])
+
+
+# --- tolerant-only matches, remaining strict gaps -----------------------------------------------------
+
+
+def test_tolerant_mode_is_never_below_strict_in_the_same_check():
+    checks = _Checks()
+    checks.add("text_presence", "x", (1, 1), (0, 1))
+    assert [c["passed"] for c in checks.checks] == [True, True]
+
+
+def test_unicode_whitespace_and_latex_spacing_are_tolerant_only(exp):
+    _set_text(exp, "p2", "The final value is 3.14.")
+    obs = _observation_of(exp)
+    _set_text(obs, "p2", "The final value is ３.１４.")  # full-width digits: only NFKC maps them
+    _equation_of(obs)["latex"] = "y = -0.5x + 1"
+    score = _rescore(exp, obs)
+    assert {("text_presence", "p2"), ("equation_match", "e1")} <= _failed(score)
+    assert not {("text_presence", "p2"), ("equation_match", "e1")} & _failed(score, "tolerant")
+    assert score["tolerant_only_matches"] >= 2 and score["verdict"] == "failed"
+
+
+def test_doi_prefix_is_tolerant_only(exp, obs):
+    _entry(obs, "r2")["doi"] = {"status": "present", "value": "doi:10.0000/Synthetic"}
+    score = _rescore(exp, obs)
+    assert ("reference_doi_recovery", "r2") in _failed(score)
+    assert ("reference_doi_recovery", "r2") not in _failed(score, "tolerant")
+
+
+def test_uncertain_equations_and_page_spanning_captions_are_not_scored(exp, obs):
+    next(b for b in exp["blocks"] if b["id"] == "e1")["uncertainty"] = {"level": "high"}
+    _equation_of(obs)["latex"] = "z"
+    exp["blocks"].append(_block("c1b", "caption", 2, 20, "Table 1 (continued).", continues_from="c1", bbox=dict(BOX)))
+    obs["blocks"].append(_block("c1b", "caption", 2, 20, "Table 1 (continued).", continues_from="c1", bbox=dict(BOX)))
+    score = _rescore(exp, obs)
+    reasons = {(n["metric"], n["subject"]): n["reason"] for n in score["not_scored"]}
+    assert "high uncertainty" in reasons[("equation_match", "e1")]
+    assert "spans pages" in reasons[("caption_match", "c1")] and ("caption_match", "c1b") in reasons
+    assert not [c for c in score["checks"] if c["subject"] in ("e1", "c1", "c1b") and c["name"] != "text_precision"]
+
+
+def test_captions_of_two_figures_must_keep_their_figures(exp):
+    for n, order in (("fa", 20), ("fb", 21)):
+        exp["blocks"].append(_block(n, "figure", 1, order, None, graphic={"kind": "chart"},
+                                    bbox={"x0": 10, "y0": 100 + 50 * (order - 20), "x1": 500, "y1": 140 + 50 * (order - 20)}))
+    exp["blocks"] += [
+        _block("ca", "caption", 1, 22, "Figure 1. First.", caption_for="fa", bbox={"x0": 10, "y0": 300, "x1": 500, "y1": 330}),
+        _block("cb", "caption", 1, 23, "Figure 2. Second.", caption_for="fb", bbox={"x0": 10, "y0": 340, "x1": 500, "y1": 370}),
+    ]
+    obs = _observation_of(exp)
+    assert _rescore(exp, obs)["verdict"] == "passed"
+    next(b for b in obs["blocks"] if b["id"] == "ca")["caption_for"] = "fb"
+    next(b for b in obs["blocks"] if b["id"] == "cb")["caption_for"] = "fa"
+    failed = _failed(_rescore(exp, obs))
+    assert {("caption_match", "ca"), ("caption_match", "cb")} <= failed
+
+
+def test_reference_end_page_must_agree_when_stated(chain_exp):
+    chain_exp["document"]["page_count"] = 4
+    chain_exp["scope"]["physical_pages"] = [1, 2, 3, 4]
+    chain_exp["pages"].append(_page(4))
+    obs = _observation_of(chain_exp)
+    assert _rescore(chain_exp, obs)["verdict"] == "passed"
+    entry = obs["references"]["entries"][0]
+    del entry["block_id"]
+    entry["end_page"] = 4
+    assert ("reference_segmentation_recall", "r3") in _failed(_rescore(chain_exp, obs))

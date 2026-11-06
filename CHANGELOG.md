@@ -12,9 +12,12 @@ All notable changes to this project are documented here. Format loosely follows
   with cross-record checks, under `benchmarks/extraction/`. Benchmark-side only; `jsonschema`
   and `referencing` were added to the `test` extra. See `docs/extraction-quality-plan.md`.
 - Extraction scorer (roadmap E1, package B): strict and tolerant checks of an observation against
-  a reviewed expectation (text, order, tables, equations, captions, references), versioned run
-  metrics, and defect injectors proving the strict checks fail on missing signs, swapped values,
-  omitted text and reordered columns. Benchmark-side only; no runtime dependency.
+  a reviewed expectation (text, order, tables, equations, captions, references) with a tri-state
+  verdict (`passed`, `failed`, `incomplete`), versioned run metrics, and defect injectors proving the
+  strict checks fail on missing signs, swapped values, omitted text and reordered columns. Strict
+  transcription ignores wraps, whitespace runs and block boundaries; segmentation and the byte-exact
+  hash are separate non-deciding metrics. The run schema gained two optional result fields,
+  `verdict` and `unscored_items`. Benchmark-side only; no runtime dependency.
 
 ## [0.16.0] - 2026-11-05
 

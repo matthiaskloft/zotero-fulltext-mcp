@@ -1,9 +1,11 @@
 """Defect injectors for evaluator-sensitivity tests (roadmap E1, package B).
 
 Each function returns a deep-copied observation with one targeted defect and leaves the input
-untouched; ``text_sha256`` is recomputed where present so the result stays a valid record. They
-raise ``ValueError`` when the target is missing rather than silently injecting nothing, so a test
-cannot pass because the defect was a no-op.
+untouched; ``text_sha256`` of an edited block is recomputed. They raise ``ValueError`` when the
+target is missing or the edit would change nothing, so a test cannot pass because the defect was a
+no-op. They do not repair cross-references: removing a block that a caption, anchor, reference
+entry or continuation chain points at (``omit_text`` without a fragment) leaves a dangling link, and
+callers that need a schema-valid result must validate it (``validate_record``) or avoid such targets.
 """
 
 from __future__ import annotations
@@ -14,7 +16,7 @@ from typing import Any
 
 from .records import sha256_text
 
-_SIGN = re.compile(r"[-−](?=[\w.])")
+_SIGN = re.compile(r"(?<!\w)[-−](?=[\d.])")
 
 
 def _block(obs: dict[str, Any], block_id: str) -> dict[str, Any]:
@@ -38,8 +40,9 @@ def _cell(block: dict[str, Any], row: int, col: int) -> dict[str, Any]:
 
 
 def drop_sign(obs: dict[str, Any], block_id: str, *, cell: tuple[int, int] | None = None) -> dict[str, Any]:
-    """Remove the first minus sign (``-`` or U+2212) that precedes a digit, letter or point, from the
-    block text, a table cell (``cell=(row, col)``) or, for equation blocks, the LaTeX."""
+    """Remove the first numeric minus sign (``-`` or U+2212 directly before a digit or decimal point
+    and not after a word character, so hyphens and ranges are left alone) from the block text, a
+    table cell (``cell=(row, col)``) or, for equation blocks, the LaTeX."""
     out = copy.deepcopy(obs)
     block = _block(out, block_id)
     if cell is not None:
@@ -93,9 +96,12 @@ def reorder_columns(obs: dict[str, Any], block_id: str, order: list[int]) -> dic
         raise ValueError("order must be a non-identity permutation of the table's columns")
     if any(c.get("colspan", 1) > 1 for c in table["cells"]):
         raise ValueError("cannot reorder columns of a table with column-spanning cells")
+    before = {(c["row"], c["col"]): c["text"] for c in table["cells"]}
     new_index = {old: new for new, old in enumerate(order)}
     for cell in table["cells"]:
         cell["col"] = new_index[cell["col"]]
+    if before == {(c["row"], c["col"]): c["text"] for c in table["cells"]}:
+        raise ValueError("the columns hold identical text; reordering would change nothing")
     return out
 
 
