@@ -11,7 +11,6 @@ from extraction import RecordError, load_record, load_reviewed_expectation, sha2
 from extraction.olmocr_export import (
     NOT_VERIFIABLE,
     OLMOCR_REFERENCE,
-    candidate_markdown_name,
     export_checks,
     main,
     write_checks_jsonl,
@@ -20,6 +19,7 @@ from extraction.olmocr_export import (
 REPO = Path(__file__).resolve().parent.parent
 EXAMPLE = REPO / "benchmarks" / "extraction" / "examples" / "ocr_corpus_synthetic_example.draft_expectation.json"
 CORPUS_PDF = REPO / "tests" / "fixtures" / "ocr_corpus" / "corpus.pdf"
+SYNTHETIC_PDF_SHA256 = "eeb0b7f3716e738e03f623090f95d12cc368c87f592c7c6340d2bb199c1473eb"
 
 # Fields each olmOCR test class accepts, copied from olmocr/bench/tests.py at OLMOCR_REFERENCE's
 # commit. load_single_test builds the dataclass with **data, so an extra key is a TypeError.
@@ -176,11 +176,11 @@ def test_table_left_heading_and_empty_or_spanned_cells_are_reported():
     assert tests["7"]["left_heading"] == "Row A"
     # The empty neighbour at (0,2) cannot be asserted; the spanned neighbour below (0,1) neither.
     relations = {(p["row"], p["col"], p["relation"], p["reason"]) for p in result.partial}
-    assert (0, 1, "right", "empty neighbour") in relations
+    assert (0, 1, "right", "empty or unusable neighbour text") in relations
     assert (0, 1, "down", "spanned neighbour") in relations
     skipped = {(s["row"], s["col"]): s["reason"] for s in result.skipped if s["kind"] == "table"}
     assert "spanned cell" in skipped[(1, 0)]
-    assert "no alphanumeric" in skipped[(0, 2)]
+    assert "alphanumeric" in skipped[(0, 2)]
 
 
 def test_equations_export_latex_or_report_skip():
@@ -263,12 +263,14 @@ def test_jsonl_lines_only_use_fields_olmocr_accepts(tmp_path):
     assert "\r" not in out.read_text(encoding="utf-8")
 
 
-def test_unicode_text_is_written_verbatim(tmp_path):
+def test_unicode_text_is_ascii_escaped_and_round_trips(tmp_path):
     exp = _expectation([_block("p", "paragraph", 1, 0, "Effect − 0.5 ≤ p, α = .05")])
     result = export_checks(exp, pdf_name="doc.pdf")
     out = tmp_path / "checks.jsonl"
     write_checks_jsonl(result.tests, out)
-    assert json.loads(out.read_text(encoding="utf-8"))["text"] == "Effect − 0.5 ≤ p, α = .05"
+    raw = out.read_text(encoding="ascii")  # upstream reads the file without an encoding
+    assert "\\u2212" in raw
+    assert json.loads(raw)["text"] == "Effect − 0.5 ≤ p, α = .05"
 
 
 def test_report_carries_links_counts_and_limits():
@@ -282,11 +284,6 @@ def test_report_carries_links_counts_and_limits():
     assert report["not_verifiable_by_olmocr"] == list(NOT_VERIFIABLE)
     assert any("exact location" in item for item in NOT_VERIFIABLE)
     assert any("chunk coverage" in item for item in NOT_VERIFIABLE)
-
-
-def test_candidate_markdown_name_matches_olmocr_layout():
-    assert candidate_markdown_name("corpus.pdf", 3) == "corpus_pg3_repeat1.md"
-    assert candidate_markdown_name("corpus.pdf", 3, repeat=2) == "corpus_pg3_repeat2.md"
 
 
 def test_cli_checks_pdf_hash_and_writes_outputs(tmp_path, capsys):
@@ -304,7 +301,7 @@ def test_cli_checks_pdf_hash_and_writes_outputs(tmp_path, capsys):
 
     pdf.write_bytes(b"%PDF-changed")
     out.unlink()
-    assert main([str(path), "--pdf", str(pdf), "--out", str(out)]) == 1
+    assert main([str(path), "--pdf", str(pdf), "--out", str(out), "--report", str(report)]) == 1
     assert "does not match" in capsys.readouterr().err
     assert not out.exists()
 
@@ -316,7 +313,7 @@ def test_cli_refuses_draft_expectations(tmp_path, capsys):
     exp["document"]["pdf_sha256"] = hashlib.sha256(b"%PDF-synthetic").hexdigest()
     path = tmp_path / "exp.json"
     path.write_text(json.dumps(exp), encoding="utf-8")
-    assert main([str(path), "--pdf", str(pdf), "--out", str(tmp_path / "o.jsonl")]) == 1
+    assert main([str(path), "--pdf", str(pdf), "--out", str(tmp_path / "o.jsonl"), "--report", str(tmp_path / "r.json")]) == 1
     assert "not reviewed" in capsys.readouterr().err
 
 
@@ -372,6 +369,7 @@ def test_unreviewed_export_is_only_possible_for_the_synthetic_example():
     with pytest.raises(RecordError, match="synthetic-example-"):
         export_checks(draft, pdf_name="doc.pdf", allow_unreviewed_example=True)
     draft["record_id"] = "synthetic-example-draft"
+    draft["document"]["pdf_sha256"] = SYNTHETIC_PDF_SHA256
     report = export_checks(draft, pdf_name="doc.pdf", allow_unreviewed_example=True).report()
     assert report["expectation_review_status"] == "draft"
 
@@ -392,14 +390,161 @@ def test_committed_example_is_an_unmistakable_unreviewed_synthetic_draft():
     result = export_checks(expectation, pdf_name="corpus.pdf", allow_unreviewed_example=True)
     counts = result.counts()
     assert (counts["present"], counts["order"], counts["table"], counts["math"]) == (7, 5, 12, 1)
-    assert counts["skipped"] == 4 and counts["partial_table_relations"] == 0
+    assert counts["skipped"] == 6 and counts["partial_table_relations"] == 0
     assert result.report()["expectation_review_status"] == "draft"
 
 
 def test_cli_exports_the_example_only_with_the_explicit_flag(tmp_path, capsys):
     out = tmp_path / "checks.jsonl"
-    args = [str(EXAMPLE), "--pdf", str(CORPUS_PDF), "--out", str(out)]
+    args = [str(EXAMPLE), "--pdf", str(CORPUS_PDF), "--out", str(out), "--report", str(tmp_path / "report.json")]
     assert main(args) == 1
     assert "not reviewed" in capsys.readouterr().err and not out.exists()
     assert main([*args, "--allow-synthetic-example"]) == 0
     assert len(out.read_text(encoding="utf-8").splitlines()) == 25
+
+
+def test_cli_requires_a_report(tmp_path):
+    with pytest.raises(SystemExit):
+        main([str(EXAMPLE), "--pdf", str(CORPUS_PDF), "--out", str(tmp_path / "o.jsonl")])
+
+
+def test_unreviewed_export_also_requires_the_committed_corpus_pdf():
+    draft = _expectation([_block("p", "paragraph", 1, 0, "Some text")], status="draft")
+    draft["record_id"] = "synthetic-example-other"
+    with pytest.raises(RecordError, match="committed synthetic corpus"):
+        export_checks(draft, pdf_name="doc.pdf", allow_unreviewed_example=True)
+
+
+def test_record_level_high_uncertainty_is_refused():
+    exp = _expectation([_block("p", "paragraph", 1, 0, "Some text")], provenance={
+        "review": {"status": "reviewed", "reviewer": "reviewer-a", "reviewed_at": "2026-01-01T00:00:00Z", "basis": "pdf_inspection"},
+        "uncertainty": {"level": "high"},
+    })
+    with pytest.raises(RecordError, match="uncertainty is high"):
+        export_checks(exp, pdf_name="doc.pdf")
+
+
+def _partials(result):
+    return {(p["row"], p["col"], p["relation"], p["reason"]) for p in result.partial}
+
+
+def test_two_header_rows_assert_only_row_zero_and_report_the_rest():
+    cells = [
+        _cell(0, 0, "Group A", is_header=True), _cell(0, 1, "Group B", is_header=True),
+        _cell(1, 0, "Mean", is_header=True), _cell(1, 1, "SD", is_header=True),
+        _cell(2, 0, "1.5"), _cell(2, 1, "0.2"),
+    ]
+    exp = _expectation([_block("t", "table", 1, 0, None, table=_table(cells, 3, 2))])
+    result = export_checks(exp, pdf_name="doc.pdf")
+    tests = {t["cell"]: t for t in _by_type(result, "table")}
+    assert tests["1.5"]["top_heading"] == "Group A"
+    assert any(p[2] == "top_heading" and "further header" in p[3] for p in _partials(result))
+
+
+def test_header_not_in_row_zero_and_spanned_headers_are_not_asserted():
+    cells = [
+        _cell(0, 0, "x"), _cell(0, 1, "y"),
+        _cell(1, 0, "Mean", is_header=True), _cell(1, 1, "Wide", is_header=True, colspan=1),
+        _cell(2, 0, "1.5"), _cell(2, 1, "0.2"),
+    ]
+    exp = _expectation([_block("t", "table", 1, 0, None, table=_table(cells, 3, 2))])
+    result = export_checks(exp, pdf_name="doc.pdf")
+    tests = {t["cell"]: t for t in _by_type(result, "table")}
+    assert "top_heading" not in tests["1.5"]
+    assert any("not in the first row" in p[3] for p in _partials(result))
+
+    spanned = [
+        _cell(0, 0, "Group", is_header=True, colspan=2),
+        _cell(1, 0, "1.5"), _cell(1, 1, "0.2"),
+    ]
+    exp = _expectation([_block("t", "table", 1, 0, None, table=_table(spanned, 2, 2))])
+    result = export_checks(exp, pdf_name="doc.pdf")
+    assert all("top_heading" not in t for t in _by_type(result, "table"))
+    assert any(p[2] == "top_heading" and p[3] == "spanned header" for p in _partials(result))
+
+
+def test_left_heading_comes_only_from_column_zero():
+    cells = [
+        _cell(0, 0, "Row A", is_header=True), _cell(0, 1, "7"), _cell(0, 2, "8"),
+    ]
+    exp = _expectation([_block("t", "table", 1, 0, None, table=_table(cells, 1, 3))])
+    tests = {t["cell"]: t for t in _by_type(export_checks(exp, pdf_name="doc.pdf"), "table")}
+    assert tests["7"]["left_heading"] == "Row A" and tests["8"]["left_heading"] == "Row A"
+    mid = [_cell(0, 0, "7"), _cell(0, 1, "Row B", is_header=True), _cell(0, 2, "8")]
+    exp = _expectation([_block("t", "table", 1, 0, None, table=_table(mid, 1, 3))])
+    result = export_checks(exp, pdf_name="doc.pdf")
+    assert all("left_heading" not in t for t in _by_type(result, "table"))
+    assert any("not in the first row" in p[3] for p in _partials(result))
+
+
+def test_order_is_skipped_when_one_text_contains_the_other():
+    exp = _expectation([
+        _block("a", "paragraph", 1, 0, "The effect was large and significant overall."),
+        _block("b", "paragraph", 1, 1, "was large and significant"),
+        _block("c", "paragraph", 1, 2, "Closing remarks follow here."),
+    ])
+    result = export_checks(exp, pdf_name="doc.pdf")
+    pairs = [(t["before"], t["after"]) for t in _by_type(result, "order")]
+    assert pairs == [("was large and significant", "Closing remarks follow here.")]
+    assert any(s["kind"] == "order" and "contains the other" in s["reason"] for s in result.skipped)
+    # Containment is judged on normalised text, so emphasis markers do not hide it.
+    exp = _expectation([
+        _block("a", "paragraph", 1, 0, "A **bold** claim stands here"),
+        _block("b", "paragraph", 1, 1, "bold claim"),
+    ])
+    assert _by_type(export_checks(exp, pdf_name="doc.pdf"), "order") == []
+
+
+def test_unbalanced_emphasis_markers_skip_blocks_and_cells():
+    cells = [_cell(0, 0, "snake_case"), _cell(0, 1, "fine"), _cell(0, 2, "a*b*c")]
+    exp = _expectation([
+        _block("p", "paragraph", 1, 0, "x_i and a lone marker here"),
+        _block("q", "paragraph", 1, 1, "balanced _emphasis_ text"),
+        _block("t", "table", 1, 2, None, table=_table(cells, 1, 3)),
+    ])
+    result = export_checks(exp, pdf_name="doc.pdf")
+    assert [t["text"] for t in _by_type(result, "present")] == ["balanced _emphasis_ text"]
+    reasons = [s["reason"] for s in result.skipped if "unbalanced" in s["reason"]]
+    assert len(reasons) == 2  # block p, cell snake_case
+    assert {t["cell"] for t in _by_type(result, "table")} == {"fine", "a*b*c"}
+    # The unusable neighbour is reported, not silently omitted.
+    assert any(p["relation"] == "left" for p in result.partial)
+
+
+def test_too_little_alphanumeric_content_is_skipped():
+    exp = _expectation([_block("a", "paragraph", 1, 0, "12"), _block("b", "paragraph", 1, 1, "Fig 1")])
+    result = export_checks(exp, pdf_name="doc.pdf")
+    assert [t["text"] for t in _by_type(result, "present")] == ["Fig 1"]
+    assert any(s["block_id"] == "a" and "fewer than 3" in s["reason"] for s in result.skipped)
+
+
+def test_ignored_fields_get_item_level_skip_entries():
+    cells = [_cell(0, 0, "h", is_header=True), _cell(1, 0, "v")]
+    exp = _expectation([
+        _block("t", "table", 1, 0, "h v", table=_table(cells, 2, 1)),
+        _block("c", "caption", 1, 1, "Table 1 shows values", caption_for="t"),
+        _block("e", "equation", 1, 2, "x squared", equation={"latex": "x^2", "number": "(2)"}),
+        _block("f", "figure", 1, 3, "axis label", graphic={"kind": "chart"}),
+        _block("g", "figure", 1, 4, None, graphic={"kind": "image"}),
+    ])
+    result = export_checks(exp, pdf_name="doc.pdf")
+    kinds = {(s["kind"], s["block_id"]) for s in result.skipped}
+    assert {("text", "t"), ("text", "e"), ("caption_link", "c"), ("equation_number", "e"), ("figure", "f"), ("figure", "g")} <= kinds
+    reasons = {s["block_id"]: s["reason"] for s in result.skipped if s["kind"] == "figure"}
+    assert "inside the figure" in reasons["f"] and "without text" in reasons["g"]
+
+
+def test_feasibility_inputs_script_builds_the_benchmark_directory(tmp_path):
+    pytest.importorskip("pymupdf4llm")
+    from extraction.olmocr_feasibility_inputs import build
+
+    counts = build(tmp_path)
+    bench = tmp_path / "bench"
+    assert (bench / "pdfs" / "corpus.pdf").read_bytes() == CORPUS_PDF.read_bytes()
+    assert counts["total"] == len((bench / "ocr_corpus.jsonl").read_text(encoding="ascii").splitlines())
+    for name in ("pymupdf4llm", "defective", "mathcontrol"):
+        assert sorted(f.name for f in (bench / name).iterdir()) == [f"corpus_pg{n}_repeat1.md" for n in range(1, 7)]
+    good = (bench / "pymupdf4llm" / "corpus_pg3_repeat1.md").read_text(encoding="utf-8")
+    bad = (bench / "defective" / "corpus_pg3_repeat1.md").read_text(encoding="utf-8")
+    assert "|Baseline|12.40|1.15|" in good and "|Baseline|15.82|1.15|" in bad and "1640" in bad
+    assert "$$" in (bench / "mathcontrol" / "corpus_pg1_repeat1.md").read_text(encoding="utf-8")

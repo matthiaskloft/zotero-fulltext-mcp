@@ -21,7 +21,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
+import unicodedata
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -30,6 +32,12 @@ from .records import RecordError, load_record, load_reviewed_expectation, sha256
 
 EXPORTER_VERSION = "1"
 SYNTHETIC_EXAMPLE_PREFIX = "synthetic-example-"
+# SHA-256 of the committed tests/fixtures/ocr_corpus/corpus.pdf: an unreviewed record may only be
+# exported for that document.
+SYNTHETIC_EXAMPLE_PDF_SHA256 = "eeb0b7f3716e738e03f623090f95d12cc368c87f592c7c6340d2bb199c1473eb"
+# Text blocks need at least this many alphanumeric characters for a presence/order check; shorter
+# strings match almost anywhere on a page and would pass vacuously. Table cells need only one.
+MIN_TEXT_ALNUM = 3
 
 OLMOCR_REFERENCE = {
     "repository": "https://github.com/allenai/olmocr",
@@ -52,6 +60,11 @@ NOT_VERIFIABLE = (
     "cross-page reading order: order checks relate two texts on a single page",
     "reference parsing, identifier recovery and citation-marker links",
     "figure/graphic content and caption-to-figure links (only the caption text is checked)",
+    "order when one text occurs inside the other, or when the later text also occurs earlier on the page"
+    " (olmOCR accepts any pair of matches; contained-text pairs are skipped, earlier duplicates are not detected)",
+    "text containing unbalanced '_' or '*' (olmOCR's page-wide emphasis stripping can pair them with"
+    " other markers); such blocks and cells are skipped",
+    "relations at table edges: olmOCR ignores a neighbour relation where the table has no neighbour",
 )
 
 _RELATIONS = {"up": (-1, 0), "down": (1, 0), "left": (0, -1), "right": (0, 1)}
@@ -96,15 +109,38 @@ class ExportResult:
         }
 
 
-def candidate_markdown_name(pdf_name: str, page: int, repeat: int = 1) -> str:
-    """File name olmOCR's benchmark expects for one page of a candidate's Markdown."""
-    stem = pdf_name[: -len(".pdf")] if pdf_name.lower().endswith(".pdf") else pdf_name
-    return f"{stem}_pg{page}_repeat{repeat}.md"
-
-
-def _has_content(text: Any) -> bool:
+def _has_content(text: Any, minimum: int = 1) -> bool:
     """olmOCR rejects empty search text, and punctuation-only text matches almost anything."""
-    return isinstance(text, str) and any(ch.isalnum() for ch in text)
+    return isinstance(text, str) and sum(ch.isalnum() for ch in text) >= minimum
+
+
+def _unbalanced_emphasis(text: str) -> bool:
+    """olmOCR strips ``_x_`` / ``*x*`` page-wide with a lazy regex; an odd marker count can pair
+    with a marker elsewhere on the page and corrupt the match."""
+    return text.count("_") % 2 == 1 or text.count("*") % 2 == 1
+
+
+_DASHES_QUOTES = str.maketrans(
+    {
+        "\u2018": "'", "\u2019": "'", "\u201c": '"', "\u201d": '"',
+        "\u2013": "-", "\u2014": "-", "\u2212": "-", "\u2011": "-", "\u2012": "-",
+    }
+)
+
+
+def _comparable(text: str) -> str:
+    """Rough stand-in for olmOCR's normalisation, used only to detect one text inside another."""
+    text = unicodedata.normalize("NFC", text).translate(_DASHES_QUOTES)
+    return re.sub(r"\s+", " ", text.replace("*", "").replace("_", "")).strip()
+
+
+def _unusable(text: Any, minimum: int) -> str | None:
+    """Reason a text cannot become a check, or None."""
+    if not _has_content(text, minimum):
+        return f"text has fewer than {minimum} alphanumeric character(s)"
+    if _unbalanced_emphasis(text):
+        return "text has unbalanced '_' or '*': olmOCR's emphasis stripping could pair it with other markers on the page"
+    return None
 
 
 def export_checks(expectation: dict[str, Any], *, pdf_name: str, allow_unreviewed_example: bool = False) -> ExportResult:
@@ -120,11 +156,15 @@ def export_checks(expectation: dict[str, Any], *, pdf_name: str, allow_unreviewe
     kind = validate_record(expectation)
     if kind != "expectation":
         raise RecordError([f"expected an expectation record, got {kind}"])
+    if expectation["provenance"].get("uncertainty", {}).get("level") == "high":
+        raise RecordError(["record-level uncertainty is high: the expectation says it must not be scored strictly"])
     status = expectation["provenance"]["review"]["status"]
     if status != "reviewed" and not allow_unreviewed_example:
         raise RecordError(["expectation is not reviewed; drafts are not ground truth"])
     if status != "reviewed" and not expectation["record_id"].startswith(SYNTHETIC_EXAMPLE_PREFIX):
         raise RecordError([f"only records whose id starts with {SYNTHETIC_EXAMPLE_PREFIX!r} may be exported unreviewed"])
+    if status != "reviewed" and expectation["document"]["pdf_sha256"] != SYNTHETIC_EXAMPLE_PDF_SHA256:
+        raise RecordError(["an unreviewed record may only be exported for the committed synthetic corpus PDF"])
     if not pdf_name or "/" in pdf_name or "\\" in pdf_name:
         raise ValueError("pdf_name must be a bare file name")
 
@@ -165,22 +205,35 @@ def export_checks(expectation: dict[str, Any], *, pdf_name: str, allow_unreviewe
                 block=block,
                 continues_from=block["continues_from"],
             )
+        if "caption_for" in block:
+            skip("caption_link", "caption links to a figure/table are not olmOCR-bench checks", block=block, caption_for=block["caption_for"])
+        number = (block.get("equation") or {}).get("number")
+        if number:
+            skip("equation_number", "printed equation numbers are not olmOCR-bench checks", block=block, number=number)
         if block.get("uncertainty", {}).get("level") == "high":
             skip("block", "high uncertainty: the expectation says not to score this strictly", block=block)
         elif btype == "table":
+            if isinstance(block.get("text"), str) and block.get("table"):
+                skip("text", "text on a table block is not exported; the table is checked through its cells", block=block)
             _export_table(block, rid, emit, skip, result)
         elif btype == "equation":
+            if isinstance(block.get("text"), str) and (block.get("equation") or {}).get("latex"):
+                skip("text", "text on an equation block is not exported; the equation is checked through its LaTeX", block=block)
             _export_equation(block, rid, emit, skip)
         elif btype in TEXT_TYPES:
-            if _has_content(block.get("text")):
+            reason = _unusable(block.get("text"), MIN_TEXT_ALNUM)
+            if reason is None:
                 emit(f"{rid}.{block['id']}.present", block, "present", text=block["text"], case_sensitive=True)
                 eligible.append(block)
             else:
-                skip("present", "block has no text with alphanumeric content", block=block)
+                skip("present", reason, block=block)
         elif btype in FURNITURE_TYPES:
             skip("absent", "page furniture: the artifact does not require extractors to omit it", block=block)
         elif btype == "figure":
-            skip("figure", "graphic without text: nothing expressible in olmOCR-bench", block=block)
+            if isinstance(block.get("text"), str) and block["text"].strip():
+                skip("figure", "text inside the figure is not exported; only the caption is checked", block=block)
+            else:
+                skip("figure", "graphic without text: nothing expressible in olmOCR-bench", block=block)
         else:
             skip("block", f"block type {btype!r} has no olmOCR-bench check", block=block)
 
@@ -192,8 +245,10 @@ def export_checks(expectation: dict[str, Any], *, pdf_name: str, allow_unreviewe
                 block=before,
                 after_block_id=after["id"],
             )
-        elif before["text"] == after["text"]:
+        elif _comparable(before["text"]) == _comparable(after["text"]):
             skip("order", "identical text in both blocks: the check could not tell them apart", block=before, after_block_id=after["id"])
+        elif _comparable(before["text"]) in _comparable(after["text"]) or _comparable(after["text"]) in _comparable(before["text"]):
+            skip("order", "one text contains the other: olmOCR would pass the check in either order", block=before, after_block_id=after["id"])
         else:
             emit(f"{rid}.{before['id']}.before.{after['id']}.order", before, "order", before=before["text"], after=after["text"])
 
@@ -236,11 +291,15 @@ def _export_table(block: dict[str, Any], rid: str, emit: Any, skip: Any, result:
     def spanned(cell: dict[str, Any]) -> bool:
         return cell.get("rowspan", 1) > 1 or cell.get("colspan", 1) > 1
 
+    def partial(where: dict[str, int], relation: str, reason: str) -> None:
+        result.partial.append({"block_id": block["id"], "page": block["page"], "relation": relation, "reason": reason, **where})
+
     for cell in sorted(table["cells"], key=lambda c: (c["row"], c["col"])):
         r, c = cell["row"], cell["col"]
         where = {"row": r, "col": c}
-        if not _has_content(cell["text"]):
-            skip("table", "cell text has no alphanumeric content", block=block, **where)
+        reason = _unusable(cell["text"], 1)
+        if reason is not None:
+            skip("table", f"cell {reason}", block=block, **where)
             continue
         if spanned(cell):
             skip("table", "spanned cell: olmOCR relations depend on its rowspan/colspan handling", block=block, **where)
@@ -249,35 +308,56 @@ def _export_table(block: dict[str, Any], rid: str, emit: Any, skip: Any, result:
         for name, (dr, dc) in _RELATIONS.items():
             neighbour = grid.get((r + dr, c + dc))
             if neighbour is None:
-                continue  # edge of the table: nothing to assert
-            if spanned(neighbour) or not _has_content(neighbour["text"]):
-                reason = "spanned neighbour" if spanned(neighbour) else "empty neighbour"
-                result.partial.append({"block_id": block["id"], "page": block["page"], "relation": name, "reason": reason, **where})
+                continue  # edge of the table: olmOCR ignores the relation there too
+            if spanned(neighbour):
+                partial(where, name, "spanned neighbour")
+            elif _unusable(neighbour["text"], 1) is not None:
+                partial(where, name, "empty or unusable neighbour text")
             else:
                 fields[name] = neighbour["text"]
         if not cell.get("is_header"):
-            heading = _heading(grid, r, c, vertical=True)
-            if heading:
-                fields["top_heading"] = heading
-            heading = _heading(grid, r, c, vertical=False)
-            if heading:
-                fields["left_heading"] = heading
+            for vertical in (True, False):
+                _add_heading(fields, grid, cell, vertical, partial, spanned)
         emit(f"{rid}.{block['id']}.table.r{r}c{c}", block, "table", **fields)
 
 
-def _heading(grid: dict[tuple[int, int], dict[str, Any]], r: int, c: int, *, vertical: bool) -> str | None:
-    """Nearest header cell above (vertical) or to the left of (r, c), if it has usable text."""
-    steps = range(r - 1, -1, -1) if vertical else range(c - 1, -1, -1)
-    for step in steps:
-        cell = grid.get((step, c) if vertical else (r, step))
-        if cell is not None and cell.get("is_header"):
-            return cell["text"] if _has_content(cell["text"]) else None
-    return None
+def _add_heading(fields: dict[str, Any], grid: dict[tuple[int, int], dict[str, Any]], cell: dict[str, Any], vertical: bool, partial: Any, spanned: Any) -> None:
+    """Add ``top_heading`` (header in row 0) or ``left_heading`` (header in column 0).
+
+    Upstream's Markdown parser treats only row 0 as the header row, so a header elsewhere, a
+    spanned header or an unusable one cannot be asserted; those cases are recorded as partial.
+    """
+    r, c = cell["row"], cell["col"]
+    name = "top_heading" if vertical else "left_heading"
+    along = range(r) if vertical else range(c)
+    headers = []
+    for i in along:
+        candidate = grid.get((i, c) if vertical else (r, i))
+        if candidate is not None and candidate.get("is_header"):
+            headers.append((i, candidate))
+    if not headers:
+        return  # the cell has no header: nothing to assert
+    where = {"row": r, "col": c}
+    index, first = headers[0]
+    if index != 0:
+        partial(where, name, "header is not in the first row/column: olmOCR only treats row 0 as header")
+    elif spanned(first):
+        partial(where, name, "spanned header")
+    elif _unusable(first["text"], 1) is not None:
+        partial(where, name, "empty or unusable header text")
+    else:
+        fields[name] = first["text"]
+        if len(headers) > 1:
+            partial(where, name, "further header rows/columns ignored: only the first is asserted")
 
 
 def write_checks_jsonl(tests: list[dict[str, Any]], path: str | Path) -> None:
-    """Write one JSON test per line, UTF-8, in the layout olmOCR's ``load_tests`` reads."""
-    lines = (json.dumps(test, ensure_ascii=False) for test in tests)
+    """Write one JSON test per line in the layout olmOCR's ``load_tests`` reads.
+
+    ASCII-only (``\\uXXXX`` escapes): upstream opens the file without an encoding, so raw UTF-8
+    would be misread wherever the platform default is not UTF-8.
+    """
+    lines = (json.dumps(test, ensure_ascii=True) for test in tests)
     Path(path).write_text("".join(f"{line}\n" for line in lines), encoding="utf-8", newline="\n")
 
 
@@ -295,7 +375,7 @@ def main(argv: list[str] | None = None) -> int:
         help="accept a draft expectation; only for the committed synthetic example, never for baseline data",
     )
     parser.add_argument("--out", type=Path, required=True, help="output checks file (.jsonl)")
-    parser.add_argument("--report", type=Path, help="output report (JSON): counts, skipped elements, check-to-block links")
+    parser.add_argument("--report", type=Path, required=True, help="output report (JSON): counts, skipped elements, check-to-block links")
     args = parser.parse_args(argv)
 
     try:
@@ -311,8 +391,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: {error}", file=sys.stderr)
         return 1
     write_checks_jsonl(result.tests, args.out)
-    if args.report:
-        args.report.write_text(json.dumps(result.report(), indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    args.report.write_text(json.dumps(result.report(), indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     counts = result.counts()
     print(f"{counts['total']} checks written to {args.out}; {counts['skipped']} skipped, {counts['partial_table_relations']} partial table relations")
     return 0
