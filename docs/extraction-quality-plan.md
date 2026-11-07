@@ -214,7 +214,9 @@ section counts as an empty list wherever the expectation has references.
   expected text accounts for (each expected text, including raw reference entries, covers one
   word-bounded occurrence), so extra copies, joined words and appended digits fail. Reviewed
   expectations must therefore record every printed header, footer and page number on in-scope pages;
-  there is no scorer exemption. The optional `text` of an observed table or equation block whose
+  there is no scorer exemption. Coverage is allocated whole-block matches first, then inside one
+  block, then across blocks, so a cross-block coincidence cannot steal a real block's text. The
+  optional `text` of an observed table or equation block whose
   structured payload matched is accounted for only if it serializes that payload (an equation's LaTeX
   ignoring whitespace; a table's cell texts, each once, with Markdown table markup tolerated); any
   other text on it, and the same text on an unmatched block, is invented.
@@ -247,7 +249,10 @@ section counts as an empty list wherever the expectation has references.
 - **Cross-page chains.** Blocks linked by `continues_from` (also same-page continuations) are one
   logical item, so a correct merged extraction passes as well as a fragment-per-page one. A split
   fragment must be on its own page; only an observed block that merges it with a chain neighbour may
-  sit on another page, including the later page. A table chain is compared as the fragments' rows
+  sit on another page, including the later page. A merged block is still ordered against the content
+  around it: the chain head must come after the preceding expected block, and later fragments may sit
+  before the cursor (for example behind an interleaved footnote) only when their predecessor was
+  placed in the same block. A table chain is compared as the fragments' rows
   concatenated in chain order, after dropping a header row repeated on a continuation page (exact
   match with the first fragment's header, so keeping it is a strict failure). Expected items marked
   `truncated`, and chains with an unscored fragment, are not compared.

@@ -282,6 +282,13 @@ class _Stream:
                 return page
         return None
 
+    def span_of(self, offset: int) -> tuple[int, int] | None:
+        """(start, end) of the observed block holding ``offset``."""
+        for start, end, _, _ in self.spans:
+            if start <= offset <= end:
+                return (start, end)
+        return None
+
     def find(self, text: str, start: int, pages: set[int], taken: list[tuple[int, int]]) -> int | None:
         """First unconsumed occurrence at or after ``start`` lying entirely on ``pages``."""
         return _search(self.text, text, start, None, taken,
@@ -344,7 +351,7 @@ def _fragments(exp: dict[str, Any], out: _Checks) -> list[dict[str, Any]]:
 
 
 def _place(frag: dict[str, Any], stream: _Stream, norm: Norm, cursor: int,
-           taken: list[tuple[int, int]]) -> tuple[str, int, int | None]:
+           taken: list[tuple[int, int]], placed: dict[str, tuple[str, int | None]]) -> tuple[str, int, int | None]:
     """Locate one fragment: (status, new cursor, offset). Status is ``ok`` (found, and in order),
     ``displaced`` (found, but only before the previous match) or ``missing``. The fragment must lie
     on its own page; only a block that merges it with a chain neighbour may sit elsewhere. Each
@@ -357,11 +364,22 @@ def _place(frag: dict[str, Any], stream: _Stream, norm: Norm, cursor: int,
         taken.append((forward, forward + len(text)))
         return "ok", forward + len(text), forward
     for neighbour, before in ((frag["previous"], False), (frag["next"], True)):
-        if neighbour is not None:
-            merged = stream.find_merged(text, norm(neighbour["text"]), _chain_pages(frag["chain"]), taken, before)
-            if merged is not None:
-                taken.append((merged, merged + len(text)))
-                return "ok", cursor, merged
+        if neighbour is None:
+            continue
+        merged = stream.find_merged(text, norm(neighbour["text"]), _chain_pages(frag["chain"]), taken, before)
+        if merged is None:
+            continue
+        taken.append((merged, merged + len(text)))
+        if merged >= cursor:
+            return "ok", merged + len(text), merged
+        # Before the cursor: legitimate only for a later fragment whose predecessor was itself placed
+        # in this very block (the block holds the chain, and sits where the head sits, so unrelated
+        # content such as a footnote may interleave in the expectation). Otherwise the merged block
+        # is displaced relative to the surrounding content.
+        previous_at = None if before else placed.get(neighbour["id"], ("", None))[1]
+        if previous_at is not None and stream.span_of(previous_at) == stream.span_of(merged):
+            return "ok", cursor, merged
+        return "displaced", cursor, merged
     anywhere = stream.find(text, 0, pages, taken)
     if anywhere is not None:
         taken.append((anywhere, anywhere + len(text)))
@@ -379,7 +397,7 @@ def _check_text(exp: dict[str, Any], obs: dict[str, Any], out: _Checks) -> None:
         cursor = 0
         taken: list[tuple[int, int]] = []
         for frag in frags:
-            status, cursor, offset = _place(frag, streams[mode], norm, cursor, taken)
+            status, cursor, offset = _place(frag, streams[mode], norm, cursor, taken, placements[mode])
             placements[mode][frag["block"]["id"]] = (status, offset)
 
     for frag in frags:
@@ -520,21 +538,36 @@ def _check_precision(exp: dict[str, Any], obs: dict[str, Any], out: _Checks, mat
         taken: list[tuple[int, int]] = [(start, end) for start, end, _, block in stream.spans
                                         if block["id"] in exempt]
 
-        def cover(text: str) -> bool:
+        whole = {(start, end) for start, end, _, _ in stream.spans}
+
+        def fits(a: int, b: int, tier: int) -> bool:
+            if tier == 1:  # exactly one observed block
+                return (a, b) in whole
+            if tier == 2:  # inside one observed block
+                return any(start <= a and b <= end for start, end, _, _ in stream.spans)
+            return True  # a span across blocks
+
+        def cover(text: str, tier: int) -> bool:
             # Only in-scope observed text can be accounted for: an out-of-scope copy must not use
             # up the expected occurrence.
-            i = stream.find(text, 0, scope, taken)
+            i = _search(stream.text, text, 0, None, taken, lambda a, b: (
+                {stream._page_at(a), stream._page_at(b - 1)} <= scope and fits(a, b, tier)))
             if i is None:
                 return False
             mask[i:i + len(text)] = b"\x01" * len(text)
             taken.append((i, i + len(text)))
             return True
 
-        for text, fallback in sorted(((norm(t), f) for t, f in items if t), key=lambda it: len(it[0]), reverse=True):
-            if not cover(text):
-                for part in fallback:
-                    if part:
-                        cover(norm(part))
+        # Whole-block matches are allocated first, then within-block, then spans across blocks, so a
+        # cross-block coincidence (``A Beta`` + ``Gamma`` containing ``Beta Gamma``) cannot steal the
+        # occurrence a real block needs. Longest first within a tier.
+        pending = sorted(((norm(t), f) for t, f in items if t), key=lambda it: len(it[0]), reverse=True)
+        for tier in (1, 2, 3):
+            pending = [(text, fallback) for text, fallback in pending if not cover(text, tier)]
+        for _, fallback in pending:
+            for part in fallback:
+                if part:
+                    cover(norm(part), 3)
         for start, end, page, block in stream.spans:
             if page not in scope:
                 continue

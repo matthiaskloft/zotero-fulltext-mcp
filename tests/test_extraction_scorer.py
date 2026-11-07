@@ -1316,3 +1316,53 @@ def test_payload_text_does_not_use_up_a_genuine_paragraphs_occurrence(exp):
     obs["blocks"].append(_block("pq2", "paragraph", 2, 21, "y=-0.5x+1", bbox={"x0": 10, "y0": 650, "x1": 500, "y1": 690}))
     exp["blocks"] = [b for b in exp["blocks"] if b["id"] != "pq"]
     assert ("text_precision", "pq2") in _decisive(_rescore(exp, obs))
+
+
+def test_cross_block_coincidence_does_not_steal_a_real_blocks_text(exp):
+    for n, (text, order) in enumerate((("A Beta", 20), ("Gamma", 21), ("Beta Gamma", 22))):
+        y = 600 + 40 * n
+        exp["blocks"].append(_block(f"w{n}", "paragraph", 1, order, text, bbox={"x0": 10, "y0": y, "x1": 500, "y1": y + 30}))
+    obs = _observation_of(exp)
+    score = _rescore(exp, obs)
+    assert score["verdict"] == "passed", _decisive(score)
+    assert not [c for c in score["checks"] if c["name"] == "text_precision" and not c["passed"]]
+    # Real invented text next to the coincidence is still caught.
+    obs["blocks"].append(_block("wz", "paragraph", 1, 23, "Beta Beta", bbox={"x0": 10, "y0": 730, "x1": 500, "y1": 760}))
+    assert ("text_precision", "wz") in _decisive(_rescore(exp, obs))
+
+
+def test_merged_chain_displaced_before_unrelated_content_fails(chain_exp, chain_obs):
+    merged = _merged(chain_obs)
+    assert _rescore(chain_exp, merged)["verdict"] == "passed"
+    displaced = _rescore(chain_exp, defects.swap_reading_order(merged, "h1", "pa"))
+    assert ("reading_order", "pa") in _failed(displaced) and displaced["verdict"] == "failed"
+
+
+def _with_footnote(record):
+    for block in record["blocks"]:
+        if block["reading_order"] >= 2:
+            block["reading_order"] += 1
+    record["blocks"].append(_block("fn", "footnote", 1, 2, "1. A footnote between the halves.",
+                                   bbox={"x0": 10, "y0": 740, "x1": 500, "y1": 770}))
+
+
+def test_footnote_interleaved_between_merged_fragments_is_still_fine(chain_exp, chain_obs):
+    _with_footnote(chain_exp)
+    obs = _observation_of(chain_exp)
+    assert _rescore(chain_exp, obs)["verdict"] == "passed"
+    merged = _merged(obs)  # one block holds both halves; the footnote sits after it
+    score = _rescore(chain_exp, merged)
+    assert score["verdict"] == "passed", _decisive(score)
+    # ...but the same merged block pushed behind the footnote is out of order.
+    behind = defects.swap_reading_order(merged, "pa", "fn")
+    assert ("reading_order", "pa") in _failed(_rescore(chain_exp, behind)) or (
+        "reading_order", "fn") in _failed(_rescore(chain_exp, behind))
+
+
+def test_a_whole_block_is_preferred_over_a_coincidence_inside_another_block(exp, obs):
+    exp["blocks"].append(_block("wb", "paragraph", 1, 20, "Beta", bbox={"x0": 10, "y0": 600, "x1": 500, "y1": 630}))
+    obs = _observation_of(exp)
+    obs["blocks"].append(_block("wa", "paragraph", 1, 19, "Alpha Beta", bbox={"x0": 10, "y0": 560, "x1": 500, "y1": 590}))
+    failed = {sub for name, sub in _decisive(_rescore(exp, obs)) if name == "text_precision"}
+    # The invented "Alpha Beta" is flagged, not the genuine "Beta" block that follows it.
+    assert failed == {"wa"}
