@@ -513,7 +513,12 @@ def _check_precision(exp: dict[str, Any], obs: dict[str, Any], out: _Checks, mat
     for mode, norm in _MODES:
         stream = streams[mode]
         mask = bytearray(len(stream.text))
-        taken: list[tuple[int, int]] = []
+        # Decide the payload exemption first and keep exempt text out of ordinary allocation, so a
+        # structured block's serialized payload cannot use up a genuine paragraph's occurrence.
+        exempt = {block["id"] for _, _, _, block in stream.spans
+                  if block["id"] in matched[mode] and _is_payload_text(block, mode, norm)}
+        taken: list[tuple[int, int]] = [(start, end) for start, end, _, block in stream.spans
+                                        if block["id"] in exempt]
 
         def cover(text: str) -> bool:
             # Only in-scope observed text can be accounted for: an out-of-scope copy must not use
@@ -534,7 +539,7 @@ def _check_precision(exp: dict[str, Any], obs: dict[str, Any], out: _Checks, mat
             if page not in scope:
                 continue
             letters = [k for k in range(start, end) if stream.text[k] != " "]
-            accounted = block["id"] in matched[mode] and _is_payload_text(block, mode, norm)
+            accounted = block["id"] in exempt
             covered.setdefault(block["id"], {})[mode] = (
                 len(letters) if accounted else sum(mask[k] for k in letters), len(letters))
     pages = {b["id"]: b["page"] for b in obs["blocks"]}

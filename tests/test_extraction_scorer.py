@@ -1302,3 +1302,17 @@ def test_identical_adjacent_fragments_merged_on_either_page_pass(chain_exp, chai
     one_copy = _merged(chain_obs)
     _set_text(one_copy, "pa", same)
     assert {("text_presence", "pa"), ("text_presence", "pb")} & _decisive(_rescore(chain_exp, one_copy))
+
+
+def test_payload_text_does_not_use_up_a_genuine_paragraphs_occurrence(exp):
+    exp["blocks"].append(_block("pq", "paragraph", 2, 20, "y=-0.5x+1", bbox=dict(BOX)))
+    obs = _observation_of(exp)
+    _set_text(obs, "e1", "y=-0.5x+1")  # serializes the matched equation's LaTeX
+    score = _rescore(exp, obs)
+    assert ("text_precision", "pq") not in _decisive(score), _decisive(score)
+    assert score["verdict"] == "passed"
+    # The paragraph must still be real: without it the repeated text is invented.
+    obs["blocks"] = [b for b in obs["blocks"] if b["id"] != "pq"]
+    obs["blocks"].append(_block("pq2", "paragraph", 2, 21, "y=-0.5x+1", bbox={"x0": 10, "y0": 650, "x1": 500, "y1": 690}))
+    exp["blocks"] = [b for b in exp["blocks"] if b["id"] != "pq"]
+    assert ("text_precision", "pq2") in _decisive(_rescore(exp, obs))
