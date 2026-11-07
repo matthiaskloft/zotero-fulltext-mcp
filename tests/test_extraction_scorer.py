@@ -1268,3 +1268,37 @@ def test_reference_blocks_without_a_references_section_are_still_compared(exp):
     score = _rescore(exp, lost)
     assert {("text_presence", "r1b"), ("text_presence", "r2b")} <= _decisive(score)
     assert score["verdict"] == "failed"
+
+
+def test_matched_payload_text_must_only_serialize_the_payload(exp, obs):
+    markdown_table = ("| Group | Mean | Delta |\n| --- | --- | --- |\n| Control | 4.25 | -0.50 |\n"
+                      "| Treated | 5.75 | +1.25 |")
+    _set_text(obs, "t1", markdown_table)
+    _set_text(obs, "e1", "y = -0.5x + 1")
+    score = _rescore(exp, obs)
+    assert score["verdict"] == "passed", _decisive(score)
+    for block_id, text in (("e1", "Invented clinical result: treatment cures all patients."),
+                           ("t1", markdown_table + " Invented clinical result.")):
+        bad = copy.deepcopy(obs)
+        _set_text(bad, block_id, text)
+        failed = _decisive(_rescore(exp, bad))
+        assert ("text_precision", block_id) in failed, block_id
+        assert ("equation_match", "e1") not in failed and ("table_exact", "t1") not in failed
+
+
+def test_identical_adjacent_fragments_merged_on_either_page_pass(chain_exp, chain_obs):
+    same = "Same words repeat here."
+    for record in (chain_exp, chain_obs):
+        _set_text(record, "pa", same)
+        _set_text(record, "pb", same)
+    assert _rescore(chain_exp, chain_obs)["verdict"] == "passed"
+    for later_page in (False, True):
+        merged = _merged(chain_obs)
+        _set_text(merged, "pa", same + "\n" + same)
+        if later_page:
+            next(b for b in merged["blocks"] if b["id"] == "pa")["page"] = 2
+        score = _rescore(chain_exp, merged)
+        assert score["verdict"] == "passed", (later_page, _decisive(score))
+    one_copy = _merged(chain_obs)
+    _set_text(one_copy, "pa", same)
+    assert {("text_presence", "pa"), ("text_presence", "pb")} & _decisive(_rescore(chain_exp, one_copy))

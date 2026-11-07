@@ -215,7 +215,9 @@ section counts as an empty list wherever the expectation has references.
   word-bounded occurrence), so extra copies, joined words and appended digits fail. Reviewed
   expectations must therefore record every printed header, footer and page number on in-scope pages;
   there is no scorer exemption. The optional `text` of an observed table or equation block whose
-  structured payload matched is accounted for; the same text on an unmatched block is still invented.
+  structured payload matched is accounted for only if it serializes that payload (an equation's LaTeX
+  ignoring whitespace; a table's cell texts, each once, with Markdown table markup tolerated); any
+  other text on it, and the same text on an unmatched block, is invented.
   Reference-entry blocks that no entry points at are compared like body text, so an expectation that
   records the bibliography as blocks only still fails when it is lost. Pages with truncated or
   uncertain expected text are not assessed.

@@ -246,6 +246,17 @@ def _search(hay: str, needle: str, start: int = 0, end: int | None = None,
     return None
 
 
+def _occurrences(hay: str, needle: str, start: int, end: int,
+                 taken: list[tuple[int, int]] | None = None) -> list[int]:
+    """Every word-bounded, unconsumed occurrence of ``needle`` in ``hay[start:end]``."""
+    found: list[int] = []
+    pos = start
+    while (i := _search(hay, needle, pos, end, taken)) is not None:
+        found.append(i)
+        pos = i + 1
+    return found
+
+
 class _Stream:
     """The observed text of all pages in reading order under one normalization: blocks are joined
     by a single space, so block boundaries and line wraps do not matter when searching."""
@@ -286,12 +297,11 @@ class _Stream:
         for start, end, page, _ in self.spans:
             if page not in pages:
                 continue
-            where = _search(self.text, neighbour, start, end)
-            if where is None:
-                continue
-            found = _search(self.text, text, start, end, taken)
-            if found is not None and (found < where if before else found > where):
-                return found
+            others = _occurrences(self.text, neighbour, start, end)
+            for found in _occurrences(self.text, text, start, end, taken):
+                # A distinct, correctly ordered pair: identical adjacent fragments need two copies.
+                if any(n >= found + len(text) if before else found >= n + len(neighbour) for n in others):
+                    return found
         return None
 
 
@@ -451,6 +461,29 @@ def _check_order(frags: list[dict[str, Any]], placements: dict[str, dict[str, tu
                          "" if status == "ok" else "found only before an earlier block's match")
 
 
+_MD_TABLE_RULE = re.compile(r"(?m)^[\s|:\-]+$")
+
+
+def _is_payload_text(block: dict[str, Any], mode: str, norm: Norm) -> bool:
+    """Does an observed block's optional ``text`` merely serialize its structured payload? For an
+    equation: the LaTeX, ignoring whitespace. For a table: only the cell texts, each used once, with
+    separators and Markdown table markup (pipes, rule rows) tolerated. Anything else is content."""
+    text = _OBS_NORMS[mode]
+    squeeze = "".join
+    if block.get("equation") is not None:
+        latex = block["equation"].get("latex")
+        return latex is not None and squeeze(text(block["text"]).split()) == squeeze(norm(latex).split())
+    if block.get("table") is not None:
+        rest = squeeze(text(_MD_TABLE_RULE.sub(" ", block["text"]).replace("|", " ")).split())
+        for cell in sorted((squeeze(norm(c["text"]).split()) for c in block["table"]["cells"]), key=len, reverse=True):
+            if cell:
+                at = rest.find(cell)
+                if at >= 0:
+                    rest = rest[:at] + rest[at + len(cell):]
+        return not rest
+    return False
+
+
 def _check_precision(exp: dict[str, Any], obs: dict[str, Any], out: _Checks, matched: dict[str, set[str]]) -> None:
     """Invented content: observed text, in every block that has text, that no expected text accounts
     for. Each expected text (block text and raw reference entries) covers one word-bounded occurrence,
@@ -501,7 +534,7 @@ def _check_precision(exp: dict[str, Any], obs: dict[str, Any], out: _Checks, mat
             if page not in scope:
                 continue
             letters = [k for k in range(start, end) if stream.text[k] != " "]
-            accounted = block["id"] in matched[mode]
+            accounted = block["id"] in matched[mode] and _is_payload_text(block, mode, norm)
             covered.setdefault(block["id"], {})[mode] = (
                 len(letters) if accounted else sum(mask[k] for k in letters), len(letters))
     pages = {b["id"]: b["page"] for b in obs["blocks"]}
