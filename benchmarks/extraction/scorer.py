@@ -509,6 +509,31 @@ def _is_payload_text(block: dict[str, Any], mode: str, norm: Norm) -> bool:
     return False
 
 
+def _unassessed_pages(exp: dict[str, Any]) -> set[int]:
+    """The one definition of where text precision cannot be assessed: every page that holds an
+    expected item the scorer leaves unscored, because observed text there may be that very item, with
+    content the expectation does not vouch for. Covered: truncated or high-uncertainty blocks of any
+    kind and reference entries (over their whole page range, linked block or not); a text-bearing
+    block with explicit ``text: null``; a table or equation without its payload (or an equation with
+    neither LaTeX nor a number); a caption that spans pages. Each of these also lands in
+    ``not_scored`` in its own family, so the verdict is ``incomplete``."""
+    pages: set[int] = set()
+    continued = {b["continues_from"] for b in exp["blocks"] if "continues_from" in b}
+    for b in exp["blocks"]:
+        kind = b["type"]
+        explicit_null = "text" in b and not b["text"] and kind not in ("table", "figure", "equation")
+        no_table = kind == "table" and "table" not in b
+        no_equation = kind == "equation" and (
+            b.get("equation") is None or (b["equation"].get("latex") is None and b["equation"].get("number") is None))
+        spanning_caption = kind == "caption" and ("continues_from" in b or b["id"] in continued)
+        if _skip_reason(b, "block") or explicit_null or no_table or no_equation or spanning_caption:
+            pages.add(b["page"])
+    for entry in exp.get("references", {}).get("entries", []):
+        if _skip_reason(entry, "entry"):
+            pages |= set(range(entry["page"], entry.get("end_page", entry["page"]) + 1))
+    return pages
+
+
 def _exempt_blocks(obs: dict[str, Any], pairs: dict[str, dict[str, set[str]]]) -> dict[str, set[str]]:
     """Per mode, the matched observed table/equation blocks whose text only serializes their payload."""
     exempt: dict[str, set[str]] = {}
@@ -533,15 +558,7 @@ def _check_precision(exp: dict[str, Any], obs: dict[str, Any], out: _Checks,
     observed block used the exemption, or one printed occurrence would pay for two extracted copies."""
     streams = {mode: _Stream(obs["blocks"], _OBS_NORMS[mode]) for mode, _ in _MODES}
     scope = set(exp["scope"]["physical_pages"])
-    # Unscorable text and unscorable structured blocks alike: an uncertain or truncated equation or
-    # table's observed text cannot be verified, even when the expectation records only its payload.
-    unsure = {b["page"] for b in exp["blocks"]
-              if (isinstance(b.get("text"), str) or "table" in b or "equation" in b) and _skip_reason(b, "block")}
-    for entry in exp.get("references", {}).get("entries", []):
-        # An unscorable entry's observed text may legitimately differ, on every page it spans, even
-        # when no block is linked to it.
-        if _skip_reason(entry, "entry"):
-            unsure |= set(range(entry["page"], entry.get("end_page", entry["page"]) + 1))
+    unsure = _unassessed_pages(exp)
     # A reference recorded both as a block and as a linked entry is one printed text: the entry's raw
     # text covers it, and the block texts of its chain are the fallback if the raw text is not
     # contiguous in the observation. Counting both would pay for two occurrences.

@@ -1531,3 +1531,38 @@ def test_unscorable_structured_blocks_exclude_their_pages_from_precision_without
     assert not {("text_precision", "e1"), ("text_precision", "t1")} & _decisive(score)
     assert {("text_precision", "e1"), ("text_precision", "t1")} <= {(n["metric"], n["subject"]) for n in score["not_scored"]}
     assert score["verdict"] == "incomplete"
+
+
+def _null_text_paragraph(exp):
+    exp["blocks"].append(_block("pn", "paragraph", 1, 20, None, bbox=dict(BOX)))
+    exp["blocks"][-1]["text"] = None
+    return 1
+
+
+def _uncertain_figure(exp):
+    exp["blocks"].append(_block("fa", "figure", 1, 20, None, graphic={"kind": "chart"}, bbox=dict(BOX),
+                                uncertainty={"level": "high"}))
+    return 1
+
+
+def _page_spanning_caption(exp):
+    exp["blocks"].append(_block("c1b", "caption", 2, 20, "Table 1 (continued).", continues_from="c1", bbox=dict(BOX)))
+    return 1
+
+
+def _equation_without_latex_or_number(exp):
+    next(b for b in exp["blocks"] if b["id"] == "e1")["equation"] = {"latex": None, "number": None}
+    return 2
+
+
+@pytest.mark.parametrize("prepare", [_null_text_paragraph, _uncertain_figure, _page_spanning_caption,
+                                     _equation_without_latex_or_number])
+def test_every_unscored_expected_item_kind_excludes_its_page_from_text_precision(exp, prepare):
+    page = prepare(exp)
+    obs = _observation_of(exp)
+    obs["blocks"].append(_block("gz", "paragraph", page, 21, "Genuine text the expectation does not vouch for.",
+                                bbox={"x0": 10, "y0": 650, "x1": 500, "y1": 690}))
+    score = _rescore(exp, obs)
+    assert ("text_precision", "gz") not in _decisive(score), prepare.__name__
+    assert ("text_precision", "gz") in {(n["metric"], n["subject"]) for n in score["not_scored"]}, prepare.__name__
+    assert score["verdict"] == "incomplete", prepare.__name__
