@@ -1566,3 +1566,38 @@ def test_every_unscored_expected_item_kind_excludes_its_page_from_text_precision
     assert ("text_precision", "gz") not in _decisive(score), prepare.__name__
     assert ("text_precision", "gz") in {(n["metric"], n["subject"]) for n in score["not_scored"]}, prepare.__name__
     assert score["verdict"] == "incomplete", prepare.__name__
+
+
+@pytest.mark.parametrize("family,text,page", [("caption", "Table 1. Synthetic group means.", 1),
+                                              ("reference entry", RAW1, 2)])
+def test_a_block_matched_by_a_family_cannot_also_satisfy_a_body_paragraph(exp, family, text, page):
+    exp["blocks"].append(_block("pdup", "paragraph", page, 20, text, bbox=dict(BOX)))
+    obs = _observation_of(exp)
+    assert _rescore(exp, obs)["verdict"] == "passed"
+    obs["blocks"] = [b for b in obs["blocks"] if b["id"] != "pdup"]  # the body paragraph is lost
+    score = _rescore(exp, obs)
+    assert ("text_presence", "pdup") in _decisive(score), family
+    assert score["verdict"] == "failed"
+
+
+def test_identical_raw_reference_entries_pair_by_ordinal_not_array_order(exp):
+    twin = copy.deepcopy(_entry(exp, "r1"))
+    twin.update(id="r9", ordinal=3)
+    del twin["block_id"]
+    exp["references"]["entries"].append(twin)
+    obs = _observation_of(exp)
+    obs["references"]["entries"].reverse()  # the twin is listed first
+    score = _rescore(exp, obs)
+    assert not {sub for name, sub in _decisive(score) if name == "reference_ordinal"}, _decisive(score)
+    assert score["verdict"] == "passed"
+
+
+def test_figure_text_cannot_satisfy_a_missing_body_paragraph(exp):
+    exp["blocks"].append(_block("fa", "figure", 1, 20, "Alt text of the chart.", graphic={"kind": "chart"},
+                                bbox={"x0": 10, "y0": 600, "x1": 500, "y1": 640}))
+    exp["blocks"].append(_block("pdup", "paragraph", 1, 21, "Alt text of the chart.",
+                                bbox={"x0": 10, "y0": 650, "x1": 500, "y1": 690}))
+    obs = _observation_of(exp)
+    assert _rescore(exp, obs)["verdict"] == "passed"
+    obs["blocks"] = [b for b in obs["blocks"] if b["id"] != "pdup"]
+    assert ("text_presence", "pdup") in _decisive(_rescore(exp, obs))

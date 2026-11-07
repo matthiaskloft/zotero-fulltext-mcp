@@ -389,9 +389,10 @@ def _place(frag: dict[str, Any], stream: _Stream, norm: Norm, cursor: int,
 
 
 def _check_text(exp: dict[str, Any], obs: dict[str, Any], out: _Checks, exempt: dict[str, set[str]]) -> None:
-    """Body-text presence and order. ``exempt`` holds, per mode, the observed table and equation blocks
-    whose optional text only serializes their own matched payload: that text is left out of the
-    search, so it cannot also satisfy a body paragraph that merely repeats it."""
+    """Body-text presence and order. ``exempt`` holds, per mode, every observed block that an
+    independent family matched (tables, equations, captions, figures, reference entries): their text
+    is left out of the search, so one extracted occurrence cannot serve both that family and a body
+    paragraph that merely repeats it."""
     observed = _page_blocks(obs)
     streams = {mode: _Stream(obs["blocks"], _OBS_NORMS[mode], exempt[mode]) for mode, _ in _MODES}
     frags = _fragments(exp, out)
@@ -532,16 +533,6 @@ def _unassessed_pages(exp: dict[str, Any]) -> set[int]:
         if _skip_reason(entry, "entry"):
             pages |= set(range(entry["page"], entry.get("end_page", entry["page"]) + 1))
     return pages
-
-
-def _exempt_blocks(obs: dict[str, Any], pairs: dict[str, dict[str, set[str]]]) -> dict[str, set[str]]:
-    """Per mode, the matched observed table/equation blocks whose text only serializes their payload."""
-    exempt: dict[str, set[str]] = {}
-    for mode, norm in _MODES:
-        matched = set().union(*pairs[mode].values())
-        exempt[mode] = {b["id"] for b in obs["blocks"]
-                        if b["id"] in matched and isinstance(b.get("text"), str) and _is_payload_text(b, mode, norm)}
-    return exempt
 
 
 def _check_precision(exp: dict[str, Any], obs: dict[str, Any], out: _Checks,
@@ -939,7 +930,7 @@ def _same_target(want_chain: list[dict[str, Any]], got_chain: list[dict[str, Any
 
 
 def _check_captions(exp: dict[str, Any], obs: dict[str, Any], out: _Checks,
-                    table_match: dict[str, dict[str, str]]) -> None:
+                        table_match: dict[str, dict[str, str]]) -> dict[str, set[str]]:
     exp_chains, obs_chains = _chains(exp), _chains(obs)
     exp_by_id = {b["id"]: b for b in exp["blocks"]}
     obs_by_id = {b["id"]: b for b in obs["blocks"]}
@@ -988,9 +979,10 @@ def _check_captions(exp: dict[str, Any], obs: dict[str, Any], out: _Checks,
                 "caption text exact, on the same page, and linked to the corresponding table/figure")
     _precision("caption_precision", [(b["id"], {b["page"]}) for b in obs["blocks"] if b["type"] == "caption"],
                used, set(exp["scope"]["physical_pages"]), unsure, out)
+    return used
 
 
-def _check_figures(exp: dict[str, Any], obs: dict[str, Any], out: _Checks) -> None:
+def _check_figures(exp: dict[str, Any], obs: dict[str, Any], out: _Checks) -> set[str]:
     """Presence only: each expected figure needs an observed figure block on its page (each used
     once). Content, placement and graphic kind are not compared."""
     taken: set[str] = set()
@@ -1007,6 +999,7 @@ def _check_figures(exp: dict[str, Any], obs: dict[str, Any], out: _Checks) -> No
             taken.add(cand["id"])
         out.add("figure_match", block["id"], _ok(cand is not None), _ok(cand is not None),
                 "an observed figure block on the same page (presence only)")
+    return taken
 
 
 # --- references ---------------------------------------------------------------------------------
@@ -1026,8 +1019,8 @@ def _align(exp_entries: list[dict[str, Any]], obs_entries: list[dict[str, Any]],
            lenient: bool) -> dict[str, dict[str, Any]]:
     """Expected entry id -> observed entry with the same raw text and page(s) (each used once)."""
     free: dict[str, list[dict[str, Any]]] = defaultdict(list)
-    for entry in obs_entries:
-        free[norm(entry["raw"])].append(entry)
+    for entry in sorted(obs_entries, key=lambda e: e["ordinal"]):
+        free[norm(entry["raw"])].append(entry)  # identical raw texts pair up in ordinal order
     aligned = {}
     for entry in sorted(exp_entries, key=lambda e: e["ordinal"]):
         bucket = free.get(norm(entry["raw"]), [])
@@ -1054,9 +1047,10 @@ def _field_hits(want: dict[str, Any], got: dict[str, Any], norm: Norm) -> dict[s
     return hits
 
 
-def _check_references(exp: dict[str, Any], obs: dict[str, Any], out: _Checks) -> None:
+def _check_references(exp: dict[str, Any], obs: dict[str, Any], out: _Checks) -> dict[str, set[str]]:
+    """Score references; return, per mode, the observed blocks that matched observed entries point at."""
     if "references" not in exp:
-        return
+        return {m: set() for m, _ in _MODES}
     scope = set(exp["scope"]["physical_pages"])
     if exp["references"]["markers"]:
         out.skip("reference_markers", "<all>", "citation-marker links are not scored")
@@ -1076,6 +1070,9 @@ def _check_references(exp: dict[str, Any], obs: dict[str, Any], out: _Checks) ->
     # Align against every expected entry, skipped ones too, so a correct observed entry whose
     # expected twin is unscored is neither a hit nor an "extra" that lowers precision.
     aligned = {m: _align(expected, obs_entries, n, m == "tolerant") for m, n in _MODES}
+    obs_chains = _chains(obs)
+    claimed = {m: {b["id"] for seg in aligned[m].values() if "block_id" in seg
+                   for b in _chain_index(obs_chains, seg["block_id"])} for m, _ in _MODES}
 
     pairs: dict[str, list[tuple[dict[str, Any], dict[str, Any]]]] = {m: [] for m, _ in _MODES}
     for entry in scored:
@@ -1143,6 +1140,7 @@ def _check_references(exp: dict[str, Any], obs: dict[str, Any], out: _Checks) ->
             else:
                 out.add_mode(metric, mode, entry["id"], _ok(doi["status"] != "present"),
                              "observation must not report a DOI the source does not print")
+    return claimed
 
 
 # --- entry points --------------------------------------------------------------------------------
@@ -1182,11 +1180,13 @@ def _score_validated(exp: dict[str, Any], obs: dict[str, Any], markdown: str | N
     pairs = {mode: {**equation_pairs[mode], **{
         block_id: set(obs_chain.split("+")) for ident, obs_chain in table_match[mode].items()
         for block_id in ident.split("+")}} for mode, _ in _MODES}
-    _check_text(exp, obs, out, _exempt_blocks(obs, pairs))
-    _check_captions(exp, obs, out, table_match)
+    captions = _check_captions(exp, obs, out, table_match)
+    figures = _check_figures(exp, obs, out)
+    references = _check_references(exp, obs, out)
+    matched_elsewhere = {mode: set().union(*pairs[mode].values()) | captions[mode] | figures | references[mode]
+                         for mode, _ in _MODES}
+    _check_text(exp, obs, out, matched_elsewhere)
     _check_precision(exp, obs, out, pairs)
-    _check_figures(exp, obs, out)
-    _check_references(exp, obs, out)
     _check_spans(obs, markdown, out)
     out.mark_tolerant_only()
     verdict, failures, n_deciding = _verdict(out)
