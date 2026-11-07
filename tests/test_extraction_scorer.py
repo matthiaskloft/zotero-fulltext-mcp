@@ -1366,3 +1366,35 @@ def test_a_whole_block_is_preferred_over_a_coincidence_inside_another_block(exp,
     failed = {sub for name, sub in _decisive(_rescore(exp, obs)) if name == "text_precision"}
     # The invented "Alpha Beta" is flagged, not the genuine "Beta" block that follows it.
     assert failed == {"wa"}
+
+
+def test_constrained_equation_claims_its_candidate_before_a_looser_twin(exp):
+    for name, order, display in (("xa", 20, None), ("xb", 21, True)):
+        payload = {"latex": "x=1", "number": None}
+        if display is not None:
+            payload["display"] = display
+        exp["blocks"].append(_block(name, "equation", 2, order, None, equation=payload,
+                                    bbox={"x0": 10, "y0": 300 + 40 * (order - 20), "x1": 500, "y1": 330 + 40 * (order - 20)}))
+    obs = _observation_of(exp)
+    next(b for b in obs["blocks"] if b["id"] == "xa")["equation"]["display"] = True   # listed first
+    next(b for b in obs["blocks"] if b["id"] == "xb")["equation"]["display"] = False
+    score = _rescore(exp, obs)
+    assert {("equation_match", "xa"), ("equation_match", "xb")}.isdisjoint(_failed(score)), _failed(score)
+    assert score["verdict"] == "passed"
+    # Results are still reported in reading order.
+    assert [c["subject"] for c in score["checks"] if c["name"] == "equation_match" and c["mode"] == "strict"] == [
+        "e1", "xa", "xb"]
+
+
+def test_linked_caption_claims_its_candidate_before_an_unlinked_twin(exp):
+    for block in exp["blocks"]:
+        if block["reading_order"] >= 1:
+            block["reading_order"] += 1
+    exp["blocks"].append(_block("c0", "caption", 1, 1, "Table 1. Synthetic group means.",
+                                bbox={"x0": 10, "y0": 700, "x1": 500, "y1": 730}))
+    obs = _observation_of(exp)
+    assert _rescore(exp, obs)["verdict"] == "passed"
+    assert [b["id"] for b in obs["blocks"] if b["type"] == "caption"] == ["c1", "c0"]
+    score = _rescore(exp, obs)
+    assert [c["subject"] for c in score["checks"] if c["name"] == "caption_match" and c["mode"] == "strict"] == [
+        "c0", "c1"]

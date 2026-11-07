@@ -781,6 +781,7 @@ def _check_equations(exp: dict[str, Any], obs: dict[str, Any], out: _Checks) -> 
     observed = _page_blocks(obs)
     used: dict[str, set[str]] = {"strict": set(), "tolerant": set()}
     unsure: set[int] = set()
+    wanted: list[tuple[dict[str, Any], dict[str, Any]]] = []
     for block in sorted(exp["blocks"], key=lambda b: b["reading_order"]):
         want = block.get("equation")
         if want is None:
@@ -794,6 +795,13 @@ def _check_equations(exp: dict[str, Any], obs: dict[str, Any], out: _Checks) -> 
             out.skip("equation_match", block["id"], "expectation records neither LaTeX nor a number")
             unsure.add(block["page"])
             continue
+        wanted.append((block, want))
+    # The most constrained expectations (printed number, display flag) claim their candidates first,
+    # so a looser twin cannot consume the only observed equation that satisfies them. Results are
+    # still reported in reading order.
+    outcome: dict[str, dict[str, Pair]] = {}
+    for block, want in sorted(wanted, key=lambda w: -((w[1].get("display") is not None)
+                                                      + (w[1].get("number") is not None))):
         results = {}
         for mode, _ in _MODES:
             hit = False
@@ -812,7 +820,9 @@ def _check_equations(exp: dict[str, Any], obs: dict[str, Any], out: _Checks) -> 
                 hit = True
                 break
             results[mode] = _ok(hit)
-        out.add("equation_match", block["id"], results["strict"], results["tolerant"],
+        outcome[block["id"]] = results
+    for block, _ in wanted:
+        out.add("equation_match", block["id"], outcome[block["id"]]["strict"], outcome[block["id"]]["tolerant"],
                 "LaTeX, printed number and display flag must agree (each observed equation used once)")
     _precision("equation_precision",
                [(b["id"], {b["page"]}) for b in obs["blocks"] if b.get("equation") is not None],
@@ -852,6 +862,7 @@ def _check_captions(exp: dict[str, Any], obs: dict[str, Any], out: _Checks,
     continued = {b["continues_from"] for b in exp["blocks"] if "continues_from" in b}
     used: dict[str, set[str]] = {"strict": set(), "tolerant": set()}
     unsure: set[int] = set()
+    wanted: list[tuple[dict[str, Any], dict[str, Any] | None]] = []
     for block in sorted(exp["blocks"], key=lambda b: b["reading_order"]):
         if block["type"] != "caption":
             continue
@@ -865,7 +876,10 @@ def _check_captions(exp: dict[str, Any], obs: dict[str, Any], out: _Checks,
             out.skip("caption_match", block["id"], "caption itself spans pages; not compared")
             unsure.add(block["page"])
             continue
-        target = exp_by_id.get(block.get("caption_for", ""))
+        wanted.append((block, exp_by_id.get(block.get("caption_for", ""))))
+    # Captions linked to a target are the more constrained: they claim their candidates first.
+    outcome: dict[str, dict[str, Pair]] = {}
+    for block, target in sorted(wanted, key=lambda w: w[1] is None):
         results = {}
         for mode, norm in _MODES:
             hit = False
@@ -884,7 +898,9 @@ def _check_captions(exp: dict[str, Any], obs: dict[str, Any], out: _Checks,
                 hit = True
                 break
             results[mode] = _ok(hit)
-        out.add("caption_match", block["id"], results["strict"], results["tolerant"],
+        outcome[block["id"]] = results
+    for block, _ in wanted:
+        out.add("caption_match", block["id"], outcome[block["id"]]["strict"], outcome[block["id"]]["tolerant"],
                 "caption text exact, on the same page, and linked to the corresponding table/figure")
     _precision("caption_precision", [(b["id"], {b["page"]}) for b in obs["blocks"] if b["type"] == "caption"],
                used, set(exp["scope"]["physical_pages"]), unsure, out)
