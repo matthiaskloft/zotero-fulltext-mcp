@@ -591,6 +591,34 @@ def _check_precision(exp: dict[str, Any], obs: dict[str, Any], out: _Checks,
         if modes["strict"][1]:
             out.add("text_precision", bid, modes["strict"], modes["tolerant"],
                     "observed text with no counterpart in the expected text (invented content)")
+    _payloadless_precision(exp, obs, scope, covered, out)
+
+
+def _payloadless_precision(exp: dict[str, Any], obs: dict[str, Any], scope: set[int],
+                           covered: dict[str, dict[str, Pair]], out: _Checks) -> None:
+    """Observed ``table`` and ``equation`` blocks that carry no structured payload cannot be matched,
+    but they stay in the inventory instead of being filtered out: such a block fails its precision
+    check unless its text is accounted for elsewhere (the text coverage above), and is listed as not
+    scored when the expected items of that kind on its page cannot be compared."""
+    comparable = {b["id"] for c in _table_chains(obs) for b in c[1]}
+    for kind, metric in (("table", "table_precision"), ("equation", "equation_precision")):
+        uncomparable = {b["page"] for b in exp["blocks"] if b["type"] == kind and (
+            _skip_reason(b, kind) or kind not in b
+            or (kind == "equation" and b[kind].get("latex") is None and b[kind].get("number") is None))}
+        for block in obs["blocks"]:
+            if block["type"] != kind or block["page"] not in scope:
+                continue
+            if block["id"] in comparable or (kind == "equation" and block.get("equation") is not None):
+                continue
+            if block["page"] in uncomparable:
+                out.skip(metric, block["id"], f"observed {kind} without a payload; expected {kind}s on its page "
+                         "cannot be compared")
+                continue
+            modes = covered.get(block["id"], {})
+            ok = {m: bool(modes.get(m)) and modes[m][1] > 0 and modes[m][0] == modes[m][1] for m in ("strict", "tolerant")}
+            out.add(metric, block["id"], _ok(ok["strict"]), _ok(ok["tolerant"]),
+                    f"observed {kind} without a payload matches no expected {kind}; it passes only if its text "
+                    "is accounted for elsewhere")
 
 
 def _precision(name: str, observed: list[tuple[str, set[int]]], matched: dict[str, set[str]], scope: set[int],
@@ -729,6 +757,10 @@ def _check_tables(exp: dict[str, Any], obs: dict[str, Any], out: _Checks) -> dic
     scope = set(exp["scope"]["physical_pages"])
     wanted = []
     unsure: set[int] = set()
+    for chain in _chains(exp):
+        if chain[0]["type"] == "table" and not all("table" in b for b in chain):
+            out.skip("table_cell_match", _chain_id(chain), "expected table has no table payload; not compared")
+            unsure |= _chain_pages(chain)
     for ident, chain, pages, table in _table_chains(exp):
         reasons = [r for r in (_skip_reason(b, "table") for b in chain) if r]
         if reasons:
@@ -795,6 +827,9 @@ def _check_equations(exp: dict[str, Any], obs: dict[str, Any], out: _Checks) -> 
     for block in sorted(exp["blocks"], key=lambda b: b["reading_order"]):
         want = block.get("equation")
         if want is None:
+            if block["type"] == "equation":
+                out.skip("equation_match", block["id"], "expected equation has no equation payload; not compared")
+                unsure.add(block["page"])
             continue
         reason = _skip_reason(block, "equation")
         if reason:

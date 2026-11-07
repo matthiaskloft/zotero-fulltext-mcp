@@ -1445,3 +1445,39 @@ def test_table_cell_with_literal_pipes_still_serializes_as_payload(exp, obs):
     assert score["verdict"] == "passed", _decisive(score)
     _set_text(obs, "t1", markdown + "\n| Invented | row |")
     assert ("text_precision", "t1") in _decisive(_rescore(exp, obs))
+
+
+def test_appended_payloadless_table_or_equation_blocks_fail_precision(exp, obs):
+    assert _rescore(exp, obs)["verdict"] == "passed"
+    for kind, page, metric in (("table", 1, "table_precision"), ("equation", 2, "equation_precision")):
+        bad = copy.deepcopy(obs)
+        bad["blocks"].append(_block("ghost", kind, page, 20, None, bbox=dict(BOX)))
+        score = _rescore(exp, bad)
+        assert (metric, "ghost") in _decisive(score) and score["verdict"] == "failed", kind
+    # Its text being accounted for elsewhere is enough: the extractor emitted the paragraph as a table.
+    moved = copy.deepcopy(obs)
+    moved["blocks"] = [b for b in moved["blocks"] if b["id"] != "p2"]
+    moved["blocks"].append(_block("ghost", "table", 1, 2 + 100, "Second paragraph with Mixed Case and x = 3.14.",
+                                  bbox=dict(BOX)))
+    score = _rescore(exp, moved)
+    assert ("table_precision", "ghost") not in _decisive(score)
+
+
+def test_payloadless_blocks_are_not_scored_when_expected_items_on_the_page_cannot_be_compared(exp, obs):
+    next(b for b in exp["blocks"] if b["id"] == "t1")["uncertainty"] = {"level": "high"}
+    next(b for b in exp["blocks"] if b["id"] == "e1")["uncertainty"] = {"level": "high"}
+    obs = _observation_of(exp)
+    obs["blocks"].append(_block("gt", "table", 1, 20, None, bbox=dict(BOX)))
+    obs["blocks"].append(_block("ge", "equation", 2, 21, None, bbox=dict(BOX)))
+    score = _rescore(exp, obs)
+    listed = {(n["metric"], n["subject"]) for n in score["not_scored"]}
+    assert {("table_precision", "gt"), ("equation_precision", "ge")} <= listed
+    assert not {("table_precision", "gt"), ("equation_precision", "ge")} & _decisive(score)
+    assert score["verdict"] == "incomplete"
+
+
+def test_partially_payloaded_observed_table_chain_stays_in_the_inventory(chain_exp, chain_obs):
+    del next(b for b in chain_obs["blocks"] if b["id"] == "tb")["table"]
+    score = _rescore(chain_exp, chain_obs)
+    assert {("table_exact", "ta+tb"), ("table_precision", "ta"), ("table_precision", "tb")} & _decisive(score)
+    assert score["verdict"] == "failed"

@@ -225,7 +225,10 @@ section counts as an empty list wherever the expectation has references.
   uncertain expected text are not assessed.
 - **Tables.** Cells at the same grid position with the same spans and text (`table_cell_match`),
   the whole grid (`table_exact`), the relative order of matched tables (`table_order`), and
-  `table_precision` for observed tables no expected table accounts for. Expected and observed tables
+  `table_precision` for observed tables no expected table accounts for. Observed table or equation
+  blocks without their structured payload stay in that inventory: they fail precision unless their
+  text is accounted for elsewhere, and are listed as not scored (verdict incomplete) when the
+  expected items of that kind on their page cannot be compared. Expected and observed tables
   are paired by an optimal assignment (cell matches first, an identical grid as the tie-break), solved
   exhaustively per group of tables that share a page; the header flag is compared in strict mode
   only.
