@@ -1398,3 +1398,28 @@ def test_linked_caption_claims_its_candidate_before_an_unlinked_twin(exp):
     score = _rescore(exp, obs)
     assert [c["subject"] for c in score["checks"] if c["name"] == "caption_match" and c["mode"] == "strict"] == [
         "c0", "c1"]
+
+
+def test_page_two_text_claiming_an_earlier_reading_order_is_displaced(exp):
+    exp["blocks"].append(_block("q2", "paragraph", 2, 20, "A late paragraph on page two.",
+                                bbox={"x0": 10, "y0": 650, "x1": 500, "y1": 690}))
+    obs = _observation_of(exp)
+    assert _rescore(exp, obs)["verdict"] == "passed"
+    for block in obs["blocks"]:
+        block["reading_order"] += 1
+    next(b for b in obs["blocks"] if b["id"] == "q2")["reading_order"] = 0  # before every page-1 block
+    score = _rescore(exp, obs)
+    assert ("reading_order", "q2") in _failed(score) and score["verdict"] == "failed"
+    assert ("text_presence", "q2") not in _failed(score)  # it is on the right page, just out of order
+
+
+def test_expected_payload_text_pays_for_one_occurrence_only(exp):
+    _set_text(exp, "e1", "y=-0.5x+1")  # the expectation prints the equation's text as well
+    obs = _observation_of(exp)
+    assert _rescore(exp, obs)["verdict"] == "passed"
+    obs["blocks"].append(_block("pz", "paragraph", 2, 20, "y=-0.5x+1", bbox=dict(BOX)))
+    score = _rescore(exp, obs)
+    assert ("text_precision", "pz") in _decisive(score) and score["verdict"] == "failed"
+    # A genuine expected paragraph with the same text still covers its own copy.
+    exp["blocks"].append(_block("pq", "paragraph", 2, 20, "y=-0.5x+1", bbox=dict(BOX)))
+    assert _rescore(exp, _observation_of(exp))["verdict"] == "passed"

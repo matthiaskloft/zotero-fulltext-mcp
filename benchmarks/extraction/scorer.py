@@ -258,22 +258,23 @@ def _occurrences(hay: str, needle: str, start: int, end: int,
 
 
 class _Stream:
-    """The observed text of all pages in reading order under one normalization: blocks are joined
-    by a single space, so block boundaries and line wraps do not matter when searching."""
+    """The observed text in document-wide reading order under one normalization: blocks are joined
+    by a single space, so block boundaries and line wraps do not matter when searching. The order is
+    the observation's own ``reading_order``, never repaired by sorting pages, so a block that claims
+    the wrong place shows up as displaced; each span keeps its page for per-page presence."""
 
-    def __init__(self, observed: dict[int, list[dict[str, Any]]], norm: Norm):
+    def __init__(self, blocks: list[dict[str, Any]], norm: Norm):
         self.spans: list[tuple[int, int, int, dict[str, Any]]] = []
         pieces = []
         pos = 0
-        for page in sorted(observed):
-            for block in observed[page]:
-                if not isinstance(block.get("text"), str):
-                    continue
-                text = norm(block["text"])
-                if text:
-                    self.spans.append((pos, pos + len(text), page, block))
-                    pieces.append(text)
-                    pos += len(text) + 1
+        for block in sorted(blocks, key=lambda b: b["reading_order"]):
+            if not isinstance(block.get("text"), str):
+                continue
+            text = norm(block["text"])
+            if text:
+                self.spans.append((pos, pos + len(text), block["page"], block))
+                pieces.append(text)
+                pos += len(text) + 1
         self.text = " ".join(pieces)
 
     def _page_at(self, offset: int) -> int | None:
@@ -389,7 +390,7 @@ def _place(frag: dict[str, Any], stream: _Stream, norm: Norm, cursor: int,
 
 def _check_text(exp: dict[str, Any], obs: dict[str, Any], out: _Checks) -> None:
     observed = _page_blocks(obs)
-    streams = {mode: _Stream(observed, _OBS_NORMS[mode]) for mode, _ in _MODES}
+    streams = {mode: _Stream(obs["blocks"], _OBS_NORMS[mode]) for mode, _ in _MODES}
     frags = _fragments(exp, out)
 
     placements: dict[str, dict[str, tuple[str, int | None]]] = {mode: {} for mode, _ in _MODES}
@@ -502,17 +503,19 @@ def _is_payload_text(block: dict[str, Any], mode: str, norm: Norm) -> bool:
     return False
 
 
-def _check_precision(exp: dict[str, Any], obs: dict[str, Any], out: _Checks, matched: dict[str, set[str]]) -> None:
+def _check_precision(exp: dict[str, Any], obs: dict[str, Any], out: _Checks,
+                     pairs: dict[str, dict[str, set[str]]]) -> None:
     """Invented content: observed text, in every block that has text, that no expected text accounts
     for. Each expected text (block text and raw reference entries) covers one word-bounded occurrence,
     so extra copies, joined words and appended digits count as invented. Reviewed expectations must
     record every printed header, footer and page number on in-scope pages: there is no exemption for
     them here. Pages where the expectation has truncated or uncertain text are not assessed. The
     optional ``text`` of an observed table or equation block whose structured payload matched an
-    expected item reproduces that item and is accounted for (``matched``: block ids per mode); the
-    same text on an unmatched block is still invented."""
-    observed = _page_blocks(obs)
-    streams = {mode: _Stream(observed, _OBS_NORMS[mode]) for mode, _ in _MODES}
+    expected item reproduces that item and is accounted for; the same text on an unmatched block is
+    still invented. ``pairs`` maps, per mode, each matched expected structured block to the observed
+    blocks it matched. The expected block's own ``text`` then gets no ordinary budget when the matched
+    observed block used the exemption, or one printed occurrence would pay for two extracted copies."""
+    streams = {mode: _Stream(obs["blocks"], _OBS_NORMS[mode]) for mode, _ in _MODES}
     scope = set(exp["scope"]["physical_pages"])
     unsure = {b["page"] for b in exp["blocks"] if isinstance(b.get("text"), str) and _skip_reason(b, "block")}
     # A reference recorded both as a block and as a linked entry is one printed text: the entry's raw
@@ -526,15 +529,16 @@ def _check_precision(exp: dict[str, Any], obs: dict[str, Any], out: _Checks, mat
         if "block_id" in entry:
             fallback = [b["text"] for b in _chain_index(chains, entry["block_id"]) if isinstance(b.get("text"), str)]
         items.append((entry["raw"], fallback))
-    items += [(b["text"], []) for b in exp["blocks"] if isinstance(b.get("text"), str) and b["id"] not in linked]
+    block_items = [b for b in exp["blocks"] if isinstance(b.get("text"), str) and b["id"] not in linked]
     covered: dict[str, dict[str, Pair]] = {}
     for mode, norm in _MODES:
         stream = streams[mode]
         mask = bytearray(len(stream.text))
         # Decide the payload exemption first and keep exempt text out of ordinary allocation, so a
         # structured block's serialized payload cannot use up a genuine paragraph's occurrence.
+        matched_obs = set().union(*pairs[mode].values())
         exempt = {block["id"] for _, _, _, block in stream.spans
-                  if block["id"] in matched[mode] and _is_payload_text(block, mode, norm)}
+                  if block["id"] in matched_obs and _is_payload_text(block, mode, norm)}
         taken: list[tuple[int, int]] = [(start, end) for start, end, _, block in stream.spans
                                         if block["id"] in exempt]
 
@@ -561,7 +565,8 @@ def _check_precision(exp: dict[str, Any], obs: dict[str, Any], out: _Checks, mat
         # Whole-block matches are allocated first, then within-block, then spans across blocks, so a
         # cross-block coincidence (``A Beta`` + ``Gamma`` containing ``Beta Gamma``) cannot steal the
         # occurrence a real block needs. Longest first within a tier.
-        pending = sorted(((norm(t), f) for t, f in items if t), key=lambda it: len(it[0]), reverse=True)
+        mode_items = items + [(b["text"], []) for b in block_items if not pairs[mode].get(b["id"], set()) & exempt]
+        pending = sorted(((norm(t), f) for t, f in mode_items if t), key=lambda it: len(it[0]), reverse=True)
         for tier in (1, 2, 3):
             pending = [(text, fallback) for text, fallback in pending if not cover(text, tier)]
         for _, fallback in pending:
@@ -777,9 +782,10 @@ def _norm_latex(mode: str, latex: str) -> str:
     return "".join(_loose(latex).split()) if mode == "tolerant" else _strict(latex)
 
 
-def _check_equations(exp: dict[str, Any], obs: dict[str, Any], out: _Checks) -> dict[str, set[str]]:
+def _check_equations(exp: dict[str, Any], obs: dict[str, Any], out: _Checks) -> dict[str, dict[str, set[str]]]:
     observed = _page_blocks(obs)
     used: dict[str, set[str]] = {"strict": set(), "tolerant": set()}
+    pairs: dict[str, dict[str, set[str]]] = {"strict": {}, "tolerant": {}}
     unsure: set[int] = set()
     wanted: list[tuple[dict[str, Any], dict[str, Any]]] = []
     for block in sorted(exp["blocks"], key=lambda b: b["reading_order"]):
@@ -817,6 +823,7 @@ def _check_equations(exp: dict[str, Any], obs: dict[str, Any], out: _Checks) -> 
                 if want.get("display") is not None and got.get("display") != want["display"]:
                     continue
                 used[mode].add(cand["id"])
+                pairs[mode][block["id"]] = {cand["id"]}
                 hit = True
                 break
             results[mode] = _ok(hit)
@@ -827,7 +834,7 @@ def _check_equations(exp: dict[str, Any], obs: dict[str, Any], out: _Checks) -> 
     _precision("equation_precision",
                [(b["id"], {b["page"]}) for b in obs["blocks"] if b.get("equation") is not None],
                used, set(exp["scope"]["physical_pages"]), unsure, out)
-    return used
+    return pairs
 
 
 def _chain_index(chains: list[list[dict[str, Any]]], block_id: str) -> list[dict[str, Any]]:
@@ -1095,12 +1102,12 @@ def _score_validated(exp: dict[str, Any], obs: dict[str, Any], markdown: str | N
     out = _Checks()
     _check_text(exp, obs, out)
     table_match = _check_tables(exp, obs, out)
-    equations_used = _check_equations(exp, obs, out)
+    equation_pairs = _check_equations(exp, obs, out)
     _check_captions(exp, obs, out, table_match)
-    matched_blocks = {mode: set(equations_used[mode]) | {
-        block_id for chain_id in table_match[mode].values() for block_id in chain_id.split("+")}
-        for mode, _ in _MODES}
-    _check_precision(exp, obs, out, matched_blocks)
+    pairs = {mode: {**equation_pairs[mode], **{
+        block_id: set(obs_chain.split("+")) for ident, obs_chain in table_match[mode].items()
+        for block_id in ident.split("+")}} for mode, _ in _MODES}
+    _check_precision(exp, obs, out, pairs)
     _check_figures(exp, obs, out)
     _check_references(exp, obs, out)
     _check_spans(obs, markdown, out)
