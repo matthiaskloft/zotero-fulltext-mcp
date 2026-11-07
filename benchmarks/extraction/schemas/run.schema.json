@@ -68,6 +68,8 @@
           "status": {"enum": ["ok", "failed", "timeout", "missing_backend", "skipped"]},
           "output_sha256": {"$ref": "common.schema.json#/$defs/sha256", "description": "Hash of the observation file the configuration produced. Required for status ok."},
           "observation_id": {"$ref": "common.schema.json#/$defs/id"},
+          "verdict": {"enum": ["passed", "failed", "incomplete"], "description": "Optional. Strict-mode verdict of the scorer for this result: 'incomplete' when expected items went unscored or no strict check ran, so a partial score cannot read as a pass."},
+          "unscored_items": {"type": "integer", "minimum": 0, "description": "Optional. Number of expected items the scorer listed as not scored (truncated, uncertain or not comparable)."},
           "error": {
             "type": "object",
             "additionalProperties": false,

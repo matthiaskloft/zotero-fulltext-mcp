@@ -11,6 +11,14 @@ All notable changes to this project are documented here. Format loosely follows
   for reviewed expectations, automatic observations and evaluation runs, plus a loader/validator
   with cross-record checks, under `benchmarks/extraction/`. Benchmark-side only; `jsonschema`
   and `referencing` were added to the `test` extra. See `docs/extraction-quality-plan.md`.
+- Extraction scorer (roadmap E1, package B): strict and tolerant checks of an observation against
+  a reviewed expectation (text, order, tables, equations, captions, references) with a tri-state
+  verdict (`passed`, `failed`, `incomplete`), versioned run metrics, and defect injectors proving the
+  strict checks fail on missing signs, swapped values, omitted text and reordered columns. Strict
+  transcription ignores wraps, whitespace runs, block boundaries and Markdown markup in observed
+  text (never in expected text); segmentation and the byte-exact hash are separate non-deciding
+  metrics. The run schema gained two optional result fields,
+  `verdict` and `unscored_items`. Benchmark-side only; no runtime dependency.
 - olmOCR-bench export adapter (roadmap E1, package C): `extraction.olmocr_export` turns a reviewed
   expectation into presence/order/table/math checks, reporting every element it cannot express as
   skipped. A one-off run of the pinned scorer (`v0.4.27`, isolated environment, no OCR model or
