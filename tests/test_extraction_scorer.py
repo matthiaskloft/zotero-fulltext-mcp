@@ -1601,3 +1601,37 @@ def test_figure_text_cannot_satisfy_a_missing_body_paragraph(exp):
     assert _rescore(exp, obs)["verdict"] == "passed"
     obs["blocks"] = [b for b in obs["blocks"] if b["id"] != "pdup"]
     assert ("text_presence", "pdup") in _decisive(_rescore(exp, obs))
+
+
+def test_unassessed_page_text_cannot_use_up_a_verified_blocks_coverage(exp):
+    next(b for b in exp["blocks"] if b["id"] == "p2")["uncertainty"] = {"level": "high"}  # page 1 unassessed
+    exp["blocks"].append(_block("hd", "header", 2, 20, "Journal of Things 12", bbox=dict(BOX)))
+    obs = _observation_of(exp)
+    obs["blocks"].append(_block("hd1", "header", 1, 19, "Journal of Things 12",
+                                bbox={"x0": 10, "y0": 650, "x1": 500, "y1": 690}))
+    score = _rescore(exp, obs)
+    assert ("text_precision", "hd") not in _decisive(score), _decisive(score)
+    assert any(c["name"] == "text_precision" and c["subject"] == "hd" and c["passed"] for c in score["checks"])
+
+
+def test_a_match_must_stay_on_one_page_across_every_block_it_touches(exp):
+    exp["blocks"].append(_block("pz", "paragraph", 1, 20, "Alpha Beta Gamma", bbox=dict(BOX)))
+    obs = _observation_of(exp)
+    obs["blocks"] = [b for b in obs["blocks"] if b["id"] != "pz"]
+    for name, page, order, text in (("aa", 1, 20, "Alpha"), ("bb", 2, 21, "Beta"), ("cc", 1, 22, "Gamma")):
+        y = 600 + 40 * (order - 20)
+        obs["blocks"].append(_block(name, "paragraph", page, order, text, bbox={"x0": 10, "y0": y, "x1": 500, "y1": y + 30}))
+    assert ("text_presence", "pz") in _decisive(_rescore(exp, obs))
+    # With all three on page 1 the same words are present.
+    next(b for b in obs["blocks"] if b["id"] == "bb")["page"] = 1
+    assert ("text_presence", "pz") not in _decisive(_rescore(exp, obs))
+
+
+def test_unassessed_pages_expected_text_cannot_claim_a_verified_blocks_occurrence(exp):
+    text = "Journal of Things 12"
+    exp["blocks"].append(_block("hdA", "header", 1, 20, text, uncertainty={"level": "high"}, bbox=dict(BOX)))
+    exp["blocks"].append(_block("hdB", "header", 2, 21, text, bbox=dict(BOX)))
+    obs = _observation_of(exp)
+    score = _rescore(exp, obs)
+    assert ("text_precision", "hdB") not in _decisive(score), _decisive(score)
+    assert any(c["name"] == "text_precision" and c["subject"] == "hdB" and c["passed"] for c in score["checks"])

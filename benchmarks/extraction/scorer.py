@@ -283,6 +283,10 @@ class _Stream:
                 return page
         return None
 
+    def pages_between(self, a: int, b: int) -> set[int]:
+        """Pages of every observed block that the match ``[a, b)`` touches, not just its endpoints."""
+        return {page for start, end, page, _ in self.spans if start < b and a <= end}
+
     def span_of(self, offset: int) -> tuple[int, int] | None:
         """(start, end) of the observed block holding ``offset``."""
         for start, end, _, _ in self.spans:
@@ -293,7 +297,7 @@ class _Stream:
     def find(self, text: str, start: int, pages: set[int], taken: list[tuple[int, int]]) -> int | None:
         """First unconsumed occurrence at or after ``start`` lying entirely on ``pages``."""
         return _search(self.text, text, start, None, taken,
-                       lambda a, b: {self._page_at(a), self._page_at(b - 1)} <= pages)
+                       lambda a, b: self.pages_between(a, b) <= pages)
 
     def find_merged(self, text: str, neighbour: str, pages: set[int], taken: list[tuple[int, int]],
                     before: bool) -> int | None:
@@ -555,12 +559,13 @@ def _check_precision(exp: dict[str, Any], obs: dict[str, Any], out: _Checks,
     # contiguous in the observation. Counting both would pay for two occurrences.
     chains = _chains(exp)
     linked = _linked_reference_blocks(exp, chains)
-    items: list[tuple[str, list[str]]] = []
+    items: list[tuple[str, list[str], bool]] = []  # (text, fallback texts, on an unassessed page)
     for entry in exp.get("references", {}).get("entries", []):
         fallback: list[str] = []
         if "block_id" in entry:
             fallback = [b["text"] for b in _chain_index(chains, entry["block_id"]) if isinstance(b.get("text"), str)]
-        items.append((entry["raw"], fallback))
+        items.append((entry["raw"], fallback,
+                      bool(set(range(entry["page"], entry.get("end_page", entry["page"]) + 1)) & unsure)))
     block_items = [b for b in exp["blocks"] if isinstance(b.get("text"), str) and b["id"] not in linked]
     covered: dict[str, dict[str, Pair]] = {}
     for mode, norm in _MODES:
@@ -571,8 +576,11 @@ def _check_precision(exp: dict[str, Any], obs: dict[str, Any], out: _Checks,
         matched_obs = set().union(*pairs[mode].values())
         exempt = {block["id"] for _, _, _, block in stream.spans
                   if block["id"] in matched_obs and _is_payload_text(block, mode, norm)}
+        # Neither exempt blocks nor observed text on unassessed pages take part in allocation: the
+        # latter would otherwise use up the expected occurrence a verified block on another page needs.
+        blocked = [(start, end) for start, end, page, _ in stream.spans if page in unsure]
         taken: list[tuple[int, int]] = [(start, end) for start, end, _, block in stream.spans
-                                        if block["id"] in exempt]
+                                        if block["id"] in exempt] + blocked
 
         whole = {(start, end) for start, end, _, _ in stream.spans}
 
@@ -587,7 +595,7 @@ def _check_precision(exp: dict[str, Any], obs: dict[str, Any], out: _Checks,
             # Only in-scope observed text can be accounted for: an out-of-scope copy must not use
             # up the expected occurrence.
             i = _search(stream.text, text, 0, None, taken, lambda a, b: (
-                {stream._page_at(a), stream._page_at(b - 1)} <= scope and fits(a, b, tier)))
+                stream.pages_between(a, b) <= scope and fits(a, b, tier)))
             if i is None:
                 return False
             mask[i:i + len(text)] = b"\x01" * len(text)
@@ -597,14 +605,25 @@ def _check_precision(exp: dict[str, Any], obs: dict[str, Any], out: _Checks,
         # Whole-block matches are allocated first, then within-block, then spans across blocks, so a
         # cross-block coincidence (``A Beta`` + ``Gamma`` containing ``Beta Gamma``) cannot steal the
         # occurrence a real block needs. Longest first within a tier.
-        mode_items = items + [(b["text"], []) for b in block_items if not pairs[mode].get(b["id"], set()) & exempt]
-        pending = sorted(((norm(t), f) for t, f in mode_items if t), key=lambda it: len(it[0]), reverse=True)
-        for tier in (1, 2, 3):
-            pending = [(text, fallback) for text, fallback in pending if not cover(text, tier)]
-        for _, fallback in pending:
-            for part in fallback:
-                if part:
-                    cover(norm(part), 3)
+        mode_items = items + [(b["text"], [], b["page"] in unsure) for b in block_items
+                              if not pairs[mode].get(b["id"], set()) & exempt]
+
+        def allocate(chosen: list[tuple[str, list[str]]]) -> None:
+            pending = sorted(((norm(t), f) for t, f in chosen if t), key=lambda it: len(it[0]), reverse=True)
+            for tier in (1, 2, 3):
+                pending = [(text, fallback) for text, fallback in pending if not cover(text, tier)]
+            for _, fallback in pending:
+                for part in fallback:
+                    if part:
+                        cover(norm(part), 3)
+
+        # Two phases. Verified items allocate first, with observed text on unassessed pages kept out
+        # of reach, so that text cannot use up an occurrence a verified block needs. The unassessed
+        # pages' own expected items then take what is left, observed text there included.
+        allocate([(t, f) for t, f, flagged in mode_items if not flagged])
+        for span in blocked:
+            taken.remove(span)
+        allocate([(t, f) for t, f, flagged in mode_items if flagged])
         for start, end, page, block in stream.spans:
             if page not in scope:
                 continue
