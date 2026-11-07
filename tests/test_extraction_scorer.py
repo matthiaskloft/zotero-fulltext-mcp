@@ -1242,3 +1242,29 @@ def test_out_of_scope_copy_cannot_use_up_an_expected_occurrence(exp):
     score = _rescore(exp, obs)
     assert ("text_precision", "hd") not in _decisive(score), _decisive(score)
     assert score["verdict"] == "passed"
+
+
+def test_text_on_a_matched_table_or_equation_block_is_not_invented(exp, obs):
+    _set_text(obs, "e1", "y=-0.5x+1")
+    _set_text(obs, "t1", "Group Mean Delta Control 4.25 -0.50 Treated 5.75 +1.25")
+    score = _rescore(exp, obs)
+    assert score["verdict"] == "passed", _decisive(score)
+    assert ("text_precision", "e1") in {(c["name"], c["subject"]) for c in score["checks"]}
+    # The same text on a block that matched nothing is still invented.
+    _equation_of(obs)["latex"] = "z=7"
+    extra = _block("ex", "equation", 2, 20, "y=-0.5x+1", bbox=dict(BOX),
+                   equation={"latex": "q=1", "number": "(8)", "display": True})
+    obs["blocks"].append(extra)
+    failed = _decisive(_rescore(exp, obs))
+    assert ("text_precision", "ex") in failed and ("equation_match", "e1") in failed
+
+
+def test_reference_blocks_without_a_references_section_are_still_compared(exp):
+    del exp["references"]
+    obs = _observation_of(exp)
+    assert _rescore(exp, obs)["verdict"] == "passed"
+    lost = copy.deepcopy(obs)
+    lost["blocks"] = [b for b in lost["blocks"] if b["type"] != "reference_entry"]
+    score = _rescore(exp, lost)
+    assert {("text_presence", "r1b"), ("text_presence", "r2b")} <= _decisive(score)
+    assert score["verdict"] == "failed"

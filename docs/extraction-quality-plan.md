@@ -214,7 +214,11 @@ section counts as an empty list wherever the expectation has references.
   expected text accounts for (each expected text, including raw reference entries, covers one
   word-bounded occurrence), so extra copies, joined words and appended digits fail. Reviewed
   expectations must therefore record every printed header, footer and page number on in-scope pages;
-  there is no scorer exemption. Pages with truncated or uncertain expected text are not assessed.
+  there is no scorer exemption. The optional `text` of an observed table or equation block whose
+  structured payload matched is accounted for; the same text on an unmatched block is still invented.
+  Reference-entry blocks that no entry points at are compared like body text, so an expectation that
+  records the bibliography as blocks only still fails when it is lost. Pages with truncated or
+  uncertain expected text are not assessed.
 - **Tables.** Cells at the same grid position with the same spans and text (`table_cell_match`),
   the whole grid (`table_exact`), the relative order of matched tables (`table_order`), and
   `table_precision` for observed tables no expected table accounts for. Expected and observed tables

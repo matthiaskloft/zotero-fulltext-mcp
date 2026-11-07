@@ -295,11 +295,25 @@ class _Stream:
         return None
 
 
+def _linked_reference_blocks(exp: dict[str, Any], chains: list[list[dict[str, Any]]]) -> set[str]:
+    """Ids of the blocks (whole chains) that a reference entry points at: their text is the entry's."""
+    linked: set[str] = set()
+    for entry in exp.get("references", {}).get("entries", []):
+        if "block_id" in entry:
+            linked |= {b["id"] for b in _chain_index(chains, entry["block_id"])}
+    return linked
+
+
 def _fragments(exp: dict[str, Any], out: _Checks) -> list[dict[str, Any]]:
-    """Scorable expected text fragments in reading order, each with its chain neighbours."""
+    """Scorable expected text fragments in reading order, each with its chain neighbours. Body text
+    types, plus reference-entry blocks that no entry covers (an expectation may record the
+    bibliography as blocks only, and losing it must not pass)."""
+    chains = _chains(exp)
+    linked = _linked_reference_blocks(exp, chains)
     result = []
-    for chain in _chains(exp):
-        if chain[0]["type"] not in _TEXT_TYPES:
+    for chain in chains:
+        if chain[0]["type"] not in _TEXT_TYPES and not (
+                chain[0]["type"] == "reference_entry" and chain[0]["id"] not in linked):
             continue
         last: dict[str, Any] | None = None
         for block in chain:
@@ -373,7 +387,6 @@ def _check_text(exp: dict[str, Any], obs: dict[str, Any], out: _Checks) -> None:
     _check_segmentation(frags, observed, out)
     _check_hashes(exp, observed, out)
     _check_order(frags, placements, out)
-    _check_precision(exp, obs, streams, out)
 
 
 def _check_segmentation(frags: list[dict[str, Any]], observed: dict[int, list[dict[str, Any]]], out: _Checks) -> None:
@@ -438,26 +451,29 @@ def _check_order(frags: list[dict[str, Any]], placements: dict[str, dict[str, tu
                          "" if status == "ok" else "found only before an earlier block's match")
 
 
-def _check_precision(exp: dict[str, Any], obs: dict[str, Any], streams: dict[str, _Stream], out: _Checks) -> None:
+def _check_precision(exp: dict[str, Any], obs: dict[str, Any], out: _Checks, matched: dict[str, set[str]]) -> None:
     """Invented content: observed text, in every block that has text, that no expected text accounts
     for. Each expected text (block text and raw reference entries) covers one word-bounded occurrence,
     so extra copies, joined words and appended digits count as invented. Reviewed expectations must
     record every printed header, footer and page number on in-scope pages: there is no exemption for
-    them here. Pages where the expectation has truncated or uncertain text are not assessed."""
+    them here. Pages where the expectation has truncated or uncertain text are not assessed. The
+    optional ``text`` of an observed table or equation block whose structured payload matched an
+    expected item reproduces that item and is accounted for (``matched``: block ids per mode); the
+    same text on an unmatched block is still invented."""
+    observed = _page_blocks(obs)
+    streams = {mode: _Stream(observed, _OBS_NORMS[mode]) for mode, _ in _MODES}
     scope = set(exp["scope"]["physical_pages"])
     unsure = {b["page"] for b in exp["blocks"] if isinstance(b.get("text"), str) and _skip_reason(b, "block")}
     # A reference recorded both as a block and as a linked entry is one printed text: the entry's raw
     # text covers it, and the block texts of its chain are the fallback if the raw text is not
     # contiguous in the observation. Counting both would pay for two occurrences.
     chains = _chains(exp)
-    linked: set[str] = set()
+    linked = _linked_reference_blocks(exp, chains)
     items: list[tuple[str, list[str]]] = []
     for entry in exp.get("references", {}).get("entries", []):
         fallback: list[str] = []
         if "block_id" in entry:
-            chain = _chain_index(chains, entry["block_id"])
-            linked |= {b["id"] for b in chain}
-            fallback = [b["text"] for b in chain if isinstance(b.get("text"), str)]
+            fallback = [b["text"] for b in _chain_index(chains, entry["block_id"]) if isinstance(b.get("text"), str)]
         items.append((entry["raw"], fallback))
     items += [(b["text"], []) for b in exp["blocks"] if isinstance(b.get("text"), str) and b["id"] not in linked]
     covered: dict[str, dict[str, Pair]] = {}
@@ -485,7 +501,9 @@ def _check_precision(exp: dict[str, Any], obs: dict[str, Any], streams: dict[str
             if page not in scope:
                 continue
             letters = [k for k in range(start, end) if stream.text[k] != " "]
-            covered.setdefault(block["id"], {})[mode] = (sum(mask[k] for k in letters), len(letters))
+            accounted = block["id"] in matched[mode]
+            covered.setdefault(block["id"], {})[mode] = (
+                len(letters) if accounted else sum(mask[k] for k in letters), len(letters))
     pages = {b["id"]: b["page"] for b in obs["blocks"]}
     for bid, modes in covered.items():
         if pages[bid] in unsure:
@@ -688,7 +706,7 @@ def _norm_latex(mode: str, latex: str) -> str:
     return "".join(_loose(latex).split()) if mode == "tolerant" else _strict(latex)
 
 
-def _check_equations(exp: dict[str, Any], obs: dict[str, Any], out: _Checks) -> None:
+def _check_equations(exp: dict[str, Any], obs: dict[str, Any], out: _Checks) -> dict[str, set[str]]:
     observed = _page_blocks(obs)
     used: dict[str, set[str]] = {"strict": set(), "tolerant": set()}
     unsure: set[int] = set()
@@ -728,6 +746,7 @@ def _check_equations(exp: dict[str, Any], obs: dict[str, Any], out: _Checks) -> 
     _precision("equation_precision",
                [(b["id"], {b["page"]}) for b in obs["blocks"] if b.get("equation") is not None],
                used, set(exp["scope"]["physical_pages"]), unsure, out)
+    return used
 
 
 def _chain_index(chains: list[list[dict[str, Any]]], block_id: str) -> list[dict[str, Any]]:
@@ -989,8 +1008,12 @@ def _score_validated(exp: dict[str, Any], obs: dict[str, Any], markdown: str | N
     out = _Checks()
     _check_text(exp, obs, out)
     table_match = _check_tables(exp, obs, out)
-    _check_equations(exp, obs, out)
+    equations_used = _check_equations(exp, obs, out)
     _check_captions(exp, obs, out, table_match)
+    matched_blocks = {mode: set(equations_used[mode]) | {
+        block_id for chain_id in table_match[mode].values() for block_id in chain_id.split("+")}
+        for mode, _ in _MODES}
+    _check_precision(exp, obs, out, matched_blocks)
     _check_figures(exp, obs, out)
     _check_references(exp, obs, out)
     _check_spans(obs, markdown, out)
