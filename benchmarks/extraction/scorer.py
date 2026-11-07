@@ -521,6 +521,11 @@ def _check_precision(exp: dict[str, Any], obs: dict[str, Any], out: _Checks,
     streams = {mode: _Stream(obs["blocks"], _OBS_NORMS[mode]) for mode, _ in _MODES}
     scope = set(exp["scope"]["physical_pages"])
     unsure = {b["page"] for b in exp["blocks"] if isinstance(b.get("text"), str) and _skip_reason(b, "block")}
+    for entry in exp.get("references", {}).get("entries", []):
+        # An unscorable entry's observed text may legitimately differ, on every page it spans, even
+        # when no block is linked to it.
+        if _skip_reason(entry, "entry"):
+            unsure |= set(range(entry["page"], entry.get("end_page", entry["page"]) + 1))
     # A reference recorded both as a block and as a linked entry is one printed text: the entry's raw
     # text covers it, and the block texts of its chain are the fallback if the raw text is not
     # contiguous in the observation. Counting both would pay for two occurrences.

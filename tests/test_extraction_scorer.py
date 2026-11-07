@@ -1481,3 +1481,28 @@ def test_partially_payloaded_observed_table_chain_stays_in_the_inventory(chain_e
     score = _rescore(chain_exp, chain_obs)
     assert {("table_exact", "ta+tb"), ("table_precision", "ta"), ("table_precision", "tb")} & _decisive(score)
     assert score["verdict"] == "failed"
+
+
+def test_unscorable_reference_entry_without_a_block_excludes_its_pages_from_precision(exp):
+    exp["scope"]["kind"] = "pages"
+    entry = _entry(exp, "r2")
+    del entry["block_id"]
+    exp["blocks"] = [b for b in exp["blocks"] if b["id"] != "r2b"]
+    entry["truncated"] = "end"
+    obs = _observation_of(exp)
+    obs["scope"]["kind"] = "pages"
+    # The observed bibliography text differs from the (unscorable) expected entry.
+    obs["blocks"].append(_block("rz", "reference_entry", 2, 20, "[2] B. Writer. Different text entirely.",
+                                bbox=dict(BOX)))
+    score = _rescore(exp, obs)
+    assert ("text_precision", "rz") not in _decisive(score)
+    assert any(n["metric"] == "text_precision" and n["subject"] == "rz" for n in score["not_scored"])
+    assert score["verdict"] == "incomplete"
+    # A scorable entry gives no such exclusion: the same stray text is invented.
+    exp2 = _expectation()
+    exp2["blocks"] = [b for b in exp2["blocks"] if b["id"] != "r2b"]
+    del _entry(exp2, "r2")["block_id"]
+    obs2 = _observation_of(exp2)
+    obs2["blocks"].append(_block("rz", "reference_entry", 2, 20, "[2] B. Writer. Different text entirely.",
+                                 bbox=dict(BOX)))
+    assert ("text_precision", "rz") in _decisive(_rescore(exp2, obs2))
