@@ -1506,3 +1506,28 @@ def test_unscorable_reference_entry_without_a_block_excludes_its_pages_from_prec
     obs2["blocks"].append(_block("rz", "reference_entry", 2, 20, "[2] B. Writer. Different text entirely.",
                                  bbox=dict(BOX)))
     assert ("text_precision", "rz") in _decisive(_rescore(exp2, obs2))
+
+
+def test_equation_text_cannot_stand_in_for_a_missing_body_paragraph(exp):
+    exp["blocks"].append(_block("pq", "paragraph", 2, 20, "y=-0.5x+1", bbox=dict(BOX)))
+    obs = _observation_of(exp)
+    _set_text(obs, "e1", "y=-0.5x+1")  # serializes the matched equation's LaTeX
+    assert _rescore(exp, obs)["verdict"] == "passed"
+    obs["blocks"] = [b for b in obs["blocks"] if b["id"] != "pq"]  # the body paragraph is lost
+    score = _rescore(exp, obs)
+    assert ("text_presence", "pq") in _decisive(score) and score["verdict"] == "failed"
+    assert ("equation_match", "e1") not in _failed(score)
+
+
+def test_unscorable_structured_blocks_exclude_their_pages_from_precision_without_text(exp):
+    exp["scope"]["kind"] = "pages"
+    next(b for b in exp["blocks"] if b["id"] == "e1")["uncertainty"] = {"level": "high"}
+    next(b for b in exp["blocks"] if b["id"] == "t1")["truncated"] = "end"
+    obs = _observation_of(exp)
+    obs["scope"]["kind"] = "pages"
+    _set_text(obs, "e1", "An unverified rendering of the equation.")
+    _set_text(obs, "t1", "An unverified rendering of the table.")
+    score = _rescore(exp, obs)
+    assert not {("text_precision", "e1"), ("text_precision", "t1")} & _decisive(score)
+    assert {("text_precision", "e1"), ("text_precision", "t1")} <= {(n["metric"], n["subject"]) for n in score["not_scored"]}
+    assert score["verdict"] == "incomplete"

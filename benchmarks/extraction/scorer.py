@@ -263,12 +263,12 @@ class _Stream:
     the observation's own ``reading_order``, never repaired by sorting pages, so a block that claims
     the wrong place shows up as displaced; each span keeps its page for per-page presence."""
 
-    def __init__(self, blocks: list[dict[str, Any]], norm: Norm):
+    def __init__(self, blocks: list[dict[str, Any]], norm: Norm, skip: set[str] | frozenset[str] = frozenset()):
         self.spans: list[tuple[int, int, int, dict[str, Any]]] = []
         pieces = []
         pos = 0
         for block in sorted(blocks, key=lambda b: b["reading_order"]):
-            if not isinstance(block.get("text"), str):
+            if not isinstance(block.get("text"), str) or block["id"] in skip:
                 continue
             text = norm(block["text"])
             if text:
@@ -388,9 +388,12 @@ def _place(frag: dict[str, Any], stream: _Stream, norm: Norm, cursor: int,
     return "missing", cursor, None
 
 
-def _check_text(exp: dict[str, Any], obs: dict[str, Any], out: _Checks) -> None:
+def _check_text(exp: dict[str, Any], obs: dict[str, Any], out: _Checks, exempt: dict[str, set[str]]) -> None:
+    """Body-text presence and order. ``exempt`` holds, per mode, the observed table and equation blocks
+    whose optional text only serializes their own matched payload: that text is left out of the
+    search, so it cannot also satisfy a body paragraph that merely repeats it."""
     observed = _page_blocks(obs)
-    streams = {mode: _Stream(obs["blocks"], _OBS_NORMS[mode]) for mode, _ in _MODES}
+    streams = {mode: _Stream(obs["blocks"], _OBS_NORMS[mode], exempt[mode]) for mode, _ in _MODES}
     frags = _fragments(exp, out)
 
     placements: dict[str, dict[str, tuple[str, int | None]]] = {mode: {} for mode, _ in _MODES}
@@ -506,6 +509,16 @@ def _is_payload_text(block: dict[str, Any], mode: str, norm: Norm) -> bool:
     return False
 
 
+def _exempt_blocks(obs: dict[str, Any], pairs: dict[str, dict[str, set[str]]]) -> dict[str, set[str]]:
+    """Per mode, the matched observed table/equation blocks whose text only serializes their payload."""
+    exempt: dict[str, set[str]] = {}
+    for mode, norm in _MODES:
+        matched = set().union(*pairs[mode].values())
+        exempt[mode] = {b["id"] for b in obs["blocks"]
+                        if b["id"] in matched and isinstance(b.get("text"), str) and _is_payload_text(b, mode, norm)}
+    return exempt
+
+
 def _check_precision(exp: dict[str, Any], obs: dict[str, Any], out: _Checks,
                      pairs: dict[str, dict[str, set[str]]]) -> None:
     """Invented content: observed text, in every block that has text, that no expected text accounts
@@ -520,7 +533,10 @@ def _check_precision(exp: dict[str, Any], obs: dict[str, Any], out: _Checks,
     observed block used the exemption, or one printed occurrence would pay for two extracted copies."""
     streams = {mode: _Stream(obs["blocks"], _OBS_NORMS[mode]) for mode, _ in _MODES}
     scope = set(exp["scope"]["physical_pages"])
-    unsure = {b["page"] for b in exp["blocks"] if isinstance(b.get("text"), str) and _skip_reason(b, "block")}
+    # Unscorable text and unscorable structured blocks alike: an uncertain or truncated equation or
+    # table's observed text cannot be verified, even when the expectation records only its payload.
+    unsure = {b["page"] for b in exp["blocks"]
+              if (isinstance(b.get("text"), str) or "table" in b or "equation" in b) and _skip_reason(b, "block")}
     for entry in exp.get("references", {}).get("entries", []):
         # An unscorable entry's observed text may legitimately differ, on every page it spans, even
         # when no block is linked to it.
@@ -1144,13 +1160,13 @@ def _score_validated(exp: dict[str, Any], obs: dict[str, Any], markdown: str | N
     if exp["document"]["pdf_sha256"] != obs["document"]["pdf_sha256"]:
         raise ScoringError("pdf_sha256 mismatch: the observation is of a different PDF than the expectation")
     out = _Checks()
-    _check_text(exp, obs, out)
     table_match = _check_tables(exp, obs, out)
     equation_pairs = _check_equations(exp, obs, out)
-    _check_captions(exp, obs, out, table_match)
     pairs = {mode: {**equation_pairs[mode], **{
         block_id: set(obs_chain.split("+")) for ident, obs_chain in table_match[mode].items()
         for block_id in ident.split("+")}} for mode, _ in _MODES}
+    _check_text(exp, obs, out, _exempt_blocks(obs, pairs))
+    _check_captions(exp, obs, out, table_match)
     _check_precision(exp, obs, out, pairs)
     _check_figures(exp, obs, out)
     _check_references(exp, obs, out)
