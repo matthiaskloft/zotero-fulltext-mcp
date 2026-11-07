@@ -480,26 +480,29 @@ def _check_order(frags: list[dict[str, Any]], placements: dict[str, dict[str, tu
                          "" if status == "ok" else "found only before an earlier block's match")
 
 
-_MD_TABLE_RULE = re.compile(r"(?m)^[\s|:\-]+$")
+# What may remain of a Markdown table's text once every cell string is consumed: pipes and rule rows.
+_MD_TABLE_RESIDUE = re.compile(r"(?:\||:?-{3,}:?)*")
 
 
 def _is_payload_text(block: dict[str, Any], mode: str, norm: Norm) -> bool:
     """Does an observed block's optional ``text`` merely serialize its structured payload? For an
     equation: the LaTeX, ignoring whitespace. For a table: only the cell texts, each used once, with
-    separators and Markdown table markup (pipes, rule rows) tolerated. Anything else is content."""
+    Markdown table markup (pipes, rule rows) tolerated. Anything else is content."""
     text = _OBS_NORMS[mode]
     squeeze = "".join
     if block.get("equation") is not None:
         latex = block["equation"].get("latex")
         return latex is not None and squeeze(text(block["text"]).split()) == squeeze(norm(latex).split())
     if block.get("table") is not None:
-        rest = squeeze(text(_MD_TABLE_RULE.sub(" ", block["text"]).replace("|", " ")).split())
+        # Consume the cell strings first (a cell may itself contain a pipe), then require that only
+        # pipes and rule rows are left.
+        rest = squeeze(text(block["text"]).split())
         for cell in sorted((squeeze(norm(c["text"]).split()) for c in block["table"]["cells"]), key=len, reverse=True):
             if cell:
                 at = rest.find(cell)
                 if at >= 0:
                     rest = rest[:at] + rest[at + len(cell):]
-        return not rest
+        return _MD_TABLE_RESIDUE.fullmatch(rest) is not None
     return False
 
 
@@ -770,7 +773,8 @@ def _check_tables(exp: dict[str, Any], obs: dict[str, Any], out: _Checks) -> dic
 def _check_table_order(wanted: list[Any], candidates: list[Any], matched: dict[str, dict[str, str]],
                        out: _Checks) -> None:
     """Matched observed tables must keep the expected tables' relative order."""
-    rank = {c[0]: (c[1][0]["page"], c[1][0]["reading_order"]) for c in candidates}
+    # Document-wide reading order, not (page, order): ranking page-first would hide a swap across pages.
+    rank = {c[0]: c[1][0]["reading_order"] for c in candidates}
     for mode, _ in _MODES:
         placed = [(ident, matched[mode][ident]) for ident, *_ in wanted if ident in matched[mode]]
         for (a_id, a_obs), (b_id, b_obs) in zip(placed, placed[1:], strict=False):

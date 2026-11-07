@@ -1423,3 +1423,25 @@ def test_expected_payload_text_pays_for_one_occurrence_only(exp):
     # A genuine expected paragraph with the same text still covers its own copy.
     exp["blocks"].append(_block("pq", "paragraph", 2, 20, "y=-0.5x+1", bbox=dict(BOX)))
     assert _rescore(exp, _observation_of(exp))["verdict"] == "passed"
+
+
+def test_table_order_is_ranked_by_document_wide_reading_order_across_pages(exp):
+    cells = [_cell(0, 0, "K", True), _cell(0, 1, "V", True), _cell(1, 0, "u"), _cell(1, 1, "7.5")]
+    exp["blocks"].append(_block("t2", "table", 2, 20, None, bbox=dict(BOX),
+                                table={"n_rows": 2, "n_cols": 2, "cells": cells}))
+    obs = _observation_of(exp)
+    assert _rescore(exp, obs)["verdict"] == "passed"
+    swapped = _rescore(exp, defects.swap_reading_order(obs, "t1", "t2"))
+    assert ("table_order", "t1->t2") in _failed(swapped)
+
+
+def test_table_cell_with_literal_pipes_still_serializes_as_payload(exp, obs):
+    for record in (exp, obs):
+        _cell_of(record, 1, 0)["text"] = "|Control|"
+    markdown = ("| Group | Mean | Delta |\n| --- | --- | --- |\n| |Control| | 4.25 | -0.50 |\n"
+                "| Treated | 5.75 | +1.25 |")
+    _set_text(obs, "t1", markdown)
+    score = _rescore(exp, obs)
+    assert score["verdict"] == "passed", _decisive(score)
+    _set_text(obs, "t1", markdown + "\n| Invented | row |")
+    assert ("text_precision", "t1") in _decisive(_rescore(exp, obs))
