@@ -278,3 +278,38 @@ section counts as an empty list wherever the expectation has references.
 ## Pilot selection and draft tooling (E2, no labels)
 
 Selection, draft proposals and the review procedure: [extraction-pilot-review.md](extraction-pilot-review.md).
+
+## Run harness (E1/E2, step 4)
+
+`benchmarks/extraction/run_pilot.py`, run through `tools/run_extraction_pilot.py`, runs one extractor
+over the reviewed pilot pages and scores it. Host-only and opt-in; no network, nothing shipped.
+
+```console
+uv run python tools/run_extraction_pilot.py --expectations <dir of reviewed records> \
+    --out <dir outside every git checkout> [--image-ocr] [--option KEY=VALUE] [--timeout SECONDS] [--split pilot]
+```
+
+- **Inputs.** Every `*.json` in `--expectations` goes through `load_pilot_expectation`; a draft or any
+  rejected record refuses the whole run, listing every finding. Each PDF in `--cache` is checked
+  against the manifest's SHA-256 before it is extracted. `--out` defaults to a directory under the
+  user's cache and is refused inside any git checkout (extracted text is copyrighted).
+- **Splits.** `--split pilot` is the default and refuses held-out documents. `--split heldout` must be
+  given explicitly, prints a warning and records `split: heldout` in the run; the held-out set is for
+  measuring final results, never for tuning, threshold calibration or defect design.
+- **Extraction.** Expectations are grouped by PDF; each PDF is extracted once for the union of the
+  pages its expectations need (`pages=None` when that is the whole document), through an injectable
+  callable with the signature of `extraction.observe.observe_pdf` (`pages`, `options`; returns
+  `observation`, `markdown`, `extractor`, `elapsed_s`). `--timeout` applies per document and runs the
+  extractor in a daemon thread, so a timed-out extraction is abandoned, not killed.
+- **Scoring.** Each expectation is scored with `score_records(..., markdown=...)` so `output_span`
+  hashes round-trip. An extractor exception, a timeout or an observation the scorer rejects becomes a
+  `failure_result` (`failed` or `timeout`, with an error and no metrics) for every expectation of that
+  PDF.
+- **Outputs**, under `<out>/run-<UTC time>-<split>/`: `run.json` (validated against the run schema
+  before it is written; one configuration, one input per expectation, versioned strict and tolerant
+  metrics, verdicts), `summary.md` (per-page verdicts, strict and tolerant aggregates kept apart,
+  counts of passed, failed, incomplete and errors, top failing strict checks), `details.json` (PDF,
+  expectation, observation and Markdown hashes per input, which the run schema has no field for) and
+  the `observations/` and `markdown/` files those hashes point at. `output_sha256` is the hash of the
+  observation file as written. `latency_seconds` is the whole-PDF time, shared by that PDF's
+  expectations.
