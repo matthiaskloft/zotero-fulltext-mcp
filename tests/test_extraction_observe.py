@@ -352,3 +352,17 @@ def test_ordinals_count_through_unselected_pages(monkeypatch):
     ordinals = {e["raw"]: e["ordinal"] for e in whole.observation["references"]["entries"]}
     got = {e["raw"]: e["ordinal"] for e in skipped.observation["references"]["entries"]}
     assert got and all(ordinals[raw] == n for raw, n in got.items()) and sorted(got.values()) == [1, 3]
+
+
+def test_doi_with_balanced_and_unbalanced_parentheses():
+    doi = "10.1016/S0169-7439(95)00013-9"
+    md = (
+        "## References \n\n"
+        f"[1] A. (2020). T. {doi}. \n\n"
+        f"[2] B. (2019). U. [{doi}](https://doi.org/{doi}) \n\n"
+        f"[3] C. (2018). V. [doi](https://doi.org/{doi}). \n\n"
+        "[4] D. (2017). W. (doi:10.1234/x) \n\n"
+        "[5] E. (2016). X. [doi](https://doi.org/10.1234/x) \n\n"
+    )
+    _, state = _blocks(md)
+    assert [e["doi"]["value"] for e in state["entries"]] == [doi, doi, doi, "10.1234/x", "10.1234/x"]

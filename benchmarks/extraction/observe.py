@@ -78,8 +78,21 @@ _REFERENCES_HEADING = re.compile(
     r"^[\s#>*_]*(?:\d+\.?\s*|[ivx]+\.\s*)?(?:references?|bibliography|literature(?: cited)?|works cited|literatur(?:verzeichnis)?)[\s*_.:]*$",
     re.I,
 )
-_DOI = re.compile(r"10\.\d{4,9}/[^\s<>\"'|\])]+", re.I)
-_MD_LINK = re.compile(r"\[([^\]]*)\]\(([^)\s]*)[^)]*\)")
+_DOI = re.compile(r"10\.\d{4,9}/[^\s<>\"'|\]]+", re.I)
+# A link destination may hold one level of balanced parentheses (DOIs such as 10.1016/S0169-7439(95)00013-9).
+_MD_LINK = re.compile(r"\[([^\]]*)\]\(((?:[^()\s]|\([^()\s]*\))*)(?:\s[^)]*)?\)")
+
+
+def _clean_doi(value: str) -> str:
+    """Trim trailing punctuation and any ``)`` that has no opening ``(`` inside the DOI."""
+    while value:
+        if value[-1] in ".,;:}]":
+            value = value[:-1]
+        elif value[-1] == ")" and value.count(")") > value.count("("):
+            value = value[:-1]
+        else:
+            break
+    return value
 _REFERENCE_START = re.compile(r"^[ \t]*(?:\[\d{1,3}\]|\d{1,3}[.)])[ \t]+\S")
 
 
@@ -380,7 +393,7 @@ def _add_entry(state: dict[str, Any], block: dict[str, Any], page: int, raw: str
     entries: list[dict[str, Any]] = state["entries"]
     doi_payload: dict[str, Any] = {"status": "not_found"}
     if doi:
-        doi_payload = {"status": "present", "value": doi.group(0).rstrip(".,;:}")}
+        doi_payload = {"status": "present", "value": _clean_doi(doi.group(0))}
     state["entry_count"] += 1
     entries.append({
         "id": f"ref-{state['entry_count']}", "ordinal": state["entry_count"], "page": page, "block_id": block["id"],
