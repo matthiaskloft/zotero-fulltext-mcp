@@ -1,0 +1,1043 @@
+{
+  "schema_version": 1,
+  "record_kind": "expectation",
+  "record_id": "pilot-data-sharing",
+  "document": {
+    "pdf_sha256": "b52ca44dfd09d240543b80315f0cd43fe9ba7946f2b5650d5580213ed5d9186c",
+    "title": "Sharing Detailed Research Data Is Associated with Increased Citation Rate",
+    "page_count": 5,
+    "corpus_id": "data-sharing"
+  },
+  "scope": {
+    "kind": "pages",
+    "physical_pages": [
+      1,
+      2
+    ]
+  },
+  "pages": [
+    {
+      "physical_page": 1,
+      "printed_label": "1",
+      "geometry": {
+        "unit": "pt",
+        "origin": "top-left",
+        "frame": "displayed",
+        "box": "cropbox",
+        "rotation": 0,
+        "width": 612.283,
+        "height": 790.866
+      },
+      "render": {
+        "renderer": "pymupdf",
+        "renderer_version": "1.28.0",
+        "dpi": 150,
+        "image_sha256": "9dc9ae17e1c95bbab046c531865369fa653b59a5a34f48be6c6841b917298243"
+      },
+      "body_start": {
+        "block_id": "p1-b2"
+      },
+      "body_end": {
+        "block_id": "p1-b22"
+      }
+    },
+    {
+      "physical_page": 2,
+      "printed_label": "2",
+      "geometry": {
+        "unit": "pt",
+        "origin": "top-left",
+        "frame": "displayed",
+        "box": "cropbox",
+        "rotation": 0,
+        "width": 612.283,
+        "height": 790.866
+      },
+      "render": {
+        "renderer": "pymupdf",
+        "renderer_version": "1.28.0",
+        "dpi": 150,
+        "image_sha256": "75077b1cf1f73330be6940802c263d46115c6d6c7be73033ba4958ca0611bd36"
+      },
+      "body_start": {
+        "block_id": "p2-b2"
+      },
+      "body_end": {
+        "block_id": "p2-b17"
+      }
+    }
+  ],
+  "blocks": [
+    {
+      "id": "p1-b1",
+      "type": "header",
+      "page": 1,
+      "reading_order": 1,
+      "bbox": {
+        "x0": 57.6,
+        "y0": 29.0,
+        "x1": 200.5,
+        "y1": 39.0
+      },
+      "text": "OPEN ACCESS Freely available online",
+      "text_sha256": "a75aca1faddc1c37cddf87adf17332f7baf6472e8a2fc99136499fcb69621f71",
+      "uncertainty": {
+        "level": "low",
+        "note": "text set in the page image (not in the text layer); a PLoS ONE logo at the right is not labelled"
+      }
+    },
+    {
+      "id": "p1-b2",
+      "type": "heading",
+      "page": 1,
+      "reading_order": 2,
+      "bbox": {
+        "x0": 57.05,
+        "y0": 55.31,
+        "x1": 504.85,
+        "y1": 99.17
+      },
+      "text": "Sharing Detailed Research Data Is Associated with Increased Citation Rate",
+      "text_sha256": "26e6e41c9a5f2f0dc4bde1e4b32abb2eb6d4137c398f7c860a856f3ebcd723f9"
+    },
+    {
+      "id": "p1-b3",
+      "type": "paragraph",
+      "page": 1,
+      "reading_order": 3,
+      "bbox": {
+        "x0": 57.05,
+        "y0": 104.41,
+        "x1": 254.79,
+        "y1": 114.38
+      },
+      "text": "Heather A. Piwowar*, Roger S. Day, Douglas B. Fridsma",
+      "text_sha256": "cc57805750862ad41705e7ec83c686a6bfadf3fc01e030884f8869f11a06c45f"
+    },
+    {
+      "id": "p1-b4",
+      "type": "paragraph",
+      "page": 1,
+      "reading_order": 4,
+      "bbox": {
+        "x0": 57.05,
+        "y0": 122.32,
+        "x1": 515.27,
+        "y1": 132.29
+      },
+      "text": "Department of Biomedical Informatics, University of Pittsburgh School of Medicine, Pittsburgh, Pennsylvania, United States of America",
+      "text_sha256": "5b11df64ba219c955232deb68ea23976ba6df2f4168ff50d3a64b7be68fd681c"
+    },
+    {
+      "id": "p1-b5",
+      "type": "paragraph",
+      "page": 1,
+      "reading_order": 5,
+      "bbox": {
+        "x0": 57.05,
+        "y0": 150.47,
+        "x1": 555.21,
+        "y1": 227.19
+      },
+      "text": "Background. Sharing research data provides benefit to the general scientific community, but the benefit is less obvious for the investigator who makes his or her data available. Principal Findings. We examined the citation history of 85 cancer microarray clinical trial publications with respect to the availability of their data. The 48% of trials with publicly available microarray data received 85% of the aggregate citations. Publicly available data was significantly (p = 0.006) associated with a 69% increase in citations, independently of journal impact factor, date of publication, and author country of origin using linear regression. Significance. This correlation between publicly available data and increased literature impact may further motivate investigators to share their detailed research data.",
+      "text_sha256": "9ef1d54cc572d83ce03defaec9ff20017892f34da2dc541bc8bb718c8d5c1f24"
+    },
+    {
+      "id": "p1-b6",
+      "type": "paragraph",
+      "page": 1,
+      "reading_order": 6,
+      "bbox": {
+        "x0": 57.05,
+        "y0": 232.42,
+        "x1": 555.25,
+        "y1": 251.86
+      },
+      "text": "Citation: Piwowar HA, Day RS, Fridsma DB (2007) Sharing Detailed Research Data Is Associated with Increased Citation Rate. PLoS ONE 2(3): e308. doi:10.1371/journal.pone.0000308",
+      "text_sha256": "2b44ec92583f4ac2788d9eb1830c3de62d79171d9b3c50d9794d2ec8b00a180a"
+    },
+    {
+      "id": "p1-b7",
+      "type": "heading",
+      "page": 1,
+      "reading_order": 7,
+      "bbox": {
+        "x0": 57.05,
+        "y0": 277.06,
+        "x1": 137.51,
+        "y1": 290.52
+      },
+      "text": "INTRODUCTION",
+      "text_sha256": "348348036267fa046df6956d6bff62c93c2f7b89c711056c6a8cdcab6dd4a8e7"
+    },
+    {
+      "id": "p1-b8",
+      "type": "paragraph",
+      "page": 1,
+      "reading_order": 8,
+      "bbox": {
+        "x0": 57.05,
+        "y0": 290.24,
+        "x1": 298.18,
+        "y1": 438.23
+      },
+      "text": "Sharing information facilitates science. Publicly sharing detailed research data–sample attributes, clinical factors, patient outcomes, DNA sequences, raw mRNA microarray measurements–with other researchers allows these valuable resources to contribute far beyond their original analysis[1]. In addition to being used to confirm original results, raw data can be used to explore related or new hypotheses, particularly when combined with other publicly available data sets. Real data is indispensable when investigating and developing study methods, analysis techniques, and software implementations. The larger scientific community also benefits: sharing data encourages multiple perspectives, helps to identify errors, discourages fraud, is useful for training new researchers, and increases efficient use of funding and patient population resources by avoiding duplicate data collection.",
+      "text_sha256": "db36260a980f620024f8e1de7f44be9f9b24e2fdedc664c789531c1bc40d45c8"
+    },
+    {
+      "id": "p1-b9",
+      "type": "paragraph",
+      "page": 1,
+      "reading_order": 9,
+      "bbox": {
+        "x0": 57.05,
+        "y0": 438.1,
+        "x1": 298.18,
+        "y1": 522.88
+      },
+      "text": "Believing that that these benefits outweigh the costs of sharing research data, many initiatives actively encourage investigators to make their data available. Some journals, including the PLoS family, require the submission of detailed biomedical data to publicly available databases as a condition of publication[2–4]. Since 2003, the NIH has required a data sharing plan for all large funding grants. The growing open-access publishing movement will perhaps increase peer pressure to share data.",
+      "text_sha256": "b046d41e5dc3e9dc6ed5ef0347232ec4ca77a4141736248ce63e6cfe2a79d6e4"
+    },
+    {
+      "id": "p1-b10",
+      "type": "paragraph",
+      "page": 1,
+      "reading_order": 10,
+      "bbox": {
+        "x0": 57.05,
+        "y0": 522.74,
+        "x1": 298.22,
+        "y1": 554.8
+      },
+      "text": "However, while the general research community benefits from shared data, much of the burden for sharing the data falls to the study investigator. Are there benefits for the investigators themselves?",
+      "text_sha256": "b46d7e929adf246887cf1e8cccd85805506262ad1a5bc835358e2ec26f5f577b"
+    },
+    {
+      "id": "p1-b11",
+      "type": "paragraph",
+      "page": 1,
+      "reading_order": 11,
+      "bbox": {
+        "x0": 57.05,
+        "y0": 554.72,
+        "x1": 298.19,
+        "y1": 618.41
+      },
+      "text": "A currency of value to many investigators is the number of times their publications are cited. Although limited as a proxy for the scientific contribution of a paper[5], citation counts are often used in research funding and promotion decisions and have even been assigned a salary-increase dollar value[6]. Boosting citation rate is thus is a potentially important motivator for publication authors.",
+      "text_sha256": "2ab0c058dacf21c821b25d3124f6fde3a07a5b818147abc5b7fbd529f19e2013"
+    },
+    {
+      "id": "p1-b12",
+      "type": "paragraph",
+      "page": 1,
+      "reading_order": 12,
+      "bbox": {
+        "x0": 57.05,
+        "y0": 618.27,
+        "x1": 298.18,
+        "y1": 734.69
+      },
+      "text": "In this study, we explored the relationship between the citation rate of a publication and whether its data was made publicly available. Using cancer microarray clinical trials, we addressed the following questions: Do trials which share their microarray data receive more citations? Is this true even within lower profile trials? What other data-sharing variables are associated with an increased citation rate? While this study is not able to investigate causation, quantifying associations is a valuable first step in understanding these relationships. Clinical microarray data provides a useful environment for the investigation: despite being valuable for reuse and extremely costly to collect, is not yet universally shared.",
+      "text_sha256": "fc0c601437ae3c4e03fe30cf83ed939f6f896780e564c24d1d612be38b924793"
+    },
+    {
+      "id": "p1-b13",
+      "type": "heading",
+      "page": 1,
+      "reading_order": 13,
+      "bbox": {
+        "x0": 314.1,
+        "y0": 277.06,
+        "x1": 359.6,
+        "y1": 290.52
+      },
+      "text": "RESULTS",
+      "text_sha256": "4aa70a38c6d2c471fde92f15af760b7e7cb182d243375d280693da48d28da413"
+    },
+    {
+      "id": "p1-b14",
+      "type": "paragraph",
+      "page": 1,
+      "reading_order": 14,
+      "bbox": {
+        "x0": 314.1,
+        "y0": 290.24,
+        "x1": 555.22,
+        "y1": 491.58
+      },
+      "text": "We studied the citations of 85 cancer microarray clinical trials published between January 1999 and April 2003, as identified in a systematic review by Ntzani and Ioannidis[7] and listed in Supplementary Text S1. We found 41 of the 85 clinical trials (48%) made their microarray data publicly available on the internet. Most data sets were located on lab websites (28), with a few found on publisher websites (4), or within public databases (6 in the Stanford Microarray Database (SMD)[8], 6 in Gene Expression Omnibus (GEO)[9], 2 in ArrayExpress[10], 2 in the NCI GeneExpression Data Portal (GEDP)(gedp.nci.nih.gov); some datasets in more than one location). The internet locations of the datasets are listed in Supplementary Text S2. The majority of datasets were made available concurrently with the trial publication, as illustrated within the WayBackMachine internet archives (www.archive.org/web/web.php) for 25 of the datasets and mention of supplementary data within the trial publication itself for 10 of the remaining 16 datasets. As seen in Table 1, trials published in high impact journals, prior to 2001, or with US authors were more likely to share their data.",
+      "text_sha256": "4cc4362d000c2d53f4105a28083fbcfd969f4eba8b8a333edfffcfef8b70c90d"
+    },
+    {
+      "id": "p1-b15",
+      "type": "paragraph",
+      "page": 1,
+      "reading_order": 15,
+      "bbox": {
+        "x0": 314.1,
+        "y0": 491.5,
+        "x1": 555.21,
+        "y1": 544.76
+      },
+      "text": "The cohort of 85 trials was cited an aggregate of 6239 times in 2004–2005 by 3133 distinct articles (median of 1.0 cohort citation per article, range 1–23). The 48% of trials which shared their data received a total of 5334 citations (85% of aggregate), distributed as shown in Figure 1.",
+      "text_sha256": "75a8bbe5d18cb49c4ade434218d9a2757fe4b5ccd39169225ea9d1f3601a9091"
+    },
+    {
+      "id": "p1-b16",
+      "type": "footnote",
+      "page": 1,
+      "reading_order": 16,
+      "bbox": {
+        "x0": 314.1,
+        "y0": 557.87,
+        "x1": 555.17,
+        "y1": 574.84
+      },
+      "text": "Academic Editor: John Ioannidis, University of Ioannina School of Medicine, Greece",
+      "text_sha256": "5d67986e6b71a339f621f0046eef4233b3fbc955e1d4792ec3e0175b9e4a1b8e"
+    },
+    {
+      "id": "p1-b17",
+      "type": "footnote",
+      "page": 1,
+      "reading_order": 17,
+      "bbox": {
+        "x0": 314.1,
+        "y0": 581.74,
+        "x1": 555.17,
+        "y1": 598.65
+      },
+      "text": "Received December 13, 2006; Accepted February 26, 2007; Published March 21, 2007",
+      "text_sha256": "862bc4b8c1b7bb3803aab47b8ebf885043f450cdbee1f98debb2c95b6a0f019a"
+    },
+    {
+      "id": "p1-b18",
+      "type": "footnote",
+      "page": 1,
+      "reading_order": 18,
+      "bbox": {
+        "x0": 314.1,
+        "y0": 605.55,
+        "x1": 555.18,
+        "y1": 638.45
+      },
+      "text": "Copyright: © 2007 Piwowar et al. This is an open-access article distributed under the terms of the Creative Commons Attribution License, which permits unrestricted use, distribution, and reproduction in any medium, provided the original author and source are credited.",
+      "text_sha256": "cbaf0aa17a90a6bad2e331be69f1e3d56cf3195136140e3dcaab419e3ee06f1b"
+    },
+    {
+      "id": "p1-b19",
+      "type": "footnote",
+      "page": 1,
+      "reading_order": 19,
+      "bbox": {
+        "x0": 314.1,
+        "y0": 645.35,
+        "x1": 555.2,
+        "y1": 686.18
+      },
+      "text": "Funding: HAP was supported by NLM Training Grant Number 5T15-LM007059-19. The NIH had no role in study design, data collection or analysis, writing the paper, or the decision to submit it for publication. The publication contents are solely the responsibility of the authors and do not necessarily represent the official views of the NIH.",
+      "text_sha256": "9ac7b38fc26bef83521db54519d9ba437b7bdc0cdf2c660a636ea1ad75fa6651"
+    },
+    {
+      "id": "p1-b20",
+      "type": "footnote",
+      "page": 1,
+      "reading_order": 20,
+      "bbox": {
+        "x0": 314.1,
+        "y0": 693.08,
+        "x1": 555.15,
+        "y1": 709.99
+      },
+      "text": "Competing Interests: The authors have declared that no competing interests exist.",
+      "text_sha256": "38d28acabd00a53dafb5c87c0481be4202671d9c74ce0f4268cddca377817db8"
+    },
+    {
+      "id": "p1-b21",
+      "type": "footnote",
+      "page": 1,
+      "reading_order": 21,
+      "bbox": {
+        "x0": 314.1,
+        "y0": 716.89,
+        "x1": 555.17,
+        "y1": 725.87
+      },
+      "text": "* To whom correspondence should be addressed. E-mail:",
+      "text_sha256": "4ab764ff64d660bab01355fcafa5d11ad601ecd133e2161bb184394159b10985"
+    },
+    {
+      "id": "p1-b22",
+      "type": "footnote",
+      "page": 1,
+      "reading_order": 22,
+      "bbox": {
+        "x0": 470,
+        "y0": 718.0,
+        "x1": 554.0,
+        "y1": 734.0
+      },
+      "text": null,
+      "uncertainty": {
+        "level": "high",
+        "note": "a printed e-mail address, withheld from this record because the repository personal-data guard rejects e-mail addresses; the address spans the end of one line and the start of the next"
+      }
+    },
+    {
+      "id": "p1-b23",
+      "type": "footer",
+      "page": 1,
+      "reading_order": 23,
+      "bbox": {
+        "x0": 81.03,
+        "y0": 752.97,
+        "x1": 185.4,
+        "y1": 762.94
+      },
+      "text": "PLoS ONE | www.plosone.org",
+      "text_sha256": "98e3c4ae21a60bd95ec9f743c44d6876749f97d38ce1b8163f9cb448083f39e3"
+    },
+    {
+      "id": "p1-b24",
+      "type": "page_number",
+      "page": 1,
+      "reading_order": 24,
+      "bbox": {
+        "x0": 303.1,
+        "y0": 752.97,
+        "x1": 309.16,
+        "y1": 762.94
+      },
+      "text": "1",
+      "text_sha256": "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b"
+    },
+    {
+      "id": "p1-b25",
+      "type": "footer",
+      "page": 1,
+      "reading_order": 25,
+      "bbox": {
+        "x0": 453.22,
+        "y0": 752.97,
+        "x1": 555.25,
+        "y1": 762.94
+      },
+      "text": "March 2007 | Issue 3 | e308",
+      "text_sha256": "8ea6eba9ae53a40a92b215ad3f194ed394a511454f86c5756edcc145299e029c"
+    },
+    {
+      "id": "p2-b1",
+      "type": "header",
+      "page": 2,
+      "reading_order": 26,
+      "bbox": {
+        "x0": 463.43,
+        "y0": 28.72,
+        "x1": 555.26,
+        "y1": 38.69
+      },
+      "text": "Sharing Data Citation Rate",
+      "text_sha256": "15b18a50012e9e16d83de667fd63a67bb392e9a20cd2d10e25a5d626f5d91728"
+    },
+    {
+      "id": "p2-b2",
+      "type": "caption",
+      "page": 2,
+      "reading_order": 27,
+      "bbox": {
+        "x0": 63.06,
+        "y0": 63.27,
+        "x1": 292.58,
+        "y1": 74.24
+      },
+      "text": "Table 1. Characteristics of Eligible Trials by Data Sharing.",
+      "text_sha256": "de759b8ba3b55cf45747b6442097f24b82a4fc6ba65348c2345a82e185530e9b",
+      "caption_for": "p2-b3"
+    },
+    {
+      "id": "p2-b3",
+      "type": "table",
+      "page": 2,
+      "reading_order": 28,
+      "bbox": {
+        "x0": 57.6,
+        "y0": 82.6,
+        "x1": 554.4,
+        "y1": 204.0
+      },
+      "table": {
+        "n_rows": 9,
+        "n_cols": 5,
+        "cells": [
+          {
+            "row": 0,
+            "col": 0,
+            "text": "",
+            "is_header": true
+          },
+          {
+            "row": 0,
+            "col": 1,
+            "text": "Number of Articles",
+            "colspan": 3,
+            "is_header": true
+          },
+          {
+            "row": 0,
+            "col": 4,
+            "text": "Odds Ratio (95% confidence interval)",
+            "rowspan": 2,
+            "is_header": true
+          },
+          {
+            "row": 1,
+            "col": 0,
+            "text": "",
+            "is_header": true
+          },
+          {
+            "row": 1,
+            "col": 1,
+            "text": "Total",
+            "is_header": true
+          },
+          {
+            "row": 1,
+            "col": 2,
+            "text": "Data Shared",
+            "is_header": true
+          },
+          {
+            "row": 1,
+            "col": 3,
+            "text": "Data Not Shared",
+            "is_header": true
+          },
+          {
+            "row": 2,
+            "col": 0,
+            "text": "TOTAL"
+          },
+          {
+            "row": 2,
+            "col": 1,
+            "text": "85"
+          },
+          {
+            "row": 2,
+            "col": 2,
+            "text": "41 (48%)"
+          },
+          {
+            "row": 2,
+            "col": 3,
+            "text": "44 (52%)"
+          },
+          {
+            "row": 2,
+            "col": 4,
+            "text": ""
+          },
+          {
+            "row": 3,
+            "col": 0,
+            "text": "High Impact (> = 25)"
+          },
+          {
+            "row": 3,
+            "col": 1,
+            "text": "12"
+          },
+          {
+            "row": 3,
+            "col": 2,
+            "text": "12 (100%)"
+          },
+          {
+            "row": 3,
+            "col": 3,
+            "text": "0 (0%)"
+          },
+          {
+            "row": 3,
+            "col": 4,
+            "text": "∞ (3.8 to ∞)"
+          },
+          {
+            "row": 4,
+            "col": 0,
+            "text": "Low Impact Journal"
+          },
+          {
+            "row": 4,
+            "col": 1,
+            "text": "73"
+          },
+          {
+            "row": 4,
+            "col": 2,
+            "text": "29 (40%)"
+          },
+          {
+            "row": 4,
+            "col": 3,
+            "text": "44 (60%)"
+          },
+          {
+            "row": 4,
+            "col": 4,
+            "text": ""
+          },
+          {
+            "row": 5,
+            "col": 0,
+            "text": "Published 1999–2000"
+          },
+          {
+            "row": 5,
+            "col": 1,
+            "text": "6"
+          },
+          {
+            "row": 5,
+            "col": 2,
+            "text": "5 (83%)"
+          },
+          {
+            "row": 5,
+            "col": 3,
+            "text": "1 (17%)"
+          },
+          {
+            "row": 5,
+            "col": 4,
+            "text": "6.0 (0.6 to 288.5)"
+          },
+          {
+            "row": 6,
+            "col": 0,
+            "text": "Published 2001–2003"
+          },
+          {
+            "row": 6,
+            "col": 1,
+            "text": "79"
+          },
+          {
+            "row": 6,
+            "col": 2,
+            "text": "36 (46%)"
+          },
+          {
+            "row": 6,
+            "col": 3,
+            "text": "43 (54%)"
+          },
+          {
+            "row": 6,
+            "col": 4,
+            "text": ""
+          },
+          {
+            "row": 7,
+            "col": 0,
+            "text": "Include a US Author"
+          },
+          {
+            "row": 7,
+            "col": 1,
+            "text": "56"
+          },
+          {
+            "row": 7,
+            "col": 2,
+            "text": "35 (63%)"
+          },
+          {
+            "row": 7,
+            "col": 3,
+            "text": "21 (38%)"
+          },
+          {
+            "row": 7,
+            "col": 4,
+            "text": "6.4 (2.0 to 21.9)"
+          },
+          {
+            "row": 8,
+            "col": 0,
+            "text": "No US Authors"
+          },
+          {
+            "row": 8,
+            "col": 1,
+            "text": "29"
+          },
+          {
+            "row": 8,
+            "col": 2,
+            "text": "6 (21%)"
+          },
+          {
+            "row": 8,
+            "col": 3,
+            "text": "23 (79%)"
+          },
+          {
+            "row": 8,
+            "col": 4,
+            "text": ""
+          }
+        ]
+      },
+      "text": null
+    },
+    {
+      "id": "p2-b4",
+      "type": "footnote",
+      "page": 2,
+      "reading_order": 29,
+      "bbox": {
+        "x0": 63.06,
+        "y0": 209.78,
+        "x1": 179.06,
+        "y1": 218.75
+      },
+      "text": "doi:10.1371/journal.pone.0000308.t001",
+      "text_sha256": "18d8cb65235db8085e8167cec5dd81b922088fb9d29fbe4e10ea1fd955d15a52"
+    },
+    {
+      "id": "p2-b5",
+      "type": "figure",
+      "page": 2,
+      "reading_order": 30,
+      "bbox": {
+        "x0": 51.14,
+        "y0": 58.69,
+        "x1": 62.11,
+        "y1": 217.17
+      },
+      "graphic": {
+        "kind": "decoration"
+      },
+      "text": null
+    },
+    {
+      "id": "p2-b6",
+      "type": "figure",
+      "page": 2,
+      "reading_order": 31,
+      "bbox": {
+        "x0": 308.18,
+        "y0": 546.75,
+        "x1": 319.15,
+        "y1": 732.17
+      },
+      "graphic": {
+        "kind": "decoration"
+      },
+      "text": null
+    },
+    {
+      "id": "p2-b7",
+      "type": "figure",
+      "page": 2,
+      "reading_order": 32,
+      "bbox": {
+        "x0": 60.06,
+        "y0": 69.28,
+        "x1": 551.43,
+        "y1": 80.25
+      },
+      "graphic": {
+        "kind": "decoration"
+      },
+      "text": null
+    },
+    {
+      "id": "p2-b8",
+      "type": "figure",
+      "page": 2,
+      "reading_order": 33,
+      "bbox": {
+        "x0": 317.1,
+        "y0": 568.63,
+        "x1": 552.98,
+        "y1": 579.6
+      },
+      "graphic": {
+        "kind": "decoration"
+      },
+      "text": null
+    },
+    {
+      "id": "p2-b9",
+      "type": "paragraph",
+      "page": 2,
+      "reading_order": 34,
+      "bbox": {
+        "x0": 57.05,
+        "y0": 231.05,
+        "x1": 298.19,
+        "y1": 325.69
+      },
+      "text": "Whether a trial’s dataset was made publicly available was significantly associated with the log of its 2004–2005 citation rate (69% increase in citation count; 95% confidence interval: 18 to 143%, p = 0.006), independent of journal impact factor, date of publication, and US authorship. Detailed results of this multivar- iate linear regression are given in Table 2. A similar result was found when we regressed on the number of citations each trial received during the 24 months after its publication (45% increase in citation count; 95% confidence interval: 1 to 109%, p = 0.050).",
+      "text_sha256": "df99a0d97920ce12a227b6deee8dc494b05cf7ffbc28d37e64d7d51b9dcbcb8f"
+    },
+    {
+      "id": "p2-b10",
+      "type": "paragraph",
+      "page": 2,
+      "reading_order": 35,
+      "bbox": {
+        "x0": 57.05,
+        "y0": 325.16,
+        "x1": 298.19,
+        "y1": 419.86
+      },
+      "text": "To confirm that these findings were not dependent on a few extremely high-profile papers, we repeated our analysis on a subset of the cohort. We define papers published after the year 2000 in journals with an impact factor less than 25 as lower-profile publications. Of the 70 trials in this subset, only 27 (39%) made their data available, although they received 1875 of 2761 (68%) aggregate citations. The distribution of the citations by data availability in this subset is shown in Figure 2. The association between data sharing and citation rate remained significant in this",
+      "text_sha256": "8165b47df5eb86b441edba9ff26ad3d2858aec402efc406bcce2b6d1a4d8a3a6"
+    },
+    {
+      "id": "p2-b11",
+      "type": "figure",
+      "page": 2,
+      "reading_order": 36,
+      "bbox": {
+        "x0": 57.6,
+        "y0": 432.0,
+        "x1": 298.0,
+        "y1": 641.0
+      },
+      "graphic": {
+        "kind": "chart"
+      },
+      "text": null
+    },
+    {
+      "id": "p2-b12",
+      "type": "caption",
+      "page": 2,
+      "reading_order": 37,
+      "bbox": {
+        "x0": 57.05,
+        "y0": 652.29,
+        "x1": 298.24,
+        "y1": 733.98
+      },
+      "text": "Figure 1. Distribution of 2004–2005 citation counts of 85 trials by data availability. The 41 clinical trial publications which publicly shared their microarray data received more citations, in general, than the 44 publications which did not share their microarray data. In this plot of the distribution of citation counts received by each publication, the extent of the box encompasses the interquartile range of the citation counts, whiskers extend to 1.5 times the interquartile range, and lines within the boxes represent medians. doi:10.1371/journal.pone.0000308.g001",
+      "text_sha256": "216976ffdbd326c02d84820d954fe5d63755670eddde8486ab0618509d7571d1",
+      "caption_for": "p2-b11"
+    },
+    {
+      "id": "p2-b13",
+      "type": "paragraph",
+      "page": 2,
+      "reading_order": 38,
+      "bbox": {
+        "x0": 314.1,
+        "y0": 231.22,
+        "x1": 555.19,
+        "y1": 263.22
+      },
+      "text": "lower-profile subset, independent of other covariates within a multivariate linear regression (71% increase in citation count; 95% confidence interval: 19 to 146%, p = 0.005).",
+      "text_sha256": "7e1b9b998f98c08831dadbce6e340f53e14024c1185f235c4874e1291f980edb",
+      "continues_from": "p2-b10"
+    },
+    {
+      "id": "p2-b14",
+      "type": "paragraph",
+      "page": 2,
+      "reading_order": 39,
+      "bbox": {
+        "x0": 314.1,
+        "y0": 263.13,
+        "x1": 555.31,
+        "y1": 537.1
+      },
+      "text": "Lastly, we performed exploratory analysis on citation rate within the subset of trials which shared their microarray data; results are given in Table 3 and raw covariate data in Supplementary Data S1. The number of patients in a trial and a clinical endpoint correlated with increased citation rate. Assuming shared data is actually re- analyzed, one might expect an increase in citations for those trials which generated data on a standard platform (Affymetrix), or released it in a central location or format (SMD, GEO, GEDP)[11]. However, the choice of platform was insignificant and only those trials located in SMD showed a weak trend of increased citations. In fact, the 6 trials with data in GEO (in addition to other locations for 4 of the 6) actually showed an inverse relationship to citation rate, though we hesitate to read much into this due to the small number of trials in this set. The few trials in this cohort which, in addition to gene expression fold-change or other preprocessed information, shared their raw probe data or actual microarray images did not receive additional citations. Finally, although finding diverse microarray datasets online is non-trivial, an additional increase in citations was not noted for trials which mentioned their Supple- mentary Material within their paper, nor for those trials with datasets identified by a centralized, established data mining website. In summary, only trial design features such as size and clinical endpoint showed a significant association with citation rate; covariates relating to the data collection and how the data was made available only showed very weak trends. Perhaps with a larger and more balanced sample of trials with shared data these trends would be more clear.",
+      "text_sha256": "587d0e1259ab604bc557efc3288e4fca47b1008df63ff6ba0528b21e5f94e2a0"
+    },
+    {
+      "id": "p2-b15",
+      "type": "caption",
+      "page": 2,
+      "reading_order": 40,
+      "bbox": {
+        "x0": 320.11,
+        "y0": 552.19,
+        "x1": 545.7,
+        "y1": 573.65
+      },
+      "text": "Table 2. Multivariate regression on citation count for 85 publications",
+      "text_sha256": "21b0edbac38f7e7ed5f10058b04fa3dfa6e81730d59447ebe86a35f205cc9ef4",
+      "caption_for": "p2-b16"
+    },
+    {
+      "id": "p2-b16",
+      "type": "table",
+      "page": 2,
+      "reading_order": 41,
+      "bbox": {
+        "x0": 320.6,
+        "y0": 582.0,
+        "x1": 554.0,
+        "y1": 677.0
+      },
+      "table": {
+        "n_rows": 5,
+        "n_cols": 3,
+        "cells": [
+          {
+            "row": 0,
+            "col": 0,
+            "text": "",
+            "is_header": true
+          },
+          {
+            "row": 0,
+            "col": 1,
+            "text": "Percent increase in citation count (95% confidence interval)",
+            "is_header": true
+          },
+          {
+            "row": 0,
+            "col": 2,
+            "text": "p-value",
+            "is_header": true
+          },
+          {
+            "row": 1,
+            "col": 0,
+            "text": "Publish in a journal with twice the impact factor"
+          },
+          {
+            "row": 1,
+            "col": 1,
+            "text": "84% (59 to 109%)"
+          },
+          {
+            "row": 1,
+            "col": 2,
+            "text": "<0.001"
+          },
+          {
+            "row": 2,
+            "col": 0,
+            "text": "Increase the publication date by a month"
+          },
+          {
+            "row": 2,
+            "col": 1,
+            "text": "−3% (−5 to −2%)"
+          },
+          {
+            "row": 2,
+            "col": 2,
+            "text": "<0.001"
+          },
+          {
+            "row": 3,
+            "col": 0,
+            "text": "Include a US author"
+          },
+          {
+            "row": 3,
+            "col": 1,
+            "text": "38% (1 to 89%)"
+          },
+          {
+            "row": 3,
+            "col": 2,
+            "text": "0.049"
+          },
+          {
+            "row": 4,
+            "col": 0,
+            "text": "Make data publicly available"
+          },
+          {
+            "row": 4,
+            "col": 1,
+            "text": "69% (18 to 143%)"
+          },
+          {
+            "row": 4,
+            "col": 2,
+            "text": "0.006"
+          }
+        ]
+      },
+      "text": null
+    },
+    {
+      "id": "p2-b17",
+      "type": "footnote",
+      "page": 2,
+      "reading_order": 42,
+      "bbox": {
+        "x0": 320.11,
+        "y0": 682.26,
+        "x1": 554.67,
+        "y1": 733.58
+      },
+      "text": "We calculated a multivariate linear regression over the citation counts, including covariates for journal impact factor, date of publication, US authorship, and data availability. The coefficients and p-values for each of the covariates are shown here, representing the contribution of each covariate to the citation count, independent of other covariates. doi:10.1371/journal.pone.0000308.t002",
+      "text_sha256": "0ba0d4c1548e19158a51d0c7878bb58debc0bb858844f84b96e9207a1001b7f9"
+    },
+    {
+      "id": "p2-b18",
+      "type": "footer",
+      "page": 2,
+      "reading_order": 43,
+      "bbox": {
+        "x0": 81.03,
+        "y0": 752.97,
+        "x1": 185.4,
+        "y1": 762.94
+      },
+      "text": "PLoS ONE | www.plosone.org",
+      "text_sha256": "98e3c4ae21a60bd95ec9f743c44d6876749f97d38ce1b8163f9cb448083f39e3"
+    },
+    {
+      "id": "p2-b19",
+      "type": "page_number",
+      "page": 2,
+      "reading_order": 44,
+      "bbox": {
+        "x0": 303.1,
+        "y0": 752.97,
+        "x1": 309.16,
+        "y1": 762.94
+      },
+      "text": "2",
+      "text_sha256": "d4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35"
+    },
+    {
+      "id": "p2-b20",
+      "type": "footer",
+      "page": 2,
+      "reading_order": 45,
+      "bbox": {
+        "x0": 453.22,
+        "y0": 752.97,
+        "x1": 555.25,
+        "y1": 762.94
+      },
+      "text": "March 2007 | Issue 3 | e308",
+      "text_sha256": "8ea6eba9ae53a40a92b215ad3f194ed394a511454f86c5756edcc145299e029c"
+    }
+  ],
+  "provenance": {
+    "proposed_by": {
+      "tool": "extraction-pilot-drafts",
+      "version": "3",
+      "options_sha256": "b74e6f2f9c021751643a9a5d2e4451944b229defbcf37f11c98141324265f7b4"
+    },
+    "review": {
+      "status": "reviewed",
+      "reviewer": "agent-claude-sonnet-5-5",
+      "reviewed_at": "2026-11-12T13:51:35Z",
+      "basis": "page_image_inspection"
+    }
+  }
+}

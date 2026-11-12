@@ -1,0 +1,159 @@
+{
+  "schema_version": 1,
+  "record_kind": "expectation",
+  "record_id": "pilot-fqs-participatory-health-research",
+  "document": {
+    "pdf_sha256": "aaffb59f715df01fc1ad74e7777d8740f34fb5c469ea349890e18b02170866e2",
+    "title": "Partizipative Gesundheitsforschung: Wer partizipiert woran?",
+    "page_count": 29,
+    "corpus_id": "fqs-participatory-health-research"
+  },
+  "scope": {
+    "kind": "pages",
+    "physical_pages": [
+      25
+    ]
+  },
+  "pages": [
+    {
+      "physical_page": 25,
+      "printed_label": null,
+      "geometry": {
+        "unit": "pt",
+        "origin": "top-left",
+        "frame": "displayed",
+        "box": "cropbox",
+        "rotation": 0,
+        "width": 595.0,
+        "height": 842.0
+      },
+      "render": {
+        "renderer": "pymupdf",
+        "renderer_version": "1.28.0",
+        "dpi": 150,
+        "image_sha256": "9a2a1d309c00be69dcd3e1c52ad3fc1ca275d2d1aac9f08397ab9731dcff39f7"
+      },
+      "body_start": {
+        "block_id": "p25-b2"
+      },
+      "body_end": {
+        "block_id": "p25-b6"
+      }
+    }
+  ],
+  "blocks": [
+    {
+      "id": "p25-b1",
+      "type": "header",
+      "page": 25,
+      "reading_order": 1,
+      "bbox": {
+        "x0": 143.7,
+        "y0": 50.06,
+        "x1": 486.68,
+        "y1": 60.99
+      },
+      "text": "FQS 13(1), Art. 7, Hella von Unger: Partizipative Gesundheitsforschung: Wer partizipiert woran?",
+      "text_sha256": "9adf65f0377f5d2ef81b0cd42e1d7014ca9b94ff675af010e12d82685756869e"
+    },
+    {
+      "id": "p25-b2",
+      "type": "paragraph",
+      "page": 25,
+      "reading_order": 2,
+      "bbox": {
+        "x0": 143.7,
+        "y0": 105.54,
+        "x1": 523.25,
+        "y1": 148.12
+      },
+      "text": "größere Enttäuschungen hervorbringen können. Dies kann insbesondere bei Partner/inne/n aus Communities, die marginalisiert sind, zu einer weiteren Verstärkung des Misstrauens gegenüber Forschung führen. [76]",
+      "text_sha256": "69445875e7f5f6af8961ec638e94f554c7432294481d084028bdf861f4738dd8",
+      "truncated": "start"
+    },
+    {
+      "id": "p25-b3",
+      "type": "paragraph",
+      "page": 25,
+      "reading_order": 3,
+      "bbox": {
+        "x0": 143.7,
+        "y0": 162.14,
+        "x1": 538.85,
+        "y1": 388.62
+      },
+      "text": "Eine weitere Gefahr, die in der Literatur bislang nur ansatzweise besprochen wird, bezieht sich auf die möglichen negativen Auswirkungen von Partizipation auf die beteiligten Community-Partner/innen. In der Regel werden positive Auswirkungen (wie capacity building etc.) hervorgehoben. An den partizipativen Forschungsprozessen sind jedoch nicht alle Mitglieder einer Community auf die gleiche Weise beteiligt, sondern es gibt einzelne Personen oder Gruppen, die in stärkerem Maße beteiligt sind, z.B. durch ihre Mitarbeit in Steuerungs-Gremien oder durch ihren Einsatz als Peer Researcher. Für diese Personen kann Beteiligung durchaus auch negative Auswirkungen haben, zum Beispiel Entfremdung von ihrer Community oder Misstrauen, das ihnen angesichts ihrer neuen Rolle entgegengebracht wird (MINKLER 2005, S.ii9). Diese Gefahr ist insbesondere dann gegeben, wenn die Forschung Themen beinhaltet, die sensibel oder sozial stigmatisiert sind, wie im PaKoMi-Projekt das Thema HIV/Aids. Die nicht intendierten und möglichen negativen Auswirkungen von Partizipation bedürfen also größerer Aufmerksamkeit, auch um ggf. Gegenmaßnahmen ergreifen zu können. [77]",
+      "text_sha256": "e61a453a60b1315b1d2a5db5fa7d115d044abe21f8213de353dd1b95885ce0cd"
+    },
+    {
+      "id": "p25-b4",
+      "type": "heading",
+      "page": 25,
+      "reading_order": 4,
+      "bbox": {
+        "x0": 143.7,
+        "y0": 402.65,
+        "x1": 346.69,
+        "y1": 416.92
+      },
+      "text": "5.6 Reflexivität im Forschungsprozess",
+      "text_sha256": "7dcfc1a6c9e9d4fdd7ea0a433c79041466b1e23cd6c9706c50a412925b294452"
+    },
+    {
+      "id": "p25-b5",
+      "type": "paragraph",
+      "page": 25,
+      "reading_order": 5,
+      "bbox": {
+        "x0": 143.7,
+        "y0": 430.95,
+        "x1": 546.15,
+        "y1": 544.32
+      },
+      "text": "Die hier beschriebenen Voraussetzungen, offenen Fragen und Gefahren verdeutlichen den zentralen Stellenwert der Reflexivität in der PF: Die komplexen und sich im Wandel befindlichen Machtbeziehungen, die die Zusammenarbeit von unterschiedlichen Partner/inne/n in der PF prägen, bedürfen der kontinuierlichen Reflexion (WALLERSTEIN 1999). Selbstreflexivität der einzelnen Partner/innen und dialogische Reflexivität, mit der im Austausch Transparenz geschaffen wird, eröffnen die Möglichkeit, Probleme zu benennen und gemeinsam nach Lösungen zu suchen. [78]",
+      "text_sha256": "706ad93d2254d3f9d7ec6df00109f0b4e5c87aa72c1696488c087f2fd5165fe9"
+    },
+    {
+      "id": "p25-b6",
+      "type": "paragraph",
+      "page": 25,
+      "reading_order": 6,
+      "bbox": {
+        "x0": 143.7,
+        "y0": 558.34,
+        "x1": 548.05,
+        "y1": 784.82
+      },
+      "text": "Gerade die Partizipation von marginalisierten Gruppen (wie sozial und rechtlich benachteiligten Migrant/inn/en) braucht Zeit und muss ermöglicht und aufgebaut werden. Vor diesem Hintergrund kommt auch \"aktivierenden\" Formen der Beteiligung, wie z.B. Befragungen als Verfahrensbeteiligung oder Anhörungen, ein erheblicher Stellenwert zu (MOSSAKOWSKI et al. 2009). Das PaKoMi-Projekt veranschaulicht, wie verschiedene Akteure und Akteurinnen im Projektverlauf und in den einzelnen Projektkomponenten unterschiedlich beteiligt werden können. Die Kombination von Beteiligung auf verschiedenen Stufen – wie die Teilhabe von einzelnen Community-Partner/inne/n in den Fallstudien auf einer hohen Stufe und die gleichzeitige Beteiligung einer größeren Anzahl von Community- Mitgliedern auf einer niedrigeren Stufe, z.B. durch Befragungen – hat sich als hilfreich und praktikabel erwiesen, um die Community-Vertreter/innen in ihrer Vertretungsfunktion zu unterstützen und die vorhandene Vielfalt von Perspektiven und Interessen innerhalb von Communities zu berücksichtigen. Partizipation ist also kein Entweder-oder, sondern ein dynamischer Prozess mit verschiedenen Schattierungen. CBPR bietet in diesem Zusammenhang eine hilfreiche",
+      "text_sha256": "cd092ecc279a9768689885ea36a2349a6f1f95fbb6103c792e1d492d86021ce8",
+      "truncated": "end"
+    },
+    {
+      "id": "p25-b7",
+      "type": "footer",
+      "page": 25,
+      "reading_order": 7,
+      "bbox": {
+        "x0": 143.7,
+        "y0": 795.86,
+        "x1": 317.6,
+        "y1": 806.79
+      },
+      "text": "© 2012 FQS http://www.qualitative-research.net/",
+      "text_sha256": "01e0e9dff483dcf64ea55a4f7106c7e1e64349190769bb04a19edf1edb696632"
+    }
+  ],
+  "provenance": {
+    "proposed_by": {
+      "tool": "extraction-pilot-drafts",
+      "version": "3",
+      "options_sha256": "b74e6f2f9c021751643a9a5d2e4451944b229defbcf37f11c98141324265f7b4"
+    },
+    "review": {
+      "status": "reviewed",
+      "reviewer": "agent-claude-sonnet-5-5",
+      "reviewed_at": "2026-11-12T14:01:33Z",
+      "basis": "page_image_inspection"
+    }
+  }
+}

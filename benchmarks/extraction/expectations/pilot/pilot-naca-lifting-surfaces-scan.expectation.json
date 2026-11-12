@@ -1,0 +1,510 @@
+{
+  "schema_version": 1,
+  "record_kind": "expectation",
+  "record_id": "pilot-naca-lifting-surfaces-scan",
+  "document": {
+    "pdf_sha256": "3885100a3f8672d809c7a78da76678cb304705fa1bb0fa614e215f5cc9dd0e59",
+    "title": "Theory of Lifting Surfaces",
+    "page_count": 10,
+    "corpus_id": "naca-lifting-surfaces-scan"
+  },
+  "scope": {
+    "kind": "pages",
+    "physical_pages": [
+      5,
+      7
+    ]
+  },
+  "pages": [
+    {
+      "physical_page": 5,
+      "printed_label": "5",
+      "geometry": {
+        "unit": "pt",
+        "origin": "top-left",
+        "frame": "displayed",
+        "box": "cropbox",
+        "rotation": 0,
+        "width": 614.0,
+        "height": 722.0
+      },
+      "render": {
+        "renderer": "pymupdf",
+        "renderer_version": "1.28.0",
+        "dpi": 150,
+        "image_sha256": "e3c74cc7e19b5efa53b19b3984b26e07423fffabebc4c299cfd8cb2709956917"
+      },
+      "body_start": {
+        "block_id": "p5-b2"
+      },
+      "body_end": {
+        "block_id": "p5-b15"
+      }
+    },
+    {
+      "physical_page": 7,
+      "printed_label": "7",
+      "geometry": {
+        "unit": "pt",
+        "origin": "top-left",
+        "frame": "displayed",
+        "box": "cropbox",
+        "rotation": 0,
+        "width": 614.0,
+        "height": 722.0
+      },
+      "render": {
+        "renderer": "pymupdf",
+        "renderer_version": "1.28.0",
+        "dpi": 150,
+        "image_sha256": "1c7ecd43b9640818ec57a0b22a950bb4bed959384394ea9875a172016caec1bc"
+      },
+      "body_start": {
+        "block_id": "p7-b2"
+      },
+      "body_end": {
+        "block_id": "p7-b13"
+      }
+    }
+  ],
+  "blocks": [
+    {
+      "id": "p5-b1",
+      "type": "page_number",
+      "page": 5,
+      "reading_order": 1,
+      "bbox": {
+        "x0": 288,
+        "y0": 52,
+        "x1": 318.5,
+        "y1": 60
+      },
+      "text": "- 5 -",
+      "text_sha256": "fd3e5ece5c25a9c885da11cc468d43acb1d78e650171e63f5545bbd33c935dbf"
+    },
+    {
+      "id": "p5-b2",
+      "type": "paragraph",
+      "page": 5,
+      "reading_order": 2,
+      "bbox": {
+        "x0": 106.5,
+        "y0": 72,
+        "x1": 232,
+        "y1": 84
+      },
+      "text": "tions of the problem.",
+      "text_sha256": "432875ba512ace3a518b06bf96e8d4588d211e7891717262de7d25ee88a7344b",
+      "truncated": "start"
+    },
+    {
+      "id": "p5-b3",
+      "type": "paragraph",
+      "page": 5,
+      "reading_order": 3,
+      "bbox": {
+        "x0": 104.6,
+        "y0": 95,
+        "x1": 505,
+        "y1": 202
+      },
+      "text": "Three cases are examined: the first refers to a biplane having the two wings of the same span. Taking ν′ as the ratio of the induced resistance of this biplane to the resistance of a mon- oplane of the same span carrying the same load, and h/b the ratio of the gap to the span of the wings, we have",
+      "text_sha256": "6df490939c990fb7ea165841f550352d68792bbb38196bdaf2fa4f9a8ae9542e",
+      "uncertainty": {
+        "level": "medium",
+        "note": "The symbol after \"Taking\" is a script V with a prime; recorded as nu with a prime, its exact glyph cannot be named."
+      }
+    },
+    {
+      "id": "p5-b4",
+      "type": "equation",
+      "page": 5,
+      "reading_order": 4,
+      "bbox": {
+        "x0": 206,
+        "y0": 211,
+        "x1": 523,
+        "y1": 235
+      },
+      "equation": {
+        "latex": "\\nu \\simeq \\frac{1 + 1.63\\,h/b}{1.027 + 3.84\\,h/b}",
+        "number": "(44)",
+        "display": true
+      }
+    },
+    {
+      "id": "p5-b5",
+      "type": "paragraph",
+      "page": 5,
+      "reading_order": 5,
+      "bbox": {
+        "x0": 104.6,
+        "y0": 246,
+        "x1": 511,
+        "y1": 329
+      },
+      "text": "The second case is that of a biplane having the upper and lower planes connected by two vertical planes placed at the tips of the wings. This biplane gives less resistance than any of the multiplanes occupying the same space. We have:",
+      "text_sha256": "d28c4f7b65c35dec2df4050a06af6eb66f34deb168bb2cc68483649af52ddfee",
+      "uncertainty": {
+        "level": "high",
+        "note": "The word after \"lower planes\" is printed as something like \"conrected\" (the second n reads as r with a gap); recorded as \"connected\" but not certain, so not for strict comparison."
+      }
+    },
+    {
+      "id": "p5-b6",
+      "type": "equation",
+      "page": 5,
+      "reading_order": 6,
+      "bbox": {
+        "x0": 206,
+        "y0": 336,
+        "x1": 523,
+        "y1": 360
+      },
+      "equation": {
+        "latex": "\\nu \\simeq \\frac{1 + 0.45\\,h/b}{1.045 + 2.8\\,h/b}",
+        "number": "(45)",
+        "display": true
+      },
+      "uncertainty": {
+        "level": "medium",
+        "note": "The equation number glyph is smudged (reads like 48) and the plus in the numerator is overprinted; read as (45) and + from the sequence of numbers and the fraction."
+      }
+    },
+    {
+      "id": "p5-b7",
+      "type": "paragraph",
+      "page": 5,
+      "reading_order": 7,
+      "bbox": {
+        "x0": 104.6,
+        "y0": 372,
+        "x1": 529.4,
+        "y1": 432
+      },
+      "text": "The third case is that of a monoplane having a slit of width d in the middle of the wing. By means of this device the resistance is that of a wing having a span b - d.",
+      "text_sha256": "063dcc0fc05413d36a74860e8990ae427fb1db5bdae3a0aa4e1793e78a409be3"
+    },
+    {
+      "id": "p5-b8",
+      "type": "heading",
+      "page": 5,
+      "reading_order": 8,
+      "bbox": {
+        "x0": 104.6,
+        "y0": 445,
+        "x1": 370.6,
+        "y1": 456
+      },
+      "text": "C. FREE STREAM AND STREAM LIMITED BY WALLS.",
+      "text_sha256": "a619fef45db82861321b55cb3f2b7420c2930d3a6ea9edec5fb8b41ea2bb53ea"
+    },
+    {
+      "id": "p5-b9",
+      "type": "paragraph",
+      "page": 5,
+      "reading_order": 9,
+      "bbox": {
+        "x0": 104.6,
+        "y0": 468,
+        "x1": 522,
+        "y1": 528
+      },
+      "text": "As regards the value of test results, it is obviously of great importance to examine the question of the influence of the lim- itations imposed on the air-stream in which models are tested.",
+      "text_sha256": "6537a17df36b42478986027e72a55ac9594f8bcc36bb334d275a509af20a5883"
+    },
+    {
+      "id": "p5-b10",
+      "type": "paragraph",
+      "page": 5,
+      "reading_order": 10,
+      "bbox": {
+        "x0": 164.6,
+        "y0": 540,
+        "x1": 374.4,
+        "y1": 550
+      },
+      "text": "Two methods are generally employed:",
+      "text_sha256": "ccc64a448735c711316e3ff623300bf78753a44c68c0e36cdfe579e719207d45"
+    },
+    {
+      "id": "p5-b11",
+      "type": "list_item",
+      "page": 5,
+      "reading_order": 11,
+      "bbox": {
+        "x0": 177.6,
+        "y0": 551,
+        "x1": 261.6,
+        "y1": 562
+      },
+      "text": "(a) The tunnel",
+      "text_sha256": "5c3618726d076c971692882639a8b72721ddea9df965f96055906dee6b6f26bf"
+    },
+    {
+      "id": "p5-b12",
+      "type": "list_item",
+      "page": 5,
+      "reading_order": 12,
+      "bbox": {
+        "x0": 177.6,
+        "y0": 562.6,
+        "x1": 504,
+        "y1": 574
+      },
+      "text": "(b) A free stream traversing the experimental chamber.",
+      "text_sha256": "6356b25dbac57ae953ddc3f5dd8254e19cbbbd6cb353e10eeb1f73a5576346ab"
+    },
+    {
+      "id": "p5-b13",
+      "type": "paragraph",
+      "page": 5,
+      "reading_order": 13,
+      "bbox": {
+        "x0": 104.6,
+        "y0": 585,
+        "x1": 528,
+        "y1": 643
+      },
+      "text": "The conditions at the limits are: for the first, the nul- lifying of the normal component, wn, of the speed. For the second, the constancy of pressure.",
+      "text_sha256": "9b461a7d1a8cbe7422f0648b5f9cb72d42309680784afd22b321dc48ea5c2dc1"
+    },
+    {
+      "id": "p5-b14",
+      "type": "paragraph",
+      "page": 5,
+      "reading_order": 14,
+      "bbox": {
+        "x0": 164.6,
+        "y0": 654,
+        "x1": 430,
+        "y1": 666
+      },
+      "text": "This latter condition leads to the relation:",
+      "text_sha256": "df0a131cd3e67f7586aa684e7f6809c72252d11552f4dc6f2775c07aca1ad858"
+    },
+    {
+      "id": "p5-b15",
+      "type": "equation",
+      "page": 5,
+      "reading_order": 15,
+      "bbox": {
+        "x0": 194,
+        "y0": 676,
+        "x1": 389,
+        "y1": 691
+      },
+      "equation": {
+        "latex": "(V + v)^2 + u^2 + w^2 = \\mathrm{const.} = V^2",
+        "number": null,
+        "display": true
+      }
+    },
+    {
+      "id": "p7-b1",
+      "type": "page_number",
+      "page": 7,
+      "reading_order": 16,
+      "bbox": {
+        "x0": 288,
+        "y0": 38,
+        "x1": 318,
+        "y1": 47
+      },
+      "text": "- 7 -",
+      "text_sha256": "8403fcb7e2f2f195ec496d4d04802e970ff53f3ac7aea7a10befe6afd4cabe11"
+    },
+    {
+      "id": "p7-b2",
+      "type": "paragraph",
+      "page": 7,
+      "reading_order": 17,
+      "bbox": {
+        "x0": 105.6,
+        "y0": 71,
+        "x1": 517.4,
+        "y1": 201.6
+      },
+      "text": "For a tunnel with uninterrupted walls the correction is the same, but of contrary sign, that is, the resistance measured is smaller than the true resistance in an unlimited stream of air. This correction is far from being negligible: thus for b/D = 0.5, a usual case in laboratories, the additional resistance reaches about 1/8 of the induced resistances.",
+      "text_sha256": "fde509ebcc411bbe8e0c90d9daf2ab16c6517720f5271ce61da44c20edba8626"
+    },
+    {
+      "id": "p7-b3",
+      "type": "paragraph",
+      "page": 7,
+      "reading_order": 18,
+      "bbox": {
+        "x0": 105.6,
+        "y0": 211,
+        "x1": 517.4,
+        "y1": 271
+      },
+      "text": "Another problem, that of a wing traversing a free cylin- drical stream, is of practical interest on account of the simple in- stallation required for the experiment.",
+      "text_sha256": "416784ae00143e38c99dbdb953e285a386c85b9ea216d984f26c2f43602d2813"
+    },
+    {
+      "id": "p7-b4",
+      "type": "paragraph",
+      "page": 7,
+      "reading_order": 19,
+      "bbox": {
+        "x0": 105.6,
+        "y0": 282,
+        "x1": 488.6,
+        "y1": 317
+      },
+      "text": "The solution is given by the fact that the lift of the wing is nullified where the wing leaves the air-stream.",
+      "text_sha256": "a52ea2e080acd3339c535c953d9af9bdc828a1cdcc203db087dc73c9b4594287"
+    },
+    {
+      "id": "p7-b5",
+      "type": "paragraph",
+      "page": 7,
+      "reading_order": 20,
+      "bbox": {
+        "x0": 105.6,
+        "y0": 320.6,
+        "x1": 494,
+        "y1": 365
+      },
+      "text": "Assuming for serial development the function (R2 - x2)/(R2 + x2) we find that",
+      "text_sha256": "b44a2f531f8ca98a03cf20ca57e17bb41cb392d28d97ea85e2013e4a48e4e60f",
+      "uncertainty": {
+        "level": "high",
+        "note": "The function is an inline stacked fraction with a smudged sign in the denominator; no unambiguous linear reading."
+      }
+    },
+    {
+      "id": "p7-b6",
+      "type": "equation",
+      "page": 7,
+      "reading_order": 21,
+      "bbox": {
+        "x0": 249.6,
+        "y0": 374,
+        "x1": 398.4,
+        "y1": 391
+      },
+      "equation": {
+        "latex": "W = 1.74\\, A^2/2\\,\\rho\\, V^2 F_0",
+        "number": null,
+        "display": true
+      }
+    },
+    {
+      "id": "p7-b7",
+      "type": "paragraph",
+      "page": 7,
+      "reading_order": 22,
+      "bbox": {
+        "x0": 105.6,
+        "y0": 396,
+        "x1": 518.4,
+        "y1": 432
+      },
+      "text": "that is, the measured resistance is greater by 1.74 than the resist- ance of the same wing in an unlimited stream.",
+      "text_sha256": "dae3c0c2223a1b1942313951e6b1e76b0c8c6c3311a9aa305337772c7029f1bf"
+    },
+    {
+      "id": "p7-b8",
+      "type": "paragraph",
+      "page": 7,
+      "reading_order": 23,
+      "bbox": {
+        "x0": 105.6,
+        "y0": 444,
+        "x1": 517.4,
+        "y1": 525.6
+      },
+      "text": "Finally the author examines the case where the chord of the wing is such that the variation of the speed wn parallel to the gen- eral direction of the stream can no longer be neglected, this lead- ing to a modification of the camber of the wing.",
+      "text_sha256": "3b833c91df9e0d7998fc220d7f5061483ff751daf9df7f16be6d6fbbd7d06224"
+    },
+    {
+      "id": "p7-b9",
+      "type": "paragraph",
+      "page": 7,
+      "reading_order": 24,
+      "bbox": {
+        "x0": 103,
+        "y0": 536.6,
+        "x1": 523,
+        "y1": 617
+      },
+      "text": "The author considers more particularly the conditions of tests of a wing limited by two vertical planes (connecting the tips of the upper and lower wings) traversing the stream, the object being to determine the conditions of a plane-parallel flow.",
+      "text_sha256": "23cc1246a7751ca4ee8477a9906e52aa660a3013ce5e8d9de15cc7ec4bdbe8d2"
+    },
+    {
+      "id": "p7-b10",
+      "type": "paragraph",
+      "page": 7,
+      "reading_order": 25,
+      "bbox": {
+        "x0": 158,
+        "y0": 628,
+        "x1": 348,
+        "y1": 641
+      },
+      "text": "The measured resistance is then",
+      "text_sha256": "8da291771b8737cc7faf7789987e2b3ecada8320decd9458a91b739c59b6896f"
+    },
+    {
+      "id": "p7-b11",
+      "type": "equation",
+      "page": 7,
+      "reading_order": 26,
+      "bbox": {
+        "x0": 249.6,
+        "y0": 649,
+        "x1": 341.8,
+        "y1": 668
+      },
+      "equation": {
+        "latex": "W = A/2\\,\\rho\\,V^2F_0",
+        "number": null,
+        "display": true
+      }
+    },
+    {
+      "id": "p7-b12",
+      "type": "paragraph",
+      "page": 7,
+      "reading_order": 27,
+      "bbox": {
+        "x0": 103,
+        "y0": 674.4,
+        "x1": 369.6,
+        "y1": 686.4
+      },
+      "text": "where F0 is still the section of the stream.",
+      "text_sha256": "8a55aaebe8be0b159c33ab28cfe73e200fb48bef3297c7f398c9837e8098462a"
+    },
+    {
+      "id": "p7-b13",
+      "type": "paragraph",
+      "page": 7,
+      "reading_order": 28,
+      "bbox": {
+        "x0": 157.4,
+        "y0": 698.4,
+        "x1": 521,
+        "y1": 713
+      },
+      "text": "Also the camber of the wing should be increased by the value",
+      "text_sha256": "257582b14de2bbf2d083ab37d540efbe500ff5332df6f8a2e938e73c69d5e2af",
+      "truncated": "end"
+    }
+  ],
+  "provenance": {
+    "proposed_by": {
+      "tool": "extraction-pilot-drafts",
+      "version": "3",
+      "options_sha256": "b74e6f2f9c021751643a9a5d2e4451944b229defbcf37f11c98141324265f7b4"
+    },
+    "review": {
+      "status": "reviewed",
+      "reviewer": "agent-claude-sonnet-5-5",
+      "reviewed_at": "2026-11-12T14:00:45Z",
+      "basis": "page_image_inspection"
+    }
+  }
+}

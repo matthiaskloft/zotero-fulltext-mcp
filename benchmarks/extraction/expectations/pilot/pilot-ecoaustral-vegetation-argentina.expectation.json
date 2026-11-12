@@ -1,0 +1,187 @@
+{
+  "schema_version": 1,
+  "record_kind": "expectation",
+  "record_id": "pilot-ecoaustral-vegetation-argentina",
+  "document": {
+    "pdf_sha256": "d4e18f4dbf2656f5757390733edc257da04ac12057bdb096b12aa2175189aca1",
+    "title": "Unidades de vegetación de la Argentina",
+    "page_count": 24,
+    "corpus_id": "ecoaustral-vegetation-argentina"
+  },
+  "scope": {
+    "kind": "pages",
+    "physical_pages": [
+      6
+    ]
+  },
+  "pages": [
+    {
+      "physical_page": 6,
+      "printed_label": "45",
+      "geometry": {
+        "unit": "pt",
+        "origin": "top-left",
+        "frame": "displayed",
+        "box": "cropbox",
+        "rotation": 0,
+        "width": 564.094,
+        "height": 810.709
+      },
+      "render": {
+        "renderer": "pymupdf",
+        "renderer_version": "1.28.0",
+        "dpi": 150,
+        "image_sha256": "f021958cd0f8658c5c6ddbabba2f663d18e83b9554d4fbb74fc6a62dbf5c5cf5"
+      },
+      "body_start": {
+        "block_id": "p6-b3"
+      },
+      "body_end": {
+        "block_id": "p6-b9"
+      }
+    }
+  ],
+  "blocks": [
+    {
+      "id": "p6-b1",
+      "type": "header",
+      "page": 6,
+      "reading_order": 1,
+      "bbox": {
+        "x0": 224.0,
+        "y0": 78.0,
+        "x1": 338.5,
+        "y1": 91.0
+      },
+      "text": "VEGETACIÓN DE LA ARGENTINA",
+      "text_sha256": "d8f12fb99565c214df78d3a3a513ba04dc62dc7ae01c29909cbb1d8ff27578d3"
+    },
+    {
+      "id": "p6-b2",
+      "type": "page_number",
+      "page": 6,
+      "reading_order": 2,
+      "bbox": {
+        "x0": 475.5,
+        "y0": 77.0,
+        "x1": 488.5,
+        "y1": 91.0
+      },
+      "text": "45",
+      "text_sha256": "811786ad1ae74adfdd20dd0372abaaebc6246e343aebd01da0bfc4c02bf0106c"
+    },
+    {
+      "id": "p6-b3",
+      "type": "paragraph",
+      "page": 6,
+      "reading_order": 3,
+      "bbox": {
+        "x0": 75.55,
+        "y0": 96.22,
+        "x1": 278.54,
+        "y1": 363.42
+      },
+      "text": "Pampeanas en el noroeste del país, entre los 2000 y 3400 m s.n.m. en la parte norte, y entre los 1000 y 3000 m s.n.m. en el extremo sur (Cabrera 1976). La precipitación es principalmente estival y menor a 200 mm/ año. En general, la presencia de la Prepuna está condicionada no sólo por la altura, sino muy particularmente por la disposición y orientación de las quebradas (Cabrera 1976). La vegetación presenta adaptaciones a la falta de agua, como tejidos que la acumulan (Trichocereus spp.), plantas en forma de cojín (Deuterocohnia brevifolia), hojas pequeñas o afilia (Junellia juniperina), entre otras. La vegetación típica es la estepa arbustiva, a veces con pequeños árboles, y la presencia característica de Cactáceas columnares de gran tamaño del género Trichocereus. Esta provincia podría ser redefinida en un futuro con nuevos estudios florísticos, ya que, aunque tiene una fisonomía distintiva, carece de especies endémicas que la definan en todo su rango de extensión (López 2000; López and Beck 2002; Aagesen et al. 2009, 2012).",
+      "text_sha256": "52bf3682ad58d2bf709d792b6551b5a34e1659698454101a6d42a80f9592b0a2",
+      "truncated": "start"
+    },
+    {
+      "id": "p6-b4",
+      "type": "paragraph",
+      "page": 6,
+      "reading_order": 4,
+      "bbox": {
+        "x0": 75.55,
+        "y0": 368.59,
+        "x1": 278.53,
+        "y1": 646.94
+      },
+      "text": "Unidad 6. Estepa arbustiva con Trichocereus spp. (Prepuna). La comunidad típica es una estepa arbustiva de dos estratos (6.1). El estrato superior está dominado por la cactácea columnar Trichocereus atacamensis, acompañada de arbustos o árboles bajos como Prosopis ferox, Gochnatia glutinosa, Senna crassiramea, Aphyllocladus spartioides, Cercidium andicola, Zuccagnia punctata, entre otros. El estrato inferior es de Cactáceas rastreras y globosas como Airampoa ayrampo, Tunilla tilcarensis, Parodia maassii, Parodia stuemeri, y numerosas gramíneas como Digitaria californica, Munroa argentina, Jarava leptostachya, Jarava media o Eragrostis andicola (Aagesen et al. 2009). Por encima de los 3000 m s.n.m. Trichocereus tarijensis reemplaza muchas veces a Trichocereus atacamensis. Hay también una estepa con Bromeliáceas terrestres (6.2), muchas de ellas en cojín, que ocupa las laderas rocosas con pendiente pronunciada, dominada por Deuterocohnia brevifolia, Deuterocohnia lorentziana, Deuterocohnia digitata, Tillandsia virescens, Puya castellanosii y Puya dyckioides, entre otras (Cabrera 1976).",
+      "text_sha256": "28f81e513c74044cb2ddac8fff64d268ee3aeceaca77821bb54e6edd404e0238"
+    },
+    {
+      "id": "p6-b5",
+      "type": "heading",
+      "page": 6,
+      "reading_order": 5,
+      "bbox": {
+        "x0": 104.21,
+        "y0": 659.19,
+        "x1": 247.31,
+        "y1": 673.41
+      },
+      "text": "Provincia Fitogeográfica Chaqueña",
+      "text_sha256": "314184b6b946602e25c799e24764af588bb3f34b71aeb0d7004276738b3ea296"
+    },
+    {
+      "id": "p6-b6",
+      "type": "paragraph",
+      "page": 6,
+      "reading_order": 6,
+      "bbox": {
+        "x0": 75.55,
+        "y0": 674.59,
+        "x1": 278.47,
+        "y1": 743.79
+      },
+      "text": "Los tipos de vegetación zonal dominantes son el bosque y la sabana tipo parque. El bosque es de xerófitas. En general está dominado por alguna de las especies del género Schinopsis (Ragonese and Castiglioni 1970; Prado 1993a), con una altura de hasta",
+      "text_sha256": "68f98b6d7dba7a2720331ca35536defcfe0c023ffd7fd3d3415b6829464ed59d"
+    },
+    {
+      "id": "p6-b7",
+      "type": "paragraph",
+      "page": 6,
+      "reading_order": 7,
+      "bbox": {
+        "x0": 288.12,
+        "y0": 96.07,
+        "x1": 491.11,
+        "y1": 209.42
+      },
+      "text": "25 m, junto con Aspidosperma quebracho-blanco, Ceiba chodatii, Ziziphus mistol y leguminosas mimosoideas. El otro tipo de vegetación es la sabana tipo parque, con las mismas xerófitas arbóreas y un estrato herbáceo dominado por gramíneas cespitosas megatérmicas. Las variantes de estos tipos de vegetación zonales, u otros tipos zonales y azonales de menor extensión y constancia permiten distinguir doce unidades.",
+      "text_sha256": "6152a04654f52294f502a1dbc8eee945e763bd6a3a8c74b4750596a76740020a",
+      "continues_from": "p6-b6"
+    },
+    {
+      "id": "p6-b8",
+      "type": "paragraph",
+      "page": 6,
+      "reading_order": 8,
+      "bbox": {
+        "x0": 288.12,
+        "y0": 214.59,
+        "x1": 491.1,
+        "y1": 492.94
+      },
+      "text": "Unidad 7. Bosque de xerófitas con Schinopsis marginata (Chaco Serrano). Está conformado por tres comunidades, de las cuales sólo la primera es zonal. (7.1) Bosque abierto de xerófitas con Schinopsis marginata. Ocupa suelos someros de los faldeos y quebradas de las Sierras Pampeanas y Subandinas, entre 500-1300 m s.n.m. (Luti et al. 1979). La composición florística varía con la latitud, la altitud, el suelo y los disturbios (Cabido et al. 1991). En los faldeos septentrionales, las principales acompañantes son Ceiba chodatii, Aspidosperma quebracho-blanco y Ruprechtia apetala; mientras que en los faldeos del sur abundan Lithraea molleoides, Zanthoxylum coco y Trithrinax campestris. (7.2) Matorral serrano con Acacia caven, Eupatorium buniifolium, Heterothalamus alienus, Flourensia campestris, etc. Ocupa laderas y pedemontes con afloramientos rocosos, entre 1300-1700 m s.n.m. (7.3) Bosque de Polylepis australis. A mayor altitud, el bosque de Polylepis ocupa ambientes similares a la comunidad 7.2, y en ocasiones forma mosaicos con la unidad 8 (ver más abajo).",
+      "text_sha256": "1b131f7d2fdad29d077fe19e6e1c417ec0c8fa1cc4d71159c860eb8bc45314ed"
+    },
+    {
+      "id": "p6-b9",
+      "type": "paragraph",
+      "page": 6,
+      "reading_order": 9,
+      "bbox": {
+        "x0": 288.12,
+        "y0": 498.25,
+        "x1": 491.12,
+        "y1": 743.45
+      },
+      "text": "Unidad 8. Pastizal de Stipeas y Festuceas (Pastizales de Altura). Caracterizada por una comunidad zonal y otra higrófitica azonal. (8.1) Pastizal de gramíneas cespitosas mesotérmicas (\"Pastizal de altura\") (Cabrera 1976). Ocupa los filos de cerros y serranías y constituye el último piso de vegetación de las Sierras Pampeanas y Subandinas, por encima de 1700- 1900 m s.n.m. (Luti et al. 1979; Cingolani et al. 2004; Martínez et al. 2016). Su composición florística fundamental está dada por Poáceas de la tribu Stipeas (Nassella filiculmis, Nassella niduloides, Nassella tenuissima, etc.) o de la tribu Festuceas (Festuca hieronymi, Festuca lilloi, Poa stuckertii, Deyeuxia hieronymi, y otras). (8.2) Como comunidad azonal se encuentra una pradera de higrófitas de altura, en sitios donde se acumula humedad y aparecen hierbas como Lachemilla pinnata, Eleocharis pseudoalbibracteata, Carex gayana. Donde el agua fluye son comunes las poblaciones de Cortaderia selloana (Cabido et al. 2010).",
+      "text_sha256": "e2b4d514e4f48784f8f538ad7e357c13318337646edbac46580e3b158b4a213a"
+    }
+  ],
+  "provenance": {
+    "proposed_by": {
+      "tool": "extraction-pilot-drafts",
+      "version": "3",
+      "options_sha256": "b74e6f2f9c021751643a9a5d2e4451944b229defbcf37f11c98141324265f7b4"
+    },
+    "review": {
+      "status": "reviewed",
+      "reviewer": "agent-claude-sonnet-5-5",
+      "reviewed_at": "2026-11-12T14:01:33Z",
+      "basis": "page_image_inspection"
+    }
+  }
+}
