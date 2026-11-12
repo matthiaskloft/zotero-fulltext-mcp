@@ -318,7 +318,11 @@ def build_page_blocks(
     last_index = len(raws) - 1
     for index, raw in enumerate(raws):
         raw_text = page_text[raw.start:raw.end]
-        if raw.type == "heading":
+        if raw.type == "heading" and _is_caption(raw_text):
+            # A caption formatted as a heading is still a caption and must not reset section state.
+            block = new_block("caption", raw.start, raw.end)
+            block["text"] = raw_text
+        elif raw.type == "heading":
             state["in_references"] = bool(_REFERENCES_HEADING.match(raw_text))
             block = new_block("heading", raw.start, raw.end)
             block["text"] = raw_text
@@ -623,6 +627,7 @@ def observe_pdf(
     from zotero_pdf_text import converter
 
     extractor = {
+        "tool": converter.PRIMARY_EXTRACTION_TOOL,
         "name": converter.PRIMARY_EXTRACTION_TOOL,
         "version": f"pymupdf4llm {pymupdf4llm.__version__} / pymupdf {pymupdf.VersionBind}",
         "options": extractor_options,
@@ -630,9 +635,10 @@ def observe_pdf(
     opt_hash = options_sha256(extractor_options)
     pdf_sha = sha256_bytes(pdf_bytes)
     complete = selected == list(range(1, page_count + 1))
-    identity: dict[str, Any] = {"tool": extractor["name"], "version": extractor["version"], "options_sha256": opt_hash}
+    identity: dict[str, Any] = {"tool": extractor["tool"], "version": extractor["version"], "options_sha256": opt_hash}
     if ocr_model:
         identity["model"] = ocr_model
+        extractor["model"] = ocr_model
     tag = "whole" if complete else "p" + "-".join(str(n) for n in selected[:8])
     observation: dict[str, Any] = {
         "schema_version": 1,

@@ -282,3 +282,53 @@ def test_section_state_carries_across_unselected_pages(monkeypatch):
     assert [b["type"] for b in only2.observation["blocks"]] == ["reference_entry"]
     assert _shape(only2.observation["blocks"]) == _shape([b for b in whole.observation["blocks"] if b["page"] == 2])
     assert verify_output_spans(only2.observation, only2.markdown) == []
+
+
+def test_heading_formatted_caption_keeps_reference_context():
+    md = "## References \n\n[1] Doe, J. (2020). A study. \n\n### **Fig. 1** A caption. \n\n[2] Roe, R. (2019). Another. \n\n"
+    blocks, state = _blocks(md)
+    assert [b["type"] for b in blocks] == ["heading", "reference_entry", "caption", "reference_entry"]
+    assert len(state["entries"]) == 2
+
+
+def test_extractor_identity_has_tool_and_model(monkeypatch, result):
+    assert result.extractor["tool"] == "pymupdf4llm.to_markdown" and "model" not in result.extractor
+    _fake_ocr(monkeypatch)
+    res = observe_pdf(CORPUS_PDF, pages=[1], options={"image_ocr": True})
+    assert res.extractor["tool"] == "pymupdf4llm.to_markdown" and res.extractor["model"]
+
+
+def test_real_harness_records_the_real_tool(tmp_path):
+    from extraction import drafts, run_pilot
+
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    pdf = cache / "corpus-synth.pdf"
+    pdf.write_bytes(CORPUS_PDF.read_bytes())
+    digest = sha256_bytes(pdf.read_bytes())
+    manifest = {"seed": "test-seed", "held_out": [], "pilot": [{
+        "id": "corpus-synth", "role": "stratum_pages", "stratum": "non-english", "basis": "assumed",
+        "pdf_sha256": digest, "pdf_pages": 6, "candidate_pages": [1],
+    }]}
+    drafts.run(manifest, cache, tmp_path / "drafts-out", titles={"corpus-synth": "Synthetic OCR Validation Corpus"})
+    draft = tmp_path / "drafts-out" / "drafts" / "pilot-corpus-synth.expectation.draft.json"
+    record = json.loads(draft.read_text(encoding="utf-8"))
+    # SYNTHETIC: a hand-promoted copy of a draft of the committed synthetic corpus; not ground truth.
+    record["provenance"]["review"] = {
+        "status": "reviewed", "reviewer": "synthetic-test-only", "reviewed_at": "2026-11-06T10:00:00Z",
+        "basis": "page_image_inspection",
+    }
+    record["provenance"].pop("uncertainty")
+    text = "This document exists to be converted, not read."
+    record["blocks"] = [{
+        "id": "b1", "type": "paragraph", "page": 1, "reading_order": 1, "text": text, "text_sha256": sha256_text(text),
+        "bbox": {"x0": 10, "y0": 10, "x1": 200, "y1": 40},
+    }]
+    expectations = tmp_path / "expectations"
+    expectations.mkdir()
+    (expectations / "corpus-synth.json").write_text(json.dumps(record), encoding="utf-8")
+    outcome = run_pilot.run_pilot(expectations, cache, tmp_path / "out", manifest, extractor=observe_pdf, timeout=300)
+    config = outcome["run"]["configurations"][0]
+    assert config["tool"] == "pymupdf4llm.to_markdown" and config["tool"] != "unknown"
+    assert config["version"].startswith("pymupdf4llm ")
+    assert all(r["status"] == "ok" for r in outcome["run"]["results"])
