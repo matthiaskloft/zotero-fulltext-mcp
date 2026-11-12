@@ -1,0 +1,4485 @@
+{
+  "schema_version": 1,
+  "record_kind": "expectation",
+  "record_id": "pilot-natcomm-metascape-whole",
+  "document": {
+    "pdf_sha256": "18a91dd8f78d73c48f53400b76ed7cdc50e4f334007c97d3c8e4bf0be2f7bc12",
+    "title": "Metascape provides a biologist-oriented resource for the analysis of systems-level datasets",
+    "page_count": 10,
+    "corpus_id": "natcomm-metascape"
+  },
+  "scope": {
+    "kind": "complete_document",
+    "physical_pages": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10
+    ]
+  },
+  "pages": [
+    {
+      "physical_page": 1,
+      "printed_label": "1",
+      "geometry": {
+        "unit": "pt",
+        "origin": "top-left",
+        "frame": "displayed",
+        "box": "cropbox",
+        "rotation": 0,
+        "width": 595.276,
+        "height": 782.362
+      },
+      "render": {
+        "renderer": "pymupdf",
+        "renderer_version": "1.28.0",
+        "dpi": 150,
+        "image_sha256": "81d4787816033178dd53dde4412a3ceb91692242e7131cfdd7b1f809e2539d2c"
+      },
+      "body_start": {
+        "block_id": "p1-b5"
+      },
+      "body_end": {
+        "block_id": "p1-b9"
+      }
+    },
+    {
+      "physical_page": 2,
+      "printed_label": "2",
+      "geometry": {
+        "unit": "pt",
+        "origin": "top-left",
+        "frame": "displayed",
+        "box": "cropbox",
+        "rotation": 0,
+        "width": 595.276,
+        "height": 782.362
+      },
+      "render": {
+        "renderer": "pymupdf",
+        "renderer_version": "1.28.0",
+        "dpi": 150,
+        "image_sha256": "7abbf57f20cfc1769d8696ad36220c369421d87f898edc4a76b649743b4a33ed"
+      },
+      "body_start": {
+        "block_id": "p2-b3"
+      },
+      "body_end": {
+        "block_id": "p2-b13"
+      }
+    },
+    {
+      "physical_page": 3,
+      "printed_label": "3",
+      "geometry": {
+        "unit": "pt",
+        "origin": "top-left",
+        "frame": "displayed",
+        "box": "cropbox",
+        "rotation": 0,
+        "width": 595.276,
+        "height": 782.362
+      },
+      "render": {
+        "renderer": "pymupdf",
+        "renderer_version": "1.28.0",
+        "dpi": 150,
+        "image_sha256": "7a35fec449790559bcbd1775f23f862b6c1af33b2aea4abced0498e70405dae1"
+      },
+      "body_start": {
+        "block_id": "p3-b3"
+      },
+      "body_end": {
+        "block_id": "p3-b13"
+      }
+    },
+    {
+      "physical_page": 4,
+      "printed_label": "4",
+      "geometry": {
+        "unit": "pt",
+        "origin": "top-left",
+        "frame": "displayed",
+        "box": "cropbox",
+        "rotation": 0,
+        "width": 595.276,
+        "height": 782.362
+      },
+      "render": {
+        "renderer": "pymupdf",
+        "renderer_version": "1.28.0",
+        "dpi": 150,
+        "image_sha256": "1a739b9e45a4448983cec5a91a084469903f7dc9f424d08ce1d9197c213cc13c"
+      },
+      "body_start": {
+        "block_id": "p4-b3"
+      },
+      "body_end": {
+        "block_id": "p4-b12"
+      }
+    },
+    {
+      "physical_page": 5,
+      "printed_label": "5",
+      "geometry": {
+        "unit": "pt",
+        "origin": "top-left",
+        "frame": "displayed",
+        "box": "cropbox",
+        "rotation": 0,
+        "width": 595.276,
+        "height": 782.362
+      },
+      "render": {
+        "renderer": "pymupdf",
+        "renderer_version": "1.28.0",
+        "dpi": 150,
+        "image_sha256": "62cbfeb1c4b1b5468cee65a81504eb4a07f1b6c171c56ce3731a65b1e7361662"
+      },
+      "body_start": {
+        "block_id": "p5-b3"
+      },
+      "body_end": {
+        "block_id": "p5-b5"
+      }
+    },
+    {
+      "physical_page": 6,
+      "printed_label": "6",
+      "geometry": {
+        "unit": "pt",
+        "origin": "top-left",
+        "frame": "displayed",
+        "box": "cropbox",
+        "rotation": 0,
+        "width": 595.276,
+        "height": 782.362
+      },
+      "render": {
+        "renderer": "pymupdf",
+        "renderer_version": "1.28.0",
+        "dpi": 150,
+        "image_sha256": "9279e1419baffff9adb8faafb02dc6eb07d795b37d9f65d0d6d24e0d244c01ae"
+      },
+      "body_start": {
+        "block_id": "p6-b3"
+      },
+      "body_end": {
+        "block_id": "p6-b5"
+      }
+    },
+    {
+      "physical_page": 7,
+      "printed_label": "7",
+      "geometry": {
+        "unit": "pt",
+        "origin": "top-left",
+        "frame": "displayed",
+        "box": "cropbox",
+        "rotation": 0,
+        "width": 595.276,
+        "height": 782.362
+      },
+      "render": {
+        "renderer": "pymupdf",
+        "renderer_version": "1.28.0",
+        "dpi": 150,
+        "image_sha256": "6888b1937beedd4698350b68fd36c36b47095e8191ae79abf6e20e5abeb65eab"
+      },
+      "body_start": {
+        "block_id": "p7-b3"
+      },
+      "body_end": {
+        "block_id": "p7-b10"
+      }
+    },
+    {
+      "physical_page": 8,
+      "printed_label": "8",
+      "geometry": {
+        "unit": "pt",
+        "origin": "top-left",
+        "frame": "displayed",
+        "box": "cropbox",
+        "rotation": 0,
+        "width": 595.276,
+        "height": 782.362
+      },
+      "render": {
+        "renderer": "pymupdf",
+        "renderer_version": "1.28.0",
+        "dpi": 150,
+        "image_sha256": "1061472f3a30ec923ec06312e9bf0475bc3e93b9f0bf3065979c4fe5ed0b8aad"
+      },
+      "body_start": {
+        "block_id": "p8-b3"
+      },
+      "body_end": {
+        "block_id": "p8-b13"
+      }
+    },
+    {
+      "physical_page": 9,
+      "printed_label": "9",
+      "geometry": {
+        "unit": "pt",
+        "origin": "top-left",
+        "frame": "displayed",
+        "box": "cropbox",
+        "rotation": 0,
+        "width": 595.276,
+        "height": 782.362
+      },
+      "render": {
+        "renderer": "pymupdf",
+        "renderer_version": "1.28.0",
+        "dpi": 150,
+        "image_sha256": "d415613a7d18d6aa261658db8da27da93418a0acb3fc160719eacd4485b67d34"
+      },
+      "body_start": {
+        "block_id": "p9-b3"
+      },
+      "body_end": {
+        "block_id": "p9-b40"
+      }
+    },
+    {
+      "physical_page": 10,
+      "printed_label": "10",
+      "geometry": {
+        "unit": "pt",
+        "origin": "top-left",
+        "frame": "displayed",
+        "box": "cropbox",
+        "rotation": 0,
+        "width": 595.276,
+        "height": 782.362
+      },
+      "render": {
+        "renderer": "pymupdf",
+        "renderer_version": "1.28.0",
+        "dpi": 150,
+        "image_sha256": "e2c27ddc5b706be920c0ed2d0101d15eb11f53f7e99eb62bf2e65f49ef6d992d"
+      },
+      "body_start": {
+        "block_id": "p10-b3"
+      },
+      "body_end": {
+        "block_id": "p10-b52"
+      }
+    }
+  ],
+  "blocks": [
+    {
+      "id": "p1-b1",
+      "type": "header",
+      "page": 1,
+      "reading_order": 1,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 127.14,
+        "x1": 95.98,
+        "y1": 143.09
+      },
+      "text": "ARTICLE",
+      "text_sha256": "1ad810ee226e08bd9889d5944d4382cedba41992cb977281f9bbe9a5c0f11b3d"
+    },
+    {
+      "id": "p1-b2",
+      "type": "header",
+      "page": 1,
+      "reading_order": 2,
+      "bbox": {
+        "x0": 34.0,
+        "y0": 19.0,
+        "x1": 170.0,
+        "y1": 72.0
+      },
+      "text": "nature COMMUNICATIONS",
+      "text_sha256": "08f4fe431cf056eabbaaabd25037d973c888eea9793c28f0f75191e5ced3f99c",
+      "uncertainty": {
+        "level": "low",
+        "note": "journal wordmark set in a raster/graphic banner; not in the text layer"
+      }
+    },
+    {
+      "id": "p1-b3",
+      "type": "header",
+      "page": 1,
+      "reading_order": 3,
+      "bbox": {
+        "x0": 45.6,
+        "y0": 150.13,
+        "x1": 209.3,
+        "y1": 160.1
+      },
+      "text": "https://doi.org/10.1038/s41467-019-09234-6",
+      "text_sha256": "da618eca44ff61c48dbacaffcf2c1533bf2a243cff374e8a1eed3ea05b500895"
+    },
+    {
+      "id": "p1-b4",
+      "type": "header",
+      "page": 1,
+      "reading_order": 4,
+      "bbox": {
+        "x0": 233.6,
+        "y0": 148.48,
+        "x1": 265.07,
+        "y1": 160.88
+      },
+      "text": "OPEN",
+      "text_sha256": "6e10953f3e4ca159285c03a116d60c5086727c958dc25b31c39848ffea1dcdfe"
+    },
+    {
+      "id": "p1-b5",
+      "type": "heading",
+      "page": 1,
+      "reading_order": 5,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 167.03,
+        "x1": 542.13,
+        "y1": 218.79
+      },
+      "text": "Metascape provides a biologist-oriented resource for the analysis of systems-level datasets",
+      "text_sha256": "e98eb006175e007c7e6ba99ad312d639b6b50eb192e40fd1cf40ccab5bb95a6b"
+    },
+    {
+      "id": "p1-b6",
+      "type": "paragraph",
+      "page": 1,
+      "reading_order": 6,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 228.0,
+        "x1": 524.96,
+        "y1": 259.17
+      },
+      "text": "Yingyao Zhou1, Bin Zhou1, Lars Pache2, Max Chang 3, Alireza Hadj Khodabakhshi1, Olga Tanaseichuk1, Christopher Benner3 & Sumit K. Chanda2",
+      "text_sha256": "d09fe9cf6279e9cc89dc56e5550a265a50014cfb935fbfb2daffc7428f772ea6"
+    },
+    {
+      "id": "p1-b7",
+      "type": "paragraph",
+      "page": 1,
+      "reading_order": 7,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 299.39,
+        "x1": 409.22,
+        "y1": 478.21
+      },
+      "text": "A critical component in the interpretation of systems-level studies is the inference of enri- ched biological pathways and protein complexes contained within OMICs datasets. Suc- cessful analysis requires the integration of a broad set of current biological databases and the application of a robust analytical pipeline to produce readily interpretable results. Metascape is a web-based portal designed to provide a comprehensive gene list annotation and analysis resource for experimental biologists. In terms of design features, Metascape combines functional enrichment, interactome analysis, gene annotation, and membership search to leverage over 40 independent knowledgebases within one integrated portal. Additionally, it facilitates comparative analyses of datasets across multiple independent and orthogonal experiments. Metascape provides a significantly simplified user experience through a one- click Express Analysis interface to generate interpretable outputs. Taken together, Metascape is an effective and efficient tool for experimental biologists to comprehensively analyze and interpret OMICs-based studies in the big data era.",
+      "text_sha256": "34c7f0c7d5f08859a718302b64eb2562617a060977c86faae4cc6a5f0db390ee"
+    },
+    {
+      "id": "p1-b8",
+      "type": "paragraph",
+      "page": 1,
+      "reading_order": 8,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 697.03,
+        "x1": 552.76,
+        "y1": 729.85
+      },
+      "text": "1 Genomics Institute of the Novartis Research Foundation, 10675 John Jay Hopkins Drive, San Diego, CA 92121, USA. 2 Immunity and Pathogenesis Program, Infectious and Inflammatory Disease Center, Sanford Burnham Prebys Medical Discovery Institute, 10901 North Torrey Pines Road, La Jolla, CA 92037, USA. 3 Department of Medicine, University of California, San Diego, 9500 Gilman Drive, La Jolla, CA 92093, USA. Correspondence and requests for materials",
+      "text_sha256": "9e53a7f070593d8b3df3f9e213c8cff29b80112c1dd78b9df7ed25beaf93e7b9"
+    },
+    {
+      "id": "p1-b9",
+      "type": "paragraph",
+      "page": 1,
+      "reading_order": 9,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 729.85,
+        "x1": 375.8,
+        "y1": 739.82
+      },
+      "text": null,
+      "uncertainty": {
+        "level": "high",
+        "note": "this line holds two printed e-mail addresses (corresponding authors), withheld from this record because the repository personal-data guard rejects e-mail addresses"
+      }
+    },
+    {
+      "id": "p1-b10",
+      "type": "footer",
+      "page": 1,
+      "reading_order": 10,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 750.76,
+        "x1": 432.41,
+        "y1": 759.48
+      },
+      "text": "NATURE COMMUNICATIONS | (2019) 10:1523 | https://doi.org/10.1038/s41467-019-09234-6 | www.nature.com/naturecommunications",
+      "text_sha256": "45baf21a4fc0eec42fd495b1837c5c3503c31cffd48219758467d7a645a62dc8"
+    },
+    {
+      "id": "p1-b11",
+      "type": "page_number",
+      "page": 1,
+      "reading_order": 11,
+      "bbox": {
+        "x0": 546.48,
+        "y0": 750.36,
+        "x1": 552.69,
+        "y1": 759.58
+      },
+      "text": "1",
+      "text_sha256": "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b"
+    },
+    {
+      "id": "p2-b1",
+      "type": "header",
+      "page": 2,
+      "reading_order": 12,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 14.72,
+        "x1": 100.67,
+        "y1": 30.67
+      },
+      "text": "ARTICLE",
+      "text_sha256": "1ad810ee226e08bd9889d5944d4382cedba41992cb977281f9bbe9a5c0f11b3d"
+    },
+    {
+      "id": "p2-b2",
+      "type": "header",
+      "page": 2,
+      "reading_order": 13,
+      "bbox": {
+        "x0": 284.79,
+        "y0": 19.5,
+        "x1": 552.71,
+        "y1": 29.47
+      },
+      "text": "NATURE COMMUNICATIONS | https://doi.org/10.1038/s41467-019-09234-6",
+      "text_sha256": "92896aee592fa3e40a67332ddc6444885b2ead45425b2a7c4e7ab71a3f898e70"
+    },
+    {
+      "id": "p2-b3",
+      "type": "paragraph",
+      "page": 2,
+      "reading_order": 14,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 44.5,
+        "x1": 292.67,
+        "y1": 301.38
+      },
+      "text": "It has become a standard practice to employ one or more OMICs assays to deconstruct the molecular mechanisms underlying a biological system. Since each study ultimately results in a list containing dozens or hundreds of gene candidates, it is essential to leverage existing biological knowledge through understanding the representation of known pathways or com- plexes within these datasets. Providing this molecular context can facilitate the interpretation of systems-level data and enable new discoveries. Common queries include: What pathways or bio- chemical complexes are enriched?1; What are the functional roles of identified protein complexes?2; Which candidate proteins are secreted, contain a transmembrane domain, or are otherwise druggable?3; Or are there any chemical probes available for a rapid candidate validation4 ? Critically, when multiple gene lists are analyzed, either from common or orthogonal platforms, the identification of consistent underlying pathways or networks can help decipher authentic signals above the experimental noise5. Conversely, pathways selectively enriched in specific lists can help elucidate critical molecular features that distinguish experimental conditions. Thus, gene-list analysis web portals have become a necessity for modern biological research. For example, DAVID6, a popular web-based annotation tool has been employed by more than 4000 published studies per year since 2014, underscoring the importance of OMICs analysis engines in biological research.",
+      "text_sha256": "6e391620c5164ccde38e00e4f1f9ace344eee266bd81e9d5b1c72d9d87696798"
+    },
+    {
+      "id": "p2-b4",
+      "type": "paragraph",
+      "page": 2,
+      "reading_order": 15,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 300.4,
+        "x1": 292.68,
+        "y1": 531.55
+      },
+      "text": "To guide the development of a next-generation tool, we studied 25 existing data analysis portals7,8, focusing on database updates, coverage of analyses, coherence of interfaces, and interpretability of outputs. While each platform maintains strong feature sets (Supplementary Data 1), multiple portals are required to accomplish a complete systems-level analysis workflow, leading to a fragmented user experience. For example, a user analyzing proteomics data may need to use one tool to convert protein identifiers into gene symbols, a second tool to perform pathway enrichment analysis, a third tool to assess protein interaction networks, followed by other tools to produce high-quality visualizations of the data. Users are not only required to learn the details behind how to use each interface successfully, but they must also learn how to integrate the outputs from multiple types of analyses and file formats in order to generate useful results. For the inexperienced user, this can pose a significant barrier to entry. Thus, it is likely that significant levels of existing biological knowledge are often inadvertently omitted during the analysis of OMICs datasets due to the disintegrated nature of data sources and analysis tools. Ideally, a broad range of biological relation- ships and classifications can be assessed within one integrated portal.",
+      "text_sha256": "76a0b01bea0585adfd00cf12c837fb3ed5894272d20fea211bcc607a091dfd68"
+    },
+    {
+      "id": "p2-b5",
+      "type": "paragraph",
+      "page": 2,
+      "reading_order": 16,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 530.52,
+        "x1": 292.68,
+        "y1": 719.82
+      },
+      "text": "Additionally, the increased accessibility of systems-level tech- nology platforms has promoted experimental strategies that rely on orthogonal OMICs approaches, including transcriptome analysis, genetic screens, and proteomics, to interrogate an experimental system. This approach enables a more compre- hensive assessment of the molecular features of a biological process and reduces false positive/negative activities associated with individual platforms9. Thus, meta-analysis of multiple gene lists to identify commonly-enriched and selectively-enriched pathways is likely to become an essential component of large- scale data analysis. Methods for the analysis of multiple gene lists continue to be an area of active investigation, which highlights the necessity to develop analytical strategies that extend beyond the consolidation and analysis of individual lists, and implement approaches that will enable emergent insights that cannot be extracted using current approaches10,11. Our survey found that multi-gene-list meta-analysis is a feature often missing from existing tools (Supplementary Data 1).",
+      "text_sha256": "2e6b804947e1add1f1ad55a76d79ff2bf78bb2c919f365b537c39f87a8fa0e52"
+    },
+    {
+      "id": "p2-b6",
+      "type": "paragraph",
+      "page": 2,
+      "reading_order": 17,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 718.79,
+        "x1": 292.65,
+        "y1": 740.74
+      },
+      "text": "In addition to a combination of diverse knowledgebases and the synthesis of analysis results across related gene lists, we",
+      "text_sha256": "e66fc43c8594f000ec687fcefb8e4d85cae1d674b8fc4c7bf90eb886f07c1c04"
+    },
+    {
+      "id": "p2-b7",
+      "type": "paragraph",
+      "page": 2,
+      "reading_order": 18,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 49.31,
+        "x1": 552.69,
+        "y1": 165.43
+      },
+      "text": "propose that biologist-oriented portals would need to incorporate additional critical features, including future-proofing, usability, and interpretability, to maximize their utility. Specifically, analysis portals must continually be kept up to date, since using outdated databases can severely impact analysis and interpretation of OMICs data. It has been estimated that 67% of ~3900 publica- tions in 2015 missed 74% of potential new biological insights as a consequence of the use of obsolete database content in many analysis portals7. This remains a concern to date, as the databases underpinning the interpretation of a majority of published studies are over 2 years old12.",
+      "text_sha256": "3b04d913574083f4747e2332cf2503910ee2018bf30ec24687da223c9bc5d041",
+      "continues_from": "p2-b6"
+    },
+    {
+      "id": "p2-b8",
+      "type": "paragraph",
+      "page": 2,
+      "reading_order": 19,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 164.39,
+        "x1": 552.67,
+        "y1": 270.02
+      },
+      "text": "Additionally, a well-designed interface that requires a minimal number of user interactions (clicks) reduces the barrier to entry for new users, or those with limited computational training. Nevertheless, simplification must be balanced with providing users sufficient information to understand and, if required, adjust statistical and computational criteria within the analysis work- flow. This feature would provide expanded access to data analysis tools and sources for experimentalists that have limited experi- ence with OMICs analysis, while enabling more advanced users to adjust analytical parameters to customize analyses.",
+      "text_sha256": "1c1481b447d3310a330a2a73794458505c544874f9f44835de64b2aed83cd9e6"
+    },
+    {
+      "id": "p2-b9",
+      "type": "paragraph",
+      "page": 2,
+      "reading_order": 20,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 268.99,
+        "x1": 552.7,
+        "y1": 353.71
+      },
+      "text": "Furthermore, it is essential that analysis results are readily decipherable, highlighting the key, non-redundant results that will be critical for informing future studies. Platforms that go beyond exporting tabular annotation information to produce graphical summaries of results tend to enhance the global inter- pretation of complex OMICs datasets. The resulting output analyses should also adopt presentation formats that facilitate data dissemination among scientists.",
+      "text_sha256": "8b062a6bc7aecd1c565be0c1ba87a3ac578c8ebdf8c6733d3666c9fd3d9580b9"
+    },
+    {
+      "id": "p2-b10",
+      "type": "paragraph",
+      "page": 2,
+      "reading_order": 21,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 352.67,
+        "x1": 552.7,
+        "y1": 500.15
+      },
+      "text": "With these design criteria in mind, we developed Metascape to harness the best practices of OMICs data analyses that have emerged over the last decade into one integrated portal. Here, we describe the features of this platform, which provide enhanced rendition of systems-level data, designed to promote the devel- opment of actionable hypotheses. These include data-engineering solutions for over 40 knowledgebases, as well as integrated and simplified workflows for gene annotation, membership search, and multi-list comparative analysis. Furthermore, we describe unique graphical outputs that enhance reporting and boost data comprehension. Taken together, Metascape provides an inte- grated and user-friendly web tool designed to facilitate multi- platform OMICs data analysis and interpretation for the experi- mental research community.",
+      "text_sha256": "f707de22cc1535301931398606d7316326fa7a18823c7d86a1e20f9e1bd353c7"
+    },
+    {
+      "id": "p2-b11",
+      "type": "heading",
+      "page": 2,
+      "reading_order": 22,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 519.49,
+        "x1": 334.64,
+        "y1": 530.95
+      },
+      "text": "Results",
+      "text_sha256": "219c4a6c86a716e99d5dc9611b61e584deb11b57e972d87d4b773387ebc3cadd"
+    },
+    {
+      "id": "p2-b12",
+      "type": "paragraph",
+      "page": 2,
+      "reading_order": 23,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 530.45,
+        "x1": 552.71,
+        "y1": 688.42
+      },
+      "text": "User experience overview. To illustrate the features and cap- abilities of Metascape, we utilized three previously published influenza genetic screens13–15 as examples in this study (see Methods). These studies utilize genome-wide RNAi screening in cells to identify host factors that modulate influenza replication rates. Specifically, single-gene-list analyses were performed with gene targets identified in the Brass et al. study13, and multi-gene- list analyses were performed with the combination of Brass et al., Karlas et al14., and Konig et al.15 target lists. The step-by-step illustration of the Metascape analysis interface for both single- and multiple-list input scenarios are available in Supplementary Figures 1–7. While these examples showcase the analysis of RNAi functional genomics studies, Metascape is equally capable of analyzing lists of genes from multiple assay types, including transcriptomics, epigenetics, proteomics, and others.",
+      "text_sha256": "464422d07650427a6b2a2fd34e6593c27de76c458c589afb83625e8a6032a0d3"
+    },
+    {
+      "id": "p2-b13",
+      "type": "paragraph",
+      "page": 2,
+      "reading_order": 24,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 687.44,
+        "x1": 552.67,
+        "y1": 740.75
+      },
+      "text": "The primary Metascape user experience is provided through a one-click analysis interface (Express Analysis, Supplementary Fig. 1). The user first provides a single or multiple input gene lists, then launches an automated analysis workflow consisting of four major components: identifier conversion, gene annotation,",
+      "text_sha256": "58fe45c499c7a2cb33fdf103f76ddbff0e75c4ca3752adad6f8f6bb36f50624c"
+    },
+    {
+      "id": "p2-b14",
+      "type": "page_number",
+      "page": 2,
+      "reading_order": 25,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 750.36,
+        "x1": 48.81,
+        "y1": 759.58
+      },
+      "text": "2",
+      "text_sha256": "d4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35"
+    },
+    {
+      "id": "p2-b15",
+      "type": "footer",
+      "page": 2,
+      "reading_order": 26,
+      "bbox": {
+        "x0": 105.7,
+        "y0": 750.76,
+        "x1": 495.51,
+        "y1": 759.48
+      },
+      "text": "NATURE COMMUNICATIONS | (2019) 10:1523 | https://doi.org/10.1038/s41467-019-09234-6 | www.nature.com/naturecommunications",
+      "text_sha256": "45baf21a4fc0eec42fd495b1837c5c3503c31cffd48219758467d7a645a62dc8"
+    },
+    {
+      "id": "p3-b1",
+      "type": "header",
+      "page": 3,
+      "reading_order": 27,
+      "bbox": {
+        "x0": 494.61,
+        "y0": 14.72,
+        "x1": 552.66,
+        "y1": 30.67
+      },
+      "text": "ARTICLE",
+      "text_sha256": "1ad810ee226e08bd9889d5944d4382cedba41992cb977281f9bbe9a5c0f11b3d"
+    },
+    {
+      "id": "p3-b2",
+      "type": "header",
+      "page": 3,
+      "reading_order": 28,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 19.5,
+        "x1": 310.57,
+        "y1": 29.47
+      },
+      "text": "NATURE COMMUNICATIONS | https://doi.org/10.1038/s41467-019-09234-6",
+      "text_sha256": "92896aee592fa3e40a67332ddc6444885b2ead45425b2a7c4e7ab71a3f898e70"
+    },
+    {
+      "id": "p3-b3",
+      "type": "figure",
+      "page": 3,
+      "reading_order": 29,
+      "bbox": {
+        "x0": 44.0,
+        "y0": 48.0,
+        "x1": 293.0,
+        "y1": 241.0
+      },
+      "graphic": {
+        "kind": "figure"
+      },
+      "text": null
+    },
+    {
+      "id": "p3-b4",
+      "type": "caption",
+      "page": 3,
+      "reading_order": 30,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 244.85,
+        "x1": 292.69,
+        "y1": 296.66
+      },
+      "text": "Fig. 1 Schematic outline of the Metascape analysis workflow. Upon gene list submission, Custom Analysis enables users to navigate the analysis workflow and output a report. The Express Analysis instead takes a streamlined approach by running the analysis steps with popular default settings, simplifying the user experience",
+      "text_sha256": "fcb010f0cd489cc0e26290ab4a6108078c3ad049eee406f319fc9bbb1f240f3c",
+      "caption_for": "p3-b3"
+    },
+    {
+      "id": "p3-b5",
+      "type": "paragraph",
+      "page": 3,
+      "reading_order": 31,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 307.03,
+        "x1": 292.64,
+        "y1": 349.9
+      },
+      "text": "membership search, and enrichment analysis (CAME). An analysis report summarizing key results is produced, accompa- nied by an Excel workbook, a PowerPoint presentation, and a Zip package containing all supporting data files (Fig. 1).",
+      "text_sha256": "1ea297d6de889b4b1d11588ac0d9c18c5165ef6d573d51b49153e73f2b6e758b",
+      "continues_from": "p2-b13"
+    },
+    {
+      "id": "p3-b6",
+      "type": "paragraph",
+      "page": 3,
+      "reading_order": 32,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 348.87,
+        "x1": 292.68,
+        "y1": 496.35
+      },
+      "text": "The Metascape interface was designed to limit user operations to a minimum number of interactions. Input data is automatically processed to recognize identifier types, such as Entrez Gene ID, gene symbol, RefSeq number, Ensembl ID, etc., without user specification. The file input supports multiple flexible formats (Supplementary Figure 1) and can incorporate an optional background gene list to customize the enrichment analysis. Gene identifiers from ten popular model organisms are recognized by Metascape (see Methods), and automatic orthologue mapping enables gene lists to be analyzed in the context of species-specific databases across any of these ten organisms. The target analysis species is human by default, since human-centric databases are often the most comprehensive. Importantly, we have observed that 63% of Metascape analyses to date utilize human datasets.",
+      "text_sha256": "e3da5b435563b9138d830c358db1152d7be6efc204a5484cd7849143eb684095"
+    },
+    {
+      "id": "p3-b7",
+      "type": "paragraph",
+      "page": 3,
+      "reading_order": 33,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 495.31,
+        "x1": 292.68,
+        "y1": 684.62
+      },
+      "text": "The concept behind Express Analysis is to encapsulate the most widely used analysis options and best analysis practices into a streamlined approach. For example, Express Analysis auto- matically includes gene annotation metadata that are likely to provide valuable context for candidate interpretation in most cases, such as their brief description, key biological processes involved, protein functions, subcellular locations, and roles in canonical pathways (Supplementary Figure 3). It incorporates a core set of default ontologies for enrichment analysis, including GO processes16, KEGG pathways17, Reactome gene sets18, canonical pathways19, and CORUM complexes20 (Supplementary Figure 5). Express Analysis also automatically sets statistical filters to remove ontology terms and interactome networks that do not meet minimal statistical requirements (Supplementary Figure 5). As an alternative to the Express Analysis, advanced users can control the four individual steps of the CAME workflow and overwrite default settings through the Custom Analysis workflow (Fig. 1, Supplementary Figures 2–6).",
+      "text_sha256": "82c760e7eae7c642b894cfc4f75f91c400fabf1a78262a583b122aa08629b0dc"
+    },
+    {
+      "id": "p3-b8",
+      "type": "paragraph",
+      "page": 3,
+      "reading_order": 34,
+      "bbox": {
+        "x0": 42.59,
+        "y0": 697.25,
+        "x1": 292.66,
+        "y1": 740.74
+      },
+      "text": "Identifier conversion analysis. The first step of the Metascape analysis workflow is gene identifier conversion (Supplementary Figure 2). Metascape automatically recognizes the popular gene identifier types described above, as well as primary locus names",
+      "text_sha256": "06a0114a95b614d3a9db0e69791545c53750c78e6c2afa9af14b14114c0cb4e0"
+    },
+    {
+      "id": "p3-b9",
+      "type": "paragraph",
+      "page": 3,
+      "reading_order": 35,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 47.86,
+        "x1": 552.7,
+        "y1": 123.59
+      },
+      "text": "from various model organism databases, such as SGD21, Fly- Base22, WormBase23, etc. Source identifiers are mapped onto a unique Entrez Gene ID list prior to analyses, as a significant number of bioinformatics knowledgebases underlying Metascape rely on Entrez Gene IDs as their primary keys. Deprecated Entrez Gene IDs are also recognized and replaced by successor IDs when encountered.",
+      "text_sha256": "9d243ce6800ddada0de8f39889b847ffcdb106991bffb4fe713f1be13cbf3cf5",
+      "continues_from": "p3-b8"
+    },
+    {
+      "id": "p3-b10",
+      "type": "paragraph",
+      "page": 3,
+      "reading_order": 36,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 122.55,
+        "x1": 552.7,
+        "y1": 238.62
+      },
+      "text": "Many gene annotation, pathway, and protein interaction databases are primarily compiled for human genes/proteins. For instance, the size of the mouse interactome encompasses only ~6% of the available human interactome24, even though many of these interactions are likely conserved across species. Therefore, it can be beneficial to cast gene candidates obtained in model organisms into their human orthologs prior to analysis. Ortholog mapping is a built-in feature and can be triggered by explicitly choosing the target analysis species (Supplementary Fig. 1), which will instruct subsequent analysis steps to use resources for that particular species.",
+      "text_sha256": "4826f275cca75a71e28d609e93592eca4612a71344845f1c3fd095a9cdb3cce2"
+    },
+    {
+      "id": "p3-b11",
+      "type": "paragraph",
+      "page": 3,
+      "reading_order": 37,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 253.27,
+        "x1": 552.7,
+        "y1": 379.84
+      },
+      "text": "Gene annotation. Detailed annotations for genes provide biolo- gical context to serve as important selection criteria when choosing candidates for follow-up studies. Metascape integrates annotation information from over 40 knowledgebases (Supple- mentary Figure 8, Supplementary Data 2), encompassing gene descriptions, gene summaries, disease implications, genomic variants, subcellular localizations, tissue expression, the avail- ability of chemical probes, etc. Express Analysis delivers nine descriptive fields by default, however, as illustrated in Supple- mentary Figure 3, the Custom Analysis feature allows the user to append up to 47 columns of metadata to a gene annotation spreadsheet.",
+      "text_sha256": "f2c7833e38e359100452bc94b1d0b233a34f5eab9f6911e9e4ddda00a60e8a8c"
+    },
+    {
+      "id": "p3-b12",
+      "type": "paragraph",
+      "page": 3,
+      "reading_order": 38,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 378.87,
+        "x1": 552.7,
+        "y1": 515.85
+      },
+      "text": "To assimilate this level of information using current tools, the experimentalist is required to first identify the appropriate knowledgebases that contain the required information. Since many of these portals do not incorporate gene list upload features for batch annotation, users must, in certain cases, search individual gene candidates one at a time. For example, it becomes an onerous undertaking to identify all extracellular proteins through UniProt25, or all chemical probes through DrugBank26, using a list with hundreds of gene candidates. Thus, Metascape’s automated gene annotation feature provides users with detailed annotation information not otherwise easily accessible, aiding in data interpretation of large-scale datasets and providing prior- itization criteria for candidate genes.",
+      "text_sha256": "7e7a0a1e1beca57b6d193d579cdd3a02c1347dcf629b715eb9ee1ff7a752d34e"
+    },
+    {
+      "id": "p3-b13",
+      "type": "paragraph",
+      "page": 3,
+      "reading_order": 39,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 530.45,
+        "x1": 552.7,
+        "y1": 740.74
+      },
+      "text": "Membership search. The membership search feature in the Custom Analysis workflow allows users to apply specific query keywords, such as “infection” or “kinase”, against knowledgebase category term names and description fields, then review and select those matched terms that most accurately describe the process of interest (Supplementary Figure 4). Metascape will then dynamically construct a column of binary flags indicating whe- ther each gene in the input gene list is a member of the matched ontology terms. This allows the user to identify genes with spe- cific functions or features, and reduces the reliance on existing hierarchical ontologies during data interpretation. For example, Metascape offers two approaches to identify transmembrane proteins candidates. First, there are pre-integrated transmem- brane predictions provided by Ensembl27 or UniProt that are extractable through the gene annotation feature as described above. An alternative is to use the Membership tools to search the keyword “transmembrane” within the GO Cellular Component catalog to identify member genes. Although these two approaches are complementary in this specific example, membership search becomes critical when metadata is not readily available through",
+      "text_sha256": "eaf107598e6649b4ee90c68a0328623c9c2057920a5b881767e54e8a41341b89"
+    },
+    {
+      "id": "p3-b14",
+      "type": "footer",
+      "page": 3,
+      "reading_order": 40,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 750.76,
+        "x1": 432.41,
+        "y1": 759.48
+      },
+      "text": "NATURE COMMUNICATIONS | (2019) 10:1523 | https://doi.org/10.1038/s41467-019-09234-6 | www.nature.com/naturecommunications",
+      "text_sha256": "45baf21a4fc0eec42fd495b1837c5c3503c31cffd48219758467d7a645a62dc8"
+    },
+    {
+      "id": "p3-b15",
+      "type": "page_number",
+      "page": 3,
+      "reading_order": 41,
+      "bbox": {
+        "x0": 546.48,
+        "y0": 750.36,
+        "x1": 552.69,
+        "y1": 759.58
+      },
+      "text": "3",
+      "text_sha256": "4e07408562bedb8b60ce05c1decfe3ad16b72230967de01f640b7e4729b49fce"
+    },
+    {
+      "id": "p4-b1",
+      "type": "header",
+      "page": 4,
+      "reading_order": 42,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 14.72,
+        "x1": 100.67,
+        "y1": 30.67
+      },
+      "text": "ARTICLE",
+      "text_sha256": "1ad810ee226e08bd9889d5944d4382cedba41992cb977281f9bbe9a5c0f11b3d"
+    },
+    {
+      "id": "p4-b2",
+      "type": "header",
+      "page": 4,
+      "reading_order": 43,
+      "bbox": {
+        "x0": 284.79,
+        "y0": 19.5,
+        "x1": 552.71,
+        "y1": 29.47
+      },
+      "text": "NATURE COMMUNICATIONS | https://doi.org/10.1038/s41467-019-09234-6",
+      "text_sha256": "92896aee592fa3e40a67332ddc6444885b2ead45425b2a7c4e7ab71a3f898e70"
+    },
+    {
+      "id": "p4-b3",
+      "type": "paragraph",
+      "page": 4,
+      "reading_order": 44,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 49.31,
+        "x1": 292.67,
+        "y1": 134.02
+      },
+      "text": "pre-integrated data sources. For instance, highlighting known infection-related genes for an influenza study cannot be accom- plished via standard gene annotation. Despite the fact that this knowledge is embedded in the ontology databases, it has not been explicitly compiled in most annotation resources and, thus, is not readily accessible to experimentalists. The binary result data from membership searches can also be visualized within nested pie charts (Supplementary Figure 9).",
+      "text_sha256": "e07836515ac4de315cf90d3f86ab5a4537333c45edf112869070aee9d7c2f2cd",
+      "continues_from": "p3-b13"
+    },
+    {
+      "id": "p4-b4",
+      "type": "paragraph",
+      "page": 4,
+      "reading_order": 45,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 148.62,
+        "x1": 292.66,
+        "y1": 432.17
+      },
+      "text": "Enrichment clustering. Enrichment analysis comprises the core of most existing gene annotation portals. During enrichment analysis, the input gene list is compared to thousands of gene sets defined by their involvement in specific biological processes, protein localization, enzymatic function, pathway membership, or other features. Gene sets whose members are significantly over- represented in the input gene list are reported to users to serve as putative biological insights into their study. A neglected problem in most current analyses is that redundancies in descriptors and ontologies can often complicate interpretation of the output. For example, ontology terms found in GO form a hierarchical structure of increasing granularity, making the terms inherently redundant. Terms across different ontology sources, such as GO, KEGG, and MSigDB19, etc. can be closely related as well. As a result, functional enrichment analysis can identify overlapping or related terms, making it difficult to extract non-redundant and representative processes to report in the analysis output. This problem is demonstrated in examples from other analysis portals using the Brass list (Fig. 2a, b), which report the enrichment of dozens of highly-related categories. During post-processing of data generated through the Metascape analysis, Kappa simila- rities28 among all pairs of enriched terms are computed and used to first hierarchically cluster terms into a tree then cast subtrees into clusters of similar terms (see Methods). By absorbing most redundancies into representative clusters, enrichment clustering eliminates confounding data interpretation issues that can arise from the reporting of multiple ontologies.",
+      "text_sha256": "7609aff9e3f4bda7d56e7272c3f3271860ff643e487379717888827f56c9226b"
+    },
+    {
+      "id": "p4-b5",
+      "type": "paragraph",
+      "page": 4,
+      "reading_order": 46,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 430.52,
+        "x1": 292.68,
+        "y1": 599.52
+      },
+      "text": "In comparison with Fig. 2a–c, d shows the Metascape enrichment analysis results of the Brass list, where bars are discretely colored to encode p-values of increasing statistical significance. The bar graph representation nevertheless does not capture inter-cluster similarities and intra-cluster redundancies. To address this, we have implemented a visualization approach called enrichment networks. As shown in Fig. 2e, enrichment networks are created by representing each enriched term as a node and connecting pairs of nodes with Kappa similarities above 0.3, forming a network that can be depicted using Cytoscape29. Nodes can be colored to reflect either their statistical p-values or cluster memberships. Redundant terms within a cluster naturally drive the formation of tight local complexes due to their high intra-cluster similarities, while clusters are occasionally bridged through terms with similarities reflecting the relatedness of two separate processes.",
+      "text_sha256": "fe4031d9c5ea379b849ba6430c33b39339e4be738397e667d78ed535969e548a"
+    },
+    {
+      "id": "p4-b6",
+      "type": "paragraph",
+      "page": 4,
+      "reading_order": 47,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 598.55,
+        "x1": 292.65,
+        "y1": 672.77
+      },
+      "text": "Although Metascape introduces the above features to facilitate the interpretation of enrichment analysis results, it is not designed to supersede existing functional enrichment analysis portals. For users solely conducting enrichment analysis for a single gene-list, some existing tools, such as Enrichr30 and ToppFunc31, contain additional gene signature collections and they remain a powerful approach to enrichment analysis.",
+      "text_sha256": "06ddcb5b349fb550738dca14d42e8154f1533d03fae4784a1510bb5a3ca55644"
+    },
+    {
+      "id": "p4-b7",
+      "type": "paragraph",
+      "page": 4,
+      "reading_order": 48,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 687.37,
+        "x1": 292.67,
+        "y1": 740.74
+      },
+      "text": "Protein network analysis. Analyzing gene lists in the context of protein interactions can help illuminate biochemical complexes or signal transduction components that govern biological out- puts32. However, a typical gene list of a few hundred human proteins can form highly complicated network layouts, making",
+      "text_sha256": "3ccdaaefabe6e3d29079e9a4e284d6633038a69faf13a2c314601881a1d1fb90"
+    },
+    {
+      "id": "p4-b8",
+      "type": "paragraph",
+      "page": 4,
+      "reading_order": 49,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 48.69,
+        "x1": 552.7,
+        "y1": 196.78
+      },
+      "text": "interpretation difficult. This is readily exemplified by the network output of other analysis portals using the Brass list (Fig. 2f). These are colloquially referred to as hairball networks. Although such large networks are generally statistically significant, they do not yield directly actionable insights unless the experimentalist has specific expectations of the data. To infer more biologically interpretable results, Metascape applies a mature complex iden- tification algorithm called MCODE33 to automatically extract protein complexes embedded in the large network. Taking advantage of Metascape’s functional enrichment analysis cap- ability, the three most significantly enriched ontology terms are combined to annotate putative biological roles for each MCODE complex. As shown in the example, Metascape results are rela- tively simple to visualize and interpret (Fig. 2g, h).",
+      "text_sha256": "80ecc042de64f45f655ec2a94878109a2c82d00f87ee3dccb849c086a092ec7e",
+      "continues_from": "p4-b7"
+    },
+    {
+      "id": "p4-b9",
+      "type": "paragraph",
+      "page": 4,
+      "reading_order": 50,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 211.38,
+        "x1": 552.69,
+        "y1": 327.57
+      },
+      "text": "Multi-gene-list meta-analysis. The proliferation and general adaptation of orthogonal OMICs platforms, including pro- teomics, genomics, functional genetic screens, and metabolomics, has made the meta-analysis of multiple gene lists a critical and largely unaddressed need. Routine comparative approaches include the use of Venn diagrams to identify hits that are com- mon or unique to certain gene lists. We, and others, have pre- viously reported that an overlap between OMICs datasets is more readily apparent at the level of pathways or protein complexes9,34,35, which can be considerably more challenging to implement without extensive computational expertise.",
+      "text_sha256": "0ac21c2edd2a65cebd9f58b594ddd4b1942b9d37de86a909fe661932dacccf16"
+    },
+    {
+      "id": "p4-b10",
+      "type": "paragraph",
+      "page": 4,
+      "reading_order": 51,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 326.53,
+        "x1": 552.7,
+        "y1": 474.01
+      },
+      "text": "Metascape has been designed to allow cross comparison of an arbitrary number of gene lists across both gene identities and ontologies. Specifically, upon the submission of multiple gene lists, all candidates are merged into one list, while encoding the original lists as additional binary membership columns (Supple- mentary Fig. 10). This pivoted layout greatly simplifies the representation of analysis results, as both gene annotation and membership search can be applied to the combined list the same way as in a single gene list input. Using a single output spreadsheet to incorporate evidence collected from each gene list thus enables efficient global gene filtering and prioritization. The overlap among the gene lists is visualized using a Circos plot36 (Supplementary Fig. 11), which is a more intuitive and scalable representation compared to a Venn diagram.",
+      "text_sha256": "ffb49ba67ae1b7f38b658d7415b9ff716b0c8abdb5b6dc0dea46107eae716c0c"
+    },
+    {
+      "id": "p4-b11",
+      "type": "paragraph",
+      "page": 4,
+      "reading_order": 52,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 472.97,
+        "x1": 552.69,
+        "y1": 630.93
+      },
+      "text": "To facilitate the understanding of pathways (and pathway clusters) that are shared between, or selectively ascribed to, specific gene lists, additional visualizations were developed for Metascape. First, Metascape depicts top enriched clusters and their enrichment patterns across multiple gene lists as a clustered heatmap (Fig. 3a). The heatmap is complemented by an enrichment network where each network node is represented by a pie chart, where the sector size is proportional to the number of genes originated from each gene list (Fig. 3b). This representation is designed to be a biologically intuitive illustration of selective or shared pathway clusters. Importantly, this approach can also be applied to visualize protein–protein interaction networks to enable the elucidation of common/ selective complex components enriched across OMICs datasets (Fig. 3c, Supplementary Fig. 12).",
+      "text_sha256": "f920de5206ffd7c7a69d2de9d52f05ad7c91e7df6dc6658a46d90a97f37a28cd"
+    },
+    {
+      "id": "p4-b12",
+      "type": "paragraph",
+      "page": 4,
+      "reading_order": 53,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 645.53,
+        "x1": 552.8,
+        "y1": 740.75
+      },
+      "text": "Maintaining updated data sources. Metascape integrates over 40 knowledgebases (Supplementary Fig. 8) to support comprehensive analyses over ten highly studied organisms. Over time, some underlying data sources may adopt new access mechanisms, rename file packages, or be impacted by modifications to cross- referenced databases. Even if each data source is 99% robust, a system relying on 40 independent sources can only be 67% reli- able. As the result of this compound effect, unexpected changes are encountered during data synchronization processes at",
+      "text_sha256": "2b4f631e0c96419bb714224f62daf683035edc504799ab2013518dde63bc08a6"
+    },
+    {
+      "id": "p4-b13",
+      "type": "page_number",
+      "page": 4,
+      "reading_order": 54,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 750.36,
+        "x1": 48.81,
+        "y1": 759.58
+      },
+      "text": "4",
+      "text_sha256": "4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb08b5531fcacdabf8a"
+    },
+    {
+      "id": "p4-b14",
+      "type": "footer",
+      "page": 4,
+      "reading_order": 55,
+      "bbox": {
+        "x0": 105.7,
+        "y0": 750.76,
+        "x1": 495.51,
+        "y1": 759.48
+      },
+      "text": "NATURE COMMUNICATIONS | (2019) 10:1523 | https://doi.org/10.1038/s41467-019-09234-6 | www.nature.com/naturecommunications",
+      "text_sha256": "45baf21a4fc0eec42fd495b1837c5c3503c31cffd48219758467d7a645a62dc8"
+    },
+    {
+      "id": "p5-b1",
+      "type": "header",
+      "page": 5,
+      "reading_order": 56,
+      "bbox": {
+        "x0": 494.61,
+        "y0": 14.72,
+        "x1": 552.66,
+        "y1": 30.67
+      },
+      "text": "ARTICLE",
+      "text_sha256": "1ad810ee226e08bd9889d5944d4382cedba41992cb977281f9bbe9a5c0f11b3d"
+    },
+    {
+      "id": "p5-b2",
+      "type": "header",
+      "page": 5,
+      "reading_order": 57,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 19.5,
+        "x1": 310.57,
+        "y1": 29.47
+      },
+      "text": "NATURE COMMUNICATIONS | https://doi.org/10.1038/s41467-019-09234-6",
+      "text_sha256": "92896aee592fa3e40a67332ddc6444885b2ead45425b2a7c4e7ab71a3f898e70"
+    },
+    {
+      "id": "p5-b3",
+      "type": "figure",
+      "page": 5,
+      "reading_order": 58,
+      "bbox": {
+        "x0": 86.0,
+        "y0": 50.0,
+        "x1": 515.0,
+        "y1": 672.0
+      },
+      "graphic": {
+        "kind": "figure"
+      },
+      "text": null
+    },
+    {
+      "id": "p5-b4",
+      "type": "paragraph",
+      "page": 5,
+      "reading_order": 59,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 686.82,
+        "x1": 292.74,
+        "y1": 740.74
+      },
+      "text": "frequencies significant enough to hinder attempts to automate content updates, which eventually results in outdated portals. DAVID6, a heavily utilized annotation tool accounting for over 80% of all functional enrichment portal usage, was not updated between 2010 and 2016, and then again not since 201612. Our",
+      "text_sha256": "991546be020d949108fdfd3f01ca9a6f9bea7f576cb0cf25d0b31a28a160e90c",
+      "continues_from": "p4-b12"
+    },
+    {
+      "id": "p5-b5",
+      "type": "paragraph",
+      "page": 5,
+      "reading_order": 60,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 686.82,
+        "x1": 552.74,
+        "y1": 740.74
+      },
+      "text": "latest analyses on DAVID indicated 4–10% of the input gene candidates (varied by identifier types) are not recognized. Further analysis of the human GO archive data indicated 44% of anno- tation records have been added or modified since its last update. This is in agreement with a semantic similarity measure suggesting",
+      "text_sha256": "ca491ba32453ca90e48aa5975903f87b0e87e599d549db592526121ec01cc251",
+      "continues_from": "p5-b4"
+    },
+    {
+      "id": "p5-b6",
+      "type": "footer",
+      "page": 5,
+      "reading_order": 61,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 750.76,
+        "x1": 432.41,
+        "y1": 759.48
+      },
+      "text": "NATURE COMMUNICATIONS | (2019) 10:1523 | https://doi.org/10.1038/s41467-019-09234-6 | www.nature.com/naturecommunications",
+      "text_sha256": "45baf21a4fc0eec42fd495b1837c5c3503c31cffd48219758467d7a645a62dc8"
+    },
+    {
+      "id": "p5-b7",
+      "type": "page_number",
+      "page": 5,
+      "reading_order": 62,
+      "bbox": {
+        "x0": 546.48,
+        "y0": 750.36,
+        "x1": 552.69,
+        "y1": 759.58
+      },
+      "text": "5",
+      "text_sha256": "ef2d127de37b942baad06145e54b0c619a1f22327b2ebbcfbec78f5564afe39d"
+    },
+    {
+      "id": "p6-b1",
+      "type": "header",
+      "page": 6,
+      "reading_order": 63,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 14.72,
+        "x1": 100.67,
+        "y1": 30.67
+      },
+      "text": "ARTICLE",
+      "text_sha256": "1ad810ee226e08bd9889d5944d4382cedba41992cb977281f9bbe9a5c0f11b3d"
+    },
+    {
+      "id": "p6-b2",
+      "type": "header",
+      "page": 6,
+      "reading_order": 64,
+      "bbox": {
+        "x0": 284.79,
+        "y0": 19.5,
+        "x1": 552.71,
+        "y1": 29.47
+      },
+      "text": "NATURE COMMUNICATIONS | https://doi.org/10.1038/s41467-019-09234-6",
+      "text_sha256": "92896aee592fa3e40a67332ddc6444885b2ead45425b2a7c4e7ab71a3f898e70"
+    },
+    {
+      "id": "p6-b3",
+      "type": "caption",
+      "page": 6,
+      "reading_order": 65,
+      "bbox": {
+        "x0": 42.59,
+        "y0": 49.88,
+        "x1": 552.76,
+        "y1": 154.02
+      },
+      "text": "Fig. 2 Visualizations of functional enrichment and interactome analysis results. a Screenshot of a portion of the directed acyclic graph rendered by Babelomics53 based on enriched GO terms. b Screenshot of a portion of the gene-term association matrix rendered by g:profile42, where enriched GO terms are organized hierarchically. c Screenshot of a portion of the tabular display of enriched terms rendered by DAVID based on all GO terms, KEGG pathways, Reactome, and CORUM. The terms related to “viral gene expression” were missed in the visualizations generated by Babelomics and g:profile, but were identified by DAVID (in cluster 8 with ranks around 20). d Metascape bar graph for viewing top non-redundant enrichment clusters, one per cluster, using a discrete color scale to represent statistical significance. e Metascape enrichment network visualization showing the intra-cluster and inter- cluster similarities of enriched terms, up to ten terms per cluster. Cluster annotations are shown in color code. f A complex interactome network generated by g:profile with the Brass gene list. g Metascape visualization of the interactome network formed by all 121 gene candidates from the Brass list, where the MCODE complexes are colored according to their identities. h Seven MCODE complexes automatically identified in Metascape, colored by their identities. Their functional labels are generated based on the top-three functional enriched terms, if available",
+      "text_sha256": "745770f8969a4d5fcfa0c952dc134fd84660ad6ce9021ce61cd20c1fa00b3e41",
+      "caption_for": "p5-b3"
+    },
+    {
+      "id": "p6-b4",
+      "type": "figure",
+      "page": 6,
+      "reading_order": 66,
+      "bbox": {
+        "x0": 50.0,
+        "y0": 205.0,
+        "x1": 550.0,
+        "y1": 603.0
+      },
+      "graphic": {
+        "kind": "figure"
+      },
+      "text": null
+    },
+    {
+      "id": "p6-b5",
+      "type": "caption",
+      "page": 6,
+      "reading_order": 67,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 608.2,
+        "x1": 552.72,
+        "y1": 712.33
+      },
+      "text": "Fig. 3 Visualizations of meta-analysis results based on multiple gene lists. a Heatmap showing the top enrichment clusters, one row per cluster, using a discrete color scale to represent statistical significance. Gray color indicates a lack of significance. The category GO:0016032 (viral process) is common to all studies, while GO:0046777 (protein autophosphorylation) is enriched exclusively in a single study, and is therefore likely a process associated with one particular experimental system. b Enrichment network visualization for results from the three gene lists, where nodes are represented by pie charts indicating their associations with each input study. Cluster labels were added manually. Color code represents the identities of gene lists. The network shows that processes such as viral gene expression, nucleocytoplasmic transport, and cellular response to external stimuli are generally shared among all three lists. RNA metabolism is shared between the Brass and Karlas lists; cellular development processes are mostly shared between the Karlas and Konig lists. c Selected MCODE components identified from the combined list of 541 genes, where each node represents a protein with a pie chart encoding its origin. The complex related to viral process is shared among all three lists, while the complex related to the MAP kinase cascade is specific to the Konig list. Supplementary Figure 12 presents all MCODE components identified",
+      "text_sha256": "6b4d19b8e046091ae0fdb9b6b5ab5dc1f32a340aadd0c229fdd5d472e6dd53bf",
+      "caption_for": "p6-b4"
+    },
+    {
+      "id": "p6-b6",
+      "type": "page_number",
+      "page": 6,
+      "reading_order": 68,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 750.36,
+        "x1": 48.81,
+        "y1": 759.58
+      },
+      "text": "6",
+      "text_sha256": "e7f6c011776e8db7cd330b54174fd76f7d0216b612387a5ffcfb81e6f0919683"
+    },
+    {
+      "id": "p6-b7",
+      "type": "footer",
+      "page": 6,
+      "reading_order": 69,
+      "bbox": {
+        "x0": 105.7,
+        "y0": 750.76,
+        "x1": 495.51,
+        "y1": 759.48
+      },
+      "text": "NATURE COMMUNICATIONS | (2019) 10:1523 | https://doi.org/10.1038/s41467-019-09234-6 | www.nature.com/naturecommunications",
+      "text_sha256": "45baf21a4fc0eec42fd495b1837c5c3503c31cffd48219758467d7a645a62dc8"
+    },
+    {
+      "id": "p7-b1",
+      "type": "header",
+      "page": 7,
+      "reading_order": 70,
+      "bbox": {
+        "x0": 494.61,
+        "y0": 14.72,
+        "x1": 552.66,
+        "y1": 30.67
+      },
+      "text": "ARTICLE",
+      "text_sha256": "1ad810ee226e08bd9889d5944d4382cedba41992cb977281f9bbe9a5c0f11b3d"
+    },
+    {
+      "id": "p7-b2",
+      "type": "header",
+      "page": 7,
+      "reading_order": 71,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 19.5,
+        "x1": 310.57,
+        "y1": 29.47
+      },
+      "text": "NATURE COMMUNICATIONS | https://doi.org/10.1038/s41467-019-09234-6",
+      "text_sha256": "92896aee592fa3e40a67332ddc6444885b2ead45425b2a7c4e7ab71a3f898e70"
+    },
+    {
+      "id": "p7-b3",
+      "type": "paragraph",
+      "page": 7,
+      "reading_order": 72,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 49.31,
+        "x1": 292.75,
+        "y1": 92.18
+      },
+      "text": "that 20% of genes change their functional identity over a two-year period37. Along with other outdated portals, it was estimated that thousands of studies were affected, and the potential impact on follow-up studies could last for years to come7.",
+      "text_sha256": "161ab18736785fb2ba9e647ae13bd437047ebbc2d7f890a69b8256632ae13497",
+      "continues_from": "p5-b5"
+    },
+    {
+      "id": "p7-b4",
+      "type": "paragraph",
+      "page": 7,
+      "reading_order": 73,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 91.2,
+        "x1": 292.68,
+        "y1": 374.62
+      },
+      "text": "Metascape has adopted a novel two-phase approach to overcome this critical issue and ensure monthly updates (Fig. 4). In the first phase, individual data sources are automatically crawled, wrangled, and assembled according to a predefined topological order of dependency, where gene identifier resources are processed before dependent annotation resources. When significant changes or unexpected errors occur while processing a data source, a database’s last known compatible copy from a previous update is reused, and an internal alert is issued to Metascape quality control (QC) developers (see below). Using this strategy, conflicts in any given database component will not stop the timely completion of the Metascape update cycle. It is important to note that more subtle inconsistencies in data content can be harder to detect and may not trigger these exceptions. For example, the accidental deletion of records for a certain model organism in NCBI38 may go undetected. The Metascape pipeline automatically carries out a detailed comparison between the current database and the new updated database, summarizing count differences into a bar graph web report, indicating the number of data records that are added or removed as illustrated in Fig. 4. In the second phase, a Metascape QC member inspects the graphical report for suspicious changes in record counts. If no concerning issues are identified, the release candidate is approved, and the database update goes to production. Alerts received during the whole process are manually examined and addressed in parallel. Taken together, this workflow ensures that Metascape users are not adversely impacted by outdated data sources.",
+      "text_sha256": "f30ba9859095c79c471796e200e3b81b63def2ded34233d23678e1230ca62af3"
+    },
+    {
+      "id": "p7-b5",
+      "type": "paragraph",
+      "page": 7,
+      "reading_order": 74,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 49.24,
+        "x1": 552.69,
+        "y1": 322.3
+      },
+      "text": "Usage and citation analysis. Metascape has been in development since 2014, and a beta version of the software was initially released in late 2015. The portal usage data, as well as feedback from users, have been decisive in correcting or refining under- lying concepts that drove the architectural design and features of Metascape. Some usage statistics are particularly enlightening. Among all recently recorded analysis sessions, ~78% users chose Express Analysis over Custom Analysis, implying that Express Analysis successfully captures a set of core algorithms and set- tings suitable for the majority of analysis needs. Six percent of analyses contained more than one gene list, indicating a demand for meta-analysis in the current research landscape. Data col- lected on input identifier types indicates gene symbol and syno- nyms are the most widely used (77%), followed by Ensembl identifiers (11%), Entrez Gene ID (4%), and RefSeq (3%). The remaining IDs are mostly UniProt IDs and model-organism- specific IDs. Microarray IDs are hardly used (<0.2%), likely reflecting the shift of the gene expression technology platform from microarrays to next-generation sequencing. About 63% of analyses were performed using human identifiers, followed by 31% using mouse. Other model organisms such as D. rerio, R. norvegicus, A. thalianai, etc. accounted for the remainder. Inter- estingly, 3% usage took advantage of the ortholog mapping fea- ture to mostly cast mouse/rat gene lists into human context for analysis. These data validate a need to support multiple gene/ protein identifiers and multiple model organisms.",
+      "text_sha256": "6f4ad96fb7f13be361aa78bcb410d7968ec82408624fc7af10fff12e647f0968"
+    },
+    {
+      "id": "p7-b6",
+      "type": "paragraph",
+      "page": 7,
+      "reading_order": 75,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 321.32,
+        "x1": 552.69,
+        "y1": 374.63
+      },
+      "text": "At the time of writing, our citation survey using Google Scholar identified 62% of the citations have adopted Metascape graphical outputs directly in publications (Supplementary Data 5), under- scoring the utility of tools that generate high-quality data visualizations (Fig. 5a). The top three most used visualizations",
+      "text_sha256": "ec8cc178fab613d31b51bd5e4d5aa52da2643837cb799c2647416687a11b83a3"
+    },
+    {
+      "id": "p7-b7",
+      "type": "figure",
+      "page": 7,
+      "reading_order": 76,
+      "bbox": {
+        "x0": 140.0,
+        "y0": 388.0,
+        "x1": 455.0,
+        "y1": 508.0
+      },
+      "graphic": {
+        "kind": "figure"
+      },
+      "text": null
+    },
+    {
+      "id": "p7-b8",
+      "type": "caption",
+      "page": 7,
+      "reading_order": 77,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 510.06,
+        "x1": 311.45,
+        "y1": 520.04
+      },
+      "text": "Fig. 4 Schematic diagram of the semi-automatic data synchronization workflow",
+      "text_sha256": "c554773f5bbdf72cf7bb7be9068689fd894aead4b836fe2679f868612686068b",
+      "caption_for": "p7-b7"
+    },
+    {
+      "id": "p7-b9",
+      "type": "figure",
+      "page": 7,
+      "reading_order": 78,
+      "bbox": {
+        "x0": 140.0,
+        "y0": 545.0,
+        "x1": 450.0,
+        "y1": 705.0
+      },
+      "graphic": {
+        "kind": "chart"
+      },
+      "text": null
+    },
+    {
+      "id": "p7-b10",
+      "type": "caption",
+      "page": 7,
+      "reading_order": 79,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 708.77,
+        "x1": 545.28,
+        "y1": 739.66
+      },
+      "text": "Fig. 5 Citation statistics illustrating the use of Metascape visualizations in publications. a 62% of publications adopted visualizations prepared by Metascape. b Visualization types sorted according to their popularity, where the enrichment bar graph, network, and heatmap are frequently used to summarize functional enrichment outputs",
+      "text_sha256": "15bc2a0b1334cae615aafc7ef78b83a9948aa03d81379be017b4cc4f9002f6e8",
+      "caption_for": "p7-b9"
+    },
+    {
+      "id": "p7-b11",
+      "type": "footer",
+      "page": 7,
+      "reading_order": 80,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 750.76,
+        "x1": 432.41,
+        "y1": 759.48
+      },
+      "text": "NATURE COMMUNICATIONS | (2019) 10:1523 | https://doi.org/10.1038/s41467-019-09234-6 | www.nature.com/naturecommunications",
+      "text_sha256": "45baf21a4fc0eec42fd495b1837c5c3503c31cffd48219758467d7a645a62dc8"
+    },
+    {
+      "id": "p7-b12",
+      "type": "page_number",
+      "page": 7,
+      "reading_order": 81,
+      "bbox": {
+        "x0": 546.48,
+        "y0": 750.36,
+        "x1": 552.69,
+        "y1": 759.58
+      },
+      "text": "7",
+      "text_sha256": "7902699be42c8a8e46fbbb4501726517e86b22c56a189f7625a6da49081b2451"
+    },
+    {
+      "id": "p8-b1",
+      "type": "header",
+      "page": 8,
+      "reading_order": 82,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 14.72,
+        "x1": 100.67,
+        "y1": 30.67
+      },
+      "text": "ARTICLE",
+      "text_sha256": "1ad810ee226e08bd9889d5944d4382cedba41992cb977281f9bbe9a5c0f11b3d"
+    },
+    {
+      "id": "p8-b2",
+      "type": "header",
+      "page": 8,
+      "reading_order": 83,
+      "bbox": {
+        "x0": 284.79,
+        "y0": 19.5,
+        "x1": 552.71,
+        "y1": 29.47
+      },
+      "text": "NATURE COMMUNICATIONS | https://doi.org/10.1038/s41467-019-09234-6",
+      "text_sha256": "92896aee592fa3e40a67332ddc6444885b2ead45425b2a7c4e7ab71a3f898e70"
+    },
+    {
+      "id": "p8-b3",
+      "type": "paragraph",
+      "page": 8,
+      "reading_order": 84,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 49.31,
+        "x1": 292.67,
+        "y1": 228.19
+      },
+      "text": "are the enrichment bar graph, enrichment network, and enrichment heatmap, highlighting the utility of the tool for functional enrichment analyses (Fig. 5b). In addition to graphical outputs, Metascape analysis generates two Excel spreadsheets providing gene annotation and functional enrichment results (Supplementary Data 3, 4, Supplementary Figure 7). These data outputs have been directly used in over 16% of publications as supplementary materials to support analysis conclusions (Sup- plementary Data 5). Since Circos plots and enrichment heatmaps are two visualization tools specifically designed for multiple gene lists only, and a bar graph is only used for a single gene list, we estimated that 70% of the published studies studied a single gene list and 30% studied multiple gene lists. This finding, together with our web portal usage data, highlight the increasing usage of multi-OMICs approaches in current studies, and suggest that meta-analysis has become an important tool for the analysis of OMICs datasets.",
+      "text_sha256": "84ac79b30667156a374df4b0a30bb2b77445f59b8fc00c2e21b6c92643549018",
+      "continues_from": "p7-b6"
+    },
+    {
+      "id": "p8-b4",
+      "type": "heading",
+      "page": 8,
+      "reading_order": 85,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 247.47,
+        "x1": 88.32,
+        "y1": 258.93
+      },
+      "text": "Discussion",
+      "text_sha256": "5eb6cf647d2c5d14a044e2d103dcef4cf0cdc872434c374debc1043092bc4746"
+    },
+    {
+      "id": "p8-b5",
+      "type": "paragraph",
+      "page": 8,
+      "reading_order": 86,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 258.56,
+        "x1": 292.67,
+        "y1": 353.7
+      },
+      "text": "The systematic categorization of genes by their functions by the Gene Ontology Consortium (GO) has initiated the widespread practice of functional enrichment analysis; many portals have been developed over the years and have led to the continual refinement of gene list analysis algorithms39–41. Metascape was not developed to replace existing specialized tools, but to provide a pipeline to assimilate many of the powerful features of these analysis platforms to enable integrative, end-to-end analysis of OMICs-level datasets.",
+      "text_sha256": "9876a1501f348b389706501f73af17581d8af673a2c86a6818f60dea5db78509"
+    },
+    {
+      "id": "p8-b6",
+      "type": "paragraph",
+      "page": 8,
+      "reading_order": 87,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 352.67,
+        "x1": 292.68,
+        "y1": 500.14
+      },
+      "text": "Our study of 25 existing analysis portals found that the underlying databases were often out-of-date (Supplementary Data 1). Although portals such as g:profile42, PANTHER43, TopFun31, InterMine44, GoEast45, and GeneTrail246 provide up- to-date knowledgebases, a significant portion of portals (60%) relied on knowledgebases older than one year (Supplementary Data 1). Due to the inclusion of over 40 unique data sources in Metascape, a fully automated synchronization pipeline becomes unstable due to changes in the underlying resources. This moti- vated us to develop a workflow that combines an automated robot crawling phase with a supervised human review phase (Fig. 4). This data-engineering solution has demonstrated success through our monthly data refresh cycles, providing a viable data syn- chronization model for complex portals facing similar challenges.",
+      "text_sha256": "e55e84d4348cfe1e646ce833f20c4aa46d032828b432d00df2b2c1a8b2e77d49"
+    },
+    {
+      "id": "p8-b7",
+      "type": "paragraph",
+      "page": 8,
+      "reading_order": 88,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 499.17,
+        "x1": 292.67,
+        "y1": 667.5
+      },
+      "text": "In addition to regular database updates, gene annotation and membership search are two features that are not readily addressed by existing portals (Supplementary Data 1). Although the term gene annotation is occasionally used by existing portals as a synonym for enrichment analysis44,47,48, here we consider gene annotation as a method to extract a diverse set of metadata, such as identifying extracellular proteins or associated chemical probes, for hundreds to thousands of gene candidates at once. Membership search is a closely related yet complementary service that dynamically highlights genes known to be involved in spe- cific biology, such as host-pathogen interactions. Typically, retrieving these metadata requires querying specific portals, often one gene at a time, and compiling outputs into a centralized format for analysis. Metascape enables the batch extraction of contents from over 40 databases in an extremely efficient manner (Supplementary Figures 3–4).",
+      "text_sha256": "b082f87bf5f198c9adbf07549b7c70e9a2d26b76597d37a7fd067af256a11636"
+    },
+    {
+      "id": "p8-b8",
+      "type": "paragraph",
+      "page": 8,
+      "reading_order": 89,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 666.52,
+        "x1": 292.67,
+        "y1": 740.74
+      },
+      "text": "Analyzing multiple gene lists simultaneously through robust meta-analysis is another unmet need in the current OMICs data analysis landscape (Supplementary Data 1). Evaluated portals provide no, or only limited, support for this activity. For example, GoEast45 and agriGO49 provide some meta-analysis functions using a two-step process, where users analyze gene lists indivi- dually first, then reupload their enrichment results for cross",
+      "text_sha256": "ede384ea84c94ec17fdb5a36e0e0b18fe6b6b028f8a6acdee83fd2800bae0b07"
+    },
+    {
+      "id": "p8-b9",
+      "type": "paragraph",
+      "page": 8,
+      "reading_order": 90,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 49.31,
+        "x1": 552.69,
+        "y1": 186.35
+      },
+      "text": "comparison. However, GoEast analyzes a maximum of three lists and agriGO only supports organisms of agricultural relevance. GeneCodis50 supports a maximum of two lists. GoMiner51 can compute enrichment terms for multiple lists in parallel, however, the separate outputs are not further integrated and cross com- pared. g:Cocoa, a component in g:profile, compiles a tabular output conceptually similar to Metascape’s enrichment heatmap. However, it currently lacks an enrichment clustering feature and does not support interactome meta-analysis (Fig. 2b). Metascape’s architecture is designed to support a seamless user experience towards the analysis and visualization of an arbitrary number of gene lists, only limited by available computing time and memory space.",
+      "text_sha256": "cf6dad1b5de1d7295965add178dd267cc980bd0997f746187db809a50cdcfebc",
+      "continues_from": "p8-b8"
+    },
+    {
+      "id": "p8-b10",
+      "type": "paragraph",
+      "page": 8,
+      "reading_order": 91,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 185.31,
+        "x1": 552.69,
+        "y1": 270.02
+      },
+      "text": "The integration of Circos plots overcomes the limitation of Venn diagrams to graphically visualize the overlaps among many lists (Supplementary Figure 11), and enrichment heatmaps (Fig. 3a) are applicable to the number of lists encountered in practice (Fig. 3a). Metascape also builds on previous imple- mentations of enrichment network maps52 by depicting enriched terms as pie charts, which more readily indicate common and selective pathways enriched across multiple gene lists (Fig. 3b).",
+      "text_sha256": "b76fd9d74e98fe3202d2883f7c83043a96b9e710c5deddc11a73b336bcdbdc2e"
+    },
+    {
+      "id": "p8-b11",
+      "type": "paragraph",
+      "page": 8,
+      "reading_order": 92,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 267.55,
+        "x1": 552.7,
+        "y1": 416.46
+      },
+      "text": "While interactome analysis is implemented in Babelomics53, Intermine44, and ConsensusPathDB54, Metascape’s interactome analysis is distinguished by two notable features. First, in addition to the BioGrid knowledgebase, Metascape integrates the more recent human interactome datasets InWeb_IM55 and Omni- Path56, resulting in a tripling of human interactome coverage (Supplementary Figure 13). Second, Metascape automatically extracts protein complexes and annotates their respective func- tions (Fig. 2h, Supplementary Figure 12). Compared to existing visualization approaches (Fig. 2f), Metascape is designed to highlight dense interactome neighborhoods and facilitate the interpretation of interactome data in a biological context; it fur- ther integrates with Cytoscape29 to leverage its rich set of visua- lization and interactive features.",
+      "text_sha256": "4650a5b34ded137cb1e4c03df96278f53182809f20eaa9305017cd7e61bfe876"
+    },
+    {
+      "id": "p8-b12",
+      "type": "paragraph",
+      "page": 8,
+      "reading_order": 93,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 415.43,
+        "x1": 552.8,
+        "y1": 709.34
+      },
+      "text": "Critically, Metascape was designed to provide more inter- pretable and actionable results for experimentalists. The redun- dancy among ontology terms presents a significant obstacle in result interpretation. The primary strategy adopted by existing portals, as seen in g:Profiler42, WebGestalt8, Babelomics53, and others, is to utilize directed acyclic graph (DAG) or tree structures embedded within ontologies such as GO16 (examples in Fig. 2a, b). WebGestalt provides an option only using a subset such as GOSlim16 to reduce redundancy. However, these strategies are not applicable to reduce redundancies across different ontology sour- ces. Metascape and DAVID6, by contrast, adopt a dynamic clus- tering solution that avoids the above-mentioned shortcomings. Metascape further simplifies the result presentation via bar graph (Fig. 2d) and heatmap (Fig. 3a) visualizations, compared to DAVID’s tabular presentation (Fig. 2c). Although p-value is used as the default representation metric for ranking enriched terms, it nevertheless has its limitations. Users may need to consider using alternative metrics, such as the multi-test corrected q-value or the biological context-sensitive enrichment factor. All popular enrichment metrics, including detailed gene counts, are computed and made available for offline analyses. Metascape further enhances the interpretability of analysis results through advanced graphical and spreadsheet outputs, a concise PowerPoint pre- sentation (Supplementary Figure 7), and a journal-style web-based Analysis Report containing additional method descriptions and references (Supplementary Figure 7). Offline analysis is facilitated by a Zip export containing third-party compatible data files, such as the Cytoscape29 and JTreeView57 formats.",
+      "text_sha256": "30357442c63e3e7481cfaae2440f6bec40ef9d0c0f1f418fdd58401fd4b5730e"
+    },
+    {
+      "id": "p8-b13",
+      "type": "paragraph",
+      "page": 8,
+      "reading_order": 94,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 708.36,
+        "x1": 552.68,
+        "y1": 740.74
+      },
+      "text": "In conclusion, Metascape has been designed for experi- mentalists (bench biologists) to apply powerful computational analysis pipelines to analyze and interpret large-scale datasets. To",
+      "text_sha256": "09121e1fca6a0a0524b884faeaba7fd21f98512362bf9dd7da1991c772edbc78"
+    },
+    {
+      "id": "p8-b14",
+      "type": "page_number",
+      "page": 8,
+      "reading_order": 95,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 750.36,
+        "x1": 48.81,
+        "y1": 759.58
+      },
+      "text": "8",
+      "text_sha256": "2c624232cdd221771294dfbb310aca000a0df6ac8b66b696d90ef06fdefb64a3"
+    },
+    {
+      "id": "p8-b15",
+      "type": "footer",
+      "page": 8,
+      "reading_order": 96,
+      "bbox": {
+        "x0": 105.7,
+        "y0": 750.76,
+        "x1": 495.51,
+        "y1": 759.48
+      },
+      "text": "NATURE COMMUNICATIONS | (2019) 10:1523 | https://doi.org/10.1038/s41467-019-09234-6 | www.nature.com/naturecommunications",
+      "text_sha256": "45baf21a4fc0eec42fd495b1837c5c3503c31cffd48219758467d7a645a62dc8"
+    },
+    {
+      "id": "p9-b1",
+      "type": "header",
+      "page": 9,
+      "reading_order": 97,
+      "bbox": {
+        "x0": 494.61,
+        "y0": 14.72,
+        "x1": 552.66,
+        "y1": 30.67
+      },
+      "text": "ARTICLE",
+      "text_sha256": "1ad810ee226e08bd9889d5944d4382cedba41992cb977281f9bbe9a5c0f11b3d"
+    },
+    {
+      "id": "p9-b2",
+      "type": "header",
+      "page": 9,
+      "reading_order": 98,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 19.5,
+        "x1": 310.57,
+        "y1": 29.47
+      },
+      "text": "NATURE COMMUNICATIONS | https://doi.org/10.1038/s41467-019-09234-6",
+      "text_sha256": "92896aee592fa3e40a67332ddc6444885b2ead45425b2a7c4e7ab71a3f898e70"
+    },
+    {
+      "id": "p9-b3",
+      "type": "paragraph",
+      "page": 9,
+      "reading_order": 99,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 49.31,
+        "x1": 292.68,
+        "y1": 186.35
+      },
+      "text": "ensure that its content is kept current, a new knowledgebase synchronization pipeline was engineered. To address gaps in current analysis tools, Metascape introduces a workflow inte- grating gene annotation, membership analysis, and multi-gene- list meta-analysis capabilities. Its rich set of analysis tools are accessible through a convenient one-click Express Analysis interface and results are communicated via an article-like analysis report. We expect that the wider adoption of Metascape will significantly enhance biological interpretation of OMICs studies by enabling experimentalists to directly analyze their data to identify novel therapeutic targets, mechanisms of action, or molecular insight into disease. Metascape is an open-access resource available at http://metascape.org.",
+      "text_sha256": "4059a3b34888d9e1429e4a78630b0766f57fc6ba4b39c55badb0ed3fbccec8d2",
+      "continues_from": "p8-b13"
+    },
+    {
+      "id": "p9-b4",
+      "type": "heading",
+      "page": 9,
+      "reading_order": 100,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 197.07,
+        "x1": 80.46,
+        "y1": 208.53
+      },
+      "text": "Methods",
+      "text_sha256": "8696622f344183c4f73993a175acb8daa6418a5cc29099e5d2d762cba2d6f7f2"
+    },
+    {
+      "id": "p9-b5",
+      "type": "paragraph",
+      "page": 9,
+      "reading_order": 101,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 207.39,
+        "x1": 292.66,
+        "y1": 293.53
+      },
+      "text": "Architecture and data source. Metascape is a web resource compatible with all major browsers. The backend knowledgebase is a relational database managed by MySQL. The front-end user interface is implemented by Angular JavaScript fra- mework to provide a rich interactive user experience. The server-side computa- tional logic is mostly implemented in Python and leverages several packages provided by the community (https://pypi.org). Each analysis request is associated with a randomly-generated unique session ID (Supplementary Figure 2), which can be used to access analysis results interactively through the web or to download all result data in a Zip package for offline use, before the data is removed from the server (Supplementary Figure 7).",
+      "text_sha256": "1099c48e00d72cef44a99473971be5af70da7a6841f75d7af5ca44004424e4ea"
+    },
+    {
+      "id": "p9-b6",
+      "type": "paragraph",
+      "page": 9,
+      "reading_order": 102,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 292.5,
+        "x1": 292.67,
+        "y1": 352.77
+      },
+      "text": "The rich analyses of Metascape sit on top of over 40 bioinformatics knowledgebases maintained by the scientific community (Supplementary Figure 8, Supplementary Data 2). A data synchronization pipeline, as described in Fig. 4, is applied monthly to process data into an Entrez Gene ID-centric relational data format. Metascape currently supports ten organisms: H. sapiens, M. musculus, R. norvegicus, D. rerio, D. melanogaster, C. elegans, S. cerevisiae, A. thaliana, S. Pombe, and P. falciparum.",
+      "text_sha256": "e1c66277b9a6cab331f516fac0ba39e7133e057c7ed612bd0b6e134c563fd178"
+    },
+    {
+      "id": "p9-b7",
+      "type": "paragraph",
+      "page": 9,
+      "reading_order": 103,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 363.91,
+        "x1": 292.67,
+        "y1": 483.96
+      },
+      "text": "Functional enrichment analysis. Metascape utilizes the well-adopted hypergeo- metric test58 and Benjamini-Hochberg p-value correction algorithm59 to identify all ontology terms that contain a statistically greater number of genes in common with an input list than expected by chance. By default, Metascape pathway enrichment analysis makes use of Gene Ontology16, KEGG17, Reactome18, MSigDB19, etc. Distinguishing it from many existing portals, Metascape auto- matically clusters enriched terms into non-redundant groups, where it implements similar logic as found in DAVID6. Briefly, pairwise similarities between any two enriched terms are computed based on a Kappa-test score28. The similarity matrix is then hierarchically clustered and a 0.3 similarity threshold is applied to trim the resultant tree into separate clusters. Metascape chooses the most significant (lowest p-value) term within each cluster (Supplementary Data 4) to represent the cluster in bar graph and heatmap representations. The analysis provides other popular enrichment metrics in addition to p-values.",
+      "text_sha256": "21bfb6248cabfe37b9c429467c640b29a529ed6e41b1c31fdcfe80c12ea49708"
+    },
+    {
+      "id": "p9-b8",
+      "type": "paragraph",
+      "page": 9,
+      "reading_order": 104,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 495.04,
+        "x1": 292.67,
+        "y1": 589.7
+      },
+      "text": "Interactome analysis. Metascape utilizes physical protein–protein interactions captured in BioGrid24 as the main data source. In addition, it integrates more recent human interactome datasets including InWeb_IM55 and OmniPath56 to provide additional interactome coverage (Supplementary Figure 13). Given a list of proteins, it first automatically extracts a protein interaction network formed by these candidates. Then for each connected network component, it iteratively applies the MCODE algorithm33, with modifications for performance improve- ments, to identify densely-connected complexes. For each complex, it further applies function enrichment analysis and uses the top three enriched terms for the annotation of its biological roles (Fig. 2h, Supplementary Figure 12). All network visualizations are generated with Cytoscape29 and exported in multiple formats.",
+      "text_sha256": "f89cf9efb0aa8eb64b971fe9bb377b45c87a0f164ed33fc5ecef4218f88346c6"
+    },
+    {
+      "id": "p9-b9",
+      "type": "paragraph",
+      "page": 9,
+      "reading_order": 105,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 600.77,
+        "x1": 292.66,
+        "y1": 661.53
+      },
+      "text": "Datasets. Previously published host factors that regulate influenza replication were used as example gene lists in this study. The 121 host factors identified by Brass et al.13 were used as a single gene list input for all portals studied in Supplementary Data 1 and Fig. 2. To demonstrate meta-analysis capabilities, three influenza gene lists were used as the input, including 121 host factors from Brass et al.13, 168 from Karlas et al.14, and 294 from Konig et al.15. All gene lists were downloaded from the IAV database9.",
+      "text_sha256": "4cbd7505f81e4b3f866810366287c2793e05bc045124ee5af99f88717c10a46c"
+    },
+    {
+      "id": "p9-b10",
+      "type": "paragraph",
+      "page": 9,
+      "reading_order": 106,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 672.66,
+        "x1": 292.68,
+        "y1": 733.41
+      },
+      "text": "User interface. Supplementary Figures 1–7 describe the Metascape user interface step-by-step for gene-list analyses using the above-mentioned datasets. Screenshots specific to the single gene list analysis are outlined in orange; those specific to the multiple gene list meta-analysis are outlined in green; common screenshot com- ponents are outlined in gray. During the Express Analysis, the submission of gene list(s) (Supplementary Figure 1) directly leads to an analysis report (Supplementary Figure 7) without the need to step through the intermediate operations",
+      "text_sha256": "44bf21bdbd870cb881ddf4b2be2f819d31ec50d1dba7b458751f5ac6bfa6f41d"
+    },
+    {
+      "id": "p9-b11",
+      "type": "paragraph",
+      "page": 9,
+      "reading_order": 107,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 50.28,
+        "x1": 551.03,
+        "y1": 68.75
+      },
+      "text": "(Supplementary Figures 2–6). Conversely, the detailed analysis interface (Supple- mentary Figures 2–6) is only accessible through Custom Analysis.",
+      "text_sha256": "d80393908f8ce38b987737f56dab7a1606671bcf0f8a6f0cd25718dc48904f93",
+      "continues_from": "p9-b10"
+    },
+    {
+      "id": "p9-b12",
+      "type": "paragraph",
+      "page": 9,
+      "reading_order": 108,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 79.43,
+        "x1": 552.68,
+        "y1": 157.13
+      },
+      "text": "Usage statistics. To avoid statistics bias due to new users, who tested and learned Metascape using either example gene lists provided on the portal site or users’ own lists, all analysis sessions associated with an exact same input gene-list group were considered duplicates, regardless of users’ IP address and the time of submission. With such duplicates being removed first, statistics on web site analysis pattern were compiled based on over 70,000 most recent sessions by the time of writing. The relative percentage usage of Metascape visualizations and spreadsheets are derived based on a total of 241 publications (2016-current), implying a maximum standard deviation of 3% in the estimations.",
+      "text_sha256": "839b1ee0c333a3c1fb7419f9475063bbb025de8db739561bd6af5af75ff24b59"
+    },
+    {
+      "id": "p9-b13",
+      "type": "heading",
+      "page": 9,
+      "reading_order": 109,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 168.04,
+        "x1": 371.4,
+        "y1": 179.5
+      },
+      "text": "Data availability",
+      "text_sha256": "188a992e372fe88d4d545fa96883a56c2aada07802d61a1332853f2ea664c1ed"
+    },
+    {
+      "id": "p9-b14",
+      "type": "paragraph",
+      "page": 9,
+      "reading_order": 110,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 179.2,
+        "x1": 514.0,
+        "y1": 188.18
+      },
+      "text": "Gene lists referenced in this study are available in Supplementary Data 3.",
+      "text_sha256": "14406d0741109ade7a5b161899686d6accbc1ddc598f3b7ecb3a80849042444d"
+    },
+    {
+      "id": "p9-b15",
+      "type": "heading",
+      "page": 9,
+      "reading_order": 111,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 199.16,
+        "x1": 372.49,
+        "y1": 210.63
+      },
+      "text": "Code availability",
+      "text_sha256": "2452440aee47f0ca92932a52a00d8caab65e6f48871e25c4521c2e1e61f54892"
+    },
+    {
+      "id": "p9-b16",
+      "type": "paragraph",
+      "page": 9,
+      "reading_order": 112,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 210.33,
+        "x1": 538.0,
+        "y1": 227.98
+      },
+      "text": "Custom code used in this study is available from the corresponding authors upon reasonable request.",
+      "text_sha256": "26bbfa1fc3e98dea38b1d2ed06ce887ca6bf46b8c0cf9be21523a9c3f3292560"
+    },
+    {
+      "id": "p9-b17",
+      "type": "paragraph",
+      "page": 9,
+      "reading_order": 113,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 239.99,
+        "x1": 491.74,
+        "y1": 250.96
+      },
+      "text": "Received: 12 July 2018 Accepted: 22 February 2019",
+      "text_sha256": "7a72521ee0a9676b71184772301da9dfb0bb7a3422c19d9f6a1beb7d3375b805"
+    },
+    {
+      "id": "p9-b18",
+      "type": "paragraph",
+      "page": 9,
+      "reading_order": 114,
+      "bbox": {
+        "x0": 303.5,
+        "y0": 249.5,
+        "x1": 437.0,
+        "y1": 262.0
+      },
+      "text": "Published online: 03 April 2019",
+      "text_sha256": "7607c02ba33718f749ba03e2b015d65473c49dd20e4cf39c8bfd62eb1a822f6e",
+      "uncertainty": {
+        "level": "low",
+        "note": "set in a different typeface and absent from the text layer; transcribed from the page image"
+      }
+    },
+    {
+      "id": "p9-b19",
+      "type": "heading",
+      "page": 9,
+      "reading_order": 115,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 294.29,
+        "x1": 349.62,
+        "y1": 305.76
+      },
+      "text": "References",
+      "text_sha256": "69824d3b0e70ca6aaa0da1613b65fd914c442bf1f7ad1bb22bcdfbdfe1a05e39"
+    },
+    {
+      "id": "p9-b20",
+      "type": "reference_entry",
+      "page": 9,
+      "reading_order": 116,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 305.09,
+        "x1": 539.71,
+        "y1": 323.3
+      },
+      "text": "1. Creixell, P. et al. Pathway and network analysis of cancer genomes. Nat. Methods 12, 615–621 (2015).",
+      "text_sha256": "07ab2a937bbccfac339ae17c95ccd288a5af56338fd77a2fa4a00d44fea43722"
+    },
+    {
+      "id": "p9-b21",
+      "type": "reference_entry",
+      "page": 9,
+      "reading_order": 117,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 322.5,
+        "x1": 541.77,
+        "y1": 340.7
+      },
+      "text": "2. Spirin, V. & Mirny, L. A. Protein complexes and functional modules in molecular networks. Proc. Natl Acad. Sci. USA 100, 12123–12128 (2003).",
+      "text_sha256": "a4d412b95bbb51ff19072f0fd7aa6b42b87eea470707ef9c078fb7e8aa9c4968"
+    },
+    {
+      "id": "p9-b22",
+      "type": "reference_entry",
+      "page": 9,
+      "reading_order": 118,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 339.96,
+        "x1": 551.06,
+        "y1": 366.89
+      },
+      "text": "3. Gonzalez, R. et al. Screening the mammalian extracellular proteome for regulators of embryonic human stem cell pluripotency. Proc. Natl Acad. Sci. USA 107, 3552–3557 (2010).",
+      "text_sha256": "b972b4900fbb8dd28c751da89cb98737663bb447f414dd7b81ec74d0488fffac"
+    },
+    {
+      "id": "p9-b23",
+      "type": "reference_entry",
+      "page": 9,
+      "reading_order": 119,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 366.1,
+        "x1": 545.61,
+        "y1": 384.3
+      },
+      "text": "4. Arrowsmith, C. H. et al. Corrigendum: The promise and peril of chemical probes. Nat. Chem. Biol. 11, 887 (2015).",
+      "text_sha256": "16de1c0653e81d9a0fa252be711230e6d0fe0f62138a48bfd2d0a818ddff10c8"
+    },
+    {
+      "id": "p9-b24",
+      "type": "reference_entry",
+      "page": 9,
+      "reading_order": 120,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 383.56,
+        "x1": 547.59,
+        "y1": 401.76
+      },
+      "text": "5. Bushman, F. D. et al. Host cell factors in HIV replication: meta-analysis of genome-wide studies. PLoS Pathog. 5, e1000437 (2009).",
+      "text_sha256": "5a5e563dd6c4db99ccb19d5b765d69543384134891d8ff0d9b19bca17ccfd8f6"
+    },
+    {
+      "id": "p9-b25",
+      "type": "reference_entry",
+      "page": 9,
+      "reading_order": 121,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 400.96,
+        "x1": 552.65,
+        "y1": 427.9
+      },
+      "text": "6. Huang da, W., Sherman, B. T. & Lempicki, R. A. Systematic and integrative analysis of large gene lists using DAVID bioinformatics resources. Nat. Protoc. 4, 44–57 (2009).",
+      "text_sha256": "742ca522ea7ea021687c2aa6da821386986c0e05f1b90cfa8b985d5b091b100a"
+    },
+    {
+      "id": "p9-b26",
+      "type": "reference_entry",
+      "page": 9,
+      "reading_order": 122,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 427.15,
+        "x1": 552.65,
+        "y1": 454.03
+      },
+      "text": "7. Wadi, L., Meyer, M., Weiser, J., Stein, L. D. & Reimand, J. Impact of outdated gene annotations on pathway enrichment analysis. Nat. Methods 13, 705–706 (2016).",
+      "text_sha256": "71c027ec915d54f27144fcc1d11637f073876003f1a558de0a5ee7fd6b596b36"
+    },
+    {
+      "id": "p9-b27",
+      "type": "reference_entry",
+      "page": 9,
+      "reading_order": 123,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 453.29,
+        "x1": 552.66,
+        "y1": 480.17
+      },
+      "text": "8. Wang, J., Vasaikar, S., Shi, Z., Greer, M. & Zhang, B. WebGestalt 2017: a more comprehensive, powerful, flexible and interactive gene set enrichment analysis toolkit. Nucleic Acids Res. 45, W130–W137 (2017).",
+      "text_sha256": "fa66ed2cc88c220a7451bce97b8e3c3e209bc1f823597beded873080d45581f4"
+    },
+    {
+      "id": "p9-b28",
+      "type": "reference_entry",
+      "page": 9,
+      "reading_order": 124,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 478.94,
+        "x1": 546.56,
+        "y1": 506.36
+      },
+      "text": "9. Tripathi, S. et al. Meta- and Orthogonal Integration of Influenza “OMICs” Data Defines a Role for UBR4 in Virus Budding. Cell Host Microbe 18, 723–735 (2015).",
+      "text_sha256": "3030fa426dd88b68a23f273a32cad770577371af705ce182c8f1dbf69b5e114f"
+    },
+    {
+      "id": "p9-b29",
+      "type": "reference_entry",
+      "page": 9,
+      "reading_order": 125,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 505.62,
+        "x1": 552.65,
+        "y1": 523.76
+      },
+      "text": "10. Chen, B. & Butte, A. J. Leveraging big data to transform target selection and drug discovery. Clin. Pharmacol. Ther. 99, 285–297 (2016).",
+      "text_sha256": "5376d1e5fe3fdbfed5d3b2fad0eb572399c86b446b418ad36fa39e5d527b711c"
+    },
+    {
+      "id": "p9-b30",
+      "type": "reference_entry",
+      "page": 9,
+      "reading_order": 126,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 522.54,
+        "x1": 552.65,
+        "y1": 549.96
+      },
+      "text": "11. Chen, R. et al. A meta-analysis of lung cancer gene expression identifies PTK7 as a survival gene in lung adenocarcinoma. Cancer Res. 74, 2892–2902 (2014).",
+      "text_sha256": "2755cfe14938fbf44bf97a8da8a537335d1a96e6063c90e79cc67db66b5c9cd4"
+    },
+    {
+      "id": "p9-b31",
+      "type": "reference_entry",
+      "page": 9,
+      "reading_order": 127,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 549.16,
+        "x1": 552.02,
+        "y1": 567.36
+      },
+      "text": "12. DAVID Release and Version Information: <https://david.ncifcrf.gov/content. jsp?file=release.html> (Accessed 20 Nov 2018).",
+      "text_sha256": "13577367f2cb827f8ed0a5e924e55c820018b739bee6c7c1de4a27cf87737e5a"
+    },
+    {
+      "id": "p9-b32",
+      "type": "reference_entry",
+      "page": 9,
+      "reading_order": 128,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 566.13,
+        "x1": 552.66,
+        "y1": 584.82
+      },
+      "text": "13. Brass, A. L. et al. The IFITM proteins mediate cellular resistance to influenza A H1N1 virus, West Nile virus, and dengue virus. Cell 139, 1243–1254 (2009).",
+      "text_sha256": "bb7d9da1aacea9c80d3eaf2ff410771d620a02e5906be19d31b89aa94378f44c"
+    },
+    {
+      "id": "p9-b33",
+      "type": "reference_entry",
+      "page": 9,
+      "reading_order": 129,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 583.54,
+        "x1": 542.72,
+        "y1": 602.23
+      },
+      "text": "14. Karlas, A. et al. Genome-wide RNAi screen identifies human host factors crucial for influenza virus replication. Nature 463, 818–822 (2010).",
+      "text_sha256": "963b7eaf06280cf1dd43e86c69d519f48dca27cd5ea10c8aa0c914c51244cd7d"
+    },
+    {
+      "id": "p9-b34",
+      "type": "reference_entry",
+      "page": 9,
+      "reading_order": 130,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 601.0,
+        "x1": 550.07,
+        "y1": 619.69
+      },
+      "text": "15. Konig, R. et al. Human host factors required for influenza virus replication. Nature 463, 813–817 (2010).",
+      "text_sha256": "d9fdb9824e76deb992bfc1e660af951f95adf131640c88334b6e751daadf8740"
+    },
+    {
+      "id": "p9-b35",
+      "type": "reference_entry",
+      "page": 9,
+      "reading_order": 131,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 618.4,
+        "x1": 549.72,
+        "y1": 637.09
+      },
+      "text": "16. Ashburner, M. et al. Gene ontology: tool for the unification of biology. The Gene Ontology Consortium. Nat. Genet. 25, 25–29 (2000).",
+      "text_sha256": "c39dcb27a43164eaea79bb9e2904cfb46d4686e04951036c1f21ce96ec1d493a"
+    },
+    {
+      "id": "p9-b36",
+      "type": "reference_entry",
+      "page": 9,
+      "reading_order": 132,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 636.35,
+        "x1": 549.22,
+        "y1": 654.55
+      },
+      "text": "17. Kanehisa, M. & Goto, S. KEGG: kyoto encyclopedia of genes and genomes. Nucleic Acids Res. 28, 27–30 (2000).",
+      "text_sha256": "d1ccd47916b9c499f31bb1913b69ec8173a6a1831186de9e0d4e48901b34e27c"
+    },
+    {
+      "id": "p9-b37",
+      "type": "reference_entry",
+      "page": 9,
+      "reading_order": 133,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 653.81,
+        "x1": 552.64,
+        "y1": 671.96
+      },
+      "text": "18. Fabregat, A. et al. The Reactome Pathway Knowledgebase. Nucleic Acids Res. 46, D649–D655 (2018).",
+      "text_sha256": "916a66957e1804c37234911da02f13317ebacb8b659bcdc2927cd24d9d6fc715"
+    },
+    {
+      "id": "p9-b38",
+      "type": "reference_entry",
+      "page": 9,
+      "reading_order": 134,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 671.22,
+        "x1": 551.29,
+        "y1": 698.15
+      },
+      "text": "19. Subramanian, A. et al. Gene set enrichment analysis: a knowledge-based approach for interpreting genome-wide expression profiles. Proc. Natl Acad. Sci. USA 102, 15545–15550 (2005).",
+      "text_sha256": "9a02f865b0e7a36d3999043b17c5e92ebf82183db24f9dba50646cda326fd26e"
+    },
+    {
+      "id": "p9-b39",
+      "type": "reference_entry",
+      "page": 9,
+      "reading_order": 135,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 697.35,
+        "x1": 552.66,
+        "y1": 715.56
+      },
+      "text": "20. Ruepp, A. et al. CORUM: the comprehensive resource of mammalian protein complexes--2009. Nucleic Acids Res. 38, D497–D501 (2010).",
+      "text_sha256": "251d49d2233ac7a854ee5d5cadc5dcf7bf70e4848285808314aa69fad3d73777"
+    },
+    {
+      "id": "p9-b40",
+      "type": "reference_entry",
+      "page": 9,
+      "reading_order": 136,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 714.81,
+        "x1": 552.62,
+        "y1": 733.02
+      },
+      "text": "21. Cherry, J. M. et al. Saccharomyces Genome Database: the genomics resource of budding yeast. Nucleic Acids Res. 40, D700–D705 (2012).",
+      "text_sha256": "ae2755f1c2888e021116461591c29f869e61f1b09c0f0ce1820835df9ba9172d"
+    },
+    {
+      "id": "p9-b41",
+      "type": "footer",
+      "page": 9,
+      "reading_order": 137,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 750.76,
+        "x1": 432.41,
+        "y1": 759.48
+      },
+      "text": "NATURE COMMUNICATIONS | (2019) 10:1523 | https://doi.org/10.1038/s41467-019-09234-6 | www.nature.com/naturecommunications",
+      "text_sha256": "45baf21a4fc0eec42fd495b1837c5c3503c31cffd48219758467d7a645a62dc8"
+    },
+    {
+      "id": "p9-b42",
+      "type": "page_number",
+      "page": 9,
+      "reading_order": 138,
+      "bbox": {
+        "x0": 546.48,
+        "y0": 750.36,
+        "x1": 552.69,
+        "y1": 759.58
+      },
+      "text": "9",
+      "text_sha256": "19581e27de7ced00ff1ce50b2047e7a567c76b1cbaebabe5ef03f7c3017bb5b7"
+    },
+    {
+      "id": "p10-b1",
+      "type": "header",
+      "page": 10,
+      "reading_order": 139,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 14.72,
+        "x1": 100.67,
+        "y1": 30.67
+      },
+      "text": "ARTICLE",
+      "text_sha256": "1ad810ee226e08bd9889d5944d4382cedba41992cb977281f9bbe9a5c0f11b3d"
+    },
+    {
+      "id": "p10-b2",
+      "type": "header",
+      "page": 10,
+      "reading_order": 140,
+      "bbox": {
+        "x0": 284.79,
+        "y0": 19.5,
+        "x1": 552.71,
+        "y1": 29.47
+      },
+      "text": "NATURE COMMUNICATIONS | https://doi.org/10.1038/s41467-019-09234-6",
+      "text_sha256": "92896aee592fa3e40a67332ddc6444885b2ead45425b2a7c4e7ab71a3f898e70"
+    },
+    {
+      "id": "p10-b3",
+      "type": "reference_entry",
+      "page": 10,
+      "reading_order": 141,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 50.71,
+        "x1": 292.67,
+        "y1": 68.97
+      },
+      "text": "22. Gramates, L. S. et al. FlyBase at 25: looking to the future. Nucleic Acids Res. 45, D663–D671 (2017).",
+      "text_sha256": "cb272ce85d301488664c96d0c571569e205892fcfdfd36e9f461ea0d69e361f2"
+    },
+    {
+      "id": "p10-b4",
+      "type": "reference_entry",
+      "page": 10,
+      "reading_order": 142,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 68.23,
+        "x1": 291.85,
+        "y1": 86.43
+      },
+      "text": "23. Lee, R. Y. N. et al. WormBase 2017: molting into a new stage. Nucleic Acids Res. 46, D869–D874 (2018).",
+      "text_sha256": "3c6ca5a0ce97741220402ea3959bf2b529e2993c088837adb020fc6759a2d470"
+    },
+    {
+      "id": "p10-b5",
+      "type": "reference_entry",
+      "page": 10,
+      "reading_order": 143,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 85.69,
+        "x1": 292.61,
+        "y1": 103.84
+      },
+      "text": "24. Chatr-Aryamontri, A. et al. The BioGRID interaction database: 2017 update. Nucleic Acids Res. 45, D369–D379 (2017).",
+      "text_sha256": "78cd9a12210ed2bd772a2997befa6b27b2a9182c87c6fc4c118de48f6245e617"
+    },
+    {
+      "id": "p10-b6",
+      "type": "reference_entry",
+      "page": 10,
+      "reading_order": 144,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 103.1,
+        "x1": 282.3,
+        "y1": 121.3
+      },
+      "text": "25. Consortium, T. U. UniProt: the universal protein knowledgebase. Nucleic Acids Res. 46, 2699 (2018).",
+      "text_sha256": "9bae767a054dd18b78193e1c23297eedda9d87458a013031946394010c3cf28c"
+    },
+    {
+      "id": "p10-b7",
+      "type": "reference_entry",
+      "page": 10,
+      "reading_order": 145,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 120.56,
+        "x1": 292.62,
+        "y1": 138.7
+      },
+      "text": "26. Wishart, D. S. et al. DrugBank 5.0: a major update to the DrugBank database for 2018. Nucleic Acids Res. 46, D1074–D1082 (2018).",
+      "text_sha256": "09fd4e5a6e571ec03a752b43e9f0e7726a49830d66fc9fe48c906782042b94aa"
+    },
+    {
+      "id": "p10-b8",
+      "type": "reference_entry",
+      "page": 10,
+      "reading_order": 146,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 137.48,
+        "x1": 292.61,
+        "y1": 147.44
+      },
+      "text": "27. Zerbino, D. R. et al. Ensembl 2018. Nucleic Acids Res. 46, D754–D761 (2018).",
+      "text_sha256": "85eaa7282c9563fd591a3ddfd268d04007a08d77b352e1c16dd9f42412e7d59b"
+    },
+    {
+      "id": "p10-b9",
+      "type": "reference_entry",
+      "page": 10,
+      "reading_order": 147,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 146.21,
+        "x1": 292.62,
+        "y1": 164.9
+      },
+      "text": "28. Cohen, J. A Coefficient of Agreement for Nominal Scales. Educ. Psychol. Meas. 20, 37–46 (1960).",
+      "text_sha256": "46b0a981f71d6afe6d7931404c1da91ca6d18a2af44b45074310ece202a334e4"
+    },
+    {
+      "id": "p10-b10",
+      "type": "reference_entry",
+      "page": 10,
+      "reading_order": 148,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 164.1,
+        "x1": 292.65,
+        "y1": 182.3
+      },
+      "text": "29. Shannon, P. et al. Cytoscape: a software environment for integrated models of biomolecular interaction networks. Genome Res. 13, 2498–2504 (2003).",
+      "text_sha256": "51c6238ab11bad53430baa9ad3d06af48283b48251ff3d2d298f4229623b6c39"
+    },
+    {
+      "id": "p10-b11",
+      "type": "reference_entry",
+      "page": 10,
+      "reading_order": 149,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 181.56,
+        "x1": 292.64,
+        "y1": 199.76
+      },
+      "text": "30. Kuleshov, M. V. et al. Enrichr: a comprehensive gene set enrichment analysis web server 2016 update. Nucleic Acids Res. 44, W90–W97 (2016).",
+      "text_sha256": "5970dfeca0d742ab539a60c08fe3f13fb6c2b06c509c4fab0b81957e6c4877b1"
+    },
+    {
+      "id": "p10-b12",
+      "type": "reference_entry",
+      "page": 10,
+      "reading_order": 150,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 198.97,
+        "x1": 292.65,
+        "y1": 225.9
+      },
+      "text": "31. Chen, J., Bardes, E. E., Aronow, B. J. & Jegga, A. G. ToppGene Suite for gene list enrichment analysis and candidate gene prioritization. Nucleic Acids Res. 37, W305–W311 (2009).",
+      "text_sha256": "fce301d4e6dc26489af7db3ea9603bb75b55d1fffbfdcc6f73d61729421d4b9c"
+    },
+    {
+      "id": "p10-b13",
+      "type": "reference_entry",
+      "page": 10,
+      "reading_order": 151,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 225.16,
+        "x1": 281.6,
+        "y1": 252.03
+      },
+      "text": "32. Pizzuti, C. & Rombo, S. E. Algorithms and tools for protein-protein interaction networks clustering, with a special focus on population-based stochastic methods. Bioinformatics 30, 1343–1352 (2014).",
+      "text_sha256": "b02be21c27ce0995d3f5beb024c33ddfb296175895693c03c68993caae295d1f"
+    },
+    {
+      "id": "p10-b14",
+      "type": "reference_entry",
+      "page": 10,
+      "reading_order": 152,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 250.81,
+        "x1": 292.61,
+        "y1": 269.5
+      },
+      "text": "33. Bader, G. D. & Hogue, C. W. An automated method for finding molecular complexes in large protein interaction networks. BMC Bioinforma. 4, 2 (2003).",
+      "text_sha256": "1593203c5a13868738aa7e478e48c540cefdc760250d8ddddebd2d35fc21ccaa"
+    },
+    {
+      "id": "p10-b15",
+      "type": "reference_entry",
+      "page": 10,
+      "reading_order": 153,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 268.76,
+        "x1": 280.89,
+        "y1": 286.9
+      },
+      "text": "34. Evangelou, E. & Ioannidis, J. P. Meta-analysis methods for genome-wide association studies and beyond. Nat. Rev. Genet. 14, 379–389 (2013).",
+      "text_sha256": "3f37c423eb8dc57203d6a11e9210c44c5c6238a3c895adac9b6382160051b4c3"
+    },
+    {
+      "id": "p10-b16",
+      "type": "reference_entry",
+      "page": 10,
+      "reading_order": 154,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 286.16,
+        "x1": 292.64,
+        "y1": 304.36
+      },
+      "text": "35. Liberali, P., Snijder, B. & Pelkmans, L. Single-cell and multivariate approaches in genetic perturbation screens. Nat. Rev. Genet. 16, 18–32 (2015).",
+      "text_sha256": "6636ffc0191dd70626a1d7d932501ad3439c6ee587c8c2ca5542110956a74686"
+    },
+    {
+      "id": "p10-b17",
+      "type": "reference_entry",
+      "page": 10,
+      "reading_order": 155,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 303.62,
+        "x1": 272.75,
+        "y1": 321.77
+      },
+      "text": "36. Krzywinski, M. et al. Circos: an information aesthetic for comparative genomics. Genome Res. 19, 1639–1645 (2009).",
+      "text_sha256": "e017cb0b28b466afd762dd7f01e29a24236a469882d4a777f112096d1a84e26d"
+    },
+    {
+      "id": "p10-b18",
+      "type": "reference_entry",
+      "page": 10,
+      "reading_order": 156,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 321.02,
+        "x1": 292.65,
+        "y1": 339.23
+      },
+      "text": "37. Gillis, J. & Pavlidis, P. Assessing identity, redundancy and confounds in Gene Ontology annotations over time. Bioinformatics 29, 476–482 (2013).",
+      "text_sha256": "1ed5ab421ff6c9d62c3d79640137dcca7b5d48adbe14708ec21165aaded44609"
+    },
+    {
+      "id": "p10-b19",
+      "type": "reference_entry",
+      "page": 10,
+      "reading_order": 157,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 338.49,
+        "x1": 292.57,
+        "y1": 356.63
+      },
+      "text": "38. Maglott, D., Ostell, J., Pruitt, K. D. & Tatusova, T. Entrez Gene: gene-centered information at NCBI. Nucleic Acids Res. 39, D52–D57 (2011).",
+      "text_sha256": "58597263db2128e5b2e882a0236fafc13336a545f24440a3039ed0ce2566ad2d"
+    },
+    {
+      "id": "p10-b20",
+      "type": "reference_entry",
+      "page": 10,
+      "reading_order": 158,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 355.89,
+        "x1": 292.68,
+        "y1": 382.82
+      },
+      "text": "39. Huang da, W., Sherman, B. T. & Lempicki, R. A. Bioinformatics enrichment tools: paths toward the comprehensive functional analysis of large gene lists. Nucleic Acids Res. 37, 1–13 (2009).",
+      "text_sha256": "8bb38303904880307af6f53baaf491aeaaf56320197c86966adda37e1d547645"
+    },
+    {
+      "id": "p10-b21",
+      "type": "reference_entry",
+      "page": 10,
+      "reading_order": 159,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 382.08,
+        "x1": 292.65,
+        "y1": 408.96
+      },
+      "text": "40. Jing, L. S. et al. A review on bioinformatics enrichment analysis tools towards functional analysis of high throughput gene set data. Curr. Proteom. 12, 14–27 (2015).",
+      "text_sha256": "70e321d484842e95d53908ae19e4c76828b4e265ca501a088f9b0caeaf5aba6b"
+    },
+    {
+      "id": "p10-b22",
+      "type": "reference_entry",
+      "page": 10,
+      "reading_order": 160,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 408.22,
+        "x1": 292.68,
+        "y1": 426.42
+      },
+      "text": "41. Khatri, P. & Draghici, S. Ontological analysis of gene expression data: current tools, limitations, and open problems. Bioinformatics 21, 3587–3595 (2005).",
+      "text_sha256": "3dc53c34546a30ab7a751087c706a7b37f54701567d152721d4314ea441d7a48"
+    },
+    {
+      "id": "p10-b23",
+      "type": "reference_entry",
+      "page": 10,
+      "reading_order": 161,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 425.14,
+        "x1": 292.65,
+        "y1": 443.83
+      },
+      "text": "42. Reimand, J. et al. g:Profiler-a web server for functional interpretation of gene lists (2016 update). Nucleic Acids Res. 44, W83–W89 (2016).",
+      "text_sha256": "c2dfad2736e711cb4b187cce829abeacecb409f74ad3180af09593e2c87eebde"
+    },
+    {
+      "id": "p10-b24",
+      "type": "reference_entry",
+      "page": 10,
+      "reading_order": 162,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 443.09,
+        "x1": 285.17,
+        "y1": 469.96
+      },
+      "text": "43. Mi, H. et al. PANTHER version 11: expanded annotation data from Gene Ontology and Reactome pathways, and data analysis tool enhancements. Nucleic Acids Res. 45, D183–D189 (2017).",
+      "text_sha256": "5870589c5e589d7fb0a7b9dd0740643dc55f510a1ddd033e0fc61c2da3fe6e86"
+    },
+    {
+      "id": "p10-b25",
+      "type": "reference_entry",
+      "page": 10,
+      "reading_order": 163,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 469.22,
+        "x1": 287.16,
+        "y1": 487.42
+      },
+      "text": "44. Kalderimis, A. et al. InterMine: extensive web services for modern biology. Nucleic Acids Res. 42, W468–W472 (2014).",
+      "text_sha256": "861c1e9beddad6fe5ea13d521081ec6dddaa556fde8691601751a5c4a5a89bbc"
+    },
+    {
+      "id": "p10-b26",
+      "type": "reference_entry",
+      "page": 10,
+      "reading_order": 164,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 486.68,
+        "x1": 285.77,
+        "y1": 504.83
+      },
+      "text": "45. Zheng, Q. & Wang, X. J. GOEAST: a web-based software toolkit for Gene Ontology enrichment analysis. Nucleic Acids Res. 36, W358–W363 (2008).",
+      "text_sha256": "02721f2329e00258fcf601cb6f63172341276666cfad393c7f19a15c8283c4d6"
+    },
+    {
+      "id": "p10-b27",
+      "type": "reference_entry",
+      "page": 10,
+      "reading_order": 165,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 504.09,
+        "x1": 291.73,
+        "y1": 522.29
+      },
+      "text": "46. Stockel, D. et al. Multi-omics enrichment analysis using the GeneTrail2 web service. Bioinformatics 32, 1502–1508 (2016).",
+      "text_sha256": "bf1910e8e35fab8ffc788e2de87510f80b1ff321bc5376556aff2d5d7215820f"
+    },
+    {
+      "id": "p10-b28",
+      "type": "reference_entry",
+      "page": 10,
+      "reading_order": 166,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 521.55,
+        "x1": 287.78,
+        "y1": 539.75
+      },
+      "text": "47. Martin, D. et al. GOToolBox: functional analysis of gene datasets based on Gene Ontology. Genome Biol. 5, R101 (2004).",
+      "text_sha256": "b97e6bef63ce1138d9dd31bb399d5e34b6503c1e349589411aab9dadd19645a8"
+    },
+    {
+      "id": "p10-b29",
+      "type": "reference_entry",
+      "page": 10,
+      "reading_order": 167,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 538.95,
+        "x1": 274.54,
+        "y1": 557.16
+      },
+      "text": "48. McLean, C. Y. et al. GREAT improves functional interpretation of cis- regulatory regions. Nat. Biotechnol. 28, 495–501 (2010).",
+      "text_sha256": "2063d49efb86629eac452620991f12d073c92fc6b5141b6afbff53ddf945e932"
+    },
+    {
+      "id": "p10-b30",
+      "type": "reference_entry",
+      "page": 10,
+      "reading_order": 168,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 556.42,
+        "x1": 270.85,
+        "y1": 574.62
+      },
+      "text": "49. Tian, T. et al. agriGO v2.0: a GO analysis toolkit for the agricultural community, 2017 update. Nucleic Acids Res. 45, W122–W129 (2017).",
+      "text_sha256": "f58fbc97dcf0aabd66970fc986bbae8a869d336c0ca38719fba821adc44320eb"
+    },
+    {
+      "id": "p10-b31",
+      "type": "reference_entry",
+      "page": 10,
+      "reading_order": 169,
+      "bbox": {
+        "x0": 42.61,
+        "y0": 573.82,
+        "x1": 272.64,
+        "y1": 600.75
+      },
+      "text": "50. Carmona-Saez, P., Chagoyen, M., Tirado, F., Carazo, J. M. & Pascual- Montano, A. GENECODIS: a web-based tool for finding significant concurrent annotations in gene lists. Genome Biol. 8, R3 (2007).",
+      "text_sha256": "3966f8d1125a8088ea71ec9d2dc590dcde195f4611775f09d6dbb4d53ac8a104"
+    },
+    {
+      "id": "p10-b32",
+      "type": "reference_entry",
+      "page": 10,
+      "reading_order": 170,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 50.77,
+        "x1": 538.52,
+        "y1": 68.98
+      },
+      "text": "51. Zeeberg, B. R. et al. GoMiner: a resource for biological interpretation of genomic and proteomic data. Genome Biol. 4, R28 (2003).",
+      "text_sha256": "6daea464e973e1421295e1a54eeec49deafb8d7566d87f6c62459ffe561386ac"
+    },
+    {
+      "id": "p10-b33",
+      "type": "reference_entry",
+      "page": 10,
+      "reading_order": 171,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 68.23,
+        "x1": 552.68,
+        "y1": 95.17
+      },
+      "text": "52. Merico, D., Isserlin, R., Stueker, O., Emili, A. & Bader, G. D. Enrichment map: a network-based method for gene-set enrichment visualization and interpretation. PLoS One 5, e13984 (2010).",
+      "text_sha256": "39841d4cba205a416d9668a88b05958e21b78d492b0690652488862aef18fe7b"
+    },
+    {
+      "id": "p10-b34",
+      "type": "reference_entry",
+      "page": 10,
+      "reading_order": 172,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 94.37,
+        "x1": 552.63,
+        "y1": 112.57
+      },
+      "text": "53. Alonso, R. et al. Babelomics 5.0: functional interpretation for new generations of genomic data. Nucleic Acids Res. 43, W117–W121 (2015).",
+      "text_sha256": "d1475e111fab3989e5759ffba0192ff82e10af03882229dc11afb763c46540d6"
+    },
+    {
+      "id": "p10-b35",
+      "type": "reference_entry",
+      "page": 10,
+      "reading_order": 173,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 111.83,
+        "x1": 549.52,
+        "y1": 138.71
+      },
+      "text": "54. Herwig, R., Hardt, C., Lienhard, M. & Kamburov, A. Analyzing and interpreting genome data at the network level with ConsensusPathDB. Nat. Protoc. 11, 1889–1907 (2016).",
+      "text_sha256": "df921a5f93437d07fe0fc9fe9bc99c1633406a8ba2dcae3734212b5e1185c696"
+    },
+    {
+      "id": "p10-b36",
+      "type": "reference_entry",
+      "page": 10,
+      "reading_order": 174,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 137.97,
+        "x1": 550.97,
+        "y1": 156.17
+      },
+      "text": "55. Li, T. et al. A scored human protein-protein interaction network to catalyze genomic interpretation. Nat. Methods 14, 61–64 (2017).",
+      "text_sha256": "db34796e483af3da7da8707f087f60be0a82090acbf31bbca42ed7e70c374bb5"
+    },
+    {
+      "id": "p10-b37",
+      "type": "reference_entry",
+      "page": 10,
+      "reading_order": 175,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 155.43,
+        "x1": 552.49,
+        "y1": 182.31
+      },
+      "text": "56. Turei, D., Korcsmaros, T. & Saez-Rodriguez, J. OmniPath: guidelines and gateway for literature-curated signaling pathway resources. Nat. Methods 13, 966–967 (2016).",
+      "text_sha256": "282a59701e9b1fba92367964596ec8e26dc20c6340e84bc2e6aa43aed3dcdd08"
+    },
+    {
+      "id": "p10-b38",
+      "type": "reference_entry",
+      "page": 10,
+      "reading_order": 176,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 181.56,
+        "x1": 543.74,
+        "y1": 199.77
+      },
+      "text": "57. Saldanha, A. J. Java Treeview--extensible visualization of microarray data. Bioinformatics 20, 3246–3248 (2004).",
+      "text_sha256": "d94e36728816c501ee915e0e20efb32a3afc3885efeef187b7a191a9a7c6a1c0"
+    },
+    {
+      "id": "p10-b39",
+      "type": "reference_entry",
+      "page": 10,
+      "reading_order": 177,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 198.97,
+        "x1": 521.88,
+        "y1": 208.44
+      },
+      "text": "58. Zar J. H. Biostatistical Analysis, 4th edn. (Prentice Hall, NJ, 1999).",
+      "text_sha256": "6a5fce06159d4145ce9f21278f472c4e0b56aabf24f7e74e6cc301bdf4832517"
+    },
+    {
+      "id": "p10-b40",
+      "type": "reference_entry",
+      "page": 10,
+      "reading_order": 178,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 207.7,
+        "x1": 532.27,
+        "y1": 225.9
+      },
+      "text": "59. Hochberg, Y. & Benjamini, Y. More powerful procedures for multiple significance testing. Stat. Med. 9, 811–818 (1990).",
+      "text_sha256": "0ab3e8cf22da63100b3d2e76c2c52146b9e1b3bc0f7456b5b17babe8bfb5d449"
+    },
+    {
+      "id": "p10-b41",
+      "type": "heading",
+      "page": 10,
+      "reading_order": 179,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 239.76,
+        "x1": 384.0,
+        "y1": 251.22
+      },
+      "text": "Acknowledgements",
+      "text_sha256": "c9015d53b90846454375a2fdf2829c66fad7a2e52de1e89e73949ca59c905e49"
+    },
+    {
+      "id": "p10-b42",
+      "type": "paragraph",
+      "page": 10,
+      "reading_order": 180,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 250.92,
+        "x1": 539.62,
+        "y1": 268.63
+      },
+      "text": "M.C., L.P., C.B. and S.C. acknowledge support by NIH grants U19 AI106754, U19 AI135972, and R01 DA033773.",
+      "text_sha256": "abdaacb71e2344d95156707c51c38364197374d1526328669b6eab9efafbc035"
+    },
+    {
+      "id": "p10-b43",
+      "type": "heading",
+      "page": 10,
+      "reading_order": 181,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 279.61,
+        "x1": 389.91,
+        "y1": 291.08
+      },
+      "text": "Author contributions",
+      "text_sha256": "af274ee53e9c422e9a2fec96af2ccb8f3eeaea83c6ee0b1e48fd0f732c7838df"
+    },
+    {
+      "id": "p10-b44",
+      "type": "paragraph",
+      "page": 10,
+      "reading_order": 182,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 293.72,
+        "x1": 552.66,
+        "y1": 320.16
+      },
+      "text": "Y.Z., B.Z., M.C., L.P., A.H.K, O.T. implemented the Metascape web portal; Y.Z. and S.K. C. managed project; Y.Z. and B.Z. analyzed usage data; Y.Z., C.B. and S.K.C. wrote the manuscript.",
+      "text_sha256": "2bf2b256cd0d3227609235b3555880782849d052db8f26b450735e6c6e96aac8"
+    },
+    {
+      "id": "p10-b45",
+      "type": "heading",
+      "page": 10,
+      "reading_order": 183,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 333.19,
+        "x1": 397.25,
+        "y1": 344.65
+      },
+      "text": "Additional information",
+      "text_sha256": "a42f24143514fb13b923a6eb1c5f2ead83a3109b29ea58fd29180fba0b3fc0b9"
+    },
+    {
+      "id": "p10-b46",
+      "type": "paragraph",
+      "page": 10,
+      "reading_order": 184,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 344.24,
+        "x1": 552.65,
+        "y1": 362.0
+      },
+      "text": "Supplementary Information accompanies this paper at https://doi.org/10.1038/s41467- 019-09234-6.",
+      "text_sha256": "8145b1000eb0fc3421463b951d8d47e75c8f2cc702d7b0a78626c4acd2e580a3"
+    },
+    {
+      "id": "p10-b47",
+      "type": "paragraph",
+      "page": 10,
+      "reading_order": 185,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 370.43,
+        "x1": 493.12,
+        "y1": 379.46
+      },
+      "text": "Competing interests: The authors declare no competing interests.",
+      "text_sha256": "40b4aec6d51ed64fa1df7917179dc5d8823bde748da3bff853e6f181af47bc9f"
+    },
+    {
+      "id": "p10-b48",
+      "type": "paragraph",
+      "page": 10,
+      "reading_order": 186,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 387.84,
+        "x1": 539.74,
+        "y1": 405.6
+      },
+      "text": "Reprints and permission information is available online at http://npg.nature.com/ reprintsandpermissions/",
+      "text_sha256": "ced0f87117255f745d51a9748d71f6672d3a84e1e755e0480e37cae1b98f6b5a"
+    },
+    {
+      "id": "p10-b49",
+      "type": "paragraph",
+      "page": 10,
+      "reading_order": 187,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 413.97,
+        "x1": 549.43,
+        "y1": 431.73
+      },
+      "text": "Journal peer review information: Nature Communications thanks Anil Jegga and the other anonymous reviewer(s) for their contribution to the peer review of this work.",
+      "text_sha256": "25664faa25fb37b3cbbd00ca065950b1fbdbc69a3749b2192bdc0d7fb2fc3960"
+    },
+    {
+      "id": "p10-b50",
+      "type": "paragraph",
+      "page": 10,
+      "reading_order": 188,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 439.76,
+        "x1": 552.66,
+        "y1": 457.92
+      },
+      "text": "Publisher’s note: Springer Nature remains neutral with regard to jurisdictional claims in published maps and institutional affiliations.",
+      "text_sha256": "a6ad251251d3e4852b37b2dc691059429aecd5a6a8d36316a1fe115359be871b"
+    },
+    {
+      "id": "p10-b51",
+      "type": "paragraph",
+      "page": 10,
+      "reading_order": 189,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 478.26,
+        "x1": 552.7,
+        "y1": 576.92
+      },
+      "text": "Open Access This article is licensed under a Creative Commons Attribution 4.0 International License, which permits use, sharing, adaptation, distribution and reproduction in any medium or format, as long as you give appropriate credit to the original author(s) and the source, provide a link to the Creative Commons license, and indicate if changes were made. The images or other third party material in this article are included in the article’s Creative Commons license, unless indicated otherwise in a credit line to the material. If material is not included in the article’s Creative Commons license and your intended use is not permitted by statutory regulation or exceeds the permitted use, you will need to obtain permission directly from the copyright holder. To view a copy of this license, visit http://creativecommons.org/ licenses/by/4.0/.",
+      "text_sha256": "2313f8b410ba4ce6919bf6bf128f0107962fcaf27b5379622377bc334a4f7bca"
+    },
+    {
+      "id": "p10-b52",
+      "type": "paragraph",
+      "page": 10,
+      "reading_order": 190,
+      "bbox": {
+        "x0": 302.59,
+        "y0": 591.87,
+        "x1": 368.41,
+        "y1": 600.85
+      },
+      "text": "© The Author(s) 2019",
+      "text_sha256": "ca6185795fcb5790c5e7f350047e2e2cf33614cae7248798339da68b3e6712e8"
+    },
+    {
+      "id": "p10-b53",
+      "type": "page_number",
+      "page": 10,
+      "reading_order": 191,
+      "bbox": {
+        "x0": 42.6,
+        "y0": 750.36,
+        "x1": 53.02,
+        "y1": 759.58
+      },
+      "text": "10",
+      "text_sha256": "4a44dc15364204a80fe80e9039455cc1608281820fe2b24f1e5233ade6af1dd5"
+    },
+    {
+      "id": "p10-b54",
+      "type": "footer",
+      "page": 10,
+      "reading_order": 192,
+      "bbox": {
+        "x0": 105.7,
+        "y0": 750.76,
+        "x1": 495.51,
+        "y1": 759.48
+      },
+      "text": "NATURE COMMUNICATIONS | (2019) 10:1523 | https://doi.org/10.1038/s41467-019-09234-6 | www.nature.com/naturecommunications",
+      "text_sha256": "45baf21a4fc0eec42fd495b1837c5c3503c31cffd48219758467d7a645a62dc8"
+    }
+  ],
+  "provenance": {
+    "proposed_by": {
+      "tool": "extraction-pilot-drafts",
+      "version": "3",
+      "options_sha256": "b74e6f2f9c021751643a9a5d2e4451944b229defbcf37f11c98141324265f7b4"
+    },
+    "review": {
+      "status": "reviewed",
+      "reviewer": "agent-claude-sonnet-5-5",
+      "reviewed_at": "2026-11-12T16:34:54Z",
+      "basis": "page_image_inspection"
+    }
+  },
+  "references": {
+    "entries": [
+      {
+        "id": "ref1",
+        "ordinal": 1,
+        "page": 9,
+        "block_id": "p9-b20",
+        "raw": "1. Creixell, P. et al. Pathway and network analysis of cancer genomes. Nat. Methods 12, 615–621 (2015).",
+        "raw_sha256": "07ab2a937bbccfac339ae17c95ccd288a5af56338fd77a2fa4a00d44fea43722",
+        "fields": {
+          "authors": [
+            {
+              "family": "Creixell",
+              "given": "P."
+            }
+          ],
+          "title": "Pathway and network analysis of cancer genomes",
+          "venue": "Nat. Methods",
+          "year": 2015
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref2",
+        "ordinal": 2,
+        "page": 9,
+        "block_id": "p9-b21",
+        "raw": "2. Spirin, V. & Mirny, L. A. Protein complexes and functional modules in molecular networks. Proc. Natl Acad. Sci. USA 100, 12123–12128 (2003).",
+        "raw_sha256": "a4d412b95bbb51ff19072f0fd7aa6b42b87eea470707ef9c078fb7e8aa9c4968",
+        "fields": {
+          "authors": [
+            {
+              "family": "Spirin",
+              "given": "V."
+            },
+            {
+              "family": "Mirny",
+              "given": "L. A."
+            }
+          ],
+          "title": "Protein complexes and functional modules in molecular networks",
+          "venue": "Proc. Natl Acad. Sci. USA",
+          "year": 2003
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref3",
+        "ordinal": 3,
+        "page": 9,
+        "block_id": "p9-b22",
+        "raw": "3. Gonzalez, R. et al. Screening the mammalian extracellular proteome for regulators of embryonic human stem cell pluripotency. Proc. Natl Acad. Sci. USA 107, 3552–3557 (2010).",
+        "raw_sha256": "b972b4900fbb8dd28c751da89cb98737663bb447f414dd7b81ec74d0488fffac",
+        "fields": {
+          "authors": [
+            {
+              "family": "Gonzalez",
+              "given": "R."
+            }
+          ],
+          "title": "Screening the mammalian extracellular proteome for regulators of embryonic human stem cell pluripotency",
+          "venue": "Proc. Natl Acad. Sci. USA",
+          "year": 2010
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref4",
+        "ordinal": 4,
+        "page": 9,
+        "block_id": "p9-b23",
+        "raw": "4. Arrowsmith, C. H. et al. Corrigendum: The promise and peril of chemical probes. Nat. Chem. Biol. 11, 887 (2015).",
+        "raw_sha256": "16de1c0653e81d9a0fa252be711230e6d0fe0f62138a48bfd2d0a818ddff10c8",
+        "fields": {
+          "authors": [
+            {
+              "family": "Arrowsmith",
+              "given": "C. H."
+            }
+          ],
+          "title": "Corrigendum: The promise and peril of chemical probes",
+          "venue": "Nat. Chem. Biol.",
+          "year": 2015
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref5",
+        "ordinal": 5,
+        "page": 9,
+        "block_id": "p9-b24",
+        "raw": "5. Bushman, F. D. et al. Host cell factors in HIV replication: meta-analysis of genome-wide studies. PLoS Pathog. 5, e1000437 (2009).",
+        "raw_sha256": "5a5e563dd6c4db99ccb19d5b765d69543384134891d8ff0d9b19bca17ccfd8f6",
+        "fields": {
+          "authors": [
+            {
+              "family": "Bushman",
+              "given": "F. D."
+            }
+          ],
+          "title": "Host cell factors in HIV replication: meta-analysis of genome-wide studies",
+          "venue": "PLoS Pathog.",
+          "year": 2009
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref6",
+        "ordinal": 6,
+        "page": 9,
+        "block_id": "p9-b25",
+        "raw": "6. Huang da, W., Sherman, B. T. & Lempicki, R. A. Systematic and integrative analysis of large gene lists using DAVID bioinformatics resources. Nat. Protoc. 4, 44–57 (2009).",
+        "raw_sha256": "742ca522ea7ea021687c2aa6da821386986c0e05f1b90cfa8b985d5b091b100a",
+        "fields": {
+          "authors": [
+            {
+              "family": "Huang da",
+              "given": "W."
+            },
+            {
+              "family": "Sherman",
+              "given": "B. T."
+            },
+            {
+              "family": "Lempicki",
+              "given": "R. A."
+            }
+          ],
+          "title": "Systematic and integrative analysis of large gene lists using DAVID bioinformatics resources",
+          "venue": "Nat. Protoc.",
+          "year": 2009
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref7",
+        "ordinal": 7,
+        "page": 9,
+        "block_id": "p9-b26",
+        "raw": "7. Wadi, L., Meyer, M., Weiser, J., Stein, L. D. & Reimand, J. Impact of outdated gene annotations on pathway enrichment analysis. Nat. Methods 13, 705–706 (2016).",
+        "raw_sha256": "71c027ec915d54f27144fcc1d11637f073876003f1a558de0a5ee7fd6b596b36",
+        "fields": {
+          "authors": [
+            {
+              "family": "Wadi",
+              "given": "L."
+            },
+            {
+              "family": "Meyer",
+              "given": "M."
+            },
+            {
+              "family": "Weiser",
+              "given": "J."
+            },
+            {
+              "family": "Stein",
+              "given": "L. D."
+            },
+            {
+              "family": "Reimand",
+              "given": "J."
+            }
+          ],
+          "title": "Impact of outdated gene annotations on pathway enrichment analysis",
+          "venue": "Nat. Methods",
+          "year": 2016
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref8",
+        "ordinal": 8,
+        "page": 9,
+        "block_id": "p9-b27",
+        "raw": "8. Wang, J., Vasaikar, S., Shi, Z., Greer, M. & Zhang, B. WebGestalt 2017: a more comprehensive, powerful, flexible and interactive gene set enrichment analysis toolkit. Nucleic Acids Res. 45, W130–W137 (2017).",
+        "raw_sha256": "fa66ed2cc88c220a7451bce97b8e3c3e209bc1f823597beded873080d45581f4",
+        "fields": {
+          "authors": [
+            {
+              "family": "Wang",
+              "given": "J."
+            },
+            {
+              "family": "Vasaikar",
+              "given": "S."
+            },
+            {
+              "family": "Shi",
+              "given": "Z."
+            },
+            {
+              "family": "Greer",
+              "given": "M."
+            },
+            {
+              "family": "Zhang",
+              "given": "B."
+            }
+          ],
+          "title": "WebGestalt 2017: a more comprehensive, powerful, flexible and interactive gene set enrichment analysis toolkit",
+          "venue": "Nucleic Acids Res.",
+          "year": 2017
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref9",
+        "ordinal": 9,
+        "page": 9,
+        "block_id": "p9-b28",
+        "raw": "9. Tripathi, S. et al. Meta- and Orthogonal Integration of Influenza “OMICs” Data Defines a Role for UBR4 in Virus Budding. Cell Host Microbe 18, 723–735 (2015).",
+        "raw_sha256": "3030fa426dd88b68a23f273a32cad770577371af705ce182c8f1dbf69b5e114f",
+        "fields": {
+          "authors": [
+            {
+              "family": "Tripathi",
+              "given": "S."
+            }
+          ],
+          "title": "Meta- and Orthogonal Integration of Influenza “OMICs” Data Defines a Role for UBR4 in Virus Budding",
+          "venue": "Cell Host Microbe",
+          "year": 2015
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref10",
+        "ordinal": 10,
+        "page": 9,
+        "block_id": "p9-b29",
+        "raw": "10. Chen, B. & Butte, A. J. Leveraging big data to transform target selection and drug discovery. Clin. Pharmacol. Ther. 99, 285–297 (2016).",
+        "raw_sha256": "5376d1e5fe3fdbfed5d3b2fad0eb572399c86b446b418ad36fa39e5d527b711c",
+        "fields": {
+          "authors": [
+            {
+              "family": "Chen",
+              "given": "B."
+            },
+            {
+              "family": "Butte",
+              "given": "A. J."
+            }
+          ],
+          "title": "Leveraging big data to transform target selection and drug discovery",
+          "venue": "Clin. Pharmacol. Ther.",
+          "year": 2016
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref11",
+        "ordinal": 11,
+        "page": 9,
+        "block_id": "p9-b30",
+        "raw": "11. Chen, R. et al. A meta-analysis of lung cancer gene expression identifies PTK7 as a survival gene in lung adenocarcinoma. Cancer Res. 74, 2892–2902 (2014).",
+        "raw_sha256": "2755cfe14938fbf44bf97a8da8a537335d1a96e6063c90e79cc67db66b5c9cd4",
+        "fields": {
+          "authors": [
+            {
+              "family": "Chen",
+              "given": "R."
+            }
+          ],
+          "title": "A meta-analysis of lung cancer gene expression identifies PTK7 as a survival gene in lung adenocarcinoma",
+          "venue": "Cancer Res.",
+          "year": 2014
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref12",
+        "ordinal": 12,
+        "page": 9,
+        "block_id": "p9-b31",
+        "raw": "12. DAVID Release and Version Information: <https://david.ncifcrf.gov/content. jsp?file=release.html> (Accessed 20 Nov 2018).",
+        "raw_sha256": "13577367f2cb827f8ed0a5e924e55c820018b739bee6c7c1de4a27cf87737e5a",
+        "fields": {
+          "title": "DAVID Release and Version Information"
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref13",
+        "ordinal": 13,
+        "page": 9,
+        "block_id": "p9-b32",
+        "raw": "13. Brass, A. L. et al. The IFITM proteins mediate cellular resistance to influenza A H1N1 virus, West Nile virus, and dengue virus. Cell 139, 1243–1254 (2009).",
+        "raw_sha256": "bb7d9da1aacea9c80d3eaf2ff410771d620a02e5906be19d31b89aa94378f44c",
+        "fields": {
+          "authors": [
+            {
+              "family": "Brass",
+              "given": "A. L."
+            }
+          ],
+          "title": "The IFITM proteins mediate cellular resistance to influenza A H1N1 virus, West Nile virus, and dengue virus",
+          "venue": "Cell",
+          "year": 2009
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref14",
+        "ordinal": 14,
+        "page": 9,
+        "block_id": "p9-b33",
+        "raw": "14. Karlas, A. et al. Genome-wide RNAi screen identifies human host factors crucial for influenza virus replication. Nature 463, 818–822 (2010).",
+        "raw_sha256": "963b7eaf06280cf1dd43e86c69d519f48dca27cd5ea10c8aa0c914c51244cd7d",
+        "fields": {
+          "authors": [
+            {
+              "family": "Karlas",
+              "given": "A."
+            }
+          ],
+          "title": "Genome-wide RNAi screen identifies human host factors crucial for influenza virus replication",
+          "venue": "Nature",
+          "year": 2010
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref15",
+        "ordinal": 15,
+        "page": 9,
+        "block_id": "p9-b34",
+        "raw": "15. Konig, R. et al. Human host factors required for influenza virus replication. Nature 463, 813–817 (2010).",
+        "raw_sha256": "d9fdb9824e76deb992bfc1e660af951f95adf131640c88334b6e751daadf8740",
+        "fields": {
+          "authors": [
+            {
+              "family": "Konig",
+              "given": "R."
+            }
+          ],
+          "title": "Human host factors required for influenza virus replication",
+          "venue": "Nature",
+          "year": 2010
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref16",
+        "ordinal": 16,
+        "page": 9,
+        "block_id": "p9-b35",
+        "raw": "16. Ashburner, M. et al. Gene ontology: tool for the unification of biology. The Gene Ontology Consortium. Nat. Genet. 25, 25–29 (2000).",
+        "raw_sha256": "c39dcb27a43164eaea79bb9e2904cfb46d4686e04951036c1f21ce96ec1d493a",
+        "fields": {
+          "authors": [
+            {
+              "family": "Ashburner",
+              "given": "M."
+            }
+          ],
+          "title": "Gene ontology: tool for the unification of biology. The Gene Ontology Consortium",
+          "venue": "Nat. Genet.",
+          "year": 2000
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref17",
+        "ordinal": 17,
+        "page": 9,
+        "block_id": "p9-b36",
+        "raw": "17. Kanehisa, M. & Goto, S. KEGG: kyoto encyclopedia of genes and genomes. Nucleic Acids Res. 28, 27–30 (2000).",
+        "raw_sha256": "d1ccd47916b9c499f31bb1913b69ec8173a6a1831186de9e0d4e48901b34e27c",
+        "fields": {
+          "authors": [
+            {
+              "family": "Kanehisa",
+              "given": "M."
+            },
+            {
+              "family": "Goto",
+              "given": "S."
+            }
+          ],
+          "title": "KEGG: kyoto encyclopedia of genes and genomes",
+          "venue": "Nucleic Acids Res.",
+          "year": 2000
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref18",
+        "ordinal": 18,
+        "page": 9,
+        "block_id": "p9-b37",
+        "raw": "18. Fabregat, A. et al. The Reactome Pathway Knowledgebase. Nucleic Acids Res. 46, D649–D655 (2018).",
+        "raw_sha256": "916a66957e1804c37234911da02f13317ebacb8b659bcdc2927cd24d9d6fc715",
+        "fields": {
+          "authors": [
+            {
+              "family": "Fabregat",
+              "given": "A."
+            }
+          ],
+          "title": "The Reactome Pathway Knowledgebase",
+          "venue": "Nucleic Acids Res.",
+          "year": 2018
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref19",
+        "ordinal": 19,
+        "page": 9,
+        "block_id": "p9-b38",
+        "raw": "19. Subramanian, A. et al. Gene set enrichment analysis: a knowledge-based approach for interpreting genome-wide expression profiles. Proc. Natl Acad. Sci. USA 102, 15545–15550 (2005).",
+        "raw_sha256": "9a02f865b0e7a36d3999043b17c5e92ebf82183db24f9dba50646cda326fd26e",
+        "fields": {
+          "authors": [
+            {
+              "family": "Subramanian",
+              "given": "A."
+            }
+          ],
+          "title": "Gene set enrichment analysis: a knowledge-based approach for interpreting genome-wide expression profiles",
+          "venue": "Proc. Natl Acad. Sci. USA",
+          "year": 2005
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref20",
+        "ordinal": 20,
+        "page": 9,
+        "block_id": "p9-b39",
+        "raw": "20. Ruepp, A. et al. CORUM: the comprehensive resource of mammalian protein complexes--2009. Nucleic Acids Res. 38, D497–D501 (2010).",
+        "raw_sha256": "251d49d2233ac7a854ee5d5cadc5dcf7bf70e4848285808314aa69fad3d73777",
+        "fields": {
+          "authors": [
+            {
+              "family": "Ruepp",
+              "given": "A."
+            }
+          ],
+          "title": "CORUM: the comprehensive resource of mammalian protein complexes--2009",
+          "venue": "Nucleic Acids Res.",
+          "year": 2010
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref21",
+        "ordinal": 21,
+        "page": 9,
+        "block_id": "p9-b40",
+        "raw": "21. Cherry, J. M. et al. Saccharomyces Genome Database: the genomics resource of budding yeast. Nucleic Acids Res. 40, D700–D705 (2012).",
+        "raw_sha256": "ae2755f1c2888e021116461591c29f869e61f1b09c0f0ce1820835df9ba9172d",
+        "fields": {
+          "authors": [
+            {
+              "family": "Cherry",
+              "given": "J. M."
+            }
+          ],
+          "title": "Saccharomyces Genome Database: the genomics resource of budding yeast",
+          "venue": "Nucleic Acids Res.",
+          "year": 2012
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref22",
+        "ordinal": 22,
+        "page": 10,
+        "block_id": "p10-b3",
+        "raw": "22. Gramates, L. S. et al. FlyBase at 25: looking to the future. Nucleic Acids Res. 45, D663–D671 (2017).",
+        "raw_sha256": "cb272ce85d301488664c96d0c571569e205892fcfdfd36e9f461ea0d69e361f2",
+        "fields": {
+          "authors": [
+            {
+              "family": "Gramates",
+              "given": "L. S."
+            }
+          ],
+          "title": "FlyBase at 25: looking to the future",
+          "venue": "Nucleic Acids Res.",
+          "year": 2017
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref23",
+        "ordinal": 23,
+        "page": 10,
+        "block_id": "p10-b4",
+        "raw": "23. Lee, R. Y. N. et al. WormBase 2017: molting into a new stage. Nucleic Acids Res. 46, D869–D874 (2018).",
+        "raw_sha256": "3c6ca5a0ce97741220402ea3959bf2b529e2993c088837adb020fc6759a2d470",
+        "fields": {
+          "authors": [
+            {
+              "family": "Lee",
+              "given": "R. Y. N."
+            }
+          ],
+          "title": "WormBase 2017: molting into a new stage",
+          "venue": "Nucleic Acids Res.",
+          "year": 2018
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref24",
+        "ordinal": 24,
+        "page": 10,
+        "block_id": "p10-b5",
+        "raw": "24. Chatr-Aryamontri, A. et al. The BioGRID interaction database: 2017 update. Nucleic Acids Res. 45, D369–D379 (2017).",
+        "raw_sha256": "78cd9a12210ed2bd772a2997befa6b27b2a9182c87c6fc4c118de48f6245e617",
+        "fields": {
+          "authors": [
+            {
+              "family": "Chatr-Aryamontri",
+              "given": "A."
+            }
+          ],
+          "title": "The BioGRID interaction database: 2017 update",
+          "venue": "Nucleic Acids Res.",
+          "year": 2017
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref25",
+        "ordinal": 25,
+        "page": 10,
+        "block_id": "p10-b6",
+        "raw": "25. Consortium, T. U. UniProt: the universal protein knowledgebase. Nucleic Acids Res. 46, 2699 (2018).",
+        "raw_sha256": "9bae767a054dd18b78193e1c23297eedda9d87458a013031946394010c3cf28c",
+        "fields": {
+          "authors": [
+            {
+              "family": "Consortium",
+              "given": "T. U."
+            }
+          ],
+          "title": "UniProt: the universal protein knowledgebase",
+          "venue": "Nucleic Acids Res.",
+          "year": 2018
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref26",
+        "ordinal": 26,
+        "page": 10,
+        "block_id": "p10-b7",
+        "raw": "26. Wishart, D. S. et al. DrugBank 5.0: a major update to the DrugBank database for 2018. Nucleic Acids Res. 46, D1074–D1082 (2018).",
+        "raw_sha256": "09fd4e5a6e571ec03a752b43e9f0e7726a49830d66fc9fe48c906782042b94aa",
+        "fields": {
+          "authors": [
+            {
+              "family": "Wishart",
+              "given": "D. S."
+            }
+          ],
+          "title": "DrugBank 5.0: a major update to the DrugBank database for 2018",
+          "venue": "Nucleic Acids Res.",
+          "year": 2018
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref27",
+        "ordinal": 27,
+        "page": 10,
+        "block_id": "p10-b8",
+        "raw": "27. Zerbino, D. R. et al. Ensembl 2018. Nucleic Acids Res. 46, D754–D761 (2018).",
+        "raw_sha256": "85eaa7282c9563fd591a3ddfd268d04007a08d77b352e1c16dd9f42412e7d59b",
+        "fields": {
+          "authors": [
+            {
+              "family": "Zerbino",
+              "given": "D. R."
+            }
+          ],
+          "title": "Ensembl 2018",
+          "venue": "Nucleic Acids Res.",
+          "year": 2018
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref28",
+        "ordinal": 28,
+        "page": 10,
+        "block_id": "p10-b9",
+        "raw": "28. Cohen, J. A Coefficient of Agreement for Nominal Scales. Educ. Psychol. Meas. 20, 37–46 (1960).",
+        "raw_sha256": "46b0a981f71d6afe6d7931404c1da91ca6d18a2af44b45074310ece202a334e4",
+        "fields": {
+          "authors": [
+            {
+              "family": "Cohen",
+              "given": "J."
+            }
+          ],
+          "title": "A Coefficient of Agreement for Nominal Scales",
+          "venue": "Educ. Psychol. Meas.",
+          "year": 1960
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref29",
+        "ordinal": 29,
+        "page": 10,
+        "block_id": "p10-b10",
+        "raw": "29. Shannon, P. et al. Cytoscape: a software environment for integrated models of biomolecular interaction networks. Genome Res. 13, 2498–2504 (2003).",
+        "raw_sha256": "51c6238ab11bad53430baa9ad3d06af48283b48251ff3d2d298f4229623b6c39",
+        "fields": {
+          "authors": [
+            {
+              "family": "Shannon",
+              "given": "P."
+            }
+          ],
+          "title": "Cytoscape: a software environment for integrated models of biomolecular interaction networks",
+          "venue": "Genome Res.",
+          "year": 2003
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref30",
+        "ordinal": 30,
+        "page": 10,
+        "block_id": "p10-b11",
+        "raw": "30. Kuleshov, M. V. et al. Enrichr: a comprehensive gene set enrichment analysis web server 2016 update. Nucleic Acids Res. 44, W90–W97 (2016).",
+        "raw_sha256": "5970dfeca0d742ab539a60c08fe3f13fb6c2b06c509c4fab0b81957e6c4877b1",
+        "fields": {
+          "authors": [
+            {
+              "family": "Kuleshov",
+              "given": "M. V."
+            }
+          ],
+          "title": "Enrichr: a comprehensive gene set enrichment analysis web server 2016 update",
+          "venue": "Nucleic Acids Res.",
+          "year": 2016
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref31",
+        "ordinal": 31,
+        "page": 10,
+        "block_id": "p10-b12",
+        "raw": "31. Chen, J., Bardes, E. E., Aronow, B. J. & Jegga, A. G. ToppGene Suite for gene list enrichment analysis and candidate gene prioritization. Nucleic Acids Res. 37, W305–W311 (2009).",
+        "raw_sha256": "fce301d4e6dc26489af7db3ea9603bb75b55d1fffbfdcc6f73d61729421d4b9c",
+        "fields": {
+          "authors": [
+            {
+              "family": "Chen",
+              "given": "J."
+            },
+            {
+              "family": "Bardes",
+              "given": "E. E."
+            },
+            {
+              "family": "Aronow",
+              "given": "B. J."
+            },
+            {
+              "family": "Jegga",
+              "given": "A. G."
+            }
+          ],
+          "title": "ToppGene Suite for gene list enrichment analysis and candidate gene prioritization",
+          "venue": "Nucleic Acids Res.",
+          "year": 2009
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref32",
+        "ordinal": 32,
+        "page": 10,
+        "block_id": "p10-b13",
+        "raw": "32. Pizzuti, C. & Rombo, S. E. Algorithms and tools for protein-protein interaction networks clustering, with a special focus on population-based stochastic methods. Bioinformatics 30, 1343–1352 (2014).",
+        "raw_sha256": "b02be21c27ce0995d3f5beb024c33ddfb296175895693c03c68993caae295d1f",
+        "fields": {
+          "authors": [
+            {
+              "family": "Pizzuti",
+              "given": "C."
+            },
+            {
+              "family": "Rombo",
+              "given": "S. E."
+            }
+          ],
+          "title": "Algorithms and tools for protein-protein interaction networks clustering, with a special focus on population-based stochastic methods",
+          "venue": "Bioinformatics",
+          "year": 2014
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref33",
+        "ordinal": 33,
+        "page": 10,
+        "block_id": "p10-b14",
+        "raw": "33. Bader, G. D. & Hogue, C. W. An automated method for finding molecular complexes in large protein interaction networks. BMC Bioinforma. 4, 2 (2003).",
+        "raw_sha256": "1593203c5a13868738aa7e478e48c540cefdc760250d8ddddebd2d35fc21ccaa",
+        "fields": {
+          "authors": [
+            {
+              "family": "Bader",
+              "given": "G. D."
+            },
+            {
+              "family": "Hogue",
+              "given": "C. W."
+            }
+          ],
+          "title": "An automated method for finding molecular complexes in large protein interaction networks",
+          "venue": "BMC Bioinforma.",
+          "year": 2003
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref34",
+        "ordinal": 34,
+        "page": 10,
+        "block_id": "p10-b15",
+        "raw": "34. Evangelou, E. & Ioannidis, J. P. Meta-analysis methods for genome-wide association studies and beyond. Nat. Rev. Genet. 14, 379–389 (2013).",
+        "raw_sha256": "3f37c423eb8dc57203d6a11e9210c44c5c6238a3c895adac9b6382160051b4c3",
+        "fields": {
+          "authors": [
+            {
+              "family": "Evangelou",
+              "given": "E."
+            },
+            {
+              "family": "Ioannidis",
+              "given": "J. P."
+            }
+          ],
+          "title": "Meta-analysis methods for genome-wide association studies and beyond",
+          "venue": "Nat. Rev. Genet.",
+          "year": 2013
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref35",
+        "ordinal": 35,
+        "page": 10,
+        "block_id": "p10-b16",
+        "raw": "35. Liberali, P., Snijder, B. & Pelkmans, L. Single-cell and multivariate approaches in genetic perturbation screens. Nat. Rev. Genet. 16, 18–32 (2015).",
+        "raw_sha256": "6636ffc0191dd70626a1d7d932501ad3439c6ee587c8c2ca5542110956a74686",
+        "fields": {
+          "authors": [
+            {
+              "family": "Liberali",
+              "given": "P."
+            },
+            {
+              "family": "Snijder",
+              "given": "B."
+            },
+            {
+              "family": "Pelkmans",
+              "given": "L."
+            }
+          ],
+          "title": "Single-cell and multivariate approaches in genetic perturbation screens",
+          "venue": "Nat. Rev. Genet.",
+          "year": 2015
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref36",
+        "ordinal": 36,
+        "page": 10,
+        "block_id": "p10-b17",
+        "raw": "36. Krzywinski, M. et al. Circos: an information aesthetic for comparative genomics. Genome Res. 19, 1639–1645 (2009).",
+        "raw_sha256": "e017cb0b28b466afd762dd7f01e29a24236a469882d4a777f112096d1a84e26d",
+        "fields": {
+          "authors": [
+            {
+              "family": "Krzywinski",
+              "given": "M."
+            }
+          ],
+          "title": "Circos: an information aesthetic for comparative genomics",
+          "venue": "Genome Res.",
+          "year": 2009
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref37",
+        "ordinal": 37,
+        "page": 10,
+        "block_id": "p10-b18",
+        "raw": "37. Gillis, J. & Pavlidis, P. Assessing identity, redundancy and confounds in Gene Ontology annotations over time. Bioinformatics 29, 476–482 (2013).",
+        "raw_sha256": "1ed5ab421ff6c9d62c3d79640137dcca7b5d48adbe14708ec21165aaded44609",
+        "fields": {
+          "authors": [
+            {
+              "family": "Gillis",
+              "given": "J."
+            },
+            {
+              "family": "Pavlidis",
+              "given": "P."
+            }
+          ],
+          "title": "Assessing identity, redundancy and confounds in Gene Ontology annotations over time",
+          "venue": "Bioinformatics",
+          "year": 2013
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref38",
+        "ordinal": 38,
+        "page": 10,
+        "block_id": "p10-b19",
+        "raw": "38. Maglott, D., Ostell, J., Pruitt, K. D. & Tatusova, T. Entrez Gene: gene-centered information at NCBI. Nucleic Acids Res. 39, D52–D57 (2011).",
+        "raw_sha256": "58597263db2128e5b2e882a0236fafc13336a545f24440a3039ed0ce2566ad2d",
+        "fields": {
+          "authors": [
+            {
+              "family": "Maglott",
+              "given": "D."
+            },
+            {
+              "family": "Ostell",
+              "given": "J."
+            },
+            {
+              "family": "Pruitt",
+              "given": "K. D."
+            },
+            {
+              "family": "Tatusova",
+              "given": "T."
+            }
+          ],
+          "title": "Entrez Gene: gene-centered information at NCBI",
+          "venue": "Nucleic Acids Res.",
+          "year": 2011
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref39",
+        "ordinal": 39,
+        "page": 10,
+        "block_id": "p10-b20",
+        "raw": "39. Huang da, W., Sherman, B. T. & Lempicki, R. A. Bioinformatics enrichment tools: paths toward the comprehensive functional analysis of large gene lists. Nucleic Acids Res. 37, 1–13 (2009).",
+        "raw_sha256": "8bb38303904880307af6f53baaf491aeaaf56320197c86966adda37e1d547645",
+        "fields": {
+          "authors": [
+            {
+              "family": "Huang da",
+              "given": "W."
+            },
+            {
+              "family": "Sherman",
+              "given": "B. T."
+            },
+            {
+              "family": "Lempicki",
+              "given": "R. A."
+            }
+          ],
+          "title": "Bioinformatics enrichment tools: paths toward the comprehensive functional analysis of large gene lists",
+          "venue": "Nucleic Acids Res.",
+          "year": 2009
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref40",
+        "ordinal": 40,
+        "page": 10,
+        "block_id": "p10-b21",
+        "raw": "40. Jing, L. S. et al. A review on bioinformatics enrichment analysis tools towards functional analysis of high throughput gene set data. Curr. Proteom. 12, 14–27 (2015).",
+        "raw_sha256": "70e321d484842e95d53908ae19e4c76828b4e265ca501a088f9b0caeaf5aba6b",
+        "fields": {
+          "authors": [
+            {
+              "family": "Jing",
+              "given": "L. S."
+            }
+          ],
+          "title": "A review on bioinformatics enrichment analysis tools towards functional analysis of high throughput gene set data",
+          "venue": "Curr. Proteom.",
+          "year": 2015
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref41",
+        "ordinal": 41,
+        "page": 10,
+        "block_id": "p10-b22",
+        "raw": "41. Khatri, P. & Draghici, S. Ontological analysis of gene expression data: current tools, limitations, and open problems. Bioinformatics 21, 3587–3595 (2005).",
+        "raw_sha256": "3dc53c34546a30ab7a751087c706a7b37f54701567d152721d4314ea441d7a48",
+        "fields": {
+          "authors": [
+            {
+              "family": "Khatri",
+              "given": "P."
+            },
+            {
+              "family": "Draghici",
+              "given": "S."
+            }
+          ],
+          "title": "Ontological analysis of gene expression data: current tools, limitations, and open problems",
+          "venue": "Bioinformatics",
+          "year": 2005
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref42",
+        "ordinal": 42,
+        "page": 10,
+        "block_id": "p10-b23",
+        "raw": "42. Reimand, J. et al. g:Profiler-a web server for functional interpretation of gene lists (2016 update). Nucleic Acids Res. 44, W83–W89 (2016).",
+        "raw_sha256": "c2dfad2736e711cb4b187cce829abeacecb409f74ad3180af09593e2c87eebde",
+        "fields": {
+          "authors": [
+            {
+              "family": "Reimand",
+              "given": "J."
+            }
+          ],
+          "title": "g:Profiler-a web server for functional interpretation of gene lists (2016 update)",
+          "venue": "Nucleic Acids Res.",
+          "year": 2016
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref43",
+        "ordinal": 43,
+        "page": 10,
+        "block_id": "p10-b24",
+        "raw": "43. Mi, H. et al. PANTHER version 11: expanded annotation data from Gene Ontology and Reactome pathways, and data analysis tool enhancements. Nucleic Acids Res. 45, D183–D189 (2017).",
+        "raw_sha256": "5870589c5e589d7fb0a7b9dd0740643dc55f510a1ddd033e0fc61c2da3fe6e86",
+        "fields": {
+          "authors": [
+            {
+              "family": "Mi",
+              "given": "H."
+            }
+          ],
+          "title": "PANTHER version 11: expanded annotation data from Gene Ontology and Reactome pathways, and data analysis tool enhancements",
+          "venue": "Nucleic Acids Res.",
+          "year": 2017
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref44",
+        "ordinal": 44,
+        "page": 10,
+        "block_id": "p10-b25",
+        "raw": "44. Kalderimis, A. et al. InterMine: extensive web services for modern biology. Nucleic Acids Res. 42, W468–W472 (2014).",
+        "raw_sha256": "861c1e9beddad6fe5ea13d521081ec6dddaa556fde8691601751a5c4a5a89bbc",
+        "fields": {
+          "authors": [
+            {
+              "family": "Kalderimis",
+              "given": "A."
+            }
+          ],
+          "title": "InterMine: extensive web services for modern biology",
+          "venue": "Nucleic Acids Res.",
+          "year": 2014
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref45",
+        "ordinal": 45,
+        "page": 10,
+        "block_id": "p10-b26",
+        "raw": "45. Zheng, Q. & Wang, X. J. GOEAST: a web-based software toolkit for Gene Ontology enrichment analysis. Nucleic Acids Res. 36, W358–W363 (2008).",
+        "raw_sha256": "02721f2329e00258fcf601cb6f63172341276666cfad393c7f19a15c8283c4d6",
+        "fields": {
+          "authors": [
+            {
+              "family": "Zheng",
+              "given": "Q."
+            },
+            {
+              "family": "Wang",
+              "given": "X. J."
+            }
+          ],
+          "title": "GOEAST: a web-based software toolkit for Gene Ontology enrichment analysis",
+          "venue": "Nucleic Acids Res.",
+          "year": 2008
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref46",
+        "ordinal": 46,
+        "page": 10,
+        "block_id": "p10-b27",
+        "raw": "46. Stockel, D. et al. Multi-omics enrichment analysis using the GeneTrail2 web service. Bioinformatics 32, 1502–1508 (2016).",
+        "raw_sha256": "bf1910e8e35fab8ffc788e2de87510f80b1ff321bc5376556aff2d5d7215820f",
+        "fields": {
+          "authors": [
+            {
+              "family": "Stockel",
+              "given": "D."
+            }
+          ],
+          "title": "Multi-omics enrichment analysis using the GeneTrail2 web service",
+          "venue": "Bioinformatics",
+          "year": 2016
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref47",
+        "ordinal": 47,
+        "page": 10,
+        "block_id": "p10-b28",
+        "raw": "47. Martin, D. et al. GOToolBox: functional analysis of gene datasets based on Gene Ontology. Genome Biol. 5, R101 (2004).",
+        "raw_sha256": "b97e6bef63ce1138d9dd31bb399d5e34b6503c1e349589411aab9dadd19645a8",
+        "fields": {
+          "authors": [
+            {
+              "family": "Martin",
+              "given": "D."
+            }
+          ],
+          "title": "GOToolBox: functional analysis of gene datasets based on Gene Ontology",
+          "venue": "Genome Biol.",
+          "year": 2004
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref48",
+        "ordinal": 48,
+        "page": 10,
+        "block_id": "p10-b29",
+        "raw": "48. McLean, C. Y. et al. GREAT improves functional interpretation of cis- regulatory regions. Nat. Biotechnol. 28, 495–501 (2010).",
+        "raw_sha256": "2063d49efb86629eac452620991f12d073c92fc6b5141b6afbff53ddf945e932",
+        "fields": {
+          "authors": [
+            {
+              "family": "McLean",
+              "given": "C. Y."
+            }
+          ],
+          "title": "GREAT improves functional interpretation of cis-regulatory regions",
+          "venue": "Nat. Biotechnol.",
+          "year": 2010
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref49",
+        "ordinal": 49,
+        "page": 10,
+        "block_id": "p10-b30",
+        "raw": "49. Tian, T. et al. agriGO v2.0: a GO analysis toolkit for the agricultural community, 2017 update. Nucleic Acids Res. 45, W122–W129 (2017).",
+        "raw_sha256": "f58fbc97dcf0aabd66970fc986bbae8a869d336c0ca38719fba821adc44320eb",
+        "fields": {
+          "authors": [
+            {
+              "family": "Tian",
+              "given": "T."
+            }
+          ],
+          "title": "agriGO v2.0: a GO analysis toolkit for the agricultural community, 2017 update",
+          "venue": "Nucleic Acids Res.",
+          "year": 2017
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref50",
+        "ordinal": 50,
+        "page": 10,
+        "block_id": "p10-b31",
+        "raw": "50. Carmona-Saez, P., Chagoyen, M., Tirado, F., Carazo, J. M. & Pascual- Montano, A. GENECODIS: a web-based tool for finding significant concurrent annotations in gene lists. Genome Biol. 8, R3 (2007).",
+        "raw_sha256": "3966f8d1125a8088ea71ec9d2dc590dcde195f4611775f09d6dbb4d53ac8a104",
+        "fields": {
+          "authors": [
+            {
+              "family": "Carmona-Saez",
+              "given": "P."
+            },
+            {
+              "family": "Chagoyen",
+              "given": "M."
+            },
+            {
+              "family": "Tirado",
+              "given": "F."
+            },
+            {
+              "family": "Carazo",
+              "given": "J. M."
+            },
+            {
+              "family": "Pascual- Montano",
+              "given": "A."
+            }
+          ],
+          "title": "GENECODIS: a web-based tool for finding significant concurrent annotations in gene lists",
+          "venue": "Genome Biol.",
+          "year": 2007
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref51",
+        "ordinal": 51,
+        "page": 10,
+        "block_id": "p10-b32",
+        "raw": "51. Zeeberg, B. R. et al. GoMiner: a resource for biological interpretation of genomic and proteomic data. Genome Biol. 4, R28 (2003).",
+        "raw_sha256": "6daea464e973e1421295e1a54eeec49deafb8d7566d87f6c62459ffe561386ac",
+        "fields": {
+          "authors": [
+            {
+              "family": "Zeeberg",
+              "given": "B. R."
+            }
+          ],
+          "title": "GoMiner: a resource for biological interpretation of genomic and proteomic data",
+          "venue": "Genome Biol.",
+          "year": 2003
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref52",
+        "ordinal": 52,
+        "page": 10,
+        "block_id": "p10-b33",
+        "raw": "52. Merico, D., Isserlin, R., Stueker, O., Emili, A. & Bader, G. D. Enrichment map: a network-based method for gene-set enrichment visualization and interpretation. PLoS One 5, e13984 (2010).",
+        "raw_sha256": "39841d4cba205a416d9668a88b05958e21b78d492b0690652488862aef18fe7b",
+        "fields": {
+          "authors": [
+            {
+              "family": "Merico",
+              "given": "D."
+            },
+            {
+              "family": "Isserlin",
+              "given": "R."
+            },
+            {
+              "family": "Stueker",
+              "given": "O."
+            },
+            {
+              "family": "Emili",
+              "given": "A."
+            },
+            {
+              "family": "Bader",
+              "given": "G. D."
+            }
+          ],
+          "title": "Enrichment map: a network-based method for gene-set enrichment visualization and interpretation",
+          "venue": "PLoS One",
+          "year": 2010
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref53",
+        "ordinal": 53,
+        "page": 10,
+        "block_id": "p10-b34",
+        "raw": "53. Alonso, R. et al. Babelomics 5.0: functional interpretation for new generations of genomic data. Nucleic Acids Res. 43, W117–W121 (2015).",
+        "raw_sha256": "d1475e111fab3989e5759ffba0192ff82e10af03882229dc11afb763c46540d6",
+        "fields": {
+          "authors": [
+            {
+              "family": "Alonso",
+              "given": "R."
+            }
+          ],
+          "title": "Babelomics 5.0: functional interpretation for new generations of genomic data",
+          "venue": "Nucleic Acids Res.",
+          "year": 2015
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref54",
+        "ordinal": 54,
+        "page": 10,
+        "block_id": "p10-b35",
+        "raw": "54. Herwig, R., Hardt, C., Lienhard, M. & Kamburov, A. Analyzing and interpreting genome data at the network level with ConsensusPathDB. Nat. Protoc. 11, 1889–1907 (2016).",
+        "raw_sha256": "df921a5f93437d07fe0fc9fe9bc99c1633406a8ba2dcae3734212b5e1185c696",
+        "fields": {
+          "authors": [
+            {
+              "family": "Herwig",
+              "given": "R."
+            },
+            {
+              "family": "Hardt",
+              "given": "C."
+            },
+            {
+              "family": "Lienhard",
+              "given": "M."
+            },
+            {
+              "family": "Kamburov",
+              "given": "A."
+            }
+          ],
+          "title": "Analyzing and interpreting genome data at the network level with ConsensusPathDB",
+          "venue": "Nat. Protoc.",
+          "year": 2016
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref55",
+        "ordinal": 55,
+        "page": 10,
+        "block_id": "p10-b36",
+        "raw": "55. Li, T. et al. A scored human protein-protein interaction network to catalyze genomic interpretation. Nat. Methods 14, 61–64 (2017).",
+        "raw_sha256": "db34796e483af3da7da8707f087f60be0a82090acbf31bbca42ed7e70c374bb5",
+        "fields": {
+          "authors": [
+            {
+              "family": "Li",
+              "given": "T."
+            }
+          ],
+          "title": "A scored human protein-protein interaction network to catalyze genomic interpretation",
+          "venue": "Nat. Methods",
+          "year": 2017
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref56",
+        "ordinal": 56,
+        "page": 10,
+        "block_id": "p10-b37",
+        "raw": "56. Turei, D., Korcsmaros, T. & Saez-Rodriguez, J. OmniPath: guidelines and gateway for literature-curated signaling pathway resources. Nat. Methods 13, 966–967 (2016).",
+        "raw_sha256": "282a59701e9b1fba92367964596ec8e26dc20c6340e84bc2e6aa43aed3dcdd08",
+        "fields": {
+          "authors": [
+            {
+              "family": "Turei",
+              "given": "D."
+            },
+            {
+              "family": "Korcsmaros",
+              "given": "T."
+            },
+            {
+              "family": "Saez-Rodriguez",
+              "given": "J."
+            }
+          ],
+          "title": "OmniPath: guidelines and gateway for literature-curated signaling pathway resources",
+          "venue": "Nat. Methods",
+          "year": 2016
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref57",
+        "ordinal": 57,
+        "page": 10,
+        "block_id": "p10-b38",
+        "raw": "57. Saldanha, A. J. Java Treeview--extensible visualization of microarray data. Bioinformatics 20, 3246–3248 (2004).",
+        "raw_sha256": "d94e36728816c501ee915e0e20efb32a3afc3885efeef187b7a191a9a7c6a1c0",
+        "fields": {
+          "authors": [
+            {
+              "family": "Saldanha",
+              "given": "A. J."
+            }
+          ],
+          "title": "Java Treeview--extensible visualization of microarray data",
+          "venue": "Bioinformatics",
+          "year": 2004
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref58",
+        "ordinal": 58,
+        "page": 10,
+        "block_id": "p10-b39",
+        "raw": "58. Zar J. H. Biostatistical Analysis, 4th edn. (Prentice Hall, NJ, 1999).",
+        "raw_sha256": "6a5fce06159d4145ce9f21278f472c4e0b56aabf24f7e74e6cc301bdf4832517",
+        "fields": {
+          "authors": [
+            {
+              "family": "Zar",
+              "given": "J. H."
+            }
+          ],
+          "title": "Biostatistical Analysis",
+          "year": 1999
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref59",
+        "ordinal": 59,
+        "page": 10,
+        "block_id": "p10-b40",
+        "raw": "59. Hochberg, Y. & Benjamini, Y. More powerful procedures for multiple significance testing. Stat. Med. 9, 811–818 (1990).",
+        "raw_sha256": "0ab3e8cf22da63100b3d2e76c2c52146b9e1b3bc0f7456b5b17babe8bfb5d449",
+        "fields": {
+          "authors": [
+            {
+              "family": "Hochberg",
+              "given": "Y."
+            },
+            {
+              "family": "Benjamini",
+              "given": "Y."
+            }
+          ],
+          "title": "More powerful procedures for multiple significance testing",
+          "venue": "Stat. Med.",
+          "year": 1990
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      }
+    ],
+    "markers": []
+  }
+}
