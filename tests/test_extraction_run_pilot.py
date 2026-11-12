@@ -186,6 +186,62 @@ def test_run_directories_never_collide(world):
     assert third["run_dir"].name.endswith("-3")
 
 
+def test_no_extraction_after_the_first_timeout(world):
+    inner = FakeExtractor(world["records"])
+
+    def hangs_on_fail(pdf_path, *, pages=None, options=None):
+        if Path(pdf_path).stem == "doc-fail":
+            time.sleep(2)
+        return inner(pdf_path, pages=pages, options=options)
+
+    outcome, _ = _run(world, extractor=hangs_on_fail, timeout=0.3)
+    results = _by_input(outcome)
+    assert results[_id(world, "doc-boom")]["status"] == "failed"  # sorted before the timeout: still extracted
+    assert results[_id(world, "doc-fail")]["status"] == "timeout"
+    for name in ("doc-incomplete", "doc-pass", "doc-slow"):
+        assert results[_id(world, name)]["status"] == "skipped"
+        assert results[_id(world, name)]["error"]["kind"] == "SkippedAfterTimeout" and "metrics" not in results[_id(world, name)]
+    assert sorted(c[0] for c in inner.calls) == ["doc-boom"]  # nothing started after the timeout
+    assert "SkippedAfterTimeout" in outcome["summary"] and "no further document was extracted" in outcome["summary"]
+    assert "harness wall clock" in outcome["summary"]
+    validate_record(outcome["run"])
+
+
+def test_extractor_identity_is_recorded_per_document_and_must_agree(world):
+    outcome, _ = _run(world, timeout=0.3)
+    documents = {d["corpus_id"]: d for d in outcome["details"]["documents"]}
+    assert documents["doc-pass"]["extractor"] == {"tool": "fake-extractor", "version": "9.9"}
+    assert documents["doc-pass"]["latency_source"] == "extractor elapsed_s" and "extractor" not in documents["doc-boom"]
+    inner = FakeExtractor(world["records"])
+
+    def drifting(pdf_path, *, pages=None, options=None):
+        result = inner(pdf_path, pages=pages, options=options)
+        version = "1.0" if Path(pdf_path).stem == "doc-pass" else "2.0"
+        return Result(result.observation, result.markdown, {"tool": "fake-extractor", "version": version}, 0.1)
+
+    before = set(world["out"].iterdir())
+    with pytest.raises(harness.HarnessError, match="different extractor identities"):
+        _run(world, extractor=drifting, timeout=0.3)
+    assert set(world["out"].iterdir()) == before
+
+
+def test_all_failed_run_keeps_unknown_identity_and_says_so(world):
+    def always_fails(pdf_path, *, pages=None, options=None):
+        raise FakeFailure("nope")
+
+    outcome, _ = _run(world, extractor=always_fails, timeout=0.3)
+    assert outcome["run"]["configurations"][0]["tool"] == "unknown"
+    assert "No extractor identity is known" in outcome["summary"]
+
+
+def test_out_dir_inside_a_git_checkout_is_refused_by_the_library(world):
+    inside = Path(harness.__file__).resolve().parent / "out"
+    extractor = FakeExtractor(world["records"])
+    with pytest.raises(harness.HarnessError, match="outside every git checkout"):
+        harness.run_pilot(world["expectations"], world["cache"], inside, world["manifest"], extractor=extractor)
+    assert extractor.calls == [] and not inside.exists()
+
+
 def test_deterministic_ordering(world):
     first, _ = _run(world, timeout=0.3, slow=1.0)
     second, _ = _run(world, timeout=0.3, slow=1.0)
@@ -254,8 +310,7 @@ def test_cli_defaults_to_pilot_prints_heldout_warning_and_stays_out_of_the_repo(
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
     monkeypatch.setattr("extraction.pilot.check_manifest", lambda *a, **k: [])
     args = ["--expectations", str(world["expectations"]), "--cache", str(world["cache"]), "--manifest", str(manifest_path)]
-    with pytest.raises(SystemExit):
-        harness.main([*args, "--out", str(Path(harness.__file__).resolve().parent / "out")])
+    assert harness.main([*args, "--out", str(Path(harness.__file__).resolve().parent / "out")]) == 2
     assert "outside every git checkout" in capsys.readouterr().err
     monkeypatch.setattr(harness, "default_extractor", lambda: FakeExtractor(world["records"]))
     # held-out requires --split heldout: the pilot documents are not held out, so it refuses and warns

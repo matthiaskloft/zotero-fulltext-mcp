@@ -300,7 +300,14 @@ uv run python tools/run_extraction_pilot.py --expectations <dir of reviewed reco
   pages its expectations need (`pages=None` when that is the whole document), through an injectable
   callable with the signature of `extraction.observe.observe_pdf` (`pages`, `options`; returns
   `observation`, `markdown`, `extractor`, `elapsed_s`). `--timeout` applies per document and runs the
-  extractor in a daemon thread, so a timed-out extraction is abandoned, not killed.
+  extractor in a daemon thread, so a timed-out extraction is abandoned, not killed. Because the
+  abandoned thread may still be running, nothing further is extracted after the first timeout: the
+  remaining expectations are recorded as `skipped` with error kind `SkippedAfterTimeout`, and the summary
+  says so. The library refuses an `out_dir` inside any git checkout. Each document's extractor identity
+  goes into `details.json`; a run whose documents disagree is refused (it must describe one
+  configuration), and a run where every document failed keeps tool/version `unknown`, noted in the summary.
+  The summary states per document whether latency is the extractor's `elapsed_s` or the harness wall clock
+  (failures, timeouts).
 - **Scoring.** Each expectation is scored with `score_records(..., markdown=...)` so `output_span`
   hashes round-trip. An extractor exception, a timeout or an observation the scorer rejects becomes a
   `failure_result` (`failed` or `timeout`, with an error and no metrics) for every expectation of that

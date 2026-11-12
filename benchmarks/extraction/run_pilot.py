@@ -33,6 +33,7 @@ import argparse
 import json
 import platform
 import re
+import shutil
 import sys
 import threading
 import time
@@ -43,6 +44,7 @@ from pathlib import Path
 from typing import Any
 
 from .page_checks import verify_cached
+from .drafts import _inside_git_checkout
 from .pilot_records import load_pilot_expectation
 from .records import RecordError, options_sha256, sha256_bytes, validate_record
 from .scorer import METRIC_VERSIONS, SCORER_VERSION, ScoringError, failure_result, score_records, score_to_result
@@ -179,9 +181,13 @@ def run_pilot(
     """Run ``extractor`` over the reviewed expectations and write the run files under ``out_dir/<run id>/``.
 
     Returns ``{"run": <record>, "run_dir": Path, "summary": str, "details": dict}``. Raises
-    ``HarnessError`` before extracting anything on a refusal. ``out_dir`` is not checked here (the
-    CLI refuses locations inside a git checkout).
+    ``HarnessError`` before extracting anything on a refusal, including an ``out_dir`` inside a git
+    checkout. After the first timeout no further PDF is extracted (the abandoned thread may still be
+    running): the remaining expectations are recorded as ``skipped`` with kind ``SkippedAfterTimeout``.
+    Documents whose extractor identities disagree make the run refuse (it must describe one configuration).
     """
+    if _inside_git_checkout(out_dir):
+        raise HarnessError("out_dir must be outside every git checkout: extracted text is copyrighted and must not be committed")
     options_dict = dict(options or {})
     items = load_expectations(expectations_dir, manifest, cache, split)
     groups = _group_by_pdf(items)
@@ -212,11 +218,11 @@ def run_pilot(
     (run_dir / "observations").mkdir()
     (run_dir / "markdown").mkdir()
 
-    identity: dict[str, Any] = {}
     results: list[dict[str, Any]] = []
     scores: dict[str, dict[str, Any]] = {}
     details_inputs: dict[str, dict[str, Any]] = {}
     documents: list[dict[str, Any]] = []
+    timed_out = False
     # The configuration id depends on the extractor identity, which is only known after extraction,
     # so results are built with a placeholder and re-keyed once.
     placeholder = "@config"
@@ -231,25 +237,29 @@ def run_pilot(
         error: tuple[str, str, str] | None = None
         result_obj = None
         wall_start = time.monotonic()
-        try:
-            result_obj = _call_with_timeout(
-                lambda p=pdf_paths[corpus_id], pg=request_pages: extract(p, pages=pg, options=options_dict or None),
-                timeout)
-        except ExtractionTimeout as exc:
-            error = ("timeout", "ExtractionTimeout", str(exc))
-        except Exception as exc:  # noqa: BLE001 - any extractor failure is recorded, never fatal to the run
-            error = ("failed", type(exc).__name__, str(exc) or type(exc).__name__)
+        if timed_out:
+            error = ("skipped", "SkippedAfterTimeout",
+                     "not extracted: an earlier document timed out and its abandoned extraction may still be running")
+        else:
+            try:
+                result_obj = _call_with_timeout(
+                    lambda p=pdf_paths[corpus_id], pg=request_pages: extract(p, pages=pg, options=options_dict or None),
+                    timeout)
+            except ExtractionTimeout as exc:
+                error = ("timeout", "ExtractionTimeout", str(exc))
+                timed_out = True
+            except Exception as exc:  # noqa: BLE001 - any extractor failure is recorded, never fatal to the run
+                error = ("failed", type(exc).__name__, str(exc) or type(exc).__name__)
         wall = time.monotonic() - wall_start
 
         output_sha = markdown_sha = None
-        latency = wall
+        latency, latency_source = wall, "harness wall clock"
         if error is None:
             try:
                 observation = dict(result_obj.observation)
                 markdown = str(result_obj.markdown)
-                latency = float(result_obj.elapsed_s)
-                for key, value in dict(result_obj.extractor or {}).items():
-                    identity.setdefault(key, value)
+                latency, latency_source = float(result_obj.elapsed_s), "extractor elapsed_s"
+                document["extractor"] = dict(result_obj.extractor or {})
                 obs_bytes = _json_bytes(observation)
                 md_bytes = markdown.encode("utf-8")
             except Exception as exc:  # noqa: BLE001 - a malformed ObservationResult is a failed extraction
@@ -260,7 +270,7 @@ def run_pilot(
             (run_dir / "markdown" / f"{_slug(corpus_id)}.md").write_bytes(md_bytes)
         else:
             document.update(status=error[0], error={"kind": error[1], "message": error[2]})
-        document.update(latency_seconds=round(latency, 3), observation_sha256=output_sha, markdown_sha256=markdown_sha)
+        document.update(latency_seconds=round(latency, 3), latency_source=latency_source, observation_sha256=output_sha, markdown_sha256=markdown_sha)
 
         for item in group:
             record = item["record"]
@@ -281,6 +291,12 @@ def run_pilot(
                                            observation_id=observation["record_id"], **extra))
 
     finished = clock()
+    identities = {json.dumps(d["extractor"], sort_keys=True): d["extractor"] for d in documents if "extractor" in d}
+    if len(identities) > 1:
+        shutil.rmtree(run_dir)  # created exclusively above, so it holds only this run's files
+        raise HarnessError("documents report different extractor identities, so the run would not describe one "
+                           "configuration; nothing written:\n  " + "\n  ".join(sorted(identities)))
+    identity = next(iter(identities.values()), {})
     tool = str(identity.get("tool") or "unknown")
     version = str(identity.get("version") or "unknown")
     options_hash = options_sha256(options_dict)
@@ -360,6 +376,8 @@ def render_summary(run: Mapping[str, Any], scores: Mapping[str, Mapping[str, Any
     lines = [f"# Extraction run {run['record_id']}", ""]
     if split == "heldout":
         lines += [HELDOUT_WARNING, ""]
+    if config["tool"] == "unknown":
+        lines += ["No extractor identity is known: every document failed, timed out or was skipped before reporting one.", ""]
     lines += [
         f"- extractor: {config['tool']} {config['version']}" + (f" ({config['model']})" if "model" in config else ""),
         f"- options: `{json.dumps(config['options'], sort_keys=True)}`",
@@ -394,13 +412,16 @@ def render_summary(run: Mapping[str, Any], scores: Mapping[str, Mapping[str, Any
         lines += [f"| {f['name']} | {f['failures']} | {f['inputs']} | {f['example']} |" for f in failing]
     else:
         lines.append("None.")
-    lines += ["", "## Documents", "", "| document | status | observation sha256 | markdown sha256 |", "|---|---|---|---|"]
+    lines += ["", "## Documents", "", "| document | status | latency s | latency source | observation sha256 | markdown sha256 |", "|---|---|---|---|---|---|"]
     for doc in documents:
         status = doc["status"] if doc["status"] == "ok" else f"{doc['status']}: {doc['error']['kind']}"
-        lines.append(f"| {doc['corpus_id']} | {status} | {(doc['observation_sha256'] or '-')[:16]} | {(doc['markdown_sha256'] or '-')[:16]} |")
+        lines.append(f"| {doc['corpus_id']} | {status} | {doc['latency_seconds']:.2f} | {doc['latency_source']} | {(doc['observation_sha256'] or '-')[:16]} | {(doc['markdown_sha256'] or '-')[:16]} |")
     errors = [r for r in results if r["status"] != "ok"]
     if errors:
         lines += ["", "## Errors", ""]
+        if any(r["error"]["kind"] == "SkippedAfterTimeout" for r in errors):
+            lines += ["After the first timeout no further document was extracted (the abandoned extraction may still be "
+                      "running); the rest are `skipped`.", ""]
         lines += [f"- {r['input_id']}: {r['status']} {r['error']['kind']}: {r['error']['message']}" for r in sorted(errors, key=lambda r: r["input_id"])]
     return "\n".join(lines) + "\n"
 
@@ -419,7 +440,7 @@ def _parse_option(text: str) -> tuple[str, Any]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    from .drafts import DEFAULT_CACHE, _inside_git_checkout
+    from .drafts import DEFAULT_CACHE
     from .pilot import MANIFEST_PATH, PIN_PATH, check_manifest
 
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -439,8 +460,6 @@ def main(argv: list[str] | None = None) -> int:
     problems = check_manifest(args.manifest, args.pin)
     if problems:
         parser.error("manifest check failed, refusing to run against a changed selection: " + "; ".join(problems))
-    if _inside_git_checkout(args.out):
-        parser.error("--out must be outside every git checkout: extracted text is copyrighted and must not be committed")
     manifest = json.loads(args.manifest.read_bytes())
     options: dict[str, Any] = dict(args.option)
     if args.image_ocr:
