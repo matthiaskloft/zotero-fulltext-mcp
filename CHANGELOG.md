@@ -12,6 +12,11 @@ All notable changes to this project are documented here. Format loosely follows
   opt-in crop OCR) into a schema-valid `observation` plus the exact Markdown its `output_span`
   offsets refer to, ready for the scorer. Benchmark-side only; no runtime dependency. See
   `docs/extraction-quality-plan.md`.
+- Extraction run harness (roadmap E1/E2): `tools/run_extraction_pilot.py` runs an extractor over the
+  reviewed pilot pages, verifies cached PDFs against the manifest pins, scores each page, and writes a
+  schema-valid `run` record plus a human-readable summary outside the repo. Drafts are refused,
+  failures and timeouts are recorded without metrics, and the held-out split needs an explicit
+  `--split heldout`. Benchmark-side only. See `docs/extraction-quality-plan.md`.
 
 ## [0.16.1] - 2026-11-12
 
