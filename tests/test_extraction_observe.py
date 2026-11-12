@@ -147,7 +147,7 @@ def test_default_run_is_the_production_configuration(result):
 
 
 def _blocks(markdown: str, page: int = 1):
-    state = {"order": 0, "in_references": False, "entries": []}
+    state = {"order": 0, "in_references": False, "entries": [], "entry_count": 0}
     blocks = observe.build_page_blocks(page, markdown, 0, sha256_text(markdown), state, markdown)
     return blocks, state
 
@@ -332,3 +332,23 @@ def test_real_harness_records_the_real_tool(tmp_path):
     assert config["tool"] == "pymupdf4llm.to_markdown" and config["tool"] != "unknown"
     assert config["version"].startswith("pymupdf4llm ")
     assert all(r["status"] == "ok" for r in outcome["run"]["results"])
+
+
+def test_doi_in_markdown_links_and_bare():
+    md = (
+        "## References \n\n[1] A. (2020). T. [10.1234/abc.def](https://doi.org/10.1234/abc.def) \n\n"
+        "[2] B. (2019). U. [doi](https://doi.org/10.5555/xyz-1). \n\n[3] C. (2018). V. doi:10.7777/q.r. \n\n"
+    )
+    _, state = _blocks(md)
+    assert [e["doi"]["value"] for e in state["entries"]] == ["10.1234/abc.def", "10.5555/xyz-1", "10.7777/q.r"]
+
+
+def test_ordinals_count_through_unselected_pages(monkeypatch):
+    pages = [(1, "## References \n\n[1] Doe, J. (2020). A. \n\n"), (2, "[2] Roe, R. (2019). B. \n\n"),
+             (3, "[3] Poe, E. (2018). C. \n\n")]
+    monkeypatch.setattr(observe, "_extract_pages", lambda *a, **k: (pages, False, Path(".")))
+    whole = observe_pdf(CORPUS_PDF, pages=[1, 2, 3])
+    skipped = observe_pdf(CORPUS_PDF, pages=[1, 3])
+    ordinals = {e["raw"]: e["ordinal"] for e in whole.observation["references"]["entries"]}
+    got = {e["raw"]: e["ordinal"] for e in skipped.observation["references"]["entries"]}
+    assert got and all(ordinals[raw] == n for raw, n in got.items()) and sorted(got.values()) == [1, 3]

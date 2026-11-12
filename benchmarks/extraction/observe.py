@@ -78,7 +78,8 @@ _REFERENCES_HEADING = re.compile(
     r"^[\s#>*_]*(?:\d+\.?\s*|[ivx]+\.\s*)?(?:references?|bibliography|literature(?: cited)?|works cited|literatur(?:verzeichnis)?)[\s*_.:]*$",
     re.I,
 )
-_DOI = re.compile(r"10\.\d{4,9}/[^\s<>\"'|]+", re.I)
+_DOI = re.compile(r"10\.\d{4,9}/[^\s<>\"'|\])]+", re.I)
+_MD_LINK = re.compile(r"\[([^\]]*)\]\(([^)\s]*)[^)]*\)")
 _REFERENCE_START = re.compile(r"^[ \t]*(?:\[\d{1,3}\]|\d{1,3}[.)])[ \t]+\S")
 
 
@@ -299,7 +300,6 @@ def build_page_blocks(
     ``state`` carries ``order`` (next reading order) and ``in_references`` across pages."""
     raws = split_blocks(page_text)
     out: list[dict[str, Any]] = []
-    entries: list[dict[str, Any]] = state["entries"]
     n = 0
 
     def new_block(btype: str, start: int, end: int) -> dict[str, Any]:
@@ -343,7 +343,7 @@ def build_page_blocks(
                 item["text"] = page_text[a:b]
                 out.append(item)
                 if state["in_references"]:
-                    _add_entry(entries, item, page, page_text[a:b])
+                    _add_entry(state, item, page, page_text[a:b])
             continue
         elif raw.type == "other":
             block = new_block("other", raw.start, raw.end)
@@ -358,7 +358,7 @@ def build_page_blocks(
                 entry_block["text_sha256"] = sha256_text(page_text[a:b])
                 out.append(entry_block)
                 if starts_entry:
-                    _add_entry(entries, entry_block, page, page_text[a:b])
+                    _add_entry(state, entry_block, page, page_text[a:b])
             continue
         elif _is_caption(raw_text):
             block = new_block("caption", raw.start, raw.end)
@@ -373,13 +373,17 @@ def build_page_blocks(
     return out
 
 
-def _add_entry(entries: list[dict[str, Any]], block: dict[str, Any], page: int, raw: str) -> None:
-    doi = _DOI.search(raw)
+def _add_entry(state: dict[str, Any], block: dict[str, Any], page: int, raw: str) -> None:
+    # Markdown links first: the label if it holds the DOI, else the destination.
+    plain = _MD_LINK.sub(lambda m: m.group(1) if _DOI.search(m.group(1)) else m.group(2), raw)
+    doi = _DOI.search(plain)
+    entries: list[dict[str, Any]] = state["entries"]
     doi_payload: dict[str, Any] = {"status": "not_found"}
     if doi:
-        doi_payload = {"status": "present", "value": doi.group(0).rstrip(".,;)]}")}
+        doi_payload = {"status": "present", "value": doi.group(0).rstrip(".,;:}")}
+    state["entry_count"] += 1
     entries.append({
-        "id": f"ref-{len(entries) + 1}", "ordinal": len(entries) + 1, "page": page, "block_id": block["id"],
+        "id": f"ref-{state['entry_count']}", "ordinal": state["entry_count"], "page": page, "block_id": block["id"],
         "raw": raw, "raw_sha256": sha256_text(raw), "doi": doi_payload,
     })
 
@@ -594,7 +598,7 @@ def observe_pdf(
 
     markdown = "".join(by_page[number] for number in selected)
     markdown_sha = sha256_text(markdown)
-    state: dict[str, Any] = {"order": 0, "in_references": False, "entries": []}
+    state: dict[str, Any] = {"order": 0, "in_references": False, "entries": [], "entry_count": 0}
     blocks: list[dict[str, Any]] = []
     base = 0
     chosen = set(selected)
@@ -606,9 +610,10 @@ def observe_pdf(
             blocks.extend(build_page_blocks(number, text, base, markdown_sha, state, markdown))
             base += len(text)
         else:
-            scratch = {"order": 0, "in_references": state["in_references"], "entries": []}
+            # Counted, not emitted: ordinals are whole-document list positions.
+            scratch = {"order": 0, "in_references": state["in_references"], "entries": [], "entry_count": state["entry_count"]}
             build_page_blocks(number, text, 0, sha256_text(text), scratch, text)
-            state["in_references"] = scratch["in_references"]
+            state["in_references"], state["entry_count"] = scratch["in_references"], scratch["entry_count"]
 
     extractor_options: dict[str, Any] = {
         "image_ocr": use_ocr,
