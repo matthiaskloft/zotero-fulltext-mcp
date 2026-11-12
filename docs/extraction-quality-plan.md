@@ -301,12 +301,12 @@ to, so `output_span_roundtrip` passes. The record pins pymupdf4llm/pymupdf versi
 Detected: headings (`#`), paragraphs, list items (one block per item), pipe tables (cells with the
 header row flagged; spans unknown), `$$` display equations (LaTeX, `display: true`, no printed number),
 captions (label emphasised or followed by `.`/`:`, so "Table 3 reports ..." stays a paragraph) linked by
-adjacency to a table or figure, figures (image placeholders and pymupdf4llm picture-text regions, no
+adjacency to a table or figure, figures (the `![](...)` crop placeholders production always leaves, typed `image`, and pymupdf4llm picture-text regions, no
 text so their internals are not scored as prose), a trailing bare number as `page_number`, and
 reference entries under a References/Bibliography heading (DOI `present`/`not_found` by pattern,
 `raw` verbatim). Not detected: bounding boxes, page `render`, equation numbers, table spans and
 cross-page `continues_from`/`truncated`, footnotes, running headers (pymupdf4llm drops them), reference
 `fields`, citation markers (the scorer lists them as unscored), and display equations when crop OCR is
-off (they are images in the Markdown). Known scorer mismatches: pymupdf4llm often leaves the next
+off (they stay crop placeholders, typed figure, so `equation_match` fails by design). Known scorer mismatches: pymupdf4llm often leaves the next
 element's lead-in on a caption's line, so exact caption text fails; heading text carries `#`/`**`
 markup (stripped by the scorer for transcription, so only the informational `text_span_hash` differs).

@@ -318,7 +318,7 @@ def build_page_blocks(
             block["equation"] = {"latex": parse_equation(raw_text), "display": True}
         elif raw.type == "figure":
             block = new_block("figure", raw.start, raw.end)
-            block["graphic"] = {"kind": "figure"}
+            block["graphic"] = {"kind": "image" if raw.lines[0].lstrip().startswith("![") else "figure"}
         elif raw.type == "list_item":
             for a, b in _item_spans(raw, page_text):
                 item = new_block("reference_entry" if state["in_references"] else "list_item", a, b)
@@ -402,8 +402,10 @@ def _package_importable() -> Iterator[None]:
             os.environ["PYTHONPATH"] = previous
 
 
-def _extract_pages(pdf_path: Path, workdir: Path, timeout_s: int, with_images: bool) -> tuple[list[tuple[int, str]], bool, Path]:
-    """Run the production primary extractor; return (page_texts, has_math, images_dir)."""
+def _extract_pages(pdf_path: Path, workdir: Path, timeout_s: int) -> tuple[list[tuple[int, str]], bool, Path]:
+    """Run the production primary extractor exactly as the converter does (crop images always
+    written, which is what leaves the ``![](...)`` placeholders); return (page_texts, has_math,
+    images_dir)."""
     from zotero_pdf_text import converter
 
     raw_path = workdir / "raw.md"
@@ -412,7 +414,7 @@ def _extract_pages(pdf_path: Path, workdir: Path, timeout_s: int, with_images: b
         with _package_importable():
             converter._run_extractor(
                 pdf_path, raw_path, converter.PRIMARY_EXTRACTION_TOOL, timeout_s,
-                image_dir=images_dir if with_images else None,
+                image_dir=images_dir,
             )
     except subprocess.TimeoutExpired as exc:
         raise ExtractionFailed(f"TimeoutExpired: exceeded {timeout_s} seconds") from exc
@@ -433,14 +435,11 @@ def _enrich_with_ocr(page_texts: list[tuple[int, str]], images_dir: Path, has_ma
     survive because replacements never cross a page text)."""
     from zotero_pdf_text import image_ocr
     from zotero_pdf_text.config import ImageOcrSettings
-    from zotero_pdf_text.library import relative_image_links
 
     config = ImageOcrSettings(**dict(settings))
     status = image_ocr.probe(config.base_url, config.model)
     if not status.ok:
         raise ExtractionFailed(f"image OCR unavailable: {status.detail}")
-    virtual_markdown = Path("observe") / "observe.md"
-    page_texts = [(page, relative_image_links(text, virtual_markdown)) for page, text in page_texts]
     plans = []
     spans = []
     for page, text in page_texts:
@@ -505,6 +504,7 @@ def observe_pdf(
     """
     import pymupdf
     import pymupdf4llm
+    from zotero_pdf_text.library import relative_image_links
 
     opts = dict(options or {})
     use_ocr = bool(opts.get("image_ocr", False))
@@ -516,13 +516,19 @@ def observe_pdf(
     except OSError as exc:
         raise ExtractionFailed(f"cannot read PDF: {exc}") from exc
     requested = sorted(set(pages)) if pages is not None else None
+    if requested is not None and not requested:
+        raise ValueError("pages must not be empty (use None for the whole document)")
     # Opened first so an unreadable PDF or a bad page number fails before the extractor subprocess.
     page_entries, page_count, title = _page_entries(pdf_path, requested)
     selected = [entry["physical_page"] for entry in page_entries]
 
     ocr_model = ""
     with tempfile.TemporaryDirectory(prefix="observe-") as tmp:
-        page_texts, has_math, images_dir = _extract_pages(pdf_path, Path(tmp), timeout_s, with_images=use_ocr)
+        page_texts, has_math, images_dir = _extract_pages(pdf_path, Path(tmp), timeout_s)
+        # As the converter does for the primary tool: links relative to the Markdown, so no temporary
+        # path ends up in the text the output spans address.
+        virtual_markdown = Path("observe") / "observe.md"
+        page_texts = [(page, relative_image_links(text, virtual_markdown)) for page, text in page_texts]
         if use_ocr:
             try:
                 page_texts, ocr_model = _enrich_with_ocr(page_texts, images_dir, has_math, opts.get("image_ocr_settings", {}))
@@ -547,7 +553,10 @@ def observe_pdf(
 
     extractor_options: dict[str, Any] = {
         "image_ocr": use_ocr,
-        "pymupdf4llm": {"function": "to_markdown", "page_chunks": True, "header_footer": "package defaults"},
+        "pymupdf4llm": {
+            "function": "to_markdown", "page_chunks": True, "header_footer": "package defaults",
+            "write_images": True, "image_format": "png", "image_size_limit": 0.05, "dpi": 150,
+        },
         "pymupdf4llm_version": pymupdf4llm.__version__,
         "pymupdf_version": pymupdf.VersionBind,
         "observer": f"{OBSERVER_NAME}/{OBSERVER_VERSION}",

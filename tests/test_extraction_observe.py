@@ -97,10 +97,7 @@ def test_scores_against_promoted_synthetic_expectation(result):
             "basis": "pdf_inspection",
         },
     }
-    try:
-        validate_record(expectation)
-    except Exception:  # noqa: BLE001
-        pytest.skip("synthetic example no longer promotable without further fields")
+    assert validate_record(expectation) == "expectation"
     score = score_records(expectation, result.observation, markdown=result.markdown)
     assert score["verdict"] in {"passed", "failed", "incomplete"}
     strict = {(m["name"], m["mode"]): m for m in score["metrics"]}
@@ -135,6 +132,15 @@ def test_failure_raises_extraction_failed(tmp_path, monkeypatch):
 def test_bad_page_number_is_a_value_error():
     with pytest.raises(ValueError):
         observe_pdf(CORPUS_PDF, pages=[99])
+    with pytest.raises(ValueError):
+        observe_pdf(CORPUS_PDF, pages=[])
+
+
+def test_default_run_is_the_production_configuration(result):
+    # Production always writes crop images, which leaves ![](...) placeholders; none may leak a temp path.
+    assert result.extractor["options"]["pymupdf4llm"]["write_images"] is True
+    assert "![" in result.markdown and "observe-" not in result.markdown
+    assert any(b["type"] == "figure" and b["graphic"]["kind"] == "image" for b in result.observation["blocks"])
 
 
 # --- block splitter on literal Markdown (no PDF) ----------------------------------------------
