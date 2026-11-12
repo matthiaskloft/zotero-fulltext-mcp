@@ -282,6 +282,9 @@ Normal PDF conversion, timeout retries and experimental local-service image OCR 
 - [Contribution policy](CONTRIBUTING.md) — issues welcome; pull requests by invitation only.
 - [Developer guide](docs/contributing.md) — development, test workflows, privacy checks, and repository history.
 - [Releasing](docs/releasing.md) — maintainer release procedure.
+- [Extraction run harness](docs/extraction-quality-plan.md#run-harness-e1e2-step-4) — `tools/run_extraction_pilot.py`, a
+  benchmark tool for maintainers (not part of the installed package). It needs reviewed pilot expectations and the
+  hash-pinned PDF cache, and writes its run record outside the repository.
 
 For problems, use the
 [bug report template](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/new?template=bug_report.yml).
