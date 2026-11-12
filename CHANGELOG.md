@@ -5,6 +5,14 @@ All notable changes to this project are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Added
+
+- Observation exporter (roadmap E1/E2, step 3): `extraction.observe.observe_pdf` turns the current
+  production extraction (pymupdf4llm Markdown, the package's measured page maps, optionally the
+  opt-in crop OCR) into a schema-valid `observation` plus the exact Markdown its `output_span`
+  offsets refer to, ready for the scorer. Benchmark-side only; no runtime dependency. See
+  `docs/extraction-quality-plan.md`.
+
 ## [0.16.1] - 2026-11-12
 
 ### Added

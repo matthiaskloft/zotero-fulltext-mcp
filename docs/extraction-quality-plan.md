@@ -278,3 +278,35 @@ section counts as an empty list wherever the expectation has references.
 ## Pilot selection and draft tooling (E2, no labels)
 
 Selection, draft proposals and the review procedure: [extraction-pilot-review.md](extraction-pilot-review.md).
+
+## Observation exporter (E1/E2, step 3)
+
+`benchmarks/extraction/observe.py` turns the *current production extraction* into a schema-valid
+`observation` so the scorer can compare it with reviewed expectations. `observe_pdf(pdf_path, *,
+pages=None, options=None)` returns a frozen `ObservationResult(observation, markdown, extractor,
+elapsed_s)`; `pages` are 1-based physical pages (None = whole document), `options["image_ocr"]`
+(default False) additionally reads crops with the package's local OCR model, and a failing extractor
+raises `ExtractionFailed` with the underlying message. Benchmark-side only; no new dependency and no
+change to production conversion.
+
+It reuses the converter's own pieces: the same `_extract_markdown` subprocess (pymupdf4llm
+`page_chunks`, package header/footer defaults), `_read_page_texts` for the measured per-page lengths,
+and, for crop OCR, `image_ocr.plan_crops`/`_run_ocr`/`render_replacement`/`splice` page by page. The
+whole document is always extracted and the requested pages are sliced by the page map, so page text
+equals a whole-document run. The page of a block is the page whose measured range holds it; a missing
+page map is a failure, never a guess. `markdown` is the exact text every block's `output_span` refers
+to, so `output_span_roundtrip` passes. The record pins pymupdf4llm/pymupdf versions and the options
+(hash in `provenance.produced_by.options_sha256`, OCR model in `model`).
+
+Detected: headings (`#`), paragraphs, list items (one block per item), pipe tables (cells with the
+header row flagged; spans unknown), `$$` display equations (LaTeX, `display: true`, no printed number),
+captions (label emphasised or followed by `.`/`:`, so "Table 3 reports ..." stays a paragraph) linked by
+adjacency to a table or figure, figures (image placeholders and pymupdf4llm picture-text regions, no
+text so their internals are not scored as prose), a trailing bare number as `page_number`, and
+reference entries under a References/Bibliography heading (DOI `present`/`not_found` by pattern,
+`raw` verbatim). Not detected: bounding boxes, page `render`, equation numbers, table spans and
+cross-page `continues_from`/`truncated`, footnotes, running headers (pymupdf4llm drops them), reference
+`fields`, citation markers (the scorer lists them as unscored), and display equations when crop OCR is
+off (they are images in the Markdown). Known scorer mismatches: pymupdf4llm often leaves the next
+element's lead-in on a caption's line, so exact caption text fails; heading text carries `#`/`**`
+markup (stripped by the scorer for transcription, so only the informational `text_span_hash` differs).
