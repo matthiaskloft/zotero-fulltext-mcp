@@ -310,3 +310,44 @@ cross-page `continues_from`/`truncated`, footnotes, running headers (pymupdf4llm
 off (they stay crop placeholders, typed figure, so `equation_match` fails by design). Known scorer mismatches: pymupdf4llm often leaves the next
 element's lead-in on a caption's line, so exact caption text fails; heading text carries `#`/`**`
 markup (stripped by the scorer for transcription, so only the informational `text_span_hash` differs).
+## Run harness (E1/E2, step 4)
+
+`benchmarks/extraction/run_pilot.py`, run through `tools/run_extraction_pilot.py`, runs one extractor
+over the reviewed pilot pages and scores it. Host-only and opt-in; no network, nothing shipped.
+
+```console
+uv run python tools/run_extraction_pilot.py --expectations <dir of reviewed records> \
+    --out <dir outside every git checkout> [--image-ocr] [--option KEY=VALUE] [--timeout SECONDS] [--split pilot]
+```
+
+- **Inputs.** Every `*.json` in `--expectations` goes through `load_pilot_expectation`; a draft or any
+  rejected record refuses the whole run, listing every finding. Each PDF in `--cache` is checked
+  against the manifest's SHA-256 before it is extracted. `--out` defaults to a directory under the
+  user's cache and is refused inside any git checkout (extracted text is copyrighted).
+- **Splits.** `--split pilot` is the default and refuses held-out documents. `--split heldout` must be
+  given explicitly, prints a warning and records `split: heldout` in the run; the held-out set is for
+  measuring final results, never for tuning, threshold calibration or defect design.
+- **Extraction.** Expectations are grouped by PDF; each PDF is extracted once for the union of the
+  pages its expectations need (`pages=None` when that is the whole document), through an injectable
+  callable with the signature of `extraction.observe.observe_pdf` (`pages`, `options`; returns
+  `observation`, `markdown`, `extractor`, `elapsed_s`). `--timeout` applies per document and runs the
+  extractor in a daemon thread, so a timed-out extraction is abandoned, not killed. Because the
+  abandoned thread may still be running, nothing further is extracted after the first timeout: the
+  remaining expectations are recorded as `skipped` with error kind `SkippedAfterTimeout`, and the summary
+  says so. The library refuses an `out_dir` inside any git checkout. Each document's extractor identity
+  goes into `details.json`; a run whose documents disagree is refused (it must describe one
+  configuration), and a run where every document failed keeps tool/version `unknown`, noted in the summary.
+  The summary states per document whether latency is the extractor's `elapsed_s` or the harness wall clock
+  (failures, timeouts).
+- **Scoring.** Each expectation is scored with `score_records(..., markdown=...)` so `output_span`
+  hashes round-trip. An extractor exception, a timeout or an observation the scorer rejects becomes a
+  `failure_result` (`failed` or `timeout`, with an error and no metrics) for every expectation of that
+  PDF.
+- **Outputs**, under `<out>/run-<UTC time>-<split>/`: `run.json` (validated against the run schema
+  before it is written; one configuration, one input per expectation, versioned strict and tolerant
+  metrics, verdicts), `summary.md` (per-page verdicts, strict and tolerant aggregates kept apart,
+  counts of passed, failed, incomplete and errors, top failing strict checks), `details.json` (PDF,
+  expectation, observation and Markdown hashes per input, which the run schema has no field for) and
+  the `observations/` and `markdown/` files those hashes point at. `output_sha256` is the hash of the
+  observation file as written. `latency_seconds` is the whole-PDF time, shared by that PDF's
+  expectations.
