@@ -13,9 +13,11 @@ All notable changes to this project are documented here. Format loosely follows
   computed against them must be reported with that caveat. The third whole paper
   (`jlmr-onet-content-model`) is not labelled. Pages left uncertain, and the labelling conventions,
   are listed in `docs/extraction-pilot-review.md`.
-
-### Added
-
+- Observation exporter (roadmap E1/E2, step 3): `extraction.observe.observe_pdf` turns the current
+  production extraction (pymupdf4llm Markdown, the package's measured page maps, optionally the
+  opt-in crop OCR) into a schema-valid `observation` plus the exact Markdown its `output_span`
+  offsets refer to, ready for the scorer. Benchmark-side only; no runtime dependency. See
+  `docs/extraction-quality-plan.md`.
 - Extraction run harness (roadmap E1/E2): `tools/run_extraction_pilot.py` runs an extractor over the
   reviewed pilot pages, verifies cached PDFs against the manifest pins, scores each page, and writes a
   schema-valid `run` record plus a human-readable summary outside the repo. Drafts are refused,
