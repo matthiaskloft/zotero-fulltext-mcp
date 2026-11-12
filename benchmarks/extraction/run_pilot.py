@@ -199,9 +199,18 @@ def run_pilot(
     extract = extractor if extractor is not None else default_extractor()
     started = clock()
     run_id = f"run-{started.astimezone(UTC):%Y%m%dT%H%M%SZ}-{split}"
-    run_dir = out_dir / run_id
-    (run_dir / "observations").mkdir(parents=True, exist_ok=True)
-    (run_dir / "markdown").mkdir(exist_ok=True)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    base_id, attempt = run_id, 1
+    while True:  # exclusive creation: a run directory is never reused or overwritten
+        run_dir = out_dir / run_id
+        try:
+            run_dir.mkdir()
+            break
+        except FileExistsError:
+            attempt += 1
+            run_id = f"{base_id}-{attempt}"
+    (run_dir / "observations").mkdir()
+    (run_dir / "markdown").mkdir()
 
     identity: dict[str, Any] = {}
     results: list[dict[str, Any]] = []

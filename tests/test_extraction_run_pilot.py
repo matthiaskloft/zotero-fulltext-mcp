@@ -175,6 +175,17 @@ def test_summary_reports_verdicts_aggregates_and_failing_checks(world):
     assert "HELD-OUT" not in summary
 
 
+def test_run_directories_never_collide(world):
+    first, _ = _run(world, timeout=0.3)
+    files = {p.relative_to(first["run_dir"]): p.read_bytes() for p in first["run_dir"].rglob("*") if p.is_file()}
+    second, _ = _run(world, timeout=0.3)
+    assert first["run_dir"] != second["run_dir"] and second["run_dir"].name == first["run_dir"].name + "-2"
+    assert second["run"]["record_id"] == second["run_dir"].name
+    assert files == {p.relative_to(first["run_dir"]): p.read_bytes() for p in first["run_dir"].rglob("*") if p.is_file()}
+    third, _ = _run(world, timeout=0.3)
+    assert third["run_dir"].name.endswith("-3")
+
+
 def test_deterministic_ordering(world):
     first, _ = _run(world, timeout=0.3, slow=1.0)
     second, _ = _run(world, timeout=0.3, slow=1.0)
