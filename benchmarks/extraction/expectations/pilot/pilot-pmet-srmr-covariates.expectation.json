@@ -1,0 +1,714 @@
+{
+  "schema_version": 1,
+  "record_kind": "expectation",
+  "record_id": "pilot-pmet-srmr-covariates",
+  "document": {
+    "pdf_sha256": "61e261d346501213f1a1f521b5623e2ad84912606381a1ab74f9b6c66bfb8287",
+    "title": "SRMR for Models with Covariates",
+    "page_count": 23,
+    "corpus_id": "pmet-srmr-covariates"
+  },
+  "scope": {
+    "kind": "pages",
+    "physical_pages": [
+      7,
+      8
+    ]
+  },
+  "pages": [
+    {
+      "physical_page": 7,
+      "printed_label": "30",
+      "geometry": {
+        "unit": "pt",
+        "origin": "top-left",
+        "frame": "displayed",
+        "box": "cropbox",
+        "rotation": 0,
+        "width": 492.844,
+        "height": 699.796
+      },
+      "render": {
+        "renderer": "pymupdf",
+        "renderer_version": "1.28.0",
+        "dpi": 150,
+        "image_sha256": "bccbc60a495bc64cb1de170cd501600fee84c6b89aaa4c4843ca8812c4198285"
+      },
+      "body_start": {
+        "block_id": "p7-b3"
+      },
+      "body_end": {
+        "block_id": "p7-b20"
+      }
+    },
+    {
+      "physical_page": 8,
+      "printed_label": "31",
+      "geometry": {
+        "unit": "pt",
+        "origin": "top-left",
+        "frame": "displayed",
+        "box": "cropbox",
+        "rotation": 0,
+        "width": 492.844,
+        "height": 699.796
+      },
+      "render": {
+        "renderer": "pymupdf",
+        "renderer_version": "1.28.0",
+        "dpi": 150,
+        "image_sha256": "9e6b4fb45c51e4050d2a239be3c193eadd524a71c604738b2016d30972671647"
+      },
+      "body_start": {
+        "block_id": "p8-b3"
+      },
+      "body_end": {
+        "block_id": "p8-b18"
+      }
+    }
+  ],
+  "blocks": [
+    {
+      "id": "p7-b1",
+      "type": "header",
+      "page": 7,
+      "reading_order": 1,
+      "bbox": {
+        "x0": 80.41,
+        "y0": 34.98,
+        "x1": 218.06,
+        "y1": 46.48
+      },
+      "text": "Daniel McNeish and Tyler H. Matta",
+      "text_sha256": "fd27324406461faed972d960df44c28b751567fa3c37f7514da8bd729687e68e"
+    },
+    {
+      "id": "p7-b2",
+      "type": "page_number",
+      "page": 7,
+      "reading_order": 2,
+      "bbox": {
+        "x0": 52.86,
+        "y0": 34.98,
+        "x1": 63.98,
+        "y1": 46.48
+      },
+      "text": "30",
+      "text_sha256": "624b60c58c9d8bfb6ff1886c2fd605d2adeb6ea4da576068201b6c6958ce93f4"
+    },
+    {
+      "id": "p7-b3",
+      "type": "heading",
+      "page": 7,
+      "reading_order": 3,
+      "bbox": {
+        "x0": 52.86,
+        "y0": 64.2,
+        "x1": 203.13,
+        "y1": 75.7
+      },
+      "text": "3.5. SRMR for models with covariates",
+      "text_sha256": "4217509705045b6da6eae1ec26208fa0fd6eb50d90ebfa25ea6eca1053484cce"
+    },
+    {
+      "id": "p7-b4",
+      "type": "paragraph",
+      "page": 7,
+      "reading_order": 4,
+      "bbox": {
+        "x0": 52.86,
+        "y0": 78.53,
+        "x1": 451.82,
+        "y1": 149.03
+      },
+      "text": "As shown in equations 3–5, SRMR definitions heavily rely on the definition of P, which is prominently featured in the denominator of each definition. For models without covariates, P is unambiguous. However, when covariates are present, the situation becomes more opaque because covariates may or may not count as part of P. Additionally, models with covariates will have marginal and conditional structures depending on how a researcher wishes to treat the variance explained by covariates, which may complicate SRMR definitions.",
+      "text_sha256": "16714f5583dba1b685fe0423bd20c8472e22ded0be24fcdd6bc90bcc1f193947"
+    },
+    {
+      "id": "p7-b5",
+      "type": "paragraph",
+      "page": 7,
+      "reading_order": 5,
+      "bbox": {
+        "x0": 52.86,
+        "y0": 149.04,
+        "x1": 451.76,
+        "y1": 184.28
+      },
+      "text": "Potential challenges of SRMR with covariates have been considered, but have yet to be more rigorously embraced. Section 4 overviews details and properties of models with covariates needed to discuss different possible SRMR definitions; definitions are then provided in Section 5.",
+      "text_sha256": "a0d283d175490f3947de5328ac8d555678bc830d474be80fdcd7b033855acddb"
+    },
+    {
+      "id": "p7-b6",
+      "type": "heading",
+      "page": 7,
+      "reading_order": 6,
+      "bbox": {
+        "x0": 52.86,
+        "y0": 215.15,
+        "x1": 330.85,
+        "y1": 226.65
+      },
+      "text": "4. Structural equation models with a mean structure and covariates",
+      "text_sha256": "3c5723061ea06f7727427562b65f45828130a4b40b31ccdcac34ebe72a46e49e"
+    },
+    {
+      "id": "p7-b7",
+      "type": "paragraph",
+      "page": 7,
+      "reading_order": 7,
+      "bbox": {
+        "x0": 52.86,
+        "y0": 229.51,
+        "x1": 411.24,
+        "y1": 241.26
+      },
+      "text": "A general structural equation model with a mean structure and covariates can be written as,",
+      "text_sha256": "f05d3c131de00aafe354bc6b04b8a21bf4064a515fb5de032bea71a499da6d30"
+    },
+    {
+      "id": "p7-b8",
+      "type": "equation",
+      "page": 7,
+      "reading_order": 8,
+      "bbox": {
+        "x0": 210.24,
+        "y0": 248.08,
+        "x1": 450.71,
+        "y1": 260.78
+      },
+      "equation": {
+        "latex": "\\mathbf{y}_i = \\boldsymbol{\\nu} + \\boldsymbol{\\Lambda}\\boldsymbol{\\eta}_i + \\mathbf{K}\\mathbf{x}_i + \\boldsymbol{\\varepsilon}_i.",
+        "number": "(6)",
+        "display": true
+      }
+    },
+    {
+      "id": "p7-b9",
+      "type": "paragraph",
+      "page": 7,
+      "reading_order": 9,
+      "bbox": {
+        "x0": 52.85,
+        "y0": 265.3,
+        "x1": 451.72,
+        "y1": 336.98
+      },
+      "text": "where yi is a P-dimensional vector of manifest outcome variables for person i (i = 1,...,N), ν is a P-dimensional vector of manifest outcome intercepts, Λ is a P × M matrix of factor loadings for M the number of latent variables, ηi is an M-dimensional vector of latent variables, K is a P × C matrix of parameters associating the C-dimensional xi vector of manifest covariates for person i that directly predict to the manifest outcome yi, and εi is a P-dimensional vector of residuals for person i such that εi ∼ NP (0,Θ).",
+      "text_sha256": "6f1940edc0e05a11e2e15a126f18fec4fbf9c0a43e41e8c4c1a366905e857df5",
+      "uncertainty": {
+        "level": "medium",
+        "note": "Inline math is recorded as plain characters in reading order; bold, italic and calligraphic variants, hats, bars and sub/superscript positions are not preserved."
+      }
+    },
+    {
+      "id": "p7-b10",
+      "type": "paragraph",
+      "page": 7,
+      "reading_order": 10,
+      "bbox": {
+        "x0": 64.86,
+        "y0": 336.44,
+        "x1": 324.8,
+        "y1": 348.19
+      },
+      "text": "The structural model for the latent variables can then be written as",
+      "text_sha256": "04ab9da8382bc0526e2315dd347955077476c687d10bfbf6099ab4c121dcb169"
+    },
+    {
+      "id": "p7-b11",
+      "type": "equation",
+      "page": 7,
+      "reading_order": 11,
+      "bbox": {
+        "x0": 210.9,
+        "y0": 355.02,
+        "x1": 450.71,
+        "y1": 367.71
+      },
+      "equation": {
+        "latex": "\\boldsymbol{\\eta}_i = \\boldsymbol{\\alpha} + \\mathbf{B}\\boldsymbol{\\eta}_i + \\boldsymbol{\\Gamma}\\mathbf{x}_i + \\boldsymbol{\\zeta}_i.",
+        "number": "(7)",
+        "display": true
+      }
+    },
+    {
+      "id": "p7-b12",
+      "type": "paragraph",
+      "page": 7,
+      "reading_order": 12,
+      "bbox": {
+        "x0": 52.85,
+        "y0": 372.79,
+        "x1": 451.74,
+        "y1": 421.42
+      },
+      "text": "where α is an M-dimensional vector of latent variable means, B is an M-dimensional square matrix of structural paths between latent variables, Γ is an M × C matrix of parameters associating the C-dimensional xi vector of manifest covariates for person i to the latent variables ηi, and ζi is an M-dimensional vector of disturbances for the latent variable for person i such that ζi ∼ NM (0,Ψ).",
+      "text_sha256": "df4e27cb102b84c71257db59829151d2b394ffe18a660429a6e4deae4e1357f3",
+      "uncertainty": {
+        "level": "medium",
+        "note": "Inline math is recorded as plain characters in reading order; bold, italic and calligraphic variants, hats, bars and sub/superscript positions are not preserved."
+      }
+    },
+    {
+      "id": "p7-b13",
+      "type": "paragraph",
+      "page": 7,
+      "reading_order": 13,
+      "bbox": {
+        "x0": 52.85,
+        "y0": 419.87,
+        "x1": 451.74,
+        "y1": 456.41
+      },
+      "text": "The fundamental parameters vector containing the unique parameters from equations 6 and 7 is ϑ = [ν′,vec(Λ)′,vec(K)′,vech(Θ)′,α′,vec(β)′,vec(Γ)′,vech(Ψ)′]′, which is featured in the estimator in equation 2 and is the basis for the model-implied means and covariances.",
+      "text_sha256": "2bf8ed81c0757ebd1dc73e7ac34afa727096cfc2c6fcc876d189eb66406ee64c",
+      "uncertainty": {
+        "level": "medium",
+        "note": "Inline math is recorded as plain characters in reading order; bold, italic and calligraphic variants, hats, bars and sub/superscript positions are not preserved."
+      }
+    },
+    {
+      "id": "p7-b14",
+      "type": "heading",
+      "page": 7,
+      "reading_order": 14,
+      "bbox": {
+        "x0": 52.86,
+        "y0": 474.29,
+        "x1": 159.45,
+        "y1": 485.79
+      },
+      "text": "4.1. Model-implied means",
+      "text_sha256": "b548dbce1f05ac7f740d8e5d3d1e3eb4427778453c14307b9eee4b7ccb3a31df"
+    },
+    {
+      "id": "p7-b15",
+      "type": "paragraph",
+      "page": 7,
+      "reading_order": 15,
+      "bbox": {
+        "x0": 53.0,
+        "y0": 486.0,
+        "x1": 452.0,
+        "y1": 512.0
+      },
+      "text": "From the estimated parameters in ϑ̂, the model-implied conditional expectation for the manifest outcomes in y given the covariates x can be expressed as",
+      "text_sha256": "24dd8bd2d2b63cb53aeb0b5a4ddf18211c12abc8693a2e1eb39970ab5e60e138",
+      "uncertainty": {
+        "level": "medium",
+        "note": "Inline math is recorded as plain characters in reading order; bold, italic and calligraphic variants, hats, bars and sub/superscript positions are not preserved."
+      }
+    },
+    {
+      "id": "p7-b16",
+      "type": "equation",
+      "page": 7,
+      "reading_order": 16,
+      "bbox": {
+        "x0": 179.79,
+        "y0": 517.08,
+        "x1": 450.71,
+        "y1": 548.15
+      },
+      "equation": {
+        "latex": "\\begin{aligned}\\boldsymbol{\\mu}_i(\\hat{\\boldsymbol{\\vartheta}}) &= \\hat{\\boldsymbol{\\mu}}_i = \\mathrm{E}(\\mathbf{y} \\mid \\mathbf{x} = \\mathbf{x}_i; \\hat{\\boldsymbol{\\vartheta}}) \\\\ &= \\hat{\\boldsymbol{\\nu}} + \\hat{\\boldsymbol{\\Lambda}}(\\mathbf{I} - \\hat{\\boldsymbol{\\beta}})^{-1}\\left[\\hat{\\boldsymbol{\\alpha}} + \\hat{\\boldsymbol{\\Gamma}}\\mathbf{x}_i\\right] + \\hat{\\mathbf{K}}\\mathbf{x}_i\\end{aligned}",
+        "number": "(8)",
+        "display": true
+      }
+    },
+    {
+      "id": "p7-b17",
+      "type": "paragraph",
+      "page": 7,
+      "reading_order": 17,
+      "bbox": {
+        "x0": 53.0,
+        "y0": 555.0,
+        "x1": 394.0,
+        "y1": 570.0
+      },
+      "text": "The i subscript on μ̂i indicates the expectation changes as a function of covariate values.",
+      "text_sha256": "3347c4c441f4ea91ac58a3b6af30d8598a8fe3de06a20f528e73395975a23ba6",
+      "uncertainty": {
+        "level": "medium",
+        "note": "Inline math is recorded as plain characters in reading order; bold, italic and calligraphic variants, hats, bars and sub/superscript positions are not preserved."
+      }
+    },
+    {
+      "id": "p7-b18",
+      "type": "paragraph",
+      "page": 7,
+      "reading_order": 18,
+      "bbox": {
+        "x0": 52.86,
+        "y0": 566.95,
+        "x1": 451.58,
+        "y1": 590.46
+      },
+      "text": "When fitting a model conditional on the covariates, the resulting output is typically the expected values given x = 0. This results in a different conditional expectation such that,",
+      "text_sha256": "e6e0b95857cade83d3b6e3c00e55d7cf3c4d6aacf4889313cb3b281996d75fe6"
+    },
+    {
+      "id": "p7-b19",
+      "type": "equation",
+      "page": 7,
+      "reading_order": 19,
+      "bbox": {
+        "x0": 181.28,
+        "y0": 595.4,
+        "x1": 450.71,
+        "y1": 644.46
+      },
+      "equation": {
+        "latex": "\\begin{aligned}\\boldsymbol{\\mu}_0(\\hat{\\boldsymbol{\\vartheta}}) &= \\hat{\\boldsymbol{\\mu}}_0 = \\mathrm{E}(\\mathbf{y} \\mid \\mathbf{x} = \\mathbf{0}; \\hat{\\boldsymbol{\\vartheta}}) \\\\ &= \\hat{\\boldsymbol{\\nu}} + \\hat{\\boldsymbol{\\Lambda}}(\\mathbf{I} - \\hat{\\boldsymbol{\\beta}})^{-1}\\left[\\hat{\\boldsymbol{\\alpha}} + \\hat{\\boldsymbol{\\Gamma}}\\mathbf{0}\\right] + \\hat{\\mathbf{K}}\\mathbf{0} \\\\ &= \\hat{\\boldsymbol{\\nu}} + \\hat{\\boldsymbol{\\Lambda}}(\\mathbf{I} - \\hat{\\boldsymbol{\\beta}})^{-1}\\hat{\\boldsymbol{\\alpha}}\\end{aligned}",
+        "number": "(9)",
+        "display": true
+      }
+    },
+    {
+      "id": "p7-b20",
+      "type": "paragraph",
+      "page": 7,
+      "reading_order": 20,
+      "bbox": {
+        "x0": 64.86,
+        "y0": 651.93,
+        "x1": 431.43,
+        "y1": 663.68
+      },
+      "text": "The “0” subscript denotes that the expectation is conditional on the covariate being equal to 0.",
+      "text_sha256": "47df96b6e529a38d01a0c0f5f0630d544b46952320d8293a0a8ee93f6a0600bc"
+    },
+    {
+      "id": "p7-b21",
+      "type": "footer",
+      "page": 7,
+      "reading_order": 21,
+      "bbox": {
+        "x0": 6.8,
+        "y0": 685.25,
+        "x1": 351.0,
+        "y1": 695.42
+      },
+      "text": "Downloaded from https://www.cambridge.org/core. 02 Oct 2026 at 17:20:55, subject to the Cambridge Core terms of use.",
+      "text_sha256": "74e61be917bb4c63560ddb6280a40c95d27f730713494a022bf17fd6b2c0d2d3"
+    },
+    {
+      "id": "p8-b1",
+      "type": "header",
+      "page": 8,
+      "reading_order": 22,
+      "bbox": {
+        "x0": 356.64,
+        "y0": 34.98,
+        "x1": 412.82,
+        "y1": 46.48
+      },
+      "text": "Psychometrika",
+      "text_sha256": "bba2105fdcaea41178b1d5a7e3d7a734d1e5b8e776423ade84e9e9ee3f043a20"
+    },
+    {
+      "id": "p8-b2",
+      "type": "page_number",
+      "page": 8,
+      "reading_order": 23,
+      "bbox": {
+        "x0": 429.25,
+        "y0": 34.98,
+        "x1": 440.37,
+        "y1": 46.48
+      },
+      "text": "31",
+      "text_sha256": "eb1e33e8a81b697b75855af6bfcdbcbf7cbbde9f94962ceaec1ed8af21f5a50f"
+    },
+    {
+      "id": "p8-b3",
+      "type": "paragraph",
+      "page": 8,
+      "reading_order": 24,
+      "bbox": {
+        "x0": 41.52,
+        "y0": 63.66,
+        "x1": 440.38,
+        "y1": 87.8
+      },
+      "text": "Setting the covariate values to their respective sample means, x = x̄ marginalizes over the covariates to arrive at a model-implied marginal expectation for the focal outcomes where",
+      "text_sha256": "a33d19f616855579f0c910399fcddc1e6e8041f9e0725d6fea4a273dcd806a7c",
+      "uncertainty": {
+        "level": "medium",
+        "note": "Inline math is recorded as plain characters in reading order; bold, italic and calligraphic variants, hats, bars and sub/superscript positions are not preserved."
+      }
+    },
+    {
+      "id": "p8-b4",
+      "type": "equation",
+      "page": 8,
+      "reading_order": 25,
+      "bbox": {
+        "x0": 171.86,
+        "y0": 92.26,
+        "x1": 439.37,
+        "y1": 122.91
+      },
+      "equation": {
+        "latex": "\\begin{aligned}\\boldsymbol{\\mu}(\\hat{\\boldsymbol{\\vartheta}}) &= \\hat{\\boldsymbol{\\mu}} = E(\\mathbf{y} \\mid \\mathbf{x} = \\bar{\\mathbf{x}}; \\hat{\\boldsymbol{\\vartheta}}) \\\\ &= \\hat{\\boldsymbol{\\nu}} + \\hat{\\boldsymbol{\\Lambda}}(\\mathbf{I} - \\hat{\\boldsymbol{\\beta}})^{-1}\\left[\\hat{\\boldsymbol{\\alpha}} + \\hat{\\boldsymbol{\\Gamma}}\\bar{\\mathbf{x}}\\right] + \\hat{\\mathbf{K}}\\bar{\\mathbf{x}}\\end{aligned}",
+        "number": "(10)",
+        "display": true
+      }
+    },
+    {
+      "id": "p8-b5",
+      "type": "paragraph",
+      "page": 8,
+      "reading_order": 26,
+      "bbox": {
+        "x0": 41.51,
+        "y0": 129.89,
+        "x1": 440.36,
+        "y1": 153.4
+      },
+      "text": "i subscripts are dropped in equation 10 to indicate a marginal expectation given that covariates are set to their respective sample means.",
+      "text_sha256": "0e25a0002fbd5b8da4ab49c80e1969da530e9ad645820fbbfa6056ed64fe8cad"
+    },
+    {
+      "id": "p8-b6",
+      "type": "heading",
+      "page": 8,
+      "reading_order": 27,
+      "bbox": {
+        "x0": 41.52,
+        "y0": 171.03,
+        "x1": 164.76,
+        "y1": 182.53
+      },
+      "text": "4.2. Model-implied covariance",
+      "text_sha256": "0e7feb1cad9d7df58909fb50fcedadef953197d8d09380e7e675d2f8c6457ef2"
+    },
+    {
+      "id": "p8-b7",
+      "type": "paragraph",
+      "page": 8,
+      "reading_order": 28,
+      "bbox": {
+        "x0": 41.52,
+        "y0": 184.74,
+        "x1": 440.42,
+        "y1": 208.87
+      },
+      "text": "The P × P model-implied covariance for the manifest outcomes, conditional on covariates, can be expressed as",
+      "text_sha256": "03fbf82e7309d934b10c93abeeeeab6b45affdc9978db3608594795234f814e3",
+      "uncertainty": {
+        "level": "medium",
+        "note": "Inline math is recorded as plain characters in reading order; bold, italic and calligraphic variants, hats, bars and sub/superscript positions are not preserved."
+      }
+    },
+    {
+      "id": "p8-b8",
+      "type": "equation",
+      "page": 8,
+      "reading_order": 29,
+      "bbox": {
+        "x0": 166.99,
+        "y0": 213.33,
+        "x1": 439.37,
+        "y1": 243.58
+      },
+      "equation": {
+        "latex": "\\begin{aligned}\\boldsymbol{\\Sigma}_i(\\hat{\\boldsymbol{\\vartheta}}) &= \\hat{\\boldsymbol{\\Sigma}}_i = Cov(\\mathbf{y} \\mid \\mathbf{x} = \\mathbf{x}_i; \\hat{\\boldsymbol{\\vartheta}}) \\\\ &= \\hat{\\boldsymbol{\\Lambda}}(\\mathbf{I} - \\hat{\\mathbf{B}})^{-1}\\hat{\\boldsymbol{\\Psi}}(\\mathbf{I} - \\hat{\\mathbf{B}})^{\\prime -1}\\hat{\\boldsymbol{\\Lambda}}^{\\prime} + \\hat{\\boldsymbol{\\Theta}}\\end{aligned}",
+        "number": "(11)",
+        "display": true
+      }
+    },
+    {
+      "id": "p8-b9",
+      "type": "paragraph",
+      "page": 8,
+      "reading_order": 30,
+      "bbox": {
+        "x0": 42.0,
+        "y0": 251.0,
+        "x1": 440.0,
+        "y1": 300.0
+      },
+      "text": "Like the model-implied conditional expectation, an i subscript indicates that the covariance is conditional. However, the conditional model-implied covariance does not vary as a function of covariate values (i.e., x does not appear in equation 11), so Σ̂i = Σ̂0. Together, equations 8 and 11 define the conditional model-implied probability distribution such that yi ∣xi ∼ N (μ̂i, Σ̂i) or yi ∣x = 0 ∼ N (μ̂0, Σ̂0).",
+      "text_sha256": "37a9f274e126be80e98e602c297e5548cb116272df8f527f7ed948d86628890c",
+      "uncertainty": {
+        "level": "medium",
+        "note": "Inline math is recorded as plain characters in reading order; bold, italic and calligraphic variants, hats, bars and sub/superscript positions are not preserved."
+      }
+    },
+    {
+      "id": "p8-b10",
+      "type": "paragraph",
+      "page": 8,
+      "reading_order": 31,
+      "bbox": {
+        "x0": 53.52,
+        "y0": 297.56,
+        "x1": 315.81,
+        "y1": 309.31
+      },
+      "text": "Correspondingly, the model-implied marginal covariance matrix is",
+      "text_sha256": "e424596811caaa30e2e8e2315df5e0293bee421c69c51894852b578fb9210ee7"
+    },
+    {
+      "id": "p8-b11",
+      "type": "equation",
+      "page": 8,
+      "reading_order": 32,
+      "bbox": {
+        "x0": 90.26,
+        "y0": 313.78,
+        "x1": 439.37,
+        "y1": 363.09
+      },
+      "equation": {
+        "latex": "\\begin{aligned}\\boldsymbol{\\Sigma}(\\hat{\\boldsymbol{\\vartheta}}) &= \\hat{\\boldsymbol{\\Sigma}} \\\\ &= \\hat{\\boldsymbol{\\Lambda}}(\\mathbf{I} - \\hat{\\mathbf{B}})^{-1}\\hat{\\boldsymbol{\\Gamma}}\\mathbf{S}_x\\hat{\\boldsymbol{\\Gamma}}^{\\prime}(\\mathbf{I} - \\hat{\\mathbf{B}})^{\\prime -1}\\hat{\\boldsymbol{\\Lambda}}^{\\prime} + \\hat{\\mathbf{K}}\\mathbf{S}_x\\hat{\\mathbf{K}}^{\\prime} + \\hat{\\boldsymbol{\\Lambda}}(\\mathbf{I} - \\hat{\\mathbf{B}})^{-1}\\hat{\\boldsymbol{\\Psi}}(\\mathbf{I} - \\hat{\\mathbf{B}})^{\\prime -1}\\hat{\\boldsymbol{\\Lambda}}^{\\prime} + \\hat{\\boldsymbol{\\Theta}} \\\\ &= \\hat{\\boldsymbol{\\Lambda}}(\\mathbf{I} - \\hat{\\mathbf{B}})^{-1}\\hat{\\boldsymbol{\\Gamma}}\\mathbf{S}_x\\hat{\\boldsymbol{\\Gamma}}^{\\prime}(\\mathbf{I} - \\hat{\\mathbf{B}})^{\\prime -1}\\hat{\\boldsymbol{\\Lambda}}^{\\prime} + \\hat{\\mathbf{K}}\\mathbf{S}_x\\hat{\\mathbf{K}}^{\\prime} + \\hat{\\boldsymbol{\\Sigma}}_i.\\end{aligned}",
+        "number": "(12)",
+        "display": true
+      }
+    },
+    {
+      "id": "p8-b12",
+      "type": "paragraph",
+      "page": 8,
+      "reading_order": 33,
+      "bbox": {
+        "x0": 42.0,
+        "y0": 369.0,
+        "x1": 440.0,
+        "y1": 417.0
+      },
+      "text": "where Sx is the sample covariance matrix for the covariates. Notably, the model-implied marginal covariance is calculated from the conditional covariance matrix (Σ̂i) plus the proportion of variance in the outcomes that are explained through covariates. Together, equations 10 and 12 define the marginal model-implied probability distribution such that yi ∼ N (μ̂, Σ̂).",
+      "text_sha256": "058c2c73d93b160244bb84ca19ce6c4aba15e064628f125e4388f73d204cb0e9",
+      "uncertainty": {
+        "level": "medium",
+        "note": "Inline math is recorded as plain characters in reading order; bold, italic and calligraphic variants, hats, bars and sub/superscript positions are not preserved."
+      }
+    },
+    {
+      "id": "p8-b13",
+      "type": "heading",
+      "page": 8,
+      "reading_order": 34,
+      "bbox": {
+        "x0": 41.52,
+        "y0": 433.62,
+        "x1": 207.26,
+        "y1": 445.12
+      },
+      "text": "4.3. Special case of continuous outcomes",
+      "text_sha256": "86e516eb4e395aa271864552816673f4b011e40de35c03d9e8aed5a067e00a81"
+    },
+    {
+      "id": "p8-b14",
+      "type": "paragraph",
+      "page": 8,
+      "reading_order": 35,
+      "bbox": {
+        "x0": 41.52,
+        "y0": 447.88,
+        "x1": 440.36,
+        "y1": 471.46
+      },
+      "text": "When y is continuous and all covariates are exogenous, the model can be simplified based on LISREL notation. Namely,",
+      "text_sha256": "63805b20994d5db04ec85bd066f174b3f9fa93e654ee4ad1fbbc5cab60f9f4af"
+    },
+    {
+      "id": "p8-b15",
+      "type": "equation",
+      "page": 8,
+      "reading_order": 36,
+      "bbox": {
+        "x0": 202.94,
+        "y0": 477.81,
+        "x1": 439.37,
+        "y1": 505.24
+      },
+      "equation": {
+        "latex": "\\begin{aligned}\\mathbf{v}_i &= \\boldsymbol{\\nu}_v + \\boldsymbol{\\Lambda}_v\\boldsymbol{\\eta}_{vi} + \\boldsymbol{\\varepsilon}_{vi} \\\\ \\boldsymbol{\\eta}_{vi} &= \\boldsymbol{\\alpha}_v + \\mathbf{B}_v\\boldsymbol{\\eta}_{vi} + \\boldsymbol{\\zeta}_{vi}\\end{aligned}",
+        "number": "(13)",
+        "display": true
+      }
+    },
+    {
+      "id": "p8-b16",
+      "type": "paragraph",
+      "page": 8,
+      "reading_order": 37,
+      "bbox": {
+        "x0": 42.0,
+        "y0": 506.0,
+        "x1": 440.0,
+        "y1": 583.0
+      },
+      "text": "where vi = (y′i,x′i)′ stacks all the variables into one vector and all variables are treated as outcomes. This notation does not permit direct paths from manifest variables to latent variables (e.g., manifest variables can only indicate latent variables, but they cannot predict them; Bollen 1989, pp. 395). Instead, single-indicator latent variables are created for each manifest variable that predicts or is predicted by another manifest variable where factor loadings are fixed to 1 and residual variances fixed to 0 for identification.2",
+      "text_sha256": "2a1fe1449df3b370b5d2166ca357d8c07e828cc848337f250643c04c3d6384ef",
+      "uncertainty": {
+        "level": "medium",
+        "note": "Inline math is recorded as plain characters in reading order; bold, italic and calligraphic variants, hats, bars and sub/superscript positions are not preserved."
+      }
+    },
+    {
+      "id": "p8-b17",
+      "type": "paragraph",
+      "page": 8,
+      "reading_order": 38,
+      "bbox": {
+        "x0": 42.0,
+        "y0": 580.0,
+        "x1": 440.0,
+        "y1": 610.0
+      },
+      "text": "ηvi = (η′i,η′yi,η′xi)′ is then composed of three parts, (a) focal latent variables (ηi), (b) dummy latent variables for elements of y that are predicted from elements of x (ηyi), and (c) dummy latent variables",
+      "text_sha256": "d7da5e0abea9f951f5c668e7875b1ca08a3afce69afd39a1d1ec32c2c742ef04",
+      "truncated": "end",
+      "uncertainty": {
+        "level": "medium",
+        "note": "Inline math is recorded as plain characters in reading order; bold, italic and calligraphic variants, hats, bars and sub/superscript positions are not preserved."
+      }
+    },
+    {
+      "id": "p8-b18",
+      "type": "footnote",
+      "page": 8,
+      "reading_order": 39,
+      "bbox": {
+        "x0": 41.52,
+        "y0": 638.99,
+        "x1": 440.28,
+        "y1": 660.22
+      },
+      "text": "2If covariates have known imperfect reliability, residual variances could be fixed to a non-zero value that implies a particular reliability (Bollen, 1989, p. 312; Cole & Preacher, 2014).",
+      "text_sha256": "d8e50d5f3b4f56eb6274afb6db3d8123b5b6451431d263eb123d69ed5abeaf51"
+    },
+    {
+      "id": "p8-b19",
+      "type": "footer",
+      "page": 8,
+      "reading_order": 40,
+      "bbox": {
+        "x0": 6.8,
+        "y0": 685.25,
+        "x1": 351.0,
+        "y1": 695.42
+      },
+      "text": "Downloaded from https://www.cambridge.org/core. 02 Oct 2026 at 17:20:55, subject to the Cambridge Core terms of use.",
+      "text_sha256": "74e61be917bb4c63560ddb6280a40c95d27f730713494a022bf17fd6b2c0d2d3"
+    }
+  ],
+  "provenance": {
+    "proposed_by": {
+      "tool": "extraction-pilot-drafts",
+      "version": "3",
+      "options_sha256": "b74e6f2f9c021751643a9a5d2e4451944b229defbcf37f11c98141324265f7b4"
+    },
+    "review": {
+      "status": "reviewed",
+      "reviewer": "agent-claude-sonnet-5-5",
+      "reviewed_at": "2026-11-12T13:59:20Z",
+      "basis": "page_image_inspection"
+    }
+  }
+}

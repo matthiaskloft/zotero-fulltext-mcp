@@ -7,6 +7,12 @@ All notable changes to this project are documented here. Format loosely follows
 
 ### Added
 
+- Reviewed E2 pilot expectations under `benchmarks/extraction/expectations/pilot/`: 20 stratum pages
+  from 13 documents plus two whole papers (39 pages), with a test that loads every committed record.
+  **These labels were reviewed by an AI agent (Claude Sonnet 5.5), not by a human**, so any baseline
+  computed against them must be reported with that caveat. The third whole paper
+  (`jlmr-onet-content-model`) is not labelled. Pages left uncertain, and the labelling conventions,
+  are listed in `docs/extraction-pilot-review.md`.
 - Observation exporter (roadmap E1/E2, step 3): `extraction.observe.observe_pdf` turns the current
   production extraction (pymupdf4llm Markdown, the package's measured page maps, optionally the
   opt-in crop OCR) into a schema-valid `observation` plus the exact Markdown its `output_span`

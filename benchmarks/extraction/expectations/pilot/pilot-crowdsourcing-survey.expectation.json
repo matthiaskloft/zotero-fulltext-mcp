@@ -1,0 +1,747 @@
+{
+  "schema_version": 1,
+  "record_kind": "expectation",
+  "record_id": "pilot-crowdsourcing-survey",
+  "document": {
+    "pdf_sha256": "357e1c039acaf2fd35f5cfadc4ba0f52b56d1c97cee660a400850551bf105583",
+    "title": "Making Better Use of the Crowd: How Crowdsourcing Can Advance Machine Learning Research",
+    "page_count": 46,
+    "corpus_id": "crowdsourcing-survey"
+  },
+  "scope": {
+    "kind": "pages",
+    "physical_pages": [
+      33
+    ]
+  },
+  "pages": [
+    {
+      "physical_page": 33,
+      "printed_label": "33",
+      "geometry": {
+        "unit": "pt",
+        "origin": "top-left",
+        "frame": "displayed",
+        "box": "cropbox",
+        "rotation": 0,
+        "width": 612.0,
+        "height": 792.0
+      },
+      "render": {
+        "renderer": "pymupdf",
+        "renderer_version": "1.28.0",
+        "dpi": 150,
+        "image_sha256": "b757ac6bce5c2283851807eaa3af247d50220e41a76bf5a1e7718b6913995d60"
+      },
+      "body_start": {
+        "block_id": "p33-b2"
+      },
+      "body_end": {
+        "block_id": "p33-b15"
+      }
+    }
+  ],
+  "blocks": [
+    {
+      "id": "p33-b1",
+      "type": "header",
+      "page": 33,
+      "reading_order": 1,
+      "bbox": {
+        "x0": 215.73,
+        "y0": 36.99,
+        "x1": 392.64,
+        "y1": 48.96
+      },
+      "text": "Making Better Use of the Crowd",
+      "text_sha256": "9402647e05f08da61e221ca24bed5b23f5d390e606f8afec021e15c08ebf8804"
+    },
+    {
+      "id": "p33-b2",
+      "type": "reference_entry",
+      "page": 33,
+      "reading_order": 2,
+      "bbox": {
+        "x0": 89.0,
+        "y0": 92.3,
+        "x1": 523.04,
+        "y1": 132.3
+      },
+      "text": "Michael Buhrmester, Tracy Kwang, and Samuel D. Gosling. Amazon’s Mechanical Turk: A new source of inexpensive, yet high-quality, data? Perspectives on Psychological Science, 6(1):3–5, 2011.",
+      "text_sha256": "9244d86c4b3e2b8ddc1b47e9b5be4b11aea155eb98a087c5462feeb7d0137d18"
+    },
+    {
+      "id": "p33-b3",
+      "type": "reference_entry",
+      "page": 33,
+      "reading_order": 3,
+      "bbox": {
+        "x0": 89.0,
+        "y0": 142.7,
+        "x1": 523.04,
+        "y1": 182.71
+      },
+      "text": "Chris Callison-Burch and Mark Dredze. Creating speech and language data with Amazon’s Mechanical Turk. In NAACL HLT Workshop on Creating Speech and Language Data with Amazon’s Mechanical Turk, 2010.",
+      "text_sha256": "67d6159e0679029cc79a5e3c0c8b1f851a6987807a8ef59fd86b836a49594fb4"
+    },
+    {
+      "id": "p33-b4",
+      "type": "reference_entry",
+      "page": 33,
+      "reading_order": 4,
+      "bbox": {
+        "x0": 89.0,
+        "y0": 193.1,
+        "x1": 523.09,
+        "y1": 220.08
+      },
+      "text": "Alex Campolo, Madelyn Sanfilippo, Meredith Whittaker, and Kate Crawford. AI Now 2017 Report. Accessed at https://ainowinstitute.org/AI_Now_2017_Report.pdf, 2017.",
+      "text_sha256": "607fca8c1a2a89444d75ae91eeadd328e4b831bc1f8a878c87e9fad4db766e6f"
+    },
+    {
+      "id": "p33-b5",
+      "type": "reference_entry",
+      "page": 33,
+      "reading_order": 5,
+      "bbox": {
+        "x0": 89.0,
+        "y0": 229.95,
+        "x1": 523.05,
+        "y1": 269.96
+      },
+      "text": "Logan Casey, Jesse Chandler, Adam Seth Levine, Andrew Proctor, and Dara Z. Strolovitch. Intertemporal differences among MTurk worker demographics. Working paper on PsyArXiv, 2017.",
+      "text_sha256": "85b06576bd68fd6e10441f1889131247d6aa99808a90d08c94dc0db406269928"
+    },
+    {
+      "id": "p33-b6",
+      "type": "reference_entry",
+      "page": 33,
+      "reading_order": 6,
+      "bbox": {
+        "x0": 89.0,
+        "y0": 280.36,
+        "x1": 523.09,
+        "y1": 320.36
+      },
+      "text": "Dana Chandler and Adam Kapelner. Breaking monotony with meaning: Motivation in crowdsourcing markets. Journal of Economic Behavior and Organization, 90:123–133, 2013.",
+      "text_sha256": "35c0e5caf15a791bce2fc696dad18bc04f1149aa24fb254c675031a9c552f022"
+    },
+    {
+      "id": "p33-b7",
+      "type": "reference_entry",
+      "page": 33,
+      "reading_order": 7,
+      "bbox": {
+        "x0": 89.0,
+        "y0": 330.76,
+        "x1": 523.03,
+        "y1": 370.77
+      },
+      "text": "Jesse Chandler, Pam Mueller, and Gabriele Paolacci. Nonnaïveté among Amazon Mechan- ical Turk workers: Consequences and solutions for behavioral researchers. Behavior Re- search Methods, 46(1):112–130, 2014.",
+      "text_sha256": "42bdc0b1431005be5d08873e19e44a3baf2cba9314eac7e280e967baa3dcb126"
+    },
+    {
+      "id": "p33-b8",
+      "type": "reference_entry",
+      "page": 33,
+      "reading_order": 8,
+      "bbox": {
+        "x0": 89.0,
+        "y0": 381.16,
+        "x1": 523.01,
+        "y1": 421.17
+      },
+      "text": "Jesse J. Chandler and Gabriele Paolacci. Lie for a dime: When most prescreening responses are honest but most study participants are imposters. Social Psychological and Person- ality Science, 8(5):500–508, 2017.",
+      "text_sha256": "3ae0bfd78db1b0e61fd161adbe0470779ed50a5ba806eeca0e6d0d270ac22a59"
+    },
+    {
+      "id": "p33-b9",
+      "type": "reference_entry",
+      "page": 33,
+      "reading_order": 9,
+      "bbox": {
+        "x0": 89.0,
+        "y0": 431.57,
+        "x1": 523.1,
+        "y1": 458.02
+      },
+      "text": "Jonathan Chang, Jordan Boyd-Graber, Chong Wang, Sean Gerrish, and David M. Blei. Reading tea leaves: How humans interpret topic models. In NIPS, 2009.",
+      "text_sha256": "76ad0d48d206dfc5d425c54ba3905eeb0de0c19d4c17af254cb1f6978ad9d625"
+    },
+    {
+      "id": "p33-b10",
+      "type": "reference_entry",
+      "page": 33,
+      "reading_order": 10,
+      "bbox": {
+        "x0": 89.0,
+        "y0": 468.42,
+        "x1": 523.09,
+        "y1": 494.88
+      },
+      "text": "Shuchi Chawla, Jason D. Hartline, and Balasubramanian Sivan. Optimal crowdsourcing contests. Games and Economic Behavior, 2015.",
+      "text_sha256": "94f14ba77ecc6f1ee2ea247002b94acfc0a8ddc7eb499a17c24922c09f08790c"
+    },
+    {
+      "id": "p33-b11",
+      "type": "reference_entry",
+      "page": 33,
+      "reading_order": 11,
+      "bbox": {
+        "x0": 89.0,
+        "y0": 505.27,
+        "x1": 523.08,
+        "y1": 531.73
+      },
+      "text": "Yiling Chen and David M. Pennock. A utility framework for bounded-loss market makers. In UAI, 2007.",
+      "text_sha256": "b3ab53d0d61afddf82f4c1a425f50f4ca2192e178f5895a64029fc7b205f98ab"
+    },
+    {
+      "id": "p33-b12",
+      "type": "reference_entry",
+      "page": 33,
+      "reading_order": 12,
+      "bbox": {
+        "x0": 89.0,
+        "y0": 542.13,
+        "x1": 523.09,
+        "y1": 568.59
+      },
+      "text": "Yiling Chen and Jennifer Wortman Vaughan. A new understanding of prediction markets via no-regret learning. In ACM EC, 2010.",
+      "text_sha256": "fba976ea46e051328b9f70585a62cd154df0bddc596b243cecc42c85983dcdef"
+    },
+    {
+      "id": "p33-b13",
+      "type": "reference_entry",
+      "page": 33,
+      "reading_order": 13,
+      "bbox": {
+        "x0": 89.0,
+        "y0": 578.98,
+        "x1": 523.09,
+        "y1": 618.99
+      },
+      "text": "Yiling Chen, Arpita Ghosh, Michael Kearns, Tim Roughgarden, and Jennifer Wortman Vaughan. Mathematical foundations of social computing. Communications of the ACM, 59(12):102–108, December 2016.",
+      "text_sha256": "bfc340e6afc6a8c1555b2f003f07ffb216f8464219878a475d5226cf9f34ce6d"
+    },
+    {
+      "id": "p33-b14",
+      "type": "reference_entry",
+      "page": 33,
+      "reading_order": 14,
+      "bbox": {
+        "x0": 89.0,
+        "y0": 629.38,
+        "x1": 523.09,
+        "y1": 669.39
+      },
+      "text": "Lydia Chilton, Juho Kim, Paul André, Felicia Cordeiro, James Landay, Dan Weld, Steven P. Dow, Robert C. Miller, and Haoqi Zhang. Frenzy: Collaborative data organization for creating conference sessions. In CHI, 2014.",
+      "text_sha256": "296fd8c6fb7e8ec0a417b19f6c5d7654ab4dbf8246186bf8e8da4257644b7065"
+    },
+    {
+      "id": "p33-b15",
+      "type": "reference_entry",
+      "page": 33,
+      "reading_order": 15,
+      "bbox": {
+        "x0": 89.0,
+        "y0": 679.79,
+        "x1": 523.07,
+        "y1": 706.25
+      },
+      "text": "Lydia B. Chilton, Greg Little, Darren Edge, Daniel S. Weld, and James A. Landay. Cascade: Crowdsourcing taxonomy creation. In CHI, 2013.",
+      "text_sha256": "9c66c83d7ec86091c42e3b30acda93e5b660d5c10d02fd069779160a8c0f63ba"
+    },
+    {
+      "id": "p33-b16",
+      "type": "page_number",
+      "page": 33,
+      "reading_order": 16,
+      "bbox": {
+        "x0": 300.02,
+        "y0": 723.96,
+        "x1": 311.98,
+        "y1": 735.93
+      },
+      "text": "33",
+      "text_sha256": "c6f3ac57944a531490cd39902d0f777715fd005efac9a30622d5f5205e7f6894"
+    }
+  ],
+  "provenance": {
+    "proposed_by": {
+      "tool": "extraction-pilot-drafts",
+      "version": "3",
+      "options_sha256": "b74e6f2f9c021751643a9a5d2e4451944b229defbcf37f11c98141324265f7b4"
+    },
+    "review": {
+      "status": "reviewed",
+      "reviewer": "agent-claude-sonnet-5-5",
+      "reviewed_at": "2026-11-12T16:25:51Z",
+      "basis": "page_image_inspection"
+    }
+  },
+  "references": {
+    "entries": [
+      {
+        "id": "ref1",
+        "ordinal": 1,
+        "page": 33,
+        "block_id": "p33-b2",
+        "raw": "Michael Buhrmester, Tracy Kwang, and Samuel D. Gosling. Amazon’s Mechanical Turk: A new source of inexpensive, yet high-quality, data? Perspectives on Psychological Science, 6(1):3–5, 2011.",
+        "raw_sha256": "9244d86c4b3e2b8ddc1b47e9b5be4b11aea155eb98a087c5462feeb7d0137d18",
+        "fields": {
+          "authors": [
+            {
+              "family": "Buhrmester",
+              "given": "Michael"
+            },
+            {
+              "family": "Kwang",
+              "given": "Tracy"
+            },
+            {
+              "family": "Gosling",
+              "given": "Samuel D."
+            }
+          ],
+          "title": "Amazon’s Mechanical Turk: A new source of inexpensive, yet high-quality, data?",
+          "venue": "Perspectives on Psychological Science",
+          "year": 2011
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref2",
+        "ordinal": 2,
+        "page": 33,
+        "block_id": "p33-b3",
+        "raw": "Chris Callison-Burch and Mark Dredze. Creating speech and language data with Amazon’s Mechanical Turk. In NAACL HLT Workshop on Creating Speech and Language Data with Amazon’s Mechanical Turk, 2010.",
+        "raw_sha256": "67d6159e0679029cc79a5e3c0c8b1f851a6987807a8ef59fd86b836a49594fb4",
+        "fields": {
+          "authors": [
+            {
+              "family": "Callison-Burch",
+              "given": "Chris"
+            },
+            {
+              "family": "Dredze",
+              "given": "Mark"
+            }
+          ],
+          "title": "Creating speech and language data with Amazon’s Mechanical Turk",
+          "venue": "NAACL HLT Workshop on Creating Speech and Language Data with Amazon’s Mechanical Turk",
+          "year": 2010
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref3",
+        "ordinal": 3,
+        "page": 33,
+        "block_id": "p33-b4",
+        "raw": "Alex Campolo, Madelyn Sanfilippo, Meredith Whittaker, and Kate Crawford. AI Now 2017 Report. Accessed at https://ainowinstitute.org/AI_Now_2017_Report.pdf, 2017.",
+        "raw_sha256": "607fca8c1a2a89444d75ae91eeadd328e4b831bc1f8a878c87e9fad4db766e6f",
+        "fields": {
+          "authors": [
+            {
+              "family": "Campolo",
+              "given": "Alex"
+            },
+            {
+              "family": "Sanfilippo",
+              "given": "Madelyn"
+            },
+            {
+              "family": "Whittaker",
+              "given": "Meredith"
+            },
+            {
+              "family": "Crawford",
+              "given": "Kate"
+            }
+          ],
+          "title": "AI Now 2017 Report",
+          "year": 2017
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref4",
+        "ordinal": 4,
+        "page": 33,
+        "block_id": "p33-b5",
+        "raw": "Logan Casey, Jesse Chandler, Adam Seth Levine, Andrew Proctor, and Dara Z. Strolovitch. Intertemporal differences among MTurk worker demographics. Working paper on PsyArXiv, 2017.",
+        "raw_sha256": "85b06576bd68fd6e10441f1889131247d6aa99808a90d08c94dc0db406269928",
+        "fields": {
+          "authors": [
+            {
+              "family": "Casey",
+              "given": "Logan"
+            },
+            {
+              "family": "Chandler",
+              "given": "Jesse"
+            },
+            {
+              "family": "Levine",
+              "given": "Adam Seth"
+            },
+            {
+              "family": "Proctor",
+              "given": "Andrew"
+            },
+            {
+              "family": "Strolovitch",
+              "given": "Dara Z."
+            }
+          ],
+          "title": "Intertemporal differences among MTurk worker demographics",
+          "venue": "Working paper on PsyArXiv",
+          "year": 2017
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref5",
+        "ordinal": 5,
+        "page": 33,
+        "block_id": "p33-b6",
+        "raw": "Dana Chandler and Adam Kapelner. Breaking monotony with meaning: Motivation in crowdsourcing markets. Journal of Economic Behavior and Organization, 90:123–133, 2013.",
+        "raw_sha256": "35c0e5caf15a791bce2fc696dad18bc04f1149aa24fb254c675031a9c552f022",
+        "fields": {
+          "authors": [
+            {
+              "family": "Chandler",
+              "given": "Dana"
+            },
+            {
+              "family": "Kapelner",
+              "given": "Adam"
+            }
+          ],
+          "title": "Breaking monotony with meaning: Motivation in crowdsourcing markets",
+          "venue": "Journal of Economic Behavior and Organization",
+          "year": 2013
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref6",
+        "ordinal": 6,
+        "page": 33,
+        "block_id": "p33-b7",
+        "raw": "Jesse Chandler, Pam Mueller, and Gabriele Paolacci. Nonnaïveté among Amazon Mechan- ical Turk workers: Consequences and solutions for behavioral researchers. Behavior Re- search Methods, 46(1):112–130, 2014.",
+        "raw_sha256": "42bdc0b1431005be5d08873e19e44a3baf2cba9314eac7e280e967baa3dcb126",
+        "fields": {
+          "authors": [
+            {
+              "family": "Chandler",
+              "given": "Jesse"
+            },
+            {
+              "family": "Mueller",
+              "given": "Pam"
+            },
+            {
+              "family": "Paolacci",
+              "given": "Gabriele"
+            }
+          ],
+          "title": "Nonnaïveté among Amazon Mechanical Turk workers: Consequences and solutions for behavioral researchers",
+          "venue": "Behavior Research Methods",
+          "year": 2014
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref7",
+        "ordinal": 7,
+        "page": 33,
+        "block_id": "p33-b8",
+        "raw": "Jesse J. Chandler and Gabriele Paolacci. Lie for a dime: When most prescreening responses are honest but most study participants are imposters. Social Psychological and Person- ality Science, 8(5):500–508, 2017.",
+        "raw_sha256": "3ae0bfd78db1b0e61fd161adbe0470779ed50a5ba806eeca0e6d0d270ac22a59",
+        "fields": {
+          "authors": [
+            {
+              "family": "Chandler",
+              "given": "Jesse J."
+            },
+            {
+              "family": "Paolacci",
+              "given": "Gabriele"
+            }
+          ],
+          "title": "Lie for a dime: When most prescreening responses are honest but most study participants are imposters",
+          "venue": "Social Psychological and Personality Science",
+          "year": 2017
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref8",
+        "ordinal": 8,
+        "page": 33,
+        "block_id": "p33-b9",
+        "raw": "Jonathan Chang, Jordan Boyd-Graber, Chong Wang, Sean Gerrish, and David M. Blei. Reading tea leaves: How humans interpret topic models. In NIPS, 2009.",
+        "raw_sha256": "76ad0d48d206dfc5d425c54ba3905eeb0de0c19d4c17af254cb1f6978ad9d625",
+        "fields": {
+          "authors": [
+            {
+              "family": "Chang",
+              "given": "Jonathan"
+            },
+            {
+              "family": "Boyd-Graber",
+              "given": "Jordan"
+            },
+            {
+              "family": "Wang",
+              "given": "Chong"
+            },
+            {
+              "family": "Gerrish",
+              "given": "Sean"
+            },
+            {
+              "family": "Blei",
+              "given": "David M."
+            }
+          ],
+          "title": "Reading tea leaves: How humans interpret topic models",
+          "venue": "NIPS",
+          "year": 2009
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref9",
+        "ordinal": 9,
+        "page": 33,
+        "block_id": "p33-b10",
+        "raw": "Shuchi Chawla, Jason D. Hartline, and Balasubramanian Sivan. Optimal crowdsourcing contests. Games and Economic Behavior, 2015.",
+        "raw_sha256": "94f14ba77ecc6f1ee2ea247002b94acfc0a8ddc7eb499a17c24922c09f08790c",
+        "fields": {
+          "authors": [
+            {
+              "family": "Chawla",
+              "given": "Shuchi"
+            },
+            {
+              "family": "Hartline",
+              "given": "Jason D."
+            },
+            {
+              "family": "Sivan",
+              "given": "Balasubramanian"
+            }
+          ],
+          "title": "Optimal crowdsourcing contests",
+          "venue": "Games and Economic Behavior",
+          "year": 2015
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref10",
+        "ordinal": 10,
+        "page": 33,
+        "block_id": "p33-b11",
+        "raw": "Yiling Chen and David M. Pennock. A utility framework for bounded-loss market makers. In UAI, 2007.",
+        "raw_sha256": "b3ab53d0d61afddf82f4c1a425f50f4ca2192e178f5895a64029fc7b205f98ab",
+        "fields": {
+          "authors": [
+            {
+              "family": "Chen",
+              "given": "Yiling"
+            },
+            {
+              "family": "Pennock",
+              "given": "David M."
+            }
+          ],
+          "title": "A utility framework for bounded-loss market makers",
+          "venue": "UAI",
+          "year": 2007
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref11",
+        "ordinal": 11,
+        "page": 33,
+        "block_id": "p33-b12",
+        "raw": "Yiling Chen and Jennifer Wortman Vaughan. A new understanding of prediction markets via no-regret learning. In ACM EC, 2010.",
+        "raw_sha256": "fba976ea46e051328b9f70585a62cd154df0bddc596b243cecc42c85983dcdef",
+        "fields": {
+          "authors": [
+            {
+              "family": "Chen",
+              "given": "Yiling"
+            },
+            {
+              "family": "Wortman Vaughan",
+              "given": "Jennifer"
+            }
+          ],
+          "title": "A new understanding of prediction markets via no-regret learning",
+          "venue": "ACM EC",
+          "year": 2010
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref12",
+        "ordinal": 12,
+        "page": 33,
+        "block_id": "p33-b13",
+        "raw": "Yiling Chen, Arpita Ghosh, Michael Kearns, Tim Roughgarden, and Jennifer Wortman Vaughan. Mathematical foundations of social computing. Communications of the ACM, 59(12):102–108, December 2016.",
+        "raw_sha256": "bfc340e6afc6a8c1555b2f003f07ffb216f8464219878a475d5226cf9f34ce6d",
+        "fields": {
+          "authors": [
+            {
+              "family": "Chen",
+              "given": "Yiling"
+            },
+            {
+              "family": "Ghosh",
+              "given": "Arpita"
+            },
+            {
+              "family": "Kearns",
+              "given": "Michael"
+            },
+            {
+              "family": "Roughgarden",
+              "given": "Tim"
+            },
+            {
+              "family": "Wortman Vaughan",
+              "given": "Jennifer"
+            }
+          ],
+          "title": "Mathematical foundations of social computing",
+          "venue": "Communications of the ACM",
+          "year": 2016
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref13",
+        "ordinal": 13,
+        "page": 33,
+        "block_id": "p33-b14",
+        "raw": "Lydia Chilton, Juho Kim, Paul André, Felicia Cordeiro, James Landay, Dan Weld, Steven P. Dow, Robert C. Miller, and Haoqi Zhang. Frenzy: Collaborative data organization for creating conference sessions. In CHI, 2014.",
+        "raw_sha256": "296fd8c6fb7e8ec0a417b19f6c5d7654ab4dbf8246186bf8e8da4257644b7065",
+        "fields": {
+          "authors": [
+            {
+              "family": "Chilton",
+              "given": "Lydia"
+            },
+            {
+              "family": "Kim",
+              "given": "Juho"
+            },
+            {
+              "family": "André",
+              "given": "Paul"
+            },
+            {
+              "family": "Cordeiro",
+              "given": "Felicia"
+            },
+            {
+              "family": "Landay",
+              "given": "James"
+            },
+            {
+              "family": "Weld",
+              "given": "Dan"
+            },
+            {
+              "family": "Dow",
+              "given": "Steven P."
+            },
+            {
+              "family": "Miller",
+              "given": "Robert C."
+            },
+            {
+              "family": "Zhang",
+              "given": "Haoqi"
+            }
+          ],
+          "title": "Frenzy: Collaborative data organization for creating conference sessions",
+          "venue": "CHI",
+          "year": 2014
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref14",
+        "ordinal": 14,
+        "page": 33,
+        "block_id": "p33-b15",
+        "raw": "Lydia B. Chilton, Greg Little, Darren Edge, Daniel S. Weld, and James A. Landay. Cascade: Crowdsourcing taxonomy creation. In CHI, 2013.",
+        "raw_sha256": "9c66c83d7ec86091c42e3b30acda93e5b660d5c10d02fd069779160a8c0f63ba",
+        "fields": {
+          "authors": [
+            {
+              "family": "Chilton",
+              "given": "Lydia B."
+            },
+            {
+              "family": "Little",
+              "given": "Greg"
+            },
+            {
+              "family": "Edge",
+              "given": "Darren"
+            },
+            {
+              "family": "Weld",
+              "given": "Daniel S."
+            },
+            {
+              "family": "Landay",
+              "given": "James A."
+            }
+          ],
+          "title": "Cascade: Crowdsourcing taxonomy creation",
+          "venue": "CHI",
+          "year": 2013
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      }
+    ],
+    "markers": []
+  }
+}

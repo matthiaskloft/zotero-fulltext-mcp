@@ -133,3 +133,45 @@ text, so only documents that passed the licence gate (every document in the mani
 committed, and only after review. Held-out records go to `.../expectations/held_out/` and are
 labelled only after the pilot and scorer are stable. Drafts, page images and the selection report
 stay out of the repository.
+
+## Status of the committed pilot labels (agent review)
+
+The records under `benchmarks/extraction/expectations/pilot/` were reviewed by an AI agent
+(`reviewer: agent-claude-sonnet-5-5`, Claude Sonnet 5.5), **not by a human**; the maintainer chose
+agent review for this pass. Any baseline reported against them must say so. The agent started from
+the tool's text-layer proposals, compared every page against its rendered image and corrected
+wrong glyphs (for example dropped ligatures, minus signs, relational operators and Greek letters
+that the text layer mangles), but a language model reading 150 dpi images can miss errors, and
+`load_pilot_expectation` cannot detect them.
+
+Covered: the 20 pilot stratum pages (13 documents) and two of the three whole papers
+(`natcomm-metascape`, `ap-high-q-nanocavity`). **Not labelled:** the whole paper
+`jlmr-onet-content-model`; its four appendix pages are raster images of survey items and it holds
+about 240 table rows, so it was left out rather than done hastily. Held-out documents are untouched.
+
+Conventions the agent applied (decide once, state plainly):
+
+- Text is whitespace-normalised by the scorer, so line breaks are joined with a space and a
+  line-end hyphen is kept as printed (`micros- copy`); ligatures are spelled out (`fi`, `fl`).
+- Sub- and superscripts are recorded as plain characters in reading order (`m2p2`, `k2x`), without
+  markup, and font variants (bold, calligraphic, blackboard) as the plain letter. Paragraphs with
+  such inline math carry `uncertainty: medium`; inline stacked fractions and products with no
+  unambiguous linear reading carry `high`.
+- Text that exists only inside figure images or vector figure labels is not recorded; figures are
+  `figure` blocks with `text: null`. Decorative dotted leaders, logos and rules are not labelled
+  (the PLoS dotted leaders are `figure`/`decoration` blocks), so an extractor that emits them is
+  charged for invented text.
+- Printed e-mail addresses are withheld (the block is `text: null`, `high` uncertainty), because the
+  repository personal-data guard rejects e-mail addresses; this removes text-precision scoring on
+  those four pages.
+- Citation markers are not recorded (`markers: []`); the scorer does not score them. Reference
+  fields hold authors, title, year and venue; titles broken across lines were re-joined using a
+  word list, which can mis-resolve a hyphenated compound.
+- A page-scoped record marks `truncated` only where a sentence visibly continues across the scope
+  boundary.
+
+Pages with real doubt (also marked in the records): `naca-lifting-surfaces-scan` pages 5 and 7 are
+typewritten scans (one word and one equation number are smudged; the inline fraction on page 7 has
+no linear reading); `stam-iron-pnictides` pages 6 and 8 are about 600 table cells of subscripted
+formulas with no text layer (sign glyph in subscripts, one middle dot); `gaussian-coresets` and
+`pmet-srmr-covariates` carry flattened inline math.

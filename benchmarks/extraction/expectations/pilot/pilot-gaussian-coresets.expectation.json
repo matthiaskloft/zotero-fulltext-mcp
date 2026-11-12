@@ -1,0 +1,790 @@
+{
+  "schema_version": 1,
+  "record_kind": "expectation",
+  "record_id": "pilot-gaussian-coresets",
+  "document": {
+    "pdf_sha256": "f0b882dbb00daf24a4fed8f4d4e21cfa44138404388dfa8a75354c89e3b57717",
+    "title": "Training Gaussian Mixture Models at Scale via Coresets",
+    "page_count": 25,
+    "corpus_id": "gaussian-coresets"
+  },
+  "scope": {
+    "kind": "pages",
+    "physical_pages": [
+      18,
+      20
+    ]
+  },
+  "pages": [
+    {
+      "physical_page": 18,
+      "printed_label": "18",
+      "geometry": {
+        "unit": "pt",
+        "origin": "top-left",
+        "frame": "displayed",
+        "box": "cropbox",
+        "rotation": 0,
+        "width": 612.0,
+        "height": 792.0
+      },
+      "render": {
+        "renderer": "pymupdf",
+        "renderer_version": "1.28.0",
+        "dpi": 150,
+        "image_sha256": "d1e85c6accf688e0e6aa10e36a9d0b4eed79774acd4f8e9b5ffc1e8b1150605e"
+      },
+      "body_start": {
+        "block_id": "p18-b2"
+      },
+      "body_end": {
+        "block_id": "p18-b19"
+      }
+    },
+    {
+      "physical_page": 20,
+      "printed_label": "20",
+      "geometry": {
+        "unit": "pt",
+        "origin": "top-left",
+        "frame": "displayed",
+        "box": "cropbox",
+        "rotation": 0,
+        "width": 612.0,
+        "height": 792.0
+      },
+      "render": {
+        "renderer": "pymupdf",
+        "renderer_version": "1.28.0",
+        "dpi": 150,
+        "image_sha256": "82f8ef0ec29c182fea684ee717b5ccf1ccf0c71dea6aaffe5b278e8ae0de6ad6"
+      },
+      "body_start": {
+        "block_id": "p20-b2"
+      },
+      "body_end": {
+        "block_id": "p20-b21"
+      }
+    }
+  ],
+  "blocks": [
+    {
+      "id": "p18-b1",
+      "type": "header",
+      "page": 18,
+      "reading_order": 1,
+      "bbox": {
+        "x0": 205.79,
+        "y0": 39.48,
+        "x1": 402.53,
+        "y1": 51.45
+      },
+      "text": "Lucic, Faulkner, Krause and Feldman",
+      "text_sha256": "5bb308e06e55f670dcb7d537a757fb094287a3b58f5d57579d3f2a37939e519d"
+    },
+    {
+      "id": "p18-b2",
+      "type": "paragraph",
+      "page": 18,
+      "reading_order": 2,
+      "bbox": {
+        "x0": 89.0,
+        "y0": 92.15,
+        "x1": 523.02,
+        "y1": 134.34
+      },
+      "text": "Lemma 10 For any f ∈ F let Bf be the indicator function of the region below or on the graph of f, i.e. Bf(x, y) = sgn(f(x) − y). The pseudo-dimension of F is precisely the VC-dimension of the subgraph class BF = {Bf | f ∈ F}.",
+      "text_sha256": "6bd6462f52ba5ef66475012e47ffcb9d24660c8eabfdbab78ccbfc39f55dc6c0",
+      "uncertainty": {
+        "level": "medium",
+        "note": "Inline math is recorded as plain characters in reading order; blackboard, calligraphic and italic variants and sub/superscript positions are not preserved."
+      }
+    },
+    {
+      "id": "p18-b3",
+      "type": "paragraph",
+      "page": 18,
+      "reading_order": 3,
+      "bbox": {
+        "x0": 89.0,
+        "y0": 141.57,
+        "x1": 523.09,
+        "y1": 195.13
+      },
+      "text": "For the Gaussian mixture model, each fθ consists exclusively of applications of the exponential function and arithmetic operations on real numbers. The problem of bounding the combinatorial complexity of such function classes has received a great deal of interest which culminated in the following result (Anthony and Bartlett, 2009, Theorem 8.14):",
+      "text_sha256": "177822c2101b755ac336c2b54cdc921705e6ee7ed005ba23eee0efb677426f55",
+      "uncertainty": {
+        "level": "medium",
+        "note": "Inline math is recorded as plain characters in reading order; blackboard, calligraphic and italic variants and sub/superscript positions are not preserved."
+      }
+    },
+    {
+      "id": "p18-b4",
+      "type": "paragraph",
+      "page": 18,
+      "reading_order": 4,
+      "bbox": {
+        "x0": 89.0,
+        "y0": 199.6,
+        "x1": 476.8,
+        "y1": 216.96
+      },
+      "text": "Theorem 11 Let h be a function from Rm × Rd to {0, 1}, determining the class",
+      "text_sha256": "4a21dd1a1dd731ab27f3818a9c897583d04ec803c583efc08c23e526571e060e",
+      "uncertainty": {
+        "level": "medium",
+        "note": "Inline math is recorded as plain characters in reading order; blackboard, calligraphic and italic variants and sub/superscript positions are not preserved."
+      }
+    },
+    {
+      "id": "p18-b5",
+      "type": "equation",
+      "page": 18,
+      "reading_order": 5,
+      "bbox": {
+        "x0": 240.0,
+        "y0": 224.0,
+        "x1": 372.0,
+        "y1": 242.0
+      },
+      "equation": {
+        "latex": "\\mathcal{H} = \\{x \\mapsto h(x) : \\theta \\in \\mathbb{R}^m\\}.",
+        "number": null,
+        "display": true
+      }
+    },
+    {
+      "id": "p18-b6",
+      "type": "paragraph",
+      "page": 18,
+      "reading_order": 6,
+      "bbox": {
+        "x0": 89.0,
+        "y0": 248.7,
+        "x1": 522.5,
+        "y1": 277.88
+      },
+      "text": "Suppose that h can be computed by an algorithm that takes as input the pair (θ, x) ∈ Rm × Rd and returns h(θ, x) after no more than t of the following operations:",
+      "text_sha256": "edf3cdf8ec5465a0f47be6cf5fc736bc605445b02309202dac6a240b99e99746",
+      "uncertainty": {
+        "level": "medium",
+        "note": "Inline math is recorded as plain characters in reading order; blackboard, calligraphic and italic variants and sub/superscript positions are not preserved."
+      }
+    },
+    {
+      "id": "p18-b7",
+      "type": "list_item",
+      "page": 18,
+      "reading_order": 7,
+      "bbox": {
+        "x0": 98.55,
+        "y0": 274.22,
+        "x1": 354.62,
+        "y1": 291.43
+      },
+      "text": "(i) the exponential function α ↦ eα on real numbers,",
+      "text_sha256": "3434e87090e4829256eecff4a848fc3bd01b49ee972ba01608b2fa6bf44332dc",
+      "uncertainty": {
+        "level": "medium",
+        "note": "Inline math is recorded as plain characters in reading order; blackboard, calligraphic and italic variants and sub/superscript positions are not preserved."
+      }
+    },
+    {
+      "id": "p18-b8",
+      "type": "list_item",
+      "page": 18,
+      "reading_order": 8,
+      "bbox": {
+        "x0": 95.21,
+        "y0": 295.93,
+        "x1": 393.04,
+        "y1": 309.33
+      },
+      "text": "(ii) the arithmetic operations +, −, ×, and / on real numbers,",
+      "text_sha256": "adc220a047c04147ecb9742c16aeff8970eba9d136544fe3223c4270d4dc0ce1"
+    },
+    {
+      "id": "p18-b9",
+      "type": "list_item",
+      "page": 18,
+      "reading_order": 9,
+      "bbox": {
+        "x0": 91.86,
+        "y0": 313.83,
+        "x1": 485.6,
+        "y1": 327.22
+      },
+      "text": "(iii) jumps conditioned on >, ≥, <, ≤, =, and ≠ comparisons of real numbers, and",
+      "text_sha256": "eb59bd636ebd7045bec6deb5d30443e2e45d0f98dbacb64816206045acc90270"
+    },
+    {
+      "id": "p18-b10",
+      "type": "list_item",
+      "page": 18,
+      "reading_order": 10,
+      "bbox": {
+        "x0": 93.53,
+        "y0": 331.87,
+        "x1": 171.39,
+        "y1": 345.12
+      },
+      "text": "(iv) output 0, 1.",
+      "text_sha256": "84d5ca3e5c6a4d1145276fe573cbfd117a19f421988628e9e9c0670c9ae83044"
+    },
+    {
+      "id": "p18-b11",
+      "type": "paragraph",
+      "page": 18,
+      "reading_order": 11,
+      "bbox": {
+        "x0": 89.0,
+        "y0": 349.0,
+        "x1": 523.0,
+        "y1": 373.0
+      },
+      "text": "If the t operations include no more than p in which the exponential function is evaluated, then the VC-dimension of H is O(m2p2 + mp(t + log mp)).",
+      "text_sha256": "36c9874f6e07051dec28f418840823a1b7efc40b6f15e3756137c42941cebe09",
+      "uncertainty": {
+        "level": "medium",
+        "note": "Inline math is recorded as plain characters in reading order; blackboard, calligraphic and italic variants and sub/superscript positions are not preserved."
+      }
+    },
+    {
+      "id": "p18-b12",
+      "type": "paragraph",
+      "page": 18,
+      "reading_order": 12,
+      "bbox": {
+        "x0": 89.0,
+        "y0": 383.61,
+        "x1": 523.0,
+        "y1": 412.23
+      },
+      "text": "Theorem 12 Let Cλ be the family of λ-semi-spherical Gaussian mixtures with k compo- nents. Let X ⊂ Rd and m = k(d + 1)(d + 2)/2 − 1. Define fθ : X → [0, ∞) as",
+      "text_sha256": "63fc0318281e1ca5f1898390ba30e64c90f671e0d595c92cce1d246b2b3e54ea",
+      "uncertainty": {
+        "level": "medium",
+        "note": "Inline math is recorded as plain characters in reading order; blackboard, calligraphic and italic variants and sub/superscript positions are not preserved."
+      }
+    },
+    {
+      "id": "p18-b13",
+      "type": "equation",
+      "page": 18,
+      "reading_order": 13,
+      "bbox": {
+        "x0": 152.0,
+        "y0": 419.0,
+        "x1": 460.0,
+        "y1": 458.0
+      },
+      "equation": {
+        "latex": "f_\\theta(x) = -\\ln\\left(\\sum_{i=1}^{k} \\frac{w_i}{Z(\\theta)\\sqrt{|2\\pi\\Sigma_i|}} \\exp\\left(-\\frac{1}{2}\\left\\|\\Sigma_i^{-1/2}(x-\\mu_i)\\right\\|_2^2\\right)\\right),",
+        "number": null,
+        "display": true
+      }
+    },
+    {
+      "id": "p18-b14",
+      "type": "paragraph",
+      "page": 18,
+      "reading_order": 14,
+      "bbox": {
+        "x0": 89.0,
+        "y0": 463.0,
+        "x1": 524.0,
+        "y1": 488.0
+      },
+      "text": "where Z(θ) = ∑i wi/√|2πΣi|. Let F = {fθ(x) | θ ∈ Cλ ⊂ Rm}. Then, dim F ∈ O(d4k4).",
+      "text_sha256": "7a664becd952ae380fe29eb3902946f8f9d98053044f2cbc86631b32fde2ff1c",
+      "uncertainty": {
+        "level": "high",
+        "note": "Inline math with stacked fractions, sums or products that has no unambiguous linear reading; not suitable for strict comparison."
+      }
+    },
+    {
+      "id": "p18-b15",
+      "type": "paragraph",
+      "page": 18,
+      "reading_order": 15,
+      "bbox": {
+        "x0": 89.0,
+        "y0": 492.7,
+        "x1": 523.0,
+        "y1": 524.4
+      },
+      "text": "Proof Let θ ∈ Cλ and r ∈ R. Define h : Rm+1 × Rd → {0, 1} such that hθ,r(x) = 1 iff fθ(x) ≥ r. Let the corresponding function class be defined as",
+      "text_sha256": "a7ac439c441d53f1f5666aab1c0efdd70e9405ba7a9a169f83332868d755fc4a",
+      "uncertainty": {
+        "level": "medium",
+        "note": "Inline math is recorded as plain characters in reading order; blackboard, calligraphic and italic variants and sub/superscript positions are not preserved."
+      }
+    },
+    {
+      "id": "p18-b16",
+      "type": "equation",
+      "page": 18,
+      "reading_order": 16,
+      "bbox": {
+        "x0": 175.0,
+        "y0": 531.0,
+        "x1": 437.0,
+        "y1": 550.0
+      },
+      "equation": {
+        "latex": "\\mathcal{H} = \\{h_{\\theta,r}(\\cdot) \\mid h_{\\theta,r} : \\mathcal{X} \\to \\{0,1\\} \\mid \\theta \\in \\mathfrak{C}_\\lambda \\subset \\mathbb{R}^m, r \\in \\mathbb{R}\\}.",
+        "number": null,
+        "display": true
+      }
+    },
+    {
+      "id": "p18-b17",
+      "type": "paragraph",
+      "page": 18,
+      "reading_order": 17,
+      "bbox": {
+        "x0": 89.0,
+        "y0": 555.0,
+        "x1": 524.0,
+        "y1": 627.0
+      },
+      "text": "For a fixed query θ, all Σi−1, ∀i ∈ [k] are well defined as θ ∈ Cλ. Furthermore, w̃i = wi/(Z(θ)√|2πΣi|) ∈ R, ∀i ∈ [k] and ∑ki=1 w̃i = 1. As shown in Figure 5 the function hθ,r(x) can be evaluated using t = O(m) arithmetic operations out of which exactly k + 1 are evaluations of the exponential function. Furthermore, it can be evaluated without using the natural logarithm by computing e−r. By Lemma 10 and Theorem 11 we have",
+      "text_sha256": "75ca4a6466ade9e761dd16ecfcabfafd836e3e744563d806bda3e12291fef5b5",
+      "uncertainty": {
+        "level": "high",
+        "note": "Inline math with stacked fractions, sums or products that has no unambiguous linear reading; not suitable for strict comparison."
+      }
+    },
+    {
+      "id": "p18-b18",
+      "type": "equation",
+      "page": 18,
+      "reading_order": 18,
+      "bbox": {
+        "x0": 161.0,
+        "y0": 633.0,
+        "x1": 451.0,
+        "y1": 652.0
+      },
+      "equation": {
+        "latex": "\\dim \\mathcal{F} = \\dim_{\\mathrm{VC}} \\mathcal{H} \\in \\mathcal{O}\\left(m^2k^2 + mk(t+\\log mk)\\right) \\in \\mathcal{O}\\left(k^4d^4\\right).",
+        "number": null,
+        "display": true
+      }
+    },
+    {
+      "id": "p18-b19",
+      "type": "paragraph",
+      "page": 18,
+      "reading_order": 19,
+      "bbox": {
+        "x0": 89.0,
+        "y0": 678.13,
+        "x1": 523.03,
+        "y1": 706.59
+      },
+      "text": "The lower-bound of Ω(kd2) was established by Akama and Irie (2011). It is an open problem whether this gap can be closed further in the general setting.",
+      "text_sha256": "f48b37fb932cf1e43324ff8fba3dc64b09e24fb20e964f6454d0ac1b9de1d4e9",
+      "uncertainty": {
+        "level": "medium",
+        "note": "Inline math is recorded as plain characters in reading order; blackboard, calligraphic and italic variants and sub/superscript positions are not preserved."
+      }
+    },
+    {
+      "id": "p18-b20",
+      "type": "page_number",
+      "page": 18,
+      "reading_order": 20,
+      "bbox": {
+        "x0": 300.02,
+        "y0": 724.28,
+        "x1": 311.98,
+        "y1": 736.24
+      },
+      "text": "18",
+      "text_sha256": "4ec9599fc203d176a301536c2e091a19bc852759b255bd6818810a42c5fed14a"
+    },
+    {
+      "id": "p20-b1",
+      "type": "header",
+      "page": 20,
+      "reading_order": 21,
+      "bbox": {
+        "x0": 205.79,
+        "y0": 39.48,
+        "x1": 402.53,
+        "y1": 51.45
+      },
+      "text": "Lucic, Faulkner, Krause and Feldman",
+      "text_sha256": "5bb308e06e55f670dcb7d537a757fb094287a3b58f5d57579d3f2a37939e519d"
+    },
+    {
+      "id": "p20-b2",
+      "type": "paragraph",
+      "page": 20,
+      "reading_order": 22,
+      "bbox": {
+        "x0": 89.0,
+        "y0": 92.15,
+        "x1": 523.0,
+        "y1": 119.1
+      },
+      "text": "where c > 0 is an absolute constant. Then, with probability at least 1 − δ, the set C is a (k, ε)-coreset of X.",
+      "text_sha256": "553dab3c3e7541fdd8e4d3359de7e1a970cb2e07de1695dc1f72b28c9079cb3b",
+      "truncated": "start",
+      "uncertainty": {
+        "level": "medium",
+        "note": "Inline math is recorded as plain characters in reading order; blackboard, calligraphic and italic variants and sub/superscript positions are not preserved."
+      }
+    },
+    {
+      "id": "p20-b3",
+      "type": "paragraph",
+      "page": 20,
+      "reading_order": 23,
+      "bbox": {
+        "x0": 89.0,
+        "y0": 127.79,
+        "x1": 348.94,
+        "y1": 141.04
+      },
+      "text": "Proof Since all p runs are independent, it holds that",
+      "text_sha256": "414e2fc74e4a6e94b8f8cf0a3c45fd805e7cb4c1fc2b62922dd02881f1279ced",
+      "uncertainty": {
+        "level": "medium",
+        "note": "Inline math is recorded as plain characters in reading order; blackboard, calligraphic and italic variants and sub/superscript positions are not preserved."
+      }
+    },
+    {
+      "id": "p20-b4",
+      "type": "equation",
+      "page": 20,
+      "reading_order": 24,
+      "bbox": {
+        "x0": 100.0,
+        "y0": 146.0,
+        "x1": 513.0,
+        "y1": 179.0
+      },
+      "equation": {
+        "latex": "\\mathbb{P}\\left[\\phi(\\mathcal{X},\\mathcal{B}^\\star) > t\\right] = \\mathbb{P}\\left[\\min_{i\\in\\{1,...,p\\}} \\phi(\\mathcal{X},\\mathcal{B}_i) > t\\right] = \\Pi_{i=1}^p \\mathbb{P}\\left[\\phi(\\mathcal{X},\\mathcal{B}_i) > t\\right] \\le \\left(\\frac{\\mathbb{E}[\\phi(\\mathcal{X},\\mathcal{B}_1)]}{t}\\right)^p",
+        "number": null,
+        "display": true
+      }
+    },
+    {
+      "id": "p20-b5",
+      "type": "paragraph",
+      "page": 20,
+      "reading_order": 25,
+      "bbox": {
+        "x0": 89.0,
+        "y0": 187.95,
+        "x1": 506.2,
+        "y1": 200.86
+      },
+      "text": "by Markov’s inequality. By Theorem 5 of Arthur and Vassilvitskii (2007), it holds that",
+      "text_sha256": "e65f4f8053763d4446c95426a5af97a07fa401f8fd84938cb31ac670c56918eb",
+      "uncertainty": {
+        "level": "medium",
+        "note": "Inline math is recorded as plain characters in reading order; blackboard, calligraphic and italic variants and sub/superscript positions are not preserved."
+      }
+    },
+    {
+      "id": "p20-b6",
+      "type": "equation",
+      "page": 20,
+      "reading_order": 26,
+      "bbox": {
+        "x0": 212.0,
+        "y0": 208.0,
+        "x1": 400.0,
+        "y1": 228.0
+      },
+      "equation": {
+        "latex": "\\mathbb{E}[\\phi(\\mathcal{X},\\mathcal{B}_1)] \\le 8(\\log_2 k + 2)\\phi(\\mathcal{X}, OPT).",
+        "number": null,
+        "display": true
+      }
+    },
+    {
+      "id": "p20-b7",
+      "type": "paragraph",
+      "page": 20,
+      "reading_order": 27,
+      "bbox": {
+        "x0": 89.0,
+        "y0": 235.11,
+        "x1": 362.93,
+        "y1": 251.12
+      },
+      "text": "Hence, for p = ⌈log2 1/δ⌉, with probability at least 1 − δ,",
+      "text_sha256": "11008b242bae01d7bd0388719e3551c91f0a7db481d0c394c557345df7f431ad",
+      "uncertainty": {
+        "level": "medium",
+        "note": "Inline math is recorded as plain characters in reading order; blackboard, calligraphic and italic variants and sub/superscript positions are not preserved."
+      }
+    },
+    {
+      "id": "p20-b8",
+      "type": "equation",
+      "page": 20,
+      "reading_order": 28,
+      "bbox": {
+        "x0": 216.0,
+        "y0": 256.0,
+        "x1": 396.0,
+        "y1": 276.0
+      },
+      "equation": {
+        "latex": "\\phi(\\mathcal{X},\\mathcal{B}^\\star) \\le 16(\\log_2 k + 2)\\phi(\\mathcal{X}, OPT).",
+        "number": null,
+        "display": true
+      }
+    },
+    {
+      "id": "p20-b9",
+      "type": "paragraph",
+      "page": 20,
+      "reading_order": 29,
+      "bbox": {
+        "x0": 89.0,
+        "y0": 283.24,
+        "x1": 217.35,
+        "y1": 296.15
+      },
+      "text": "By Lemma 7 we have that",
+      "text_sha256": "37eabfaa00754d8bb47fedb808a0839b79bbc488272807f30f49327d8cf177b8"
+    },
+    {
+      "id": "p20-b10",
+      "type": "equation",
+      "page": 20,
+      "reading_order": 30,
+      "bbox": {
+        "x0": 132.0,
+        "y0": 303.0,
+        "x1": 481.0,
+        "y1": 340.0
+      },
+      "equation": {
+        "latex": "s(x) = |\\mathcal{X}|\\frac{2}{\\lambda^2}\\left(\\frac{\\alpha \\mathrm{d}(x,\\mathcal{B})^2}{\\sum_{x'\\in\\mathcal{X}} \\mathrm{d}(x',\\mathcal{B})^2} + \\frac{2\\alpha}{|\\mathcal{X}_j|}\\frac{\\sum_{x'\\in\\mathcal{X}_j} \\mathrm{d}(x',\\mathcal{B})^2}{\\sum_{x'\\in\\mathcal{X}} \\mathrm{d}(x',\\mathcal{B})^2} + \\frac{2}{|\\mathcal{X}_j|}\\right) \\ge \\sigma(x)",
+        "number": null,
+        "display": true
+      }
+    },
+    {
+      "id": "p20-b11",
+      "type": "paragraph",
+      "page": 20,
+      "reading_order": 31,
+      "bbox": {
+        "x0": 89.0,
+        "y0": 347.72,
+        "x1": 182.41,
+        "y1": 361.12
+      },
+      "text": "for each x ∈ X and",
+      "text_sha256": "5d7ecdf46608115a8a304ff8c81ab10afeacefb8ede9d0f32fe26a1ad38a7458",
+      "uncertainty": {
+        "level": "medium",
+        "note": "Inline math is recorded as plain characters in reading order; blackboard, calligraphic and italic variants and sub/superscript positions are not preserved."
+      }
+    },
+    {
+      "id": "p20-b12",
+      "type": "equation",
+      "page": 20,
+      "reading_order": 32,
+      "bbox": {
+        "x0": 209.0,
+        "y0": 359.0,
+        "x1": 523.0,
+        "y1": 402.0
+      },
+      "equation": {
+        "latex": "\\mathfrak{S} \\le \\frac{1}{|\\mathcal{X}|}\\sum_{x\\in\\mathcal{X}} s(x) = \\frac{4\\alpha+2\\beta}{\\lambda^2} \\in \\mathcal{O}\\left(\\frac{k}{\\lambda^2}\\right)",
+        "number": "(5)",
+        "display": true
+      }
+    },
+    {
+      "id": "p20-b13",
+      "type": "paragraph",
+      "page": 20,
+      "reading_order": 33,
+      "bbox": {
+        "x0": 89.0,
+        "y0": 409.55,
+        "x1": 523.04,
+        "y1": 438.18
+      },
+      "text": "since α = O(log2 k) and β = k. We conclude the proof by instantiating Theorem 13 with µX(x) = 1/|X|, Theorem 12 and the total sensitivity bound (5).",
+      "text_sha256": "89648e895d47d53ef30bf201f0e9c9a465c8973ed06321e7e86071b206f788d7",
+      "uncertainty": {
+        "level": "medium",
+        "note": "Inline math is recorded as plain characters in reading order; blackboard, calligraphic and italic variants and sub/superscript positions are not preserved."
+      }
+    },
+    {
+      "id": "p20-b14",
+      "type": "heading",
+      "page": 20,
+      "reading_order": 34,
+      "bbox": {
+        "x0": 89.0,
+        "y0": 470.4,
+        "x1": 355.46,
+        "y1": 483.31
+      },
+      "text": "A.4 Directly Approximating the Log-Likelihood",
+      "text_sha256": "9c59e44fa97c818498bba0dbe2755b0554bbfdc5aeaca7eec3c45f1bf528f543"
+    },
+    {
+      "id": "p20-b15",
+      "type": "paragraph",
+      "page": 20,
+      "reading_order": 35,
+      "bbox": {
+        "x0": 89.0,
+        "y0": 490.06,
+        "x1": 523.04,
+        "y1": 516.52
+      },
+      "text": "Under additional assumptions on the eigenvalues we can derive a stronger result directly relating the approximated log-likelihood with the true likelihood.",
+      "text_sha256": "5098251e15e4a74b971b50066514d6d71f52f8e67bfc2132802dc32e2eb85a98"
+    },
+    {
+      "id": "p20-b16",
+      "type": "paragraph",
+      "page": 20,
+      "reading_order": 36,
+      "bbox": {
+        "x0": 89.0,
+        "y0": 522.0,
+        "x1": 507.0,
+        "y1": 547.0
+      },
+      "text": "Theorem 14 Let the conditions of Theorem 2 hold. If ∏λj∈spec(Σi) λj ≥ 1/(2π)d we have",
+      "text_sha256": "faf51bd6cc589b2bec64530fada5e82aca6d4fc90155c0b52491969477d08ea9",
+      "uncertainty": {
+        "level": "high",
+        "note": "Inline math with stacked fractions, sums or products that has no unambiguous linear reading; not suitable for strict comparison."
+      }
+    },
+    {
+      "id": "p20-b17",
+      "type": "equation",
+      "page": 20,
+      "reading_order": 37,
+      "bbox": {
+        "x0": 225.0,
+        "y0": 550.0,
+        "x1": 387.0,
+        "y1": 565.0
+      },
+      "equation": {
+        "latex": "|\\mathcal{L}(\\mathcal{X} \\mid \\theta) - \\mathcal{L}(\\mathcal{C} \\mid \\theta)| \\le \\varepsilon\\mathcal{L}(\\mathcal{X} \\mid \\theta).",
+        "number": null,
+        "display": true
+      }
+    },
+    {
+      "id": "p20-b18",
+      "type": "paragraph",
+      "page": 20,
+      "reading_order": 38,
+      "bbox": {
+        "x0": 89.0,
+        "y0": 573.0,
+        "x1": 523.0,
+        "y1": 603.0
+      },
+      "text": "Proof By Theorem 2, for α = 16(log2 k + 2), β = k, m ∈ Θ(d4k6λ−4ε−2), with probability at least 1 − δ, it holds that",
+      "text_sha256": "b10ca3a2b760b90ec4506efa2da90da69c8370e8129016b70326ff8389d0e874",
+      "uncertainty": {
+        "level": "medium",
+        "note": "Inline math is recorded as plain characters in reading order; blackboard, calligraphic and italic variants and sub/superscript positions are not preserved."
+      }
+    },
+    {
+      "id": "p20-b19",
+      "type": "equation",
+      "page": 20,
+      "reading_order": 39,
+      "bbox": {
+        "x0": 185.0,
+        "y0": 611.0,
+        "x1": 427.0,
+        "y1": 626.0
+      },
+      "equation": {
+        "latex": "(1-\\varepsilon)\\,\\mathrm{cost}(\\mathcal{X},\\theta) \\le \\mathrm{cost}(\\mathcal{C},\\theta) \\le (1+\\varepsilon)\\,\\mathrm{cost}(\\mathcal{X},\\theta).",
+        "number": null,
+        "display": true
+      }
+    },
+    {
+      "id": "p20-b20",
+      "type": "paragraph",
+      "page": 20,
+      "reading_order": 40,
+      "bbox": {
+        "x0": 89.0,
+        "y0": 634.0,
+        "x1": 523.0,
+        "y1": 666.0
+      },
+      "text": "By assumption that all eigenvalues are sufficiently large, namely ∏λj∈spec(Σi) λj ≥ 1/(2π)d, for all components i, the log-normalizer ln Z(θ) is negative since",
+      "text_sha256": "2193ffa8982ee72a1404d2d98baebf4b0e9024df9fddcaa08bbe09b6cb54455c",
+      "uncertainty": {
+        "level": "high",
+        "note": "Inline math with stacked fractions, sums or products that has no unambiguous linear reading; not suitable for strict comparison."
+      }
+    },
+    {
+      "id": "p20-b21",
+      "type": "equation",
+      "page": 20,
+      "reading_order": 41,
+      "bbox": {
+        "x0": 131.0,
+        "y0": 672.0,
+        "x1": 481.0,
+        "y1": 710.0
+      },
+      "equation": {
+        "latex": "Z(\\theta) = \\sum_i \\frac{w_i}{\\sqrt{|2\\pi\\Sigma_i|}} \\le \\max_i \\frac{1}{\\sqrt{|2\\pi\\Sigma_i|}} = \\max_i \\frac{1}{\\sqrt{(2\\pi)^d \\prod_{\\lambda_j\\in\\mathrm{spec}(\\Sigma_i)}\\lambda_j}} \\le 1.",
+        "number": null,
+        "display": true
+      }
+    },
+    {
+      "id": "p20-b22",
+      "type": "page_number",
+      "page": 20,
+      "reading_order": 42,
+      "bbox": {
+        "x0": 300.02,
+        "y0": 724.28,
+        "x1": 311.98,
+        "y1": 736.24
+      },
+      "text": "20",
+      "text_sha256": "f5ca38f748a1d6eaf726b8a42fb575c3c71f1864a8143301782de13da2d9202b"
+    }
+  ],
+  "provenance": {
+    "proposed_by": {
+      "tool": "extraction-pilot-drafts",
+      "version": "3",
+      "options_sha256": "b74e6f2f9c021751643a9a5d2e4451944b229defbcf37f11c98141324265f7b4"
+    },
+    "review": {
+      "status": "reviewed",
+      "reviewer": "agent-claude-sonnet-5-5",
+      "reviewed_at": "2026-11-12T13:58:00Z",
+      "basis": "page_image_inspection"
+    }
+  }
+}

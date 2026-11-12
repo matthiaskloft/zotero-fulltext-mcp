@@ -1,0 +1,176 @@
+{
+  "schema_version": 1,
+  "record_kind": "expectation",
+  "record_id": "pilot-crbiol-penicillium-domestication",
+  "document": {
+    "pdf_sha256": "f0d4c4f6927bf267734a452ec068528285232dac26295b76e1afcb9823eaf78e",
+    "title": "La domestication des champignons Penicillium du fromage",
+    "page_count": 23,
+    "corpus_id": "crbiol-penicillium-domestication"
+  },
+  "scope": {
+    "kind": "pages",
+    "physical_pages": [
+      5
+    ]
+  },
+  "pages": [
+    {
+      "physical_page": 5,
+      "printed_label": "158",
+      "geometry": {
+        "unit": "pt",
+        "origin": "top-left",
+        "frame": "displayed",
+        "box": "cropbox",
+        "rotation": 0,
+        "width": 544.252,
+        "height": 742.677
+      },
+      "render": {
+        "renderer": "pymupdf",
+        "renderer_version": "1.28.0",
+        "dpi": 150,
+        "image_sha256": "d49ebb8eade7a4ea5d9f4918130af945539b406f9dddd90b79bb0df755b50f5c"
+      },
+      "body_start": {
+        "block_id": "p5-b3"
+      },
+      "body_end": {
+        "block_id": "p5-b7"
+      }
+    }
+  ],
+  "blocks": [
+    {
+      "id": "p5-b1",
+      "type": "page_number",
+      "page": 5,
+      "reading_order": 1,
+      "bbox": {
+        "x0": 44.35,
+        "y0": 39.98,
+        "x1": 60.94,
+        "y1": 51.15
+      },
+      "text": "158",
+      "text_sha256": "7ed8f0f3b707956d9fb1e889e11153e0aa0a854983081d262fbe5eede32da7ca"
+    },
+    {
+      "id": "p5-b2",
+      "type": "header",
+      "page": 5,
+      "reading_order": 2,
+      "bbox": {
+        "x0": 238.62,
+        "y0": 41.36,
+        "x1": 305.63,
+        "y1": 50.71
+      },
+      "text": "Jeanne Ropars et al.",
+      "text_sha256": "32f177d136f37c7bccd3744e7bd85b4f20668a4f85ea62ba4658ea3dea6e04bf"
+    },
+    {
+      "id": "p5-b3",
+      "type": "figure",
+      "page": 5,
+      "reading_order": 3,
+      "bbox": {
+        "x0": 88.0,
+        "y0": 74.0,
+        "x1": 456.0,
+        "y1": 302.0
+      },
+      "graphic": {
+        "kind": "figure"
+      },
+      "text": null
+    },
+    {
+      "id": "p5-b4",
+      "type": "caption",
+      "page": 5,
+      "reading_order": 4,
+      "bbox": {
+        "x0": 56.31,
+        "y0": 303.32,
+        "x1": 487.94,
+        "y1": 413.93
+      },
+      "text": "Figure 1. Les champignons du fromage ne sont pas tous étroitement liés, mais plutôt dispersés dans l’arbre généalogique des champignons. On trouve les champignons Scopulariopsis sur Ossau-Iraty et Tommes, Bisfusarium domesticum sur Saint-Nectaire et Reblochon, Sporendonema casei sur Cantal et Salers, Penicillium camemberti sur Camembert et Brie, P. roqueforti dans tous les fromages bleus du monde, Debaryomyces hansenii, Geotrichum candidum, Kluyveromyces marxianus et Saccharomyces cerevisiae dans de nombreuses sortes de fromages. Phylogénie dessinée sur la base de LifeMap [37]. Images de fromages : Scopulariopsis : Ossau Iraty, B. domesticum : Saint-Nectaire, S. casei : Cantal, P. camemberti : Camembert, P. roqueforti : Roquefort, D. hansenii : Reblochon, G. candidum : fromage de chèvre. Les photos de Saint-Nectaire, Reblochon et Cantal sont tirées de Wikipédia.",
+      "text_sha256": "1320856996f9fbb5e7ba7e11079eb8608596ceba1ed9c6268f5eff5aea77114b",
+      "caption_for": "p5-b3"
+    },
+    {
+      "id": "p5-b5",
+      "type": "heading",
+      "page": 5,
+      "reading_order": 5,
+      "bbox": {
+        "x0": 44.35,
+        "y0": 432.01,
+        "x1": 197.87,
+        "y1": 444.09
+      },
+      "text": "2. Les champignons Penicillium",
+      "text_sha256": "e35e5269ea1ee58a4742ac2e3023c7f22159177bbc13ac9c5d11ee5a1ce47f3e"
+    },
+    {
+      "id": "p5-b6",
+      "type": "paragraph",
+      "page": 5,
+      "reading_order": 6,
+      "bbox": {
+        "x0": 44.35,
+        "y0": 458.05,
+        "x1": 264.17,
+        "y1": 675.86
+      },
+      "text": "Penicillium est un genre de champignons des As- comycota, décrit pour la première fois en 1809 par Link. Le nom Penicillium vient du mot latin qui si- gnifie pinceau, reflétant la forme conidiophore des champignons Penicillium [38]. Le genre Penicillium contient 354 espèces acceptées taxonomiquement, isolées dans le monde entier dans divers environne- ments, par exemple le sol, l’air et la nourriture [38– 40]. La plupart des espèces de Penicillium peuvent se reproduire par voie sexuée et asexuée. Pour la repro- duction asexuée, les champignons Penicillium gé- nèrent des conidies en chaîne (spores asexuées) via des structures spécifiques appelées conidiophores. Les conidiophores de Penicillium sont plus ou moins ramifiés, certaines espèces de Penicillium ayant des conidiophores uniquement composés de phialides d’où sortent les conidies (Penicillia monoverticillate), tandis que d’autres espèces ont des conidiophores",
+      "text_sha256": "ac4999652ef7ed6252d910fc92745e34799d38ae71de2d5a5d8dca4bed250e44"
+    },
+    {
+      "id": "p5-b7",
+      "type": "paragraph",
+      "page": 5,
+      "reading_order": 7,
+      "bbox": {
+        "x0": 280.09,
+        "y0": 432.69,
+        "x1": 499.9,
+        "y1": 674.81
+      },
+      "text": "avec une (biverticillate) ou plusieurs (Penicillia ter- verticillate) branches (appelées metula); ces sché- mas de ramification des conidiophores ont été uti- lisés par Pitt pour classer les espèces de Penicillium avant l’avènement de l’identification moléculaire. Les conidies de Penicillium sont généralement vertes ou bleues/vertes, la couleur changeant toutefois en fonction des conditions de croissance, telles que le milieu de culture, la lumière, l’humidité et la tempé- rature [41]. La dispersion asexuée des spores peut se produire par dispersion aérienne, aquatique ou ani- male lorsque les spores germent en hyphes qui vont croître et se développer en un nouveau mycélium. Les champignons Penicillium peuvent également se reproduire par voie sexuée, lorsque les hyphes de deux individus haploïdes portant des types d’accou- plement opposés, appelés MAT1-1 et MAT1-2, se ren- contrent dans des conditions adéquates. Ensuite, les noyaux fusionnent (caryogamie) et une méiose se produit, donnant naissance à huit ascospores. Ces",
+      "text_sha256": "d5c6706bc1ab6bd418a3759260d2945f11f0153678fd7f6d8a1b7a4dc726d734",
+      "truncated": "end",
+      "continues_from": "p5-b6"
+    },
+    {
+      "id": "p5-b8",
+      "type": "footer",
+      "page": 5,
+      "reading_order": 8,
+      "bbox": {
+        "x0": 44.35,
+        "y0": 704.01,
+        "x1": 180.75,
+        "y1": 715.11
+      },
+      "text": "C. R. Biologies — 2020, 343, no 2, 155-176",
+      "text_sha256": "1f43846bbfe36c547a088526b2f6f0230d70072d7d09483e10b7e5a6865e6013"
+    }
+  ],
+  "provenance": {
+    "proposed_by": {
+      "tool": "extraction-pilot-drafts",
+      "version": "3",
+      "options_sha256": "b74e6f2f9c021751643a9a5d2e4451944b229defbcf37f11c98141324265f7b4"
+    },
+    "review": {
+      "status": "reviewed",
+      "reviewer": "agent-claude-sonnet-5-5",
+      "reviewed_at": "2026-11-12T14:01:33Z",
+      "basis": "page_image_inspection"
+    }
+  }
+}

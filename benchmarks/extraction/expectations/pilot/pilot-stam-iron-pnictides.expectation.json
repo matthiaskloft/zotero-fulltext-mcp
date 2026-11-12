@@ -1,0 +1,2822 @@
+{
+  "schema_version": 1,
+  "record_kind": "expectation",
+  "record_id": "pilot-stam-iron-pnictides",
+  "document": {
+    "pdf_sha256": "c7007d53b733728558d9e72ce64b4aab4aa6c1483ca9d72896da80f55ed9d496",
+    "title": "Exploration of new superconductors and functional materials, and fabrication of superconducting tapes and wires of iron pnictides",
+    "page_count": 87,
+    "corpus_id": "stam-iron-pnictides"
+  },
+  "scope": {
+    "kind": "pages",
+    "physical_pages": [
+      6,
+      8
+    ]
+  },
+  "pages": [
+    {
+      "physical_page": 6,
+      "printed_label": "6",
+      "geometry": {
+        "unit": "pt",
+        "origin": "top-left",
+        "frame": "displayed",
+        "box": "cropbox",
+        "rotation": 0,
+        "width": 595.276,
+        "height": 841.89
+      },
+      "render": {
+        "renderer": "pymupdf",
+        "renderer_version": "1.28.0",
+        "dpi": 150,
+        "image_sha256": "623e0cc9ee52a328246c53fee38ffe74b9590242674df8e7ade9cb3c4175cb59"
+      },
+      "body_start": {
+        "block_id": "p6-b3"
+      },
+      "body_end": {
+        "block_id": "p6-b6"
+      }
+    },
+    {
+      "physical_page": 8,
+      "printed_label": "8",
+      "geometry": {
+        "unit": "pt",
+        "origin": "top-left",
+        "frame": "displayed",
+        "box": "cropbox",
+        "rotation": 0,
+        "width": 595.276,
+        "height": 841.89
+      },
+      "render": {
+        "renderer": "pymupdf",
+        "renderer_version": "1.28.0",
+        "dpi": 150,
+        "image_sha256": "a2148ce2dac47c653ef6c374d3e96b675384f9716a6643a1d1b8d712e2d7d472"
+      },
+      "body_start": {
+        "block_id": "p8-b3"
+      },
+      "body_end": {
+        "block_id": "p8-b4"
+      }
+    }
+  ],
+  "blocks": [
+    {
+      "id": "p6-b1",
+      "type": "header",
+      "page": 6,
+      "reading_order": 1,
+      "bbox": {
+        "x0": 46.85,
+        "y0": 52.66,
+        "x1": 183.29,
+        "y1": 61.65
+      },
+      "text": "Sci. Technol. Adv. Mater. 16 (2015) 033503",
+      "text_sha256": "d61a88e3a01996662cb175e23a46ccabd5bf179fbfcc1f4571cc3f8daccae50d"
+    },
+    {
+      "id": "p6-b2",
+      "type": "header",
+      "page": 6,
+      "reading_order": 2,
+      "bbox": {
+        "x0": 501.92,
+        "y0": 52.68,
+        "x1": 550.91,
+        "y1": 61.65
+      },
+      "text": "H Hosono et al",
+      "text_sha256": "7fb033e48cb750bdb64d7961d05b58190ff77fb36d058f78c20bc83ea4f68b0a"
+    },
+    {
+      "id": "p6-b3",
+      "type": "caption",
+      "page": 6,
+      "reading_order": 3,
+      "bbox": {
+        "x0": 260.86,
+        "y0": 69.98,
+        "x1": 336.86,
+        "y1": 80.03
+      },
+      "text": "Table 2. (Continued.)",
+      "text_sha256": "0554dfa0be7d3d39b27d8ed636c14e74fe58fbd968f6ec2154d1c675fff42aec",
+      "caption_for": "p6-b6"
+    },
+    {
+      "id": "p6-b4",
+      "type": "heading",
+      "page": 6,
+      "reading_order": 4,
+      "bbox": {
+        "x0": 204.5,
+        "y0": 92.0,
+        "x1": 400.5,
+        "y1": 103.0
+      },
+      "text": "(b) Materials which exhibited no superconductivity",
+      "text_sha256": "9e754f22b73ffd439f347093702967913f72543f1fd80b06e2258da21e640e80"
+    },
+    {
+      "id": "p6-b5",
+      "type": "paragraph",
+      "page": 6,
+      "reading_order": 5,
+      "bbox": {
+        "x0": 130.0,
+        "y0": 108.0,
+        "x1": 476.0,
+        "y1": 119.0
+      },
+      "text": ": possible to obtain the target phase, : impossible to obtain the target phase",
+      "text_sha256": "3b0c0ebe7e46197186703d5d8658feed8d42fae67cec08e19fcb2939d6ba1fc0"
+    },
+    {
+      "id": "p6-b6",
+      "type": "table",
+      "page": 6,
+      "reading_order": 6,
+      "bbox": {
+        "x0": 99.5,
+        "y0": 121.0,
+        "x1": 506.5,
+        "y1": 736.0
+      },
+      "table": {
+        "n_rows": 52,
+        "n_cols": 5,
+        "cells": [
+          {
+            "row": 0,
+            "col": 0,
+            "text": "IBSC (Square net of Fe)",
+            "colspan": 5,
+            "is_header": true
+          },
+          {
+            "row": 1,
+            "col": 0,
+            "text": "MgFeAsH"
+          },
+          {
+            "row": 1,
+            "col": 1,
+            "text": "SrFeAsH"
+          },
+          {
+            "row": 1,
+            "col": 2,
+            "text": "BaFeAsH"
+          },
+          {
+            "row": 1,
+            "col": 3,
+            "text": "EuFeAsH"
+          },
+          {
+            "row": 1,
+            "col": 4,
+            "text": "MgFePH"
+          },
+          {
+            "row": 2,
+            "col": 0,
+            "text": "CaFePH"
+          },
+          {
+            "row": 2,
+            "col": 1,
+            "text": "CaFeAsF1-x"
+          },
+          {
+            "row": 2,
+            "col": 2,
+            "text": "CaFeAsF1-xOx"
+          },
+          {
+            "row": 2,
+            "col": 3,
+            "text": "CaFeAsF1-xHx [9]"
+          },
+          {
+            "row": 2,
+            "col": 4,
+            "text": "Ca1-xLaxFeAsF"
+          },
+          {
+            "row": 3,
+            "col": 0,
+            "text": "Sr1-xLaxFeAsF"
+          },
+          {
+            "row": 3,
+            "col": 1,
+            "text": "Ca1-xNaxFeAsH"
+          },
+          {
+            "row": 3,
+            "col": 2,
+            "text": "LaFeAsO:N"
+          },
+          {
+            "row": 3,
+            "col": 3,
+            "text": "CaFeAsH1-xOx"
+          },
+          {
+            "row": 3,
+            "col": 4,
+            "text": "LaFeOSb"
+          },
+          {
+            "row": 4,
+            "col": 0,
+            "text": "CaFeOSe"
+          },
+          {
+            "row": 4,
+            "col": 1,
+            "text": "SrFeOSe"
+          },
+          {
+            "row": 4,
+            "col": 2,
+            "text": "KFeSeF"
+          },
+          {
+            "row": 4,
+            "col": 3,
+            "text": "LaFeSiF"
+          },
+          {
+            "row": 4,
+            "col": 4,
+            "text": "Ba(Fe,Re)2As2"
+          },
+          {
+            "row": 5,
+            "col": 0,
+            "text": "Ca(Fe,Au)2As2 (thin film)"
+          },
+          {
+            "row": 5,
+            "col": 1,
+            "text": "Ca(Fe,Mg)2As2"
+          },
+          {
+            "row": 5,
+            "col": 2,
+            "text": "Ca(Fe,Al)2As2"
+          },
+          {
+            "row": 5,
+            "col": 3,
+            "text": "Ca(Fe,Pt)2As2 [75]"
+          },
+          {
+            "row": 5,
+            "col": 4,
+            "text": "Ca(Fe,Ru)2As2"
+          },
+          {
+            "row": 6,
+            "col": 0,
+            "text": "(Ca,La)Fe2As2"
+          },
+          {
+            "row": 6,
+            "col": 1,
+            "text": "YFe2-xCoxGe2"
+          },
+          {
+            "row": 6,
+            "col": 2,
+            "text": "BaFe2-xZnxAs2"
+          },
+          {
+            "row": 6,
+            "col": 3,
+            "text": "BaFe2Sb2"
+          },
+          {
+            "row": 6,
+            "col": 4,
+            "text": "BaFe2Se2"
+          },
+          {
+            "row": 7,
+            "col": 0,
+            "text": "(Fe,Mn)2AlB2"
+          },
+          {
+            "row": 7,
+            "col": 1,
+            "text": "(Fe,Co)2AlB2"
+          },
+          {
+            "row": 7,
+            "col": 2,
+            "text": "(Fe,Ni)2AlB2"
+          },
+          {
+            "row": 7,
+            "col": 3,
+            "text": "(Fe,Cr)2AlB2"
+          },
+          {
+            "row": 7,
+            "col": 4,
+            "text": "ZrFe2Si2"
+          },
+          {
+            "row": 8,
+            "col": 0,
+            "text": "ZrFe2B2"
+          },
+          {
+            "row": 8,
+            "col": 1,
+            "text": "LuFe2-xSi2"
+          },
+          {
+            "row": 8,
+            "col": 2,
+            "text": "YFe2-xSi2"
+          },
+          {
+            "row": 8,
+            "col": 3,
+            "text": "TlFe2-xCoxSe2"
+          },
+          {
+            "row": 8,
+            "col": 4,
+            "text": "TlFe2-xNixSe2"
+          },
+          {
+            "row": 9,
+            "col": 0,
+            "text": "Tl1-xFe2Se2"
+          },
+          {
+            "row": 9,
+            "col": 1,
+            "text": "MgFe2As2"
+          },
+          {
+            "row": 9,
+            "col": 2,
+            "text": "CdFe2As2"
+          },
+          {
+            "row": 9,
+            "col": 3,
+            "text": "YFe2B2"
+          },
+          {
+            "row": 9,
+            "col": 4,
+            "text": "Fe2-xCuxAs"
+          },
+          {
+            "row": 10,
+            "col": 0,
+            "text": "(Fe,Pt)Se"
+          },
+          {
+            "row": 10,
+            "col": 1,
+            "text": "Fe(Te,As)"
+          },
+          {
+            "row": 10,
+            "col": 2,
+            "text": "Fe(Se,As)"
+          },
+          {
+            "row": 10,
+            "col": 3,
+            "text": "FeP0.5X0.50.5 (X = Cl, Br)"
+          },
+          {
+            "row": 10,
+            "col": 4,
+            "text": "FeSe1-xXx (X = P, Cl)"
+          },
+          {
+            "row": 11,
+            "col": 0,
+            "text": "FeSb1-x"
+          },
+          {
+            "row": 11,
+            "col": 1,
+            "text": "La-Ca10(Ir4As8)(Fe2As2)5"
+          },
+          {
+            "row": 11,
+            "col": 2,
+            "text": "Ge- Ca10(Ir4As8)(Fe2As2)5"
+          },
+          {
+            "row": 11,
+            "col": 3,
+            "text": "P- Ca10(Ir4As8)(Fe2As2)5"
+          },
+          {
+            "row": 11,
+            "col": 4,
+            "text": "Re- Ca10(Ir4As8)(Fe2As2)5"
+          },
+          {
+            "row": 12,
+            "col": 0,
+            "text": "K- Ca10(Ir4As8)(Fe2As2)5"
+          },
+          {
+            "row": 12,
+            "col": 1,
+            "text": "Sr- Ca10(Ir4As8)(Fe2As2)5"
+          },
+          {
+            "row": 12,
+            "col": 2,
+            "text": "Ba- Ca10(Ir4As8)(Fe2As2)5"
+          },
+          {
+            "row": 12,
+            "col": 3,
+            "text": "Ca10(M4As8)(Fe2As2)5 (M=Pd,Rh)"
+          },
+          {
+            "row": 12,
+            "col": 4,
+            "text": "Ba10(Pt4As8)(Fe2As2)5"
+          },
+          {
+            "row": 13,
+            "col": 0,
+            "text": "Sr10(Pt4As8)(Fe2As2)5"
+          },
+          {
+            "row": 13,
+            "col": 1,
+            "text": "Ca10Pt5.8Fe8.2Sb18"
+          },
+          {
+            "row": 13,
+            "col": 2,
+            "text": "Ba2InO3FeAs"
+          },
+          {
+            "row": 13,
+            "col": 3,
+            "text": "Sr2InO3FeAs"
+          },
+          {
+            "row": 13,
+            "col": 4,
+            "text": "Sr2FeO3FeAs"
+          },
+          {
+            "row": 14,
+            "col": 0,
+            "text": "Ba2FeO3FeAs"
+          },
+          {
+            "row": 14,
+            "col": 1,
+            "text": "Sr4V2O5Fe2As2"
+          },
+          {
+            "row": 14,
+            "col": 2,
+            "text": "Bi2SrFe2O4Se2"
+          },
+          {
+            "row": 14,
+            "col": 3,
+            "text": "La3O2Fe4As4"
+          },
+          {
+            "row": 14,
+            "col": 4,
+            "text": "Ca3F2Fe4As4"
+          },
+          {
+            "row": 15,
+            "col": 0,
+            "text": "La2O3Fe2(S1-xFx)2"
+          },
+          {
+            "row": 15,
+            "col": 1,
+            "text": "La2O3Fe2(Se1-xFx)2"
+          },
+          {
+            "row": 15,
+            "col": 2,
+            "text": "La2O3Fe2(Se1-xAsx)2"
+          },
+          {
+            "row": 15,
+            "col": 3,
+            "text": "La2O3Fe2(Se1-xGex)2"
+          },
+          {
+            "row": 15,
+            "col": 4,
+            "text": "La2O3(Fe1-xCox)2Se"
+          },
+          {
+            "row": 16,
+            "col": 0,
+            "text": "La2O3(Fe1-xMnx)2Se"
+          },
+          {
+            "row": 16,
+            "col": 1,
+            "text": "NdFexSb2"
+          },
+          {
+            "row": 16,
+            "col": 2,
+            "text": "Fe1-xCuxAs0.5"
+          },
+          {
+            "row": 16,
+            "col": 3,
+            "text": "EuFeAsO1-x"
+          },
+          {
+            "row": 16,
+            "col": 4,
+            "text": "Fe1-xSi2"
+          },
+          {
+            "row": 17,
+            "col": 0,
+            "text": "(Fe1-xMnx)1-ySi2"
+          },
+          {
+            "row": 17,
+            "col": 1,
+            "text": "(Fe1-xCox)1-ySi2"
+          },
+          {
+            "row": 17,
+            "col": 2,
+            "text": "(Fe1-xMox)1-ySi2"
+          },
+          {
+            "row": 17,
+            "col": 3,
+            "text": "AgFeAs"
+          },
+          {
+            "row": 17,
+            "col": 4,
+            "text": "La(Fe1-xCox)2Si2"
+          },
+          {
+            "row": 18,
+            "col": 0,
+            "text": "Fe0.82(Si1-xGex)2"
+          },
+          {
+            "row": 18,
+            "col": 1,
+            "text": "RFeC2"
+          },
+          {
+            "row": 18,
+            "col": 2,
+            "text": "Sc(Fe,Co)C2"
+          },
+          {
+            "row": 18,
+            "col": 3,
+            "text": "Sc(Fe,Ni)C2"
+          },
+          {
+            "row": 18,
+            "col": 4,
+            "text": "La(Fe,Co)Si2"
+          },
+          {
+            "row": 19,
+            "col": 0,
+            "text": "La(Fe,Mn)Si2"
+          },
+          {
+            "row": 19,
+            "col": 1,
+            "text": "LaFe0.5Sb2"
+          },
+          {
+            "row": 19,
+            "col": 2,
+            "text": "CaFe4As3"
+          },
+          {
+            "row": 19,
+            "col": 3,
+            "text": "CaFe3AgAs3"
+          },
+          {
+            "row": 19,
+            "col": 4,
+            "text": "CaFe3CuAs3"
+          },
+          {
+            "row": 20,
+            "col": 0,
+            "text": "CaFe3LiAs3"
+          },
+          {
+            "row": 20,
+            "col": 1,
+            "text": "La3O4Fe4As3"
+          },
+          {
+            "row": 20,
+            "col": 2,
+            "text": "Fe(Se,As)2"
+          },
+          {
+            "row": 20,
+            "col": 3,
+            "text": "(Fe,Mn)As2"
+          },
+          {
+            "row": 20,
+            "col": 4,
+            "text": "(Fe,Ru)As2"
+          },
+          {
+            "row": 21,
+            "col": 0,
+            "text": "(Fe,Rh)As2"
+          },
+          {
+            "row": 21,
+            "col": 1,
+            "text": "(Fe,Co)As2"
+          },
+          {
+            "row": 21,
+            "col": 2,
+            "text": "(Fe,Ni)As2"
+          },
+          {
+            "row": 21,
+            "col": 3,
+            "text": "(Fe,Pd)As2"
+          },
+          {
+            "row": 21,
+            "col": 4,
+            "text": "La3-xRExCu2O6-yFe2As2"
+          },
+          {
+            "row": 22,
+            "col": 0,
+            "text": "Sr3Fe2Cu2Se2O5"
+          },
+          {
+            "row": 22,
+            "col": 1,
+            "text": "Sr2.6K0.4Fe2Cu2Se2O5"
+          },
+          {
+            "row": 22,
+            "col": 2,
+            "text": "La3O4Fe4As4"
+          },
+          {
+            "row": 22,
+            "col": 3,
+            "text": "Ca3Fe4As4F3"
+          },
+          {
+            "row": 22,
+            "col": 4,
+            "text": "Ca2FeOsO6"
+          },
+          {
+            "row": 23,
+            "col": 0,
+            "text": "Ba1-xKxFe2X (X = S, Se)"
+          },
+          {
+            "row": 23,
+            "col": 1,
+            "text": "NaFe2O4"
+          },
+          {
+            "row": 23,
+            "col": 2,
+            "text": "BaFe2-xCoxSe3"
+          },
+          {
+            "row": 23,
+            "col": 3,
+            "text": "Tl1-xBaxFeSe2"
+          },
+          {
+            "row": 23,
+            "col": 4,
+            "text": "La2Fe2Se2O3-xHx"
+          },
+          {
+            "row": 24,
+            "col": 0,
+            "text": "La2Fe2S2O3-xHx"
+          },
+          {
+            "row": 24,
+            "col": 1,
+            "text": "CaBaFe2Pn2O (Pn = As Sb, Bi),"
+          },
+          {
+            "row": 24,
+            "col": 2,
+            "text": "SrFe2Pn2O (Pn = As, Sb, Bi)"
+          },
+          {
+            "row": 24,
+            "col": 3,
+            "text": "BaFe2Pn2O (Pn = As, Sb, Bi)"
+          },
+          {
+            "row": 24,
+            "col": 4,
+            "text": "BaFe2Se2O"
+          },
+          {
+            "row": 25,
+            "col": 0,
+            "text": "t-FeS"
+          },
+          {
+            "row": 25,
+            "col": 1,
+            "text": ""
+          },
+          {
+            "row": 25,
+            "col": 2,
+            "text": ""
+          },
+          {
+            "row": 25,
+            "col": 3,
+            "text": ""
+          },
+          {
+            "row": 25,
+            "col": 4,
+            "text": ""
+          },
+          {
+            "row": 26,
+            "col": 0,
+            "text": "Analogous structure to IBSC material",
+            "colspan": 5
+          },
+          {
+            "row": 27,
+            "col": 0,
+            "text": "Square net of transition metal elements",
+            "colspan": 2
+          },
+          {
+            "row": 27,
+            "col": 2,
+            "text": "BaSc2Pn2O (Pn=As, Sb, Bi)"
+          },
+          {
+            "row": 27,
+            "col": 3,
+            "text": "SrTi2As2O"
+          },
+          {
+            "row": 27,
+            "col": 4,
+            "text": "BaTi2(As,Sb)2O [31]"
+          },
+          {
+            "row": 28,
+            "col": 0,
+            "text": "EuTi2As2O"
+          },
+          {
+            "row": 28,
+            "col": 1,
+            "text": "BaTi2Sb2O"
+          },
+          {
+            "row": 28,
+            "col": 2,
+            "text": "(SrF)2Ti2Bi2O [76]"
+          },
+          {
+            "row": 28,
+            "col": 3,
+            "text": "(SrF)2Ti2(Sb1-xBix)2O"
+          },
+          {
+            "row": 28,
+            "col": 4,
+            "text": "Zr2Ti2As2H"
+          },
+          {
+            "row": 29,
+            "col": 0,
+            "text": "Zr2Ti2Pn2H (Pn = Sb, Bi)"
+          },
+          {
+            "row": 29,
+            "col": 1,
+            "text": "ZrTiPn (Pn = Sb, Bi)"
+          },
+          {
+            "row": 29,
+            "col": 2,
+            "text": "ZrTiAs"
+          },
+          {
+            "row": 29,
+            "col": 3,
+            "text": "BaV2Ge2O"
+          },
+          {
+            "row": 29,
+            "col": 4,
+            "text": "BaV2Sn2O"
+          },
+          {
+            "row": 30,
+            "col": 0,
+            "text": "BaV2Pn2O (Pn = As, Sb, Bi)"
+          },
+          {
+            "row": 30,
+            "col": 1,
+            "text": "LnCrAsO (Ln=La-Nd, Sm) [77]"
+          },
+          {
+            "row": 30,
+            "col": 2,
+            "text": "SrCrAsF"
+          },
+          {
+            "row": 30,
+            "col": 3,
+            "text": "EuCrAsF"
+          },
+          {
+            "row": 30,
+            "col": 4,
+            "text": "La1-xCaMnAsO1-yFy"
+          },
+          {
+            "row": 31,
+            "col": 0,
+            "text": "Ce1-xCaMnAsO1-yFy"
+          },
+          {
+            "row": 31,
+            "col": 1,
+            "text": "Sm1-xCaMnAsO1-yFy"
+          },
+          {
+            "row": 31,
+            "col": 2,
+            "text": "SrMnAsF"
+          },
+          {
+            "row": 31,
+            "col": 3,
+            "text": "BaMnAsF"
+          },
+          {
+            "row": 31,
+            "col": 4,
+            "text": "EuMnAsF"
+          },
+          {
+            "row": 32,
+            "col": 0,
+            "text": "LaMnAsO1-xHx"
+          },
+          {
+            "row": 32,
+            "col": 1,
+            "text": "CeMnAsO1-xHx"
+          },
+          {
+            "row": 32,
+            "col": 2,
+            "text": "DyMnAsO1-xHx"
+          },
+          {
+            "row": 32,
+            "col": 3,
+            "text": "LaZn1-xMnxAsO0.75"
+          },
+          {
+            "row": 32,
+            "col": 4,
+            "text": "CaMn2As2"
+          },
+          {
+            "row": 33,
+            "col": 0,
+            "text": "CaMn2Sb2"
+          },
+          {
+            "row": 33,
+            "col": 1,
+            "text": "CaMnBi2"
+          },
+          {
+            "row": 33,
+            "col": 2,
+            "text": "(Ca,La)Mn2Sb2"
+          },
+          {
+            "row": 33,
+            "col": 3,
+            "text": "BaMn2As2"
+          },
+          {
+            "row": 33,
+            "col": 4,
+            "text": "(Ba,K)Mn2As2"
+          },
+          {
+            "row": 34,
+            "col": 0,
+            "text": "BaMnRuAs2"
+          },
+          {
+            "row": 34,
+            "col": 1,
+            "text": "BaMnFeAs2"
+          },
+          {
+            "row": 34,
+            "col": 2,
+            "text": "BaMnCoAs2"
+          },
+          {
+            "row": 34,
+            "col": 3,
+            "text": "BaMnRhAs2"
+          },
+          {
+            "row": 34,
+            "col": 4,
+            "text": "BaMnIrAs2"
+          },
+          {
+            "row": 35,
+            "col": 0,
+            "text": "BaMnBi2"
+          },
+          {
+            "row": 35,
+            "col": 1,
+            "text": "LaMn2Si2"
+          },
+          {
+            "row": 35,
+            "col": 2,
+            "text": "Sr(Mn,Fe)2P2"
+          },
+          {
+            "row": 35,
+            "col": 3,
+            "text": "Sr(Mn,Cr)2P2"
+          },
+          {
+            "row": 35,
+            "col": 4,
+            "text": "Sr(Mn,Al)2P2"
+          },
+          {
+            "row": 36,
+            "col": 0,
+            "text": "Sr(Mn,Zn)2P2"
+          },
+          {
+            "row": 36,
+            "col": 1,
+            "text": "(Ca,Eu)Mn2P2"
+          },
+          {
+            "row": 36,
+            "col": 2,
+            "text": "La2O2Mn2Te2O"
+          },
+          {
+            "row": 36,
+            "col": 3,
+            "text": "CaMn2Pn2O (Pn = As, Sb, Bi)"
+          },
+          {
+            "row": 36,
+            "col": 4,
+            "text": "SrMn2Pn2O (Pn = As, Sb, Bi)"
+          },
+          {
+            "row": 37,
+            "col": 0,
+            "text": "BaMn2Pn2O (Pn = As, Sb, Bi)"
+          },
+          {
+            "row": 37,
+            "col": 1,
+            "text": "BaMn2Se2O"
+          },
+          {
+            "row": 37,
+            "col": 2,
+            "text": "Ca10(Pt4As8)(Mn2- xPtxAs2)5"
+          },
+          {
+            "row": 37,
+            "col": 3,
+            "text": "LaCoAsO1-xHx"
+          },
+          {
+            "row": 37,
+            "col": 4,
+            "text": "(Ca,La)CoAs2"
+          },
+          {
+            "row": 38,
+            "col": 0,
+            "text": "(Sr1-xCax)Co2Ge2"
+          },
+          {
+            "row": 38,
+            "col": 1,
+            "text": "BaCo2Ge2"
+          },
+          {
+            "row": 38,
+            "col": 2,
+            "text": "YCo2B2"
+          },
+          {
+            "row": 38,
+            "col": 3,
+            "text": "YCo2Ge2"
+          },
+          {
+            "row": 38,
+            "col": 4,
+            "text": "LaCo0.6Sb2"
+          },
+          {
+            "row": 39,
+            "col": 0,
+            "text": "LaCo2Si2"
+          },
+          {
+            "row": 39,
+            "col": 1,
+            "text": "La(Co1-xNix)2Si2"
+          },
+          {
+            "row": 39,
+            "col": 2,
+            "text": "LaCo2(B1-xSix)2 [37]"
+          },
+          {
+            "row": 39,
+            "col": 3,
+            "text": "LaCo2Ge2"
+          },
+          {
+            "row": 39,
+            "col": 4,
+            "text": "NdCoxSb2"
+          },
+          {
+            "row": 40,
+            "col": 0,
+            "text": "GdCo2B2"
+          },
+          {
+            "row": 40,
+            "col": 1,
+            "text": "LaCo2B2Cx"
+          },
+          {
+            "row": 40,
+            "col": 2,
+            "text": "ZrCo2Si2"
+          },
+          {
+            "row": 40,
+            "col": 3,
+            "text": "HfCo2Si2"
+          },
+          {
+            "row": 40,
+            "col": 4,
+            "text": "HfCo2Ge2"
+          },
+          {
+            "row": 41,
+            "col": 0,
+            "text": "CaCo2Pn2O (Pn = As, Sb, Bi)"
+          },
+          {
+            "row": 41,
+            "col": 1,
+            "text": "SrCo2Pn2O (Pn = As, Sb, Bi)"
+          },
+          {
+            "row": 41,
+            "col": 2,
+            "text": "BaCo2Pn2O (Pn = As, Sb, Bi)"
+          },
+          {
+            "row": 41,
+            "col": 3,
+            "text": "Ca10(Pt4As8)(Co2-x PtxAs2)5"
+          },
+          {
+            "row": 41,
+            "col": 4,
+            "text": "(Ca,La)NiAs2"
+          },
+          {
+            "row": 42,
+            "col": 0,
+            "text": "CaNiAsH"
+          },
+          {
+            "row": 42,
+            "col": 1,
+            "text": "Ba1-xLaxNi2As2"
+          },
+          {
+            "row": 42,
+            "col": 2,
+            "text": "MgNiGe [78]"
+          },
+          {
+            "row": 42,
+            "col": 3,
+            "text": "CaNi1-xMnxGe [79]"
+          },
+          {
+            "row": 42,
+            "col": 4,
+            "text": "CaNi1-xMnxGeH [80]"
+          },
+          {
+            "row": 43,
+            "col": 0,
+            "text": "Y3NiSi3"
+          },
+          {
+            "row": 43,
+            "col": 1,
+            "text": "LaNiAs"
+          },
+          {
+            "row": 43,
+            "col": 2,
+            "text": "La3NiSi3"
+          },
+          {
+            "row": 43,
+            "col": 3,
+            "text": "CeNiBiO1-x"
+          },
+          {
+            "row": 43,
+            "col": 4,
+            "text": "ZrNi0.75P"
+          },
+          {
+            "row": 44,
+            "col": 0,
+            "text": "ZrNi0.75As"
+          },
+          {
+            "row": 44,
+            "col": 1,
+            "text": "KNi2Se2"
+          },
+          {
+            "row": 44,
+            "col": 2,
+            "text": "ZrNi2Si2"
+          },
+          {
+            "row": 44,
+            "col": 3,
+            "text": "RhNiP"
+          },
+          {
+            "row": 44,
+            "col": 4,
+            "text": "GdNixBi2"
+          },
+          {
+            "row": 45,
+            "col": 0,
+            "text": "Ni3(Te1-xSex)2"
+          },
+          {
+            "row": 45,
+            "col": 1,
+            "text": "CaNi2Pn2O (Pn = As, Sb, Bi)"
+          },
+          {
+            "row": 45,
+            "col": 2,
+            "text": "SrNi2Pn2O (Pn = As, Sb, Bi)"
+          },
+          {
+            "row": 45,
+            "col": 3,
+            "text": "BaNi2Pn2O (Pn = As, Sb, Bi)"
+          },
+          {
+            "row": 45,
+            "col": 4,
+            "text": "Ca10(Pt4As8)(Ni2-xPtxAs2)5"
+          },
+          {
+            "row": 46,
+            "col": 0,
+            "text": "Cu2As"
+          },
+          {
+            "row": 46,
+            "col": 1,
+            "text": "Cu2Sb"
+          },
+          {
+            "row": 46,
+            "col": 2,
+            "text": "MgCuAs"
+          },
+          {
+            "row": 46,
+            "col": 3,
+            "text": "Ca2Cu6P5"
+          },
+          {
+            "row": 46,
+            "col": 4,
+            "text": "BaCu1.8As2"
+          },
+          {
+            "row": 47,
+            "col": 0,
+            "text": "BaCu2As2"
+          },
+          {
+            "row": 47,
+            "col": 1,
+            "text": "Ba2Cu3P4"
+          },
+          {
+            "row": 47,
+            "col": 2,
+            "text": "BaCu6As2"
+          },
+          {
+            "row": 47,
+            "col": 3,
+            "text": "YCuSb2"
+          },
+          {
+            "row": 47,
+            "col": 4,
+            "text": "YCuAs2"
+          },
+          {
+            "row": 48,
+            "col": 0,
+            "text": "CeCuPO"
+          },
+          {
+            "row": 48,
+            "col": 1,
+            "text": "GdCu1.25P1.75"
+          },
+          {
+            "row": 48,
+            "col": 2,
+            "text": "ZrCu2P2"
+          },
+          {
+            "row": 48,
+            "col": 3,
+            "text": "ZrCu2As2"
+          },
+          {
+            "row": 48,
+            "col": 4,
+            "text": "ZrCuSiAs"
+          },
+          {
+            "row": 49,
+            "col": 0,
+            "text": "HfCu2P2"
+          },
+          {
+            "row": 49,
+            "col": 1,
+            "text": "Hf0.5Cu1-xMnxP"
+          },
+          {
+            "row": 49,
+            "col": 2,
+            "text": "HfCuSi2"
+          },
+          {
+            "row": 49,
+            "col": 3,
+            "text": "HfCuGe2"
+          },
+          {
+            "row": 49,
+            "col": 4,
+            "text": "BiOCuS"
+          },
+          {
+            "row": 50,
+            "col": 0,
+            "text": "Ca2Cu2Pn2O (Pn = As, Sb, Bi)"
+          },
+          {
+            "row": 50,
+            "col": 1,
+            "text": "Sr2Cu2Pn2O (Pn = As, Sb, Bi)"
+          },
+          {
+            "row": 50,
+            "col": 2,
+            "text": "Ba2Cu2Pn2O (Pn = As, Sb, Bi)"
+          },
+          {
+            "row": 50,
+            "col": 3,
+            "text": "La3(O,F)2Cu4As4"
+          },
+          {
+            "row": 50,
+            "col": 4,
+            "text": "Bi2LnO4Cu2-xFexSe2 (Ln=lamtanide elements)"
+          },
+          {
+            "row": 51,
+            "col": 0,
+            "text": "BaZnBi2"
+          },
+          {
+            "row": 51,
+            "col": 1,
+            "text": "K2NbO3-xF1+x"
+          },
+          {
+            "row": 51,
+            "col": 2,
+            "text": "(Ca,La)RuAs2"
+          },
+          {
+            "row": 51,
+            "col": 3,
+            "text": "La3Ru2B2N3 [38]"
+          },
+          {
+            "row": 51,
+            "col": 4,
+            "text": "LaRuBN [38]"
+          }
+        ]
+      },
+      "text": null,
+      "truncated": "both",
+      "uncertainty": {
+        "level": "medium",
+        "note": "Formulas are set with subscripts and superscripts in the page image only (no text layer). Each is recorded as the plain character sequence in reading order, with an ASCII hyphen for the sign in subscripts such as 1-x; whether that sign is a hyphen, en dash or minus cannot be told from the raster."
+      }
+    },
+    {
+      "id": "p6-b7",
+      "type": "page_number",
+      "page": 6,
+      "reading_order": 7,
+      "bbox": {
+        "x0": 295.96,
+        "y0": 774.15,
+        "x1": 301.81,
+        "y1": 783.13
+      },
+      "text": "6",
+      "text_sha256": "e7f6c011776e8db7cd330b54174fd76f7d0216b612387a5ffcfb81e6f0919683"
+    },
+    {
+      "id": "p8-b1",
+      "type": "header",
+      "page": 8,
+      "reading_order": 8,
+      "bbox": {
+        "x0": 46.85,
+        "y0": 52.66,
+        "x1": 183.29,
+        "y1": 61.65
+      },
+      "text": "Sci. Technol. Adv. Mater. 16 (2015) 033503",
+      "text_sha256": "d61a88e3a01996662cb175e23a46ccabd5bf179fbfcc1f4571cc3f8daccae50d"
+    },
+    {
+      "id": "p8-b2",
+      "type": "header",
+      "page": 8,
+      "reading_order": 9,
+      "bbox": {
+        "x0": 501.92,
+        "y0": 52.68,
+        "x1": 550.91,
+        "y1": 61.65
+      },
+      "text": "H Hosono et al",
+      "text_sha256": "7fb033e48cb750bdb64d7961d05b58190ff77fb36d058f78c20bc83ea4f68b0a"
+    },
+    {
+      "id": "p8-b3",
+      "type": "caption",
+      "page": 8,
+      "reading_order": 10,
+      "bbox": {
+        "x0": 260.86,
+        "y0": 69.98,
+        "x1": 336.86,
+        "y1": 80.03
+      },
+      "text": "Table 2. (Continued.)",
+      "text_sha256": "0554dfa0be7d3d39b27d8ed636c14e74fe58fbd968f6ec2154d1c675fff42aec",
+      "caption_for": "p8-b4"
+    },
+    {
+      "id": "p8-b4",
+      "type": "table",
+      "page": 8,
+      "reading_order": 11,
+      "bbox": {
+        "x0": 101.5,
+        "y0": 93.0,
+        "x1": 504.5,
+        "y1": 702.5
+      },
+      "table": {
+        "n_rows": 56,
+        "n_cols": 5,
+        "cells": [
+          {
+            "row": 0,
+            "col": 0,
+            "text": ""
+          },
+          {
+            "row": 0,
+            "col": 1,
+            "text": "[95]"
+          },
+          {
+            "row": 0,
+            "col": 2,
+            "text": ""
+          },
+          {
+            "row": 0,
+            "col": 3,
+            "text": ""
+          },
+          {
+            "row": 0,
+            "col": 4,
+            "text": ""
+          },
+          {
+            "row": 1,
+            "col": 0,
+            "text": "SrCrO2H [96]"
+          },
+          {
+            "row": 1,
+            "col": 1,
+            "text": "Sr1-xBaxCrO2H (x = 0.1-0.4)"
+          },
+          {
+            "row": 1,
+            "col": 2,
+            "text": "LnCrO3 (Ln = La, Sm, Nd)"
+          },
+          {
+            "row": 1,
+            "col": 3,
+            "text": "BaTiO3-x"
+          },
+          {
+            "row": 1,
+            "col": 4,
+            "text": "BaZrO3:H"
+          },
+          {
+            "row": 2,
+            "col": 0,
+            "text": "SrSnO3-x"
+          },
+          {
+            "row": 2,
+            "col": 1,
+            "text": "SrNbO2N"
+          },
+          {
+            "row": 2,
+            "col": 2,
+            "text": "BaSnO3-x"
+          },
+          {
+            "row": 2,
+            "col": 3,
+            "text": "NaIrO3"
+          },
+          {
+            "row": 2,
+            "col": 4,
+            "text": "Na1-xCaxIrO3"
+          },
+          {
+            "row": 3,
+            "col": 0,
+            "text": "SrMoO2.5N0.5"
+          },
+          {
+            "row": 3,
+            "col": 1,
+            "text": "BaBiS3"
+          },
+          {
+            "row": 3,
+            "col": 2,
+            "text": ""
+          },
+          {
+            "row": 3,
+            "col": 3,
+            "text": ""
+          },
+          {
+            "row": 3,
+            "col": 4,
+            "text": ""
+          },
+          {
+            "row": 4,
+            "col": 0,
+            "text": "other perovskite",
+            "colspan": 2
+          },
+          {
+            "row": 4,
+            "col": 2,
+            "text": "A2Ru2O5"
+          },
+          {
+            "row": 4,
+            "col": 3,
+            "text": "LaBaMn2O6"
+          },
+          {
+            "row": 4,
+            "col": 4,
+            "text": "YBaMn2O6"
+          },
+          {
+            "row": 5,
+            "col": 0,
+            "text": "A2Cr2O5"
+          },
+          {
+            "row": 5,
+            "col": 1,
+            "text": ""
+          },
+          {
+            "row": 5,
+            "col": 2,
+            "text": ""
+          },
+          {
+            "row": 5,
+            "col": 3,
+            "text": ""
+          },
+          {
+            "row": 5,
+            "col": 4,
+            "text": ""
+          },
+          {
+            "row": 6,
+            "col": 0,
+            "text": "cuprate superconductor and its related structure",
+            "colspan": 5
+          },
+          {
+            "row": 7,
+            "col": 0,
+            "text": "(Sr,Eu)CuO2"
+          },
+          {
+            "row": 7,
+            "col": 1,
+            "text": "(Sr,Pb)CuO2"
+          },
+          {
+            "row": 7,
+            "col": 2,
+            "text": "Bi2CuO4_CaH4"
+          },
+          {
+            "row": 7,
+            "col": 3,
+            "text": "Bi2CuO4-CuF2"
+          },
+          {
+            "row": 7,
+            "col": 4,
+            "text": "BiOCuS"
+          },
+          {
+            "row": 8,
+            "col": 0,
+            "text": "YBCO:H"
+          },
+          {
+            "row": 8,
+            "col": 1,
+            "text": "(Cu2S2)Sr3Fe2O5"
+          },
+          {
+            "row": 8,
+            "col": 2,
+            "text": "Sr3FeNiCu2Se2O5"
+          },
+          {
+            "row": 8,
+            "col": 3,
+            "text": "Sr3Ni2Cu2Se2O5"
+          },
+          {
+            "row": 8,
+            "col": 4,
+            "text": "Sr3Cu4Se2O5"
+          },
+          {
+            "row": 9,
+            "col": 0,
+            "text": "Bi2YCu2O4Se2"
+          },
+          {
+            "row": 9,
+            "col": 1,
+            "text": "Bi2SrCu2O4Se2"
+          },
+          {
+            "row": 9,
+            "col": 2,
+            "text": "SrLa2Cu4Se2O5"
+          },
+          {
+            "row": 9,
+            "col": 3,
+            "text": "A2CuOx(OH)y"
+          },
+          {
+            "row": 9,
+            "col": 4,
+            "text": "LaSrTiO4"
+          },
+          {
+            "row": 10,
+            "col": 0,
+            "text": "Sr2CrO4"
+          },
+          {
+            "row": 10,
+            "col": 1,
+            "text": "Ca2CrO4"
+          },
+          {
+            "row": 10,
+            "col": 2,
+            "text": "Sr3Cr2O7"
+          },
+          {
+            "row": 10,
+            "col": 3,
+            "text": "Ca3Cr2O7"
+          },
+          {
+            "row": 10,
+            "col": 4,
+            "text": "A4Cr3O10 (A = Sr, Ca)"
+          },
+          {
+            "row": 11,
+            "col": 0,
+            "text": "Sr2-xNaxCrO4"
+          },
+          {
+            "row": 11,
+            "col": 1,
+            "text": "YCaCrO4"
+          },
+          {
+            "row": 11,
+            "col": 2,
+            "text": "Srn1-xKxMnnO3n+1 (n = 1, ∞)"
+          },
+          {
+            "row": 11,
+            "col": 3,
+            "text": ""
+          },
+          {
+            "row": 11,
+            "col": 4,
+            "text": ""
+          },
+          {
+            "row": 12,
+            "col": 0,
+            "text": "clathrate structure",
+            "colspan": 5
+          },
+          {
+            "row": 13,
+            "col": 0,
+            "text": "Ca3Ni12B6"
+          },
+          {
+            "row": 13,
+            "col": 1,
+            "text": "Sr3Ni12B6"
+          },
+          {
+            "row": 13,
+            "col": 2,
+            "text": "KC24"
+          },
+          {
+            "row": 13,
+            "col": 3,
+            "text": "LixC60"
+          },
+          {
+            "row": 13,
+            "col": 4,
+            "text": "KxC60"
+          },
+          {
+            "row": 14,
+            "col": 0,
+            "text": "CaxC60"
+          },
+          {
+            "row": 14,
+            "col": 1,
+            "text": "BaxC60"
+          },
+          {
+            "row": 14,
+            "col": 2,
+            "text": "Mg2C60"
+          },
+          {
+            "row": 14,
+            "col": 3,
+            "text": "Ba3C60 [97]"
+          },
+          {
+            "row": 14,
+            "col": 4,
+            "text": "CaxAlN"
+          },
+          {
+            "row": 15,
+            "col": 0,
+            "text": "LixSi136"
+          },
+          {
+            "row": 15,
+            "col": 1,
+            "text": "Na32Si136 [98]"
+          },
+          {
+            "row": 15,
+            "col": 2,
+            "text": "KxSi136"
+          },
+          {
+            "row": 15,
+            "col": 3,
+            "text": "MgxSi136"
+          },
+          {
+            "row": 15,
+            "col": 4,
+            "text": "CaxSi136"
+          },
+          {
+            "row": 16,
+            "col": 0,
+            "text": "BaxSi136"
+          },
+          {
+            "row": 16,
+            "col": 1,
+            "text": ""
+          },
+          {
+            "row": 16,
+            "col": 2,
+            "text": ""
+          },
+          {
+            "row": 16,
+            "col": 3,
+            "text": ""
+          },
+          {
+            "row": 16,
+            "col": 4,
+            "text": ""
+          },
+          {
+            "row": 17,
+            "col": 0,
+            "text": "Pyrite structure",
+            "colspan": 5
+          },
+          {
+            "row": 18,
+            "col": 0,
+            "text": "FeS2-x"
+          },
+          {
+            "row": 18,
+            "col": 1,
+            "text": "PtSb2"
+          },
+          {
+            "row": 18,
+            "col": 2,
+            "text": "(Pt,Pd)Sb2"
+          },
+          {
+            "row": 18,
+            "col": 3,
+            "text": "(Pt,Ir)Sb2 [99]"
+          },
+          {
+            "row": 18,
+            "col": 4,
+            "text": "Pt(Sb,As)2"
+          },
+          {
+            "row": 19,
+            "col": 0,
+            "text": "Pt(Sb,Te)2"
+          },
+          {
+            "row": 19,
+            "col": 1,
+            "text": "Pt(Sb,Sn)2"
+          },
+          {
+            "row": 19,
+            "col": 2,
+            "text": "(Pt,Au)Sb2"
+          },
+          {
+            "row": 19,
+            "col": 3,
+            "text": "IrSb2"
+          },
+          {
+            "row": 19,
+            "col": 4,
+            "text": ""
+          },
+          {
+            "row": 20,
+            "col": 0,
+            "text": "other materials",
+            "colspan": 5
+          },
+          {
+            "row": 21,
+            "col": 0,
+            "text": "carbide",
+            "colspan": 2
+          },
+          {
+            "row": 21,
+            "col": 2,
+            "text": "CaC2"
+          },
+          {
+            "row": 21,
+            "col": 3,
+            "text": "BaC2"
+          },
+          {
+            "row": 21,
+            "col": 4,
+            "text": "YC2"
+          },
+          {
+            "row": 22,
+            "col": 0,
+            "text": "nitride",
+            "colspan": 2
+          },
+          {
+            "row": 22,
+            "col": 2,
+            "text": "Ti3N4"
+          },
+          {
+            "row": 22,
+            "col": 3,
+            "text": "Zr3N4"
+          },
+          {
+            "row": 22,
+            "col": 4,
+            "text": "Hf3N4"
+          },
+          {
+            "row": 23,
+            "col": 0,
+            "text": "VCrN"
+          },
+          {
+            "row": 23,
+            "col": 1,
+            "text": "MgxAlN"
+          },
+          {
+            "row": 23,
+            "col": 2,
+            "text": "MnN (thin film)"
+          },
+          {
+            "row": 23,
+            "col": 3,
+            "text": "CoN (thin film)"
+          },
+          {
+            "row": 23,
+            "col": 4,
+            "text": ""
+          },
+          {
+            "row": 24,
+            "col": 0,
+            "text": "oxide",
+            "colspan": 2
+          },
+          {
+            "row": 24,
+            "col": 2,
+            "text": "TiOx (anatase) [100]"
+          },
+          {
+            "row": 24,
+            "col": 3,
+            "text": "Cr3O"
+          },
+          {
+            "row": 24,
+            "col": 4,
+            "text": "CrnO2n-1 (n = 3, 4)"
+          },
+          {
+            "row": 25,
+            "col": 0,
+            "text": "MnO2 (nanosheet)"
+          },
+          {
+            "row": 25,
+            "col": 1,
+            "text": "Co3O4: H"
+          },
+          {
+            "row": 25,
+            "col": 2,
+            "text": "NiO: H"
+          },
+          {
+            "row": 25,
+            "col": 3,
+            "text": "GeO2 (HP phase)"
+          },
+          {
+            "row": 25,
+            "col": 4,
+            "text": "h-WO3: H"
+          },
+          {
+            "row": 26,
+            "col": 0,
+            "text": "BaScO2H"
+          },
+          {
+            "row": 26,
+            "col": 1,
+            "text": "Ti3O4.9N0.1"
+          },
+          {
+            "row": 26,
+            "col": 2,
+            "text": "Ti4O6.99N0.01"
+          },
+          {
+            "row": 26,
+            "col": 3,
+            "text": "(Ir,Ru)O2"
+          },
+          {
+            "row": 26,
+            "col": 4,
+            "text": "CuAl(O,N)2"
+          },
+          {
+            "row": 27,
+            "col": 0,
+            "text": "LaSiO3H"
+          },
+          {
+            "row": 27,
+            "col": 1,
+            "text": "NaTi2O4"
+          },
+          {
+            "row": 27,
+            "col": 2,
+            "text": "Bi4Ti3O12: H"
+          },
+          {
+            "row": 27,
+            "col": 3,
+            "text": "Sc4Ti3O12"
+          },
+          {
+            "row": 27,
+            "col": 4,
+            "text": "Cs0.7Ti1.825O4: F"
+          },
+          {
+            "row": 28,
+            "col": 0,
+            "text": "La2Ti2O7-x"
+          },
+          {
+            "row": 28,
+            "col": 1,
+            "text": "Ba-Ti-O glass + e"
+          },
+          {
+            "row": 28,
+            "col": 2,
+            "text": "Y2Ti2O2-x"
+          },
+          {
+            "row": 28,
+            "col": 3,
+            "text": "Sr2TiO3F2"
+          },
+          {
+            "row": 28,
+            "col": 4,
+            "text": "Cr1-xTixO2"
+          },
+          {
+            "row": 29,
+            "col": 0,
+            "text": "Cr1-xVxO2"
+          },
+          {
+            "row": 29,
+            "col": 1,
+            "text": "nSrO・V2O3 (n= 4, 2, 1)"
+          },
+          {
+            "row": 29,
+            "col": 2,
+            "text": "BixV8O16"
+          },
+          {
+            "row": 29,
+            "col": 3,
+            "text": "CaV2O5"
+          },
+          {
+            "row": 29,
+            "col": 4,
+            "text": "LiV2O4"
+          },
+          {
+            "row": 30,
+            "col": 0,
+            "text": "LaVO3: H"
+          },
+          {
+            "row": 30,
+            "col": 1,
+            "text": "LaVO4: H"
+          },
+          {
+            "row": 30,
+            "col": 2,
+            "text": "NaCr2O4 [101]"
+          },
+          {
+            "row": 30,
+            "col": 3,
+            "text": "Ca1-xNaxCr2O4"
+          },
+          {
+            "row": 30,
+            "col": 4,
+            "text": "CaCr2O4"
+          },
+          {
+            "row": 31,
+            "col": 0,
+            "text": "BaCr2O4"
+          },
+          {
+            "row": 31,
+            "col": 1,
+            "text": "SrCu3Cr4O12"
+          },
+          {
+            "row": 31,
+            "col": 2,
+            "text": "BaCu3Cr4O12"
+          },
+          {
+            "row": 31,
+            "col": 3,
+            "text": "YCu3Cr4O12"
+          },
+          {
+            "row": 31,
+            "col": 4,
+            "text": "LaCu3Cr4O12"
+          },
+          {
+            "row": 32,
+            "col": 0,
+            "text": "CeCu3Cr4O12"
+          },
+          {
+            "row": 32,
+            "col": 1,
+            "text": "LuCu3Cr4O12"
+          },
+          {
+            "row": 32,
+            "col": 2,
+            "text": "EuCu3Cr4O12"
+          },
+          {
+            "row": 32,
+            "col": 3,
+            "text": "BiCu3Cr4O12"
+          },
+          {
+            "row": 32,
+            "col": 4,
+            "text": "Cr1-xMnxO2"
+          },
+          {
+            "row": 33,
+            "col": 0,
+            "text": "Ag2MnO2"
+          },
+          {
+            "row": 33,
+            "col": 1,
+            "text": "Pb2MnO4: F"
+          },
+          {
+            "row": 33,
+            "col": 2,
+            "text": "LiMn2O4"
+          },
+          {
+            "row": 33,
+            "col": 3,
+            "text": "Sr3Co2O6 [102]"
+          },
+          {
+            "row": 33,
+            "col": 4,
+            "text": "Ba3Co2O6(CO3)x"
+          },
+          {
+            "row": 34,
+            "col": 0,
+            "text": "Sr3-xYxCo2O6 [103]"
+          },
+          {
+            "row": 34,
+            "col": 1,
+            "text": "Sr3-xCaxCo2O6"
+          },
+          {
+            "row": 34,
+            "col": 2,
+            "text": "Sr3Co2-xZnxO6"
+          },
+          {
+            "row": 34,
+            "col": 3,
+            "text": "Sr3Co2-xFexO6"
+          },
+          {
+            "row": 34,
+            "col": 4,
+            "text": "Y-ZrO2-x"
+          },
+          {
+            "row": 35,
+            "col": 0,
+            "text": "SrNb2O6: F"
+          },
+          {
+            "row": 35,
+            "col": 1,
+            "text": "Ba5Nb4O15-x"
+          },
+          {
+            "row": 35,
+            "col": 2,
+            "text": "Ba2Nb5O9: F"
+          },
+          {
+            "row": 35,
+            "col": 3,
+            "text": "PbMoO4: N"
+          },
+          {
+            "row": 35,
+            "col": 4,
+            "text": "Ca2Nb2O6-xF1+x"
+          },
+          {
+            "row": 36,
+            "col": 0,
+            "text": "Sr2NbO3N"
+          },
+          {
+            "row": 36,
+            "col": 1,
+            "text": "Li2Ir1-xRuxO3 [104]"
+          },
+          {
+            "row": 36,
+            "col": 2,
+            "text": "La4Ru2O10"
+          },
+          {
+            "row": 36,
+            "col": 3,
+            "text": "Bi3Ru3O11"
+          },
+          {
+            "row": 36,
+            "col": 4,
+            "text": "Sr3Ru2O7C12"
+          },
+          {
+            "row": 37,
+            "col": 0,
+            "text": "Sr3Ru2O7F2"
+          },
+          {
+            "row": 37,
+            "col": 1,
+            "text": "LaCu3Ru4O12"
+          },
+          {
+            "row": 37,
+            "col": 2,
+            "text": "CdRh2O4 [105]"
+          },
+          {
+            "row": 37,
+            "col": 3,
+            "text": "Cd1-xNaxRh2O4"
+          },
+          {
+            "row": 37,
+            "col": 4,
+            "text": "La2Pd2O5"
+          },
+          {
+            "row": 38,
+            "col": 0,
+            "text": "BaSbO3"
+          },
+          {
+            "row": 38,
+            "col": 1,
+            "text": "CsW2O6"
+          },
+          {
+            "row": 38,
+            "col": 2,
+            "text": "SrWO2N"
+          },
+          {
+            "row": 38,
+            "col": 3,
+            "text": "LiOsO3 [106]"
+          },
+          {
+            "row": 38,
+            "col": 4,
+            "text": "Na1-xCaxOsO3"
+          },
+          {
+            "row": 39,
+            "col": 0,
+            "text": "KOsO3"
+          },
+          {
+            "row": 39,
+            "col": 1,
+            "text": "Ca3LiOsO6 [107]"
+          },
+          {
+            "row": 39,
+            "col": 2,
+            "text": "Ca2Os2O7"
+          },
+          {
+            "row": 39,
+            "col": 3,
+            "text": "Ca5Os2O12"
+          },
+          {
+            "row": 39,
+            "col": 4,
+            "text": "Ba2OsO5"
+          },
+          {
+            "row": 40,
+            "col": 0,
+            "text": "Bi2OsO6"
+          },
+          {
+            "row": 40,
+            "col": 1,
+            "text": "Pb2Os2O7"
+          },
+          {
+            "row": 40,
+            "col": 2,
+            "text": "Pb2Ir2O7"
+          },
+          {
+            "row": 40,
+            "col": 3,
+            "text": "Ag2BiO3"
+          },
+          {
+            "row": 40,
+            "col": 4,
+            "text": "Ba1-xKxBiO3 (junction)"
+          },
+          {
+            "row": 41,
+            "col": 0,
+            "text": "chalcogenide",
+            "colspan": 2
+          },
+          {
+            "row": 41,
+            "col": 2,
+            "text": "CuxS"
+          },
+          {
+            "row": 41,
+            "col": 3,
+            "text": "Cu(S,As)"
+          },
+          {
+            "row": 41,
+            "col": 4,
+            "text": "KMo3S3"
+          },
+          {
+            "row": 42,
+            "col": 0,
+            "text": "SrPt3S"
+          },
+          {
+            "row": 42,
+            "col": 1,
+            "text": "BaPt3S"
+          },
+          {
+            "row": 42,
+            "col": 2,
+            "text": "InV6Se8"
+          },
+          {
+            "row": 42,
+            "col": 3,
+            "text": "PtxBi2Se3"
+          },
+          {
+            "row": 42,
+            "col": 4,
+            "text": "KMo3Se3"
+          },
+          {
+            "row": 43,
+            "col": 0,
+            "text": "CuxBi2Se3"
+          },
+          {
+            "row": 43,
+            "col": 1,
+            "text": "CuxBi2Te3"
+          },
+          {
+            "row": 43,
+            "col": 2,
+            "text": "PdxBi2Te3"
+          },
+          {
+            "row": 43,
+            "col": 3,
+            "text": "LixZrTe3"
+          },
+          {
+            "row": 43,
+            "col": 4,
+            "text": "SnTe"
+          },
+          {
+            "row": 44,
+            "col": 0,
+            "text": "pnictide",
+            "colspan": 2
+          },
+          {
+            "row": 44,
+            "col": 2,
+            "text": "CoP"
+          },
+          {
+            "row": 44,
+            "col": 3,
+            "text": "NiP"
+          },
+          {
+            "row": 44,
+            "col": 4,
+            "text": "(Co,Ni)P"
+          },
+          {
+            "row": 45,
+            "col": 0,
+            "text": "LaxIr4P12"
+          },
+          {
+            "row": 45,
+            "col": 1,
+            "text": "MgxAlP"
+          },
+          {
+            "row": 45,
+            "col": 2,
+            "text": "BaNi2P4"
+          },
+          {
+            "row": 45,
+            "col": 3,
+            "text": "BaPd2P4"
+          },
+          {
+            "row": 45,
+            "col": 4,
+            "text": "(Y1-xEux)P"
+          },
+          {
+            "row": 46,
+            "col": 0,
+            "text": "SrPt3Sb"
+          },
+          {
+            "row": 46,
+            "col": 1,
+            "text": "BaPt3Sb"
+          },
+          {
+            "row": 46,
+            "col": 2,
+            "text": "La3TiSb5"
+          },
+          {
+            "row": 46,
+            "col": 3,
+            "text": "La3VSb5"
+          },
+          {
+            "row": 46,
+            "col": 4,
+            "text": "La3CrSb5"
+          },
+          {
+            "row": 47,
+            "col": 0,
+            "text": "La3MnSb5"
+          },
+          {
+            "row": 47,
+            "col": 1,
+            "text": "La3TiBi5"
+          },
+          {
+            "row": 47,
+            "col": 2,
+            "text": "La3VBi5"
+          },
+          {
+            "row": 47,
+            "col": 3,
+            "text": "La3CrBi5"
+          },
+          {
+            "row": 47,
+            "col": 4,
+            "text": "La3ZtBi5"
+          },
+          {
+            "row": 48,
+            "col": 0,
+            "text": "La3HfBi5"
+          },
+          {
+            "row": 48,
+            "col": 1,
+            "text": ""
+          },
+          {
+            "row": 48,
+            "col": 2,
+            "text": ""
+          },
+          {
+            "row": 48,
+            "col": 3,
+            "text": ""
+          },
+          {
+            "row": 48,
+            "col": 4,
+            "text": ""
+          },
+          {
+            "row": 49,
+            "col": 0,
+            "text": "silicide, germanide, stannide, plumbide",
+            "colspan": 2
+          },
+          {
+            "row": 49,
+            "col": 2,
+            "text": "(Ca, Mg)Si2"
+          },
+          {
+            "row": 49,
+            "col": 3,
+            "text": "Fe3Al2Si4"
+          },
+          {
+            "row": 49,
+            "col": 4,
+            "text": "MgAl2Si2"
+          },
+          {
+            "row": 50,
+            "col": 0,
+            "text": "Mg4AlSi6"
+          },
+          {
+            "row": 50,
+            "col": 1,
+            "text": "Mg1.3Ga0.7Si"
+          },
+          {
+            "row": 50,
+            "col": 2,
+            "text": "LixPtSi3"
+          },
+          {
+            "row": 50,
+            "col": 3,
+            "text": "BaMg2Si2"
+          },
+          {
+            "row": 50,
+            "col": 4,
+            "text": "Ti2Ru3Si4"
+          },
+          {
+            "row": 51,
+            "col": 0,
+            "text": "BaPdSi"
+          },
+          {
+            "row": 51,
+            "col": 1,
+            "text": "SrPdSi"
+          },
+          {
+            "row": 51,
+            "col": 2,
+            "text": "BaMg2Ge2"
+          },
+          {
+            "row": 51,
+            "col": 3,
+            "text": "Rh3Ge7"
+          },
+          {
+            "row": 51,
+            "col": 4,
+            "text": "BaMg2Sn2"
+          },
+          {
+            "row": 52,
+            "col": 0,
+            "text": "BaMg2Pb2"
+          },
+          {
+            "row": 52,
+            "col": 1,
+            "text": ""
+          },
+          {
+            "row": 52,
+            "col": 2,
+            "text": ""
+          },
+          {
+            "row": 52,
+            "col": 3,
+            "text": ""
+          },
+          {
+            "row": 52,
+            "col": 4,
+            "text": ""
+          },
+          {
+            "row": 53,
+            "col": 0,
+            "text": "halide",
+            "colspan": 2
+          },
+          {
+            "row": 53,
+            "col": 2,
+            "text": "K1+xTiF4"
+          },
+          {
+            "row": 53,
+            "col": 3,
+            "text": "K1-xTiF4"
+          },
+          {
+            "row": 53,
+            "col": 4,
+            "text": "Zr5(N4Na)F6"
+          },
+          {
+            "row": 54,
+            "col": 0,
+            "text": "Zr5(N4H-)F6"
+          },
+          {
+            "row": 54,
+            "col": 1,
+            "text": "CsSnI3"
+          },
+          {
+            "row": 54,
+            "col": 2,
+            "text": "La2TeI2"
+          },
+          {
+            "row": 54,
+            "col": 3,
+            "text": ""
+          },
+          {
+            "row": 54,
+            "col": 4,
+            "text": ""
+          },
+          {
+            "row": 55,
+            "col": 0,
+            "text": "metal",
+            "colspan": 2
+          },
+          {
+            "row": 55,
+            "col": 2,
+            "text": "ZrMn2"
+          },
+          {
+            "row": 55,
+            "col": 3,
+            "text": "Zr5Pb4"
+          },
+          {
+            "row": 55,
+            "col": 4,
+            "text": ""
+          }
+        ]
+      },
+      "text": null,
+      "truncated": "both",
+      "uncertainty": {
+        "level": "medium",
+        "note": "Formulas are set with subscripts and superscripts in the page image only (no text layer). Each is recorded as the plain character sequence in reading order, with an ASCII hyphen for the sign in subscripts such as 1-x; whether that sign is a hyphen, en dash or minus cannot be told from the raster. The dot in \"nSrO・V2O3\" is a wide middle dot whose exact code point cannot be told from the raster."
+      }
+    },
+    {
+      "id": "p8-b5",
+      "type": "page_number",
+      "page": 8,
+      "reading_order": 12,
+      "bbox": {
+        "x0": 295.96,
+        "y0": 774.15,
+        "x1": 301.81,
+        "y1": 783.13
+      },
+      "text": "8",
+      "text_sha256": "2c624232cdd221771294dfbb310aca000a0df6ac8b66b696d90ef06fdefb64a3"
+    }
+  ],
+  "provenance": {
+    "proposed_by": {
+      "tool": "extraction-pilot-drafts",
+      "version": "3",
+      "options_sha256": "b74e6f2f9c021751643a9a5d2e4451944b229defbcf37f11c98141324265f7b4"
+    },
+    "review": {
+      "status": "reviewed",
+      "reviewer": "agent-claude-sonnet-5-5",
+      "reviewed_at": "2026-11-12T13:56:13Z",
+      "basis": "page_image_inspection"
+    }
+  }
+}

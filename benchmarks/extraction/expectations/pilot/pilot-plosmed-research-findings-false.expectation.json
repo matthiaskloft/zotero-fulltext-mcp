@@ -1,0 +1,934 @@
+{
+  "schema_version": 1,
+  "record_kind": "expectation",
+  "record_id": "pilot-plosmed-research-findings-false",
+  "document": {
+    "pdf_sha256": "ffc1005680cb620eec4c913437dfabbf311b535cfe16cbaeb2faec1f92afc362",
+    "title": "Why Most Published Research Findings Are False",
+    "page_count": 6,
+    "corpus_id": "plosmed-research-findings-false"
+  },
+  "scope": {
+    "kind": "pages",
+    "physical_pages": [
+      3,
+      5
+    ]
+  },
+  "pages": [
+    {
+      "physical_page": 3,
+      "printed_label": "0698",
+      "geometry": {
+        "unit": "pt",
+        "origin": "top-left",
+        "frame": "displayed",
+        "box": "cropbox",
+        "rotation": 0,
+        "width": 594.0,
+        "height": 783.0
+      },
+      "render": {
+        "renderer": "pymupdf",
+        "renderer_version": "1.28.0",
+        "dpi": 150,
+        "image_sha256": "8c3d825aa240791d050959bbd57f4a86cc229b0afc2b82f7ed7605c5b1485064"
+      },
+      "body_start": {
+        "block_id": "p3-b1"
+      },
+      "body_end": {
+        "block_id": "p3-b13"
+      }
+    },
+    {
+      "physical_page": 5,
+      "printed_label": "0700",
+      "geometry": {
+        "unit": "pt",
+        "origin": "top-left",
+        "frame": "displayed",
+        "box": "cropbox",
+        "rotation": 0,
+        "width": 594.0,
+        "height": 783.0
+      },
+      "render": {
+        "renderer": "pymupdf",
+        "renderer_version": "1.28.0",
+        "dpi": 150,
+        "image_sha256": "49f1cf0519aa8c2ed622f142da361930f16e0eb0840bfacb6706708a864b852b"
+      },
+      "body_start": {
+        "block_id": "p5-b1"
+      },
+      "body_end": {
+        "block_id": "p5-b15"
+      }
+    }
+  ],
+  "blocks": [
+    {
+      "id": "p3-b1",
+      "type": "paragraph",
+      "page": 3,
+      "reading_order": 1,
+      "bbox": {
+        "x0": 44.0,
+        "y0": 43.28,
+        "x1": 200.8,
+        "y1": 186.27
+      },
+      "text": "effect sizes [16]. Consequently, the proportion of true research findings is expected to decrease. In the same line of thinking, if the true effect sizes are very small in a scientific field, this field is likely to be plagued by almost ubiquitous false positive claims. For example, if the majority of true genetic or nutritional determinants of complex diseases confer relative risks less than 1.05, genetic or nutritional epidemiology would be largely utopian endeavors.",
+      "text_sha256": "ac467dda8794aa90e8f1b1781d8d23c9f235f80832549b07d12635686cfb4733",
+      "truncated": "start"
+    },
+    {
+      "id": "p3-b2",
+      "type": "paragraph",
+      "page": 3,
+      "reading_order": 2,
+      "bbox": {
+        "x0": 44.0,
+        "y0": 186.72,
+        "x1": 202.96,
+        "y1": 395.26
+      },
+      "text": "Corollary 3: The greater the number and the lesser the selection of tested relationships in a scientific field, the less likely the research findings are to be true. As shown above, the post-study probability that a finding is true (PPV) depends a lot on the pre-study odds (R). Thus, research findings are more likely true in confirmatory designs, such as large phase III randomized controlled trials, or meta-analyses thereof, than in hypothesis-generating experiments. Fields considered highly informative and creative given the wealth of the assembled and tested information, such as microarrays and other high-throughput discovery- oriented research [4,8,17], should have extremely low PPV.",
+      "text_sha256": "6a0924b10b697d52031068f476c8058770402d7d31ca4d2daa0c93e35c515ef4"
+    },
+    {
+      "id": "p3-b3",
+      "type": "paragraph",
+      "page": 3,
+      "reading_order": 3,
+      "bbox": {
+        "x0": 44.0,
+        "y0": 395.72,
+        "x1": 200.44,
+        "y1": 626.26
+      },
+      "text": "Corollary 4: The greater the flexibility in designs, definitions, outcomes, and analytical modes in a scientific field, the less likely the research findings are to be true. Flexibility increases the potential for transforming what would be “negative” results into “positive” results, i.e., bias, u. For several research designs, e.g., randomized controlled trials [18–20] or meta-analyses [21,22], there have been efforts to standardize their conduct and reporting. Adherence to common standards is likely to increase the proportion of true findings. The same applies to outcomes. True findings may be more common when outcomes are unequivocal and universally agreed (e.g., death) rather than when multifarious outcomes are devised (e.g., scales for schizophrenia",
+      "text_sha256": "def2da7c88894ca0d9f29ba1ec9ce70a5875c99a7a5c43550718828c05be69fa"
+    },
+    {
+      "id": "p3-b4",
+      "type": "paragraph",
+      "page": 3,
+      "reading_order": 4,
+      "bbox": {
+        "x0": 218.0,
+        "y0": 43.26,
+        "x1": 373.18,
+        "y1": 263.25
+      },
+      "text": "outcomes) [23]. Similarly, fields that use commonly agreed, stereotyped analytical methods (e.g., Kaplan- Meier plots and the log-rank test) [24] may yield a larger proportion of true findings than fields where analytical methods are still under experimentation (e.g., artificial intelligence methods) and only “best” results are reported. Regardless, even in the most stringent research designs, bias seems to be a major problem. For example, there is strong evidence that selective outcome reporting, with manipulation of the outcomes and analyses reported, is a common problem even for randomized trails [25]. Simply abolishing selective publication would not make this problem go away.",
+      "text_sha256": "7e0e29c89c637a597191505b80a5f44e0e4f316755adb3ba21113e0c13a279d9",
+      "continues_from": "p3-b3"
+    },
+    {
+      "id": "p3-b5",
+      "type": "paragraph",
+      "page": 3,
+      "reading_order": 5,
+      "bbox": {
+        "x0": 218.0,
+        "y0": 263.7,
+        "x1": 378.3,
+        "y1": 582.24
+      },
+      "text": "Corollary 5: The greater the financial and other interests and prejudices in a scientific field, the less likely the research findings are to be true. Conflicts of interest and prejudice may increase bias, u. Conflicts of interest are very common in biomedical research [26], and typically they are inadequately and sparsely reported [26,27]. Prejudice may not necessarily have financial roots. Scientists in a given field may be prejudiced purely because of their belief in a scientific theory or commitment to their own findings. Many otherwise seemingly independent, university-based studies may be conducted for no other reason than to give physicians and researchers qualifications for promotion or tenure. Such nonfinancial conflicts may also lead to distorted reported results and interpretations. Prestigious investigators may suppress via the peer review process the appearance and dissemination of findings that refute their findings, thus condemning their field to perpetuate false dogma. Empirical evidence on expert opinion shows that it is extremely unreliable [28].",
+      "text_sha256": "2fb2238013f42c67622f99d66dd286ba7745d32e310c8a052c551898b1a0e718"
+    },
+    {
+      "id": "p3-b6",
+      "type": "paragraph",
+      "page": 3,
+      "reading_order": 6,
+      "bbox": {
+        "x0": 218.0,
+        "y0": 582.69,
+        "x1": 359.86,
+        "y1": 627.26
+      },
+      "text": "Corollary 6: The hotter a scientific field (with more scientific teams involved), the less likely the research findings are to be true.",
+      "text_sha256": "fc99f410b800ee0cfa354cf43ff4f3d96efdc5b596054d725069203740ab91bf"
+    },
+    {
+      "id": "p3-b7",
+      "type": "caption",
+      "page": 3,
+      "reading_order": 7,
+      "bbox": {
+        "x0": 44.0,
+        "y0": 641.12,
+        "x1": 363.71,
+        "y1": 652.12
+      },
+      "text": "Table 3. Research Findings and True Relationships in the Presence of Multiple Studies",
+      "text_sha256": "bd4a7f64f9080906e3626a5f3cfe1f9cf300b42fc6066c6dcc6f5ef95bba11eb",
+      "caption_for": "p3-b8"
+    },
+    {
+      "id": "p3-b8",
+      "type": "table",
+      "page": 3,
+      "reading_order": 8,
+      "bbox": {
+        "x0": 44.6,
+        "y0": 654.0,
+        "x1": 375.5,
+        "y1": 720.5
+      },
+      "table": {
+        "n_rows": 5,
+        "n_cols": 4,
+        "cells": [
+          {
+            "row": 0,
+            "col": 0,
+            "text": "Research Finding",
+            "rowspan": 2,
+            "is_header": true
+          },
+          {
+            "row": 0,
+            "col": 1,
+            "text": "True Relationship",
+            "colspan": 3,
+            "is_header": true
+          },
+          {
+            "row": 1,
+            "col": 1,
+            "text": "Yes",
+            "is_header": true
+          },
+          {
+            "row": 1,
+            "col": 2,
+            "text": "No",
+            "is_header": true
+          },
+          {
+            "row": 1,
+            "col": 3,
+            "text": "Total",
+            "is_header": true
+          },
+          {
+            "row": 2,
+            "col": 0,
+            "text": "Yes"
+          },
+          {
+            "row": 2,
+            "col": 1,
+            "text": "cR(1 − βn)/(R + 1)"
+          },
+          {
+            "row": 2,
+            "col": 2,
+            "text": "c(1 − [1 − α]n)/(R + 1)"
+          },
+          {
+            "row": 2,
+            "col": 3,
+            "text": "c(R + 1 − [1 − α]n − Rβn)/(R + 1)"
+          },
+          {
+            "row": 3,
+            "col": 0,
+            "text": "No"
+          },
+          {
+            "row": 3,
+            "col": 1,
+            "text": "cRβn/(R + 1)"
+          },
+          {
+            "row": 3,
+            "col": 2,
+            "text": "c(1 − α)n/(R + 1)"
+          },
+          {
+            "row": 3,
+            "col": 3,
+            "text": "c([1 − α]n + Rβn)/(R + 1)"
+          },
+          {
+            "row": 4,
+            "col": 0,
+            "text": "Total"
+          },
+          {
+            "row": 4,
+            "col": 1,
+            "text": "cR/(R + 1)"
+          },
+          {
+            "row": 4,
+            "col": 2,
+            "text": "c/(R + 1)"
+          },
+          {
+            "row": 4,
+            "col": 3,
+            "text": "c"
+          }
+        ]
+      },
+      "text": null,
+      "uncertainty": {
+        "level": "low",
+        "note": "exponent n is printed as a superscript; recorded as a plain character in reading order"
+      }
+    },
+    {
+      "id": "p3-b9",
+      "type": "footnote",
+      "page": 3,
+      "reading_order": 9,
+      "bbox": {
+        "x0": 44.0,
+        "y0": 723.3,
+        "x1": 131.24,
+        "y1": 730.3
+      },
+      "text": "DOI: 10.1371/journal.pmed.0020124.t003",
+      "text_sha256": "45a24414258131de70458dc5862651ea547fe37a657bf29e93007b93c16a09cd"
+    },
+    {
+      "id": "p3-b10",
+      "type": "figure",
+      "page": 3,
+      "reading_order": 10,
+      "bbox": {
+        "x0": 393.0,
+        "y0": 45.0,
+        "x1": 549.0,
+        "y1": 393.0
+      },
+      "graphic": {
+        "kind": "chart"
+      },
+      "text": null
+    },
+    {
+      "id": "p3-b11",
+      "type": "footnote",
+      "page": 3,
+      "reading_order": 11,
+      "bbox": {
+        "x0": 392.0,
+        "y0": 395.16,
+        "x1": 514.9,
+        "y1": 404.16
+      },
+      "text": "DOI: 10.1371/journal.pmed.0020124.g001",
+      "text_sha256": "9541dd8f6de45acdccc313725f3d2e0fbdbe43276f6f4045878f6be298706497"
+    },
+    {
+      "id": "p3-b12",
+      "type": "caption",
+      "page": 3,
+      "reading_order": 12,
+      "bbox": {
+        "x0": 392.0,
+        "y0": 411.38,
+        "x1": 546.86,
+        "y1": 458.49
+      },
+      "text": "Figure 1. PPV (Probability That a Research Finding Is True) as a Function of the Pre-Study Odds for Various Levels of Bias, u Panels correspond to power of 0.20, 0.50, and 0.80.",
+      "text_sha256": "dfcc678d42307f2bf84e0b47be26a33b9db26bfddf608f432359cc078a358ade",
+      "caption_for": "p3-b10"
+    },
+    {
+      "id": "p3-b13",
+      "type": "paragraph",
+      "page": 3,
+      "reading_order": 13,
+      "bbox": {
+        "x0": 392.0,
+        "y0": 467.37,
+        "x1": 552.34,
+        "y1": 731.39
+      },
+      "text": "This seemingly paradoxical corollary follows because, as stated above, the PPV of isolated findings decreases when many teams of investigators are involved in the same field. This may explain why we occasionally see major excitement followed rapidly by severe disappointments in fields that draw wide attention. With many teams working on the same field and with massive experimental data being produced, timing is of the essence in beating competition. Thus, each team may prioritize on pursuing and disseminating its most impressive “positive” results. “Negative” results may become attractive for dissemination only if some other team has found a “positive” association on the same question. In that case, it may be attractive to refute a claim made in some prestigious journal. The term Proteus phenomenon has been coined to describe this phenomenon of rapidly",
+      "text_sha256": "e0855f373fa777bb9dda237ba88ab5dec179b4ea707fe6a4a23992980840add4",
+      "truncated": "end"
+    },
+    {
+      "id": "p3-b14",
+      "type": "footer",
+      "page": 3,
+      "reading_order": 14,
+      "bbox": {
+        "x0": 66.73,
+        "y0": 746.51,
+        "x1": 203.09,
+        "y1": 756.51
+      },
+      "text": "PLoS Medicine | www.plosmedicine.org",
+      "text_sha256": "3a43708c8acf0cbe1488079b43f0564d4ab8289984086e8ece15cd4914518845"
+    },
+    {
+      "id": "p3-b15",
+      "type": "page_number",
+      "page": 3,
+      "reading_order": 15,
+      "bbox": {
+        "x0": 287.82,
+        "y0": 746.51,
+        "x1": 306.23,
+        "y1": 756.51
+      },
+      "text": "0698",
+      "text_sha256": "01fb8c7751a94300d674af0848f2a9491e18b9e5475b9bbb2b55d4acf37291af"
+    },
+    {
+      "id": "p3-b16",
+      "type": "footer",
+      "page": 3,
+      "reading_order": 16,
+      "bbox": {
+        "x0": 410.11,
+        "y0": 746.48,
+        "x1": 550.02,
+        "y1": 756.48
+      },
+      "text": "August 2005 | Volume 2 | Issue 8 | e124",
+      "text_sha256": "5ff00b25052d71cd7217d43b74d6f27da5df94e8cf396269a732d9b57a150dde"
+    },
+    {
+      "id": "p5-b1",
+      "type": "paragraph",
+      "page": 5,
+      "reading_order": 17,
+      "bbox": {
+        "x0": 44.0,
+        "y0": 43.28,
+        "x1": 183.7,
+        "y1": 76.28
+      },
+      "text": "standardization of laboratory and statistical methods, outcomes, and reporting thereof to minimize bias.",
+      "text_sha256": "9cda7a153f0a12dddbc5f888667be90cf2f1334d8b88232d40b4a4d21bdf2cb5",
+      "truncated": "start"
+    },
+    {
+      "id": "p5-b2",
+      "type": "heading",
+      "page": 5,
+      "reading_order": 18,
+      "bbox": {
+        "x0": 44.0,
+        "y0": 83.52,
+        "x1": 186.0,
+        "y1": 119.52
+      },
+      "text": "Claimed Research Findings May Often Be Simply Accurate Measures of the Prevailing Bias",
+      "text_sha256": "dc0a5dcca2447ccd53157ce78ecec227fe9ee8adf5d8c9cb19df862558ec74d3"
+    },
+    {
+      "id": "p5-b3",
+      "type": "paragraph",
+      "page": 5,
+      "reading_order": 19,
+      "bbox": {
+        "x0": 44.0,
+        "y0": 122.36,
+        "x1": 199.54,
+        "y1": 331.35
+      },
+      "text": "As shown, the majority of modern biomedical research is operating in areas with very low pre- and post- study probability for true findings. Let us suppose that in a research field there are no true findings at all to be discovered. History of science teaches us that scientific endeavor has often in the past wasted effort in fields with absolutely no yield of true scientific information, at least based on our current understanding. In such a “null field,” one would ideally expect all observed effect sizes to vary by chance around the null in the absence of bias. The extent that observed findings deviate from what is expected by chance alone would be simply a pure measure of the prevailing bias.",
+      "text_sha256": "e8ca6ad48fef8984b729ae75d41d0c9f60d7e6b7535cc671593ebaf59957509d"
+    },
+    {
+      "id": "p5-b4",
+      "type": "paragraph",
+      "page": 5,
+      "reading_order": 20,
+      "bbox": {
+        "x0": 44.0,
+        "y0": 331.35,
+        "x1": 200.8,
+        "y1": 441.71
+      },
+      "text": "For example, let us suppose that no nutrients or dietary patterns are actually important determinants for the risk of developing a specific tumor. Let us also suppose that the scientific literature has examined 60 nutrients and claims all of them to be related to the risk of developing this tumor with relative risks in the range of 1.2 to 1.4 for the comparison of the upper to",
+      "text_sha256": "01ec07e83cbe042955ec8feb0e9ad5722669cc1875262787a593f223430d5ea8"
+    },
+    {
+      "id": "p5-b5",
+      "type": "paragraph",
+      "page": 5,
+      "reading_order": 21,
+      "bbox": {
+        "x0": 218.0,
+        "y0": 43.27,
+        "x1": 376.78,
+        "y1": 186.99
+      },
+      "text": "lower intake tertiles. Then the claimed effect sizes are simply measuring nothing else but the net bias that has been involved in the generation of this scientific literature. Claimed effect sizes are in fact the most accurate estimates of the net bias. It even follows that between “null fields,” the fields that claim stronger effects (often with accompanying claims of medical or public health importance) are simply those that have sustained the worst biases.",
+      "text_sha256": "7bae7a85b6f7c9d537a35ac855c141052f2e2f581328c789f7fc3539ff90e0b5",
+      "continues_from": "p5-b4"
+    },
+    {
+      "id": "p5-b6",
+      "type": "paragraph",
+      "page": 5,
+      "reading_order": 22,
+      "bbox": {
+        "x0": 218.0,
+        "y0": 187.05,
+        "x1": 376.24,
+        "y1": 407.89
+      },
+      "text": "For fields with very low PPV, the few true relationships would not distort this overall picture much. Even if a few relationships are true, the shape of the distribution of the observed effects would still yield a clear measure of the biases involved in the field. This concept totally reverses the way we view scientific results. Traditionally, investigators have viewed large and highly significant effects with excitement, as signs of important discoveries. Too large and too highly significant effects may actually be more likely to be signs of large bias in most fields of modern research. They should lead investigators to careful critical thinking about what might have gone wrong with their data, analyses, and results.",
+      "text_sha256": "e067b764b9fe98cc15d0d45b61b2d6927721c6b29c52df5c7f7ac7ff724ab050"
+    },
+    {
+      "id": "p5-b7",
+      "type": "paragraph",
+      "page": 5,
+      "reading_order": 23,
+      "bbox": {
+        "x0": 218.0,
+        "y0": 407.89,
+        "x1": 373.54,
+        "y1": 440.89
+      },
+      "text": "Of course, investigators working in any field are likely to resist accepting that the whole field in which they have",
+      "text_sha256": "ea535fe9d7f5e58d8d866237e63e2ea7cfa2de129808cf2a41be164276569e08"
+    },
+    {
+      "id": "p5-b8",
+      "type": "paragraph",
+      "page": 5,
+      "reading_order": 24,
+      "bbox": {
+        "x0": 392.0,
+        "y0": 43.27,
+        "x1": 549.88,
+        "y1": 175.27
+      },
+      "text": "spent their careers is a “null field.” However, other lines of evidence, or advances in technology and experimentation, may lead eventually to the dismantling of a scientific field. Obtaining measures of the net bias in one field may also be useful for obtaining insight into what might be the range of bias operating in other fields where similar analytical methods, technologies, and conflicts may be operating.",
+      "text_sha256": "01489cd968997a3421ba7580e4ea642453caa3295a98d6a86ac79f8ac041b69b",
+      "continues_from": "p5-b7"
+    },
+    {
+      "id": "p5-b9",
+      "type": "caption",
+      "page": 5,
+      "reading_order": 25,
+      "bbox": {
+        "x0": 44.0,
+        "y0": 463.03,
+        "x1": 352.73,
+        "y1": 485.03
+      },
+      "text": "Table 4. PPV of Research Findings for Various Combinations of Power (1 − β), Ratio of True to Not-True Relationships (R), and Bias (u)",
+      "text_sha256": "d6d7cd17d1a801df793cdd7787c89ea25577842caea1b5b101269906ba9760f2",
+      "caption_for": "p5-b10"
+    },
+    {
+      "id": "p5-b10",
+      "type": "table",
+      "page": 5,
+      "reading_order": 26,
+      "bbox": {
+        "x0": 44.6,
+        "y0": 487.0,
+        "x1": 375.5,
+        "y1": 702.0
+      },
+      "table": {
+        "n_rows": 10,
+        "n_cols": 5,
+        "cells": [
+          {
+            "row": 0,
+            "col": 0,
+            "text": "1 − β",
+            "is_header": true
+          },
+          {
+            "row": 0,
+            "col": 1,
+            "text": "R",
+            "is_header": true
+          },
+          {
+            "row": 0,
+            "col": 2,
+            "text": "u",
+            "is_header": true
+          },
+          {
+            "row": 0,
+            "col": 3,
+            "text": "Practical Example",
+            "is_header": true
+          },
+          {
+            "row": 0,
+            "col": 4,
+            "text": "PPV",
+            "is_header": true
+          },
+          {
+            "row": 1,
+            "col": 0,
+            "text": "0.80"
+          },
+          {
+            "row": 1,
+            "col": 1,
+            "text": "1:1"
+          },
+          {
+            "row": 1,
+            "col": 2,
+            "text": "0.10"
+          },
+          {
+            "row": 1,
+            "col": 3,
+            "text": "Adequately powered RCT with little bias and 1:1 pre-study odds"
+          },
+          {
+            "row": 1,
+            "col": 4,
+            "text": "0.85"
+          },
+          {
+            "row": 2,
+            "col": 0,
+            "text": "0.95"
+          },
+          {
+            "row": 2,
+            "col": 1,
+            "text": "2:1"
+          },
+          {
+            "row": 2,
+            "col": 2,
+            "text": "0.30"
+          },
+          {
+            "row": 2,
+            "col": 3,
+            "text": "Confirmatory meta-analysis of good- quality RCTs"
+          },
+          {
+            "row": 2,
+            "col": 4,
+            "text": "0.85"
+          },
+          {
+            "row": 3,
+            "col": 0,
+            "text": "0.80"
+          },
+          {
+            "row": 3,
+            "col": 1,
+            "text": "1:3"
+          },
+          {
+            "row": 3,
+            "col": 2,
+            "text": "0.40"
+          },
+          {
+            "row": 3,
+            "col": 3,
+            "text": "Meta-analysis of small inconclusive studies"
+          },
+          {
+            "row": 3,
+            "col": 4,
+            "text": "0.41"
+          },
+          {
+            "row": 4,
+            "col": 0,
+            "text": "0.20"
+          },
+          {
+            "row": 4,
+            "col": 1,
+            "text": "1:5"
+          },
+          {
+            "row": 4,
+            "col": 2,
+            "text": "0.20"
+          },
+          {
+            "row": 4,
+            "col": 3,
+            "text": "Underpowered, but well-performed phase I/II RCT"
+          },
+          {
+            "row": 4,
+            "col": 4,
+            "text": "0.23"
+          },
+          {
+            "row": 5,
+            "col": 0,
+            "text": "0.20"
+          },
+          {
+            "row": 5,
+            "col": 1,
+            "text": "1:5"
+          },
+          {
+            "row": 5,
+            "col": 2,
+            "text": "0.80"
+          },
+          {
+            "row": 5,
+            "col": 3,
+            "text": "Underpowered, poorly performed phase I/II RCT"
+          },
+          {
+            "row": 5,
+            "col": 4,
+            "text": "0.17"
+          },
+          {
+            "row": 6,
+            "col": 0,
+            "text": "0.80"
+          },
+          {
+            "row": 6,
+            "col": 1,
+            "text": "1:10"
+          },
+          {
+            "row": 6,
+            "col": 2,
+            "text": "0.30"
+          },
+          {
+            "row": 6,
+            "col": 3,
+            "text": "Adequately powered exploratory epidemiological study"
+          },
+          {
+            "row": 6,
+            "col": 4,
+            "text": "0.20"
+          },
+          {
+            "row": 7,
+            "col": 0,
+            "text": "0.20"
+          },
+          {
+            "row": 7,
+            "col": 1,
+            "text": "1:10"
+          },
+          {
+            "row": 7,
+            "col": 2,
+            "text": "0.30"
+          },
+          {
+            "row": 7,
+            "col": 3,
+            "text": "Underpowered exploratory epidemiological study"
+          },
+          {
+            "row": 7,
+            "col": 4,
+            "text": "0.12"
+          },
+          {
+            "row": 8,
+            "col": 0,
+            "text": "0.20"
+          },
+          {
+            "row": 8,
+            "col": 1,
+            "text": "1:1,000"
+          },
+          {
+            "row": 8,
+            "col": 2,
+            "text": "0.80"
+          },
+          {
+            "row": 8,
+            "col": 3,
+            "text": "Discovery-oriented exploratory research with massive testing"
+          },
+          {
+            "row": 8,
+            "col": 4,
+            "text": "0.0010"
+          },
+          {
+            "row": 9,
+            "col": 0,
+            "text": "0.20"
+          },
+          {
+            "row": 9,
+            "col": 1,
+            "text": "1:1,000"
+          },
+          {
+            "row": 9,
+            "col": 2,
+            "text": "0.20"
+          },
+          {
+            "row": 9,
+            "col": 3,
+            "text": "As in previous example, but with more limited bias (more standardized)"
+          },
+          {
+            "row": 9,
+            "col": 4,
+            "text": "0.0015"
+          }
+        ]
+      },
+      "text": null
+    },
+    {
+      "id": "p5-b11",
+      "type": "footnote",
+      "page": 5,
+      "reading_order": 27,
+      "bbox": {
+        "x0": 44.0,
+        "y0": 704.24,
+        "x1": 244.09,
+        "y1": 725.24
+      },
+      "text": "The estimated PPVs (positive predictive values) are derived assuming α = 0.05 for a single study. RCT, randomized controlled trial. DOI: 10.1371/journal.pmed.0020124.t004",
+      "text_sha256": "93de3c1ceb6f92570384df6de97759052fcddbedf7fa3cd01c127eef20012740"
+    },
+    {
+      "id": "p5-b12",
+      "type": "heading",
+      "page": 5,
+      "reading_order": 28,
+      "bbox": {
+        "x0": 392.0,
+        "y0": 182.52,
+        "x1": 489.78,
+        "y1": 206.52
+      },
+      "text": "How Can We Improve the Situation?",
+      "text_sha256": "135c7c04e8aae1d07cdf76f1cefaf88a94dd594a322ecbf13bbf7d595becb911"
+    },
+    {
+      "id": "p5-b13",
+      "type": "paragraph",
+      "page": 5,
+      "reading_order": 29,
+      "bbox": {
+        "x0": 392.0,
+        "y0": 209.36,
+        "x1": 547.36,
+        "y1": 308.35
+      },
+      "text": "Is it unavoidable that most research findings are false, or can we improve the situation? A major problem is that it is impossible to know with 100% certainty what the truth is in any research question. In this regard, the pure “gold” standard is unattainable. However, there are several approaches to improve the post-study probability.",
+      "text_sha256": "38bbb187792eb934a4ccf81ef6917469c1b0ec66d96a1ff41164afc1114a5dd3"
+    },
+    {
+      "id": "p5-b14",
+      "type": "paragraph",
+      "page": 5,
+      "reading_order": 30,
+      "bbox": {
+        "x0": 392.0,
+        "y0": 308.35,
+        "x1": 551.5,
+        "y1": 671.34
+      },
+      "text": "Better powered evidence, e.g., large studies or low-bias meta-analyses, may help, as it comes closer to the unknown “gold” standard. However, large studies may still have biases and these should be acknowledged and avoided. Moreover, large-scale evidence is impossible to obtain for all of the millions and trillions of research questions posed in current research. Large-scale evidence should be targeted for research questions where the pre-study probability is already considerably high, so that a significant research finding will lead to a post-test probability that would be considered quite definitive. Large-scale evidence is also particularly indicated when it can test major concepts rather than narrow, specific questions. A negative finding can then refute not only a specific proposed claim, but a whole field or considerable portion thereof. Selecting the performance of large-scale studies based on narrow-minded criteria, such as the marketing promotion of a specific drug, is largely wasted research. Moreover, one should be cautious that extremely large studies may be more likely to find a formally statistical significant difference for a trivial effect that is not really meaningfully different from the null [32–34].",
+      "text_sha256": "5ed0d71efde19ef5e87bca37574f07ef94a4855fb6468b56138f9e5a5b6f0d4f"
+    },
+    {
+      "id": "p5-b15",
+      "type": "paragraph",
+      "page": 5,
+      "reading_order": 31,
+      "bbox": {
+        "x0": 392.0,
+        "y0": 671.34,
+        "x1": 538.22,
+        "y1": 726.34
+      },
+      "text": "Second, most research questions are addressed by many teams, and it is misleading to emphasize the statistically significant findings of any single team. What matters is the",
+      "text_sha256": "46a8718cad83a8715b91927e5c1e06acdaf00aee0868d2a5715d591efeab4e6f",
+      "truncated": "end"
+    },
+    {
+      "id": "p5-b16",
+      "type": "footer",
+      "page": 5,
+      "reading_order": 32,
+      "bbox": {
+        "x0": 66.73,
+        "y0": 746.51,
+        "x1": 203.09,
+        "y1": 756.51
+      },
+      "text": "PLoS Medicine | www.plosmedicine.org",
+      "text_sha256": "3a43708c8acf0cbe1488079b43f0564d4ab8289984086e8ece15cd4914518845"
+    },
+    {
+      "id": "p5-b17",
+      "type": "page_number",
+      "page": 5,
+      "reading_order": 33,
+      "bbox": {
+        "x0": 287.82,
+        "y0": 746.51,
+        "x1": 306.23,
+        "y1": 756.51
+      },
+      "text": "0700",
+      "text_sha256": "3afc20e93f4a8c5281ad23fb3da6d548e6324de195e3de4d0865555f3e623762"
+    },
+    {
+      "id": "p5-b18",
+      "type": "footer",
+      "page": 5,
+      "reading_order": 34,
+      "bbox": {
+        "x0": 410.11,
+        "y0": 746.48,
+        "x1": 550.02,
+        "y1": 756.48
+      },
+      "text": "August 2005 | Volume 2 | Issue 8 | e124",
+      "text_sha256": "5ff00b25052d71cd7217d43b74d6f27da5df94e8cf396269a732d9b57a150dde"
+    }
+  ],
+  "provenance": {
+    "proposed_by": {
+      "tool": "extraction-pilot-drafts",
+      "version": "3",
+      "options_sha256": "b74e6f2f9c021751643a9a5d2e4451944b229defbcf37f11c98141324265f7b4"
+    },
+    "review": {
+      "status": "reviewed",
+      "reviewer": "agent-claude-sonnet-5-5",
+      "reviewed_at": "2026-11-12T13:52:20Z",
+      "basis": "page_image_inspection"
+    }
+  }
+}

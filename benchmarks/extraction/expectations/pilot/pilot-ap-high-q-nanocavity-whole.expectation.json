@@ -1,0 +1,3807 @@
+{
+  "schema_version": 1,
+  "record_kind": "expectation",
+  "record_id": "pilot-ap-high-q-nanocavity-whole",
+  "document": {
+    "pdf_sha256": "adf95ca146496a795fa0e0c6e86f323f12acf05c0438e21cbd8d37aa86c5cdde",
+    "title": "Pushing the limit of high-Q mode of a single dielectric nanocavity",
+    "page_count": 9,
+    "corpus_id": "ap-high-q-nanocavity"
+  },
+  "scope": {
+    "kind": "complete_document",
+    "physical_pages": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9
+    ]
+  },
+  "pages": [
+    {
+      "physical_page": 1,
+      "printed_label": "016004-1",
+      "geometry": {
+        "unit": "pt",
+        "origin": "top-left",
+        "frame": "displayed",
+        "box": "cropbox",
+        "rotation": 0,
+        "width": 612.0,
+        "height": 792.0
+      },
+      "render": {
+        "renderer": "pymupdf",
+        "renderer_version": "1.28.0",
+        "dpi": 150,
+        "image_sha256": "e11e008d109da0ae4d5bdca32d43678e7b45042b6ff177d651a2d5400dbfe570"
+      },
+      "body_start": {
+        "block_id": "p1-b3"
+      },
+      "body_end": {
+        "block_id": "p1-b18"
+      }
+    },
+    {
+      "physical_page": 2,
+      "printed_label": "016004-2",
+      "geometry": {
+        "unit": "pt",
+        "origin": "top-left",
+        "frame": "displayed",
+        "box": "cropbox",
+        "rotation": 0,
+        "width": 612.0,
+        "height": 792.0
+      },
+      "render": {
+        "renderer": "pymupdf",
+        "renderer_version": "1.28.0",
+        "dpi": 150,
+        "image_sha256": "79c9856fafa6e34d3d5b9cf194c86f8ad45b1ebc612f57d74f285abb6d97c58c"
+      },
+      "body_start": {
+        "block_id": "p2-b2"
+      },
+      "body_end": {
+        "block_id": "p2-b10"
+      }
+    },
+    {
+      "physical_page": 3,
+      "printed_label": "016004-3",
+      "geometry": {
+        "unit": "pt",
+        "origin": "top-left",
+        "frame": "displayed",
+        "box": "cropbox",
+        "rotation": 0,
+        "width": 612.0,
+        "height": 792.0
+      },
+      "render": {
+        "renderer": "pymupdf",
+        "renderer_version": "1.28.0",
+        "dpi": 150,
+        "image_sha256": "5030a1acf6c5844c238ad8feef2b932e64779117e33fe025e59f76afde6c184e"
+      },
+      "body_start": {
+        "block_id": "p3-b2"
+      },
+      "body_end": {
+        "block_id": "p3-b10"
+      }
+    },
+    {
+      "physical_page": 4,
+      "printed_label": "016004-4",
+      "geometry": {
+        "unit": "pt",
+        "origin": "top-left",
+        "frame": "displayed",
+        "box": "cropbox",
+        "rotation": 0,
+        "width": 612.0,
+        "height": 792.0
+      },
+      "render": {
+        "renderer": "pymupdf",
+        "renderer_version": "1.28.0",
+        "dpi": 150,
+        "image_sha256": "2ce2a036eaa1bfe11ff991ef6c5d26e121698f374b5a0dbd3066f51af78e6915"
+      },
+      "body_start": {
+        "block_id": "p4-b2"
+      },
+      "body_end": {
+        "block_id": "p4-b5"
+      }
+    },
+    {
+      "physical_page": 5,
+      "printed_label": "016004-5",
+      "geometry": {
+        "unit": "pt",
+        "origin": "top-left",
+        "frame": "displayed",
+        "box": "cropbox",
+        "rotation": 0,
+        "width": 612.0,
+        "height": 792.0
+      },
+      "render": {
+        "renderer": "pymupdf",
+        "renderer_version": "1.28.0",
+        "dpi": 150,
+        "image_sha256": "8d55c6d2e6409b95c6e5ac25c7a0748e23f03aa13052883fed1159b15ec02805"
+      },
+      "body_start": {
+        "block_id": "p5-b2"
+      },
+      "body_end": {
+        "block_id": "p5-b11"
+      }
+    },
+    {
+      "physical_page": 6,
+      "printed_label": "016004-6",
+      "geometry": {
+        "unit": "pt",
+        "origin": "top-left",
+        "frame": "displayed",
+        "box": "cropbox",
+        "rotation": 0,
+        "width": 612.0,
+        "height": 792.0
+      },
+      "render": {
+        "renderer": "pymupdf",
+        "renderer_version": "1.28.0",
+        "dpi": 150,
+        "image_sha256": "6ddb38242b976ca9e8ba855808a29b23199e7d2925739379cd6d6494ac7be482"
+      },
+      "body_start": {
+        "block_id": "p6-b2"
+      },
+      "body_end": {
+        "block_id": "p6-b9"
+      }
+    },
+    {
+      "physical_page": 7,
+      "printed_label": "016004-7",
+      "geometry": {
+        "unit": "pt",
+        "origin": "top-left",
+        "frame": "displayed",
+        "box": "cropbox",
+        "rotation": 0,
+        "width": 612.0,
+        "height": 792.0
+      },
+      "render": {
+        "renderer": "pymupdf",
+        "renderer_version": "1.28.0",
+        "dpi": 150,
+        "image_sha256": "9c50474268fb907957fd73ba8cd9e37204ce33db4fa15dcc619770e6f1d7460f"
+      },
+      "body_start": {
+        "block_id": "p7-b2"
+      },
+      "body_end": {
+        "block_id": "p7-b8"
+      }
+    },
+    {
+      "physical_page": 8,
+      "printed_label": "016004-8",
+      "geometry": {
+        "unit": "pt",
+        "origin": "top-left",
+        "frame": "displayed",
+        "box": "cropbox",
+        "rotation": 0,
+        "width": 612.0,
+        "height": 792.0
+      },
+      "render": {
+        "renderer": "pymupdf",
+        "renderer_version": "1.28.0",
+        "dpi": 150,
+        "image_sha256": "cc159bea5f4a123c911b6c08b21e61c0e3fcc409afed5b6c08dbc9f7014a56e7"
+      },
+      "body_start": {
+        "block_id": "p8-b2"
+      },
+      "body_end": {
+        "block_id": "p8-b34"
+      }
+    },
+    {
+      "physical_page": 9,
+      "printed_label": "016004-9",
+      "geometry": {
+        "unit": "pt",
+        "origin": "top-left",
+        "frame": "displayed",
+        "box": "cropbox",
+        "rotation": 0,
+        "width": 612.0,
+        "height": 792.0
+      },
+      "render": {
+        "renderer": "pymupdf",
+        "renderer_version": "1.28.0",
+        "dpi": 150,
+        "image_sha256": "0c55c24d8909a0aa7aaa429492853fa5a0536138a08bceb4be6e17bc4f75284e"
+      },
+      "body_start": {
+        "block_id": "p9-b2"
+      },
+      "body_end": {
+        "block_id": "p9-b24"
+      }
+    }
+  ],
+  "blocks": [
+    {
+      "id": "p1-b1",
+      "type": "header",
+      "page": 1,
+      "reading_order": 1,
+      "bbox": {
+        "x0": 44.01,
+        "y0": 33.47,
+        "x1": 140.36,
+        "y1": 47.43
+      },
+      "text": "Research Article",
+      "text_sha256": "998497e86fd0a66e48c8234944eab4cb8dcb1e33f8df71007c4d6db4d3931e1e"
+    },
+    {
+      "id": "p1-b2",
+      "type": "header",
+      "page": 1,
+      "reading_order": 2,
+      "bbox": {
+        "x0": 45.0,
+        "y0": 52.0,
+        "x1": 567.0,
+        "y1": 124.0
+      },
+      "text": "ADVANCED PHOTONICS",
+      "text_sha256": "b3a916f9a2f7f240c7de61cc8b545da01c178ae18565f04c450bf73a8445c9d0",
+      "uncertainty": {
+        "level": "low",
+        "note": "wordmark set in a raster banner image; not in the text layer"
+      }
+    },
+    {
+      "id": "p1-b3",
+      "type": "heading",
+      "page": 1,
+      "reading_order": 3,
+      "bbox": {
+        "x0": 44.01,
+        "y0": 138.39,
+        "x1": 512.57,
+        "y1": 186.94
+      },
+      "text": "Pushing the limit of high-Q mode of a single dielectric nanocavity",
+      "text_sha256": "f43a3b4ccb183724a3ffc1630abe02e2ab3ebf06fb1f753fe9e9d6983c63b730"
+    },
+    {
+      "id": "p1-b4",
+      "type": "paragraph",
+      "page": 1,
+      "reading_order": 4,
+      "bbox": {
+        "x0": 44.01,
+        "y0": 197.54,
+        "x1": 536.22,
+        "y1": 213.53
+      },
+      "text": "Lujun Huang,a,† Lei Xu,b,† Mohsen Rahmani,b Dragomir Neshev,c and Andrey E. Miroshnichenko a,*",
+      "text_sha256": "1e0c654bff8b31f8aeea5a61410ebd80f526fd6c22a559cc12d630dad22c80d1"
+    },
+    {
+      "id": "p1-b5",
+      "type": "paragraph",
+      "page": 1,
+      "reading_order": 5,
+      "bbox": {
+        "x0": 44.01,
+        "y0": 212.46,
+        "x1": 516.64,
+        "y1": 223.06
+      },
+      "text": "aUniversity of New South Wales, School of Engineering and Information Technology, Canberra, Australian Capital Territory, Australia",
+      "text_sha256": "0c21f29be3f13124a834de2cffb852e6b36dbbb164cb731b0e025817db3dcf33"
+    },
+    {
+      "id": "p1-b6",
+      "type": "paragraph",
+      "page": 1,
+      "reading_order": 6,
+      "bbox": {
+        "x0": 44.01,
+        "y0": 222.43,
+        "x1": 537.68,
+        "y1": 242.96
+      },
+      "text": "bNottingham Trent University, School of Science and Technology, Department of Engineering, Advanced Optics and Photonics Laboratory, Nottingham, United Kingdom",
+      "text_sha256": "ef75a883b7caaf1217fd70c91a94513aa923e021fe8eb6b4da476d75bcd56df1"
+    },
+    {
+      "id": "p1-b7",
+      "type": "paragraph",
+      "page": 1,
+      "reading_order": 7,
+      "bbox": {
+        "x0": 44.01,
+        "y0": 242.33,
+        "x1": 568.03,
+        "y1": 262.92
+      },
+      "text": "cThe Australia National University, Research School of Physics, Department of Electronic Material Engineering, ARC Centre of Excellence for Transformative Meta-Optical Systems (TMOS), Canberra, Australian Capital Territory, Australia",
+      "text_sha256": "a8c7322514ad673c712a40c370a2c7f2f8fb6065925f2b93ec4e65ea7b4fe3eb"
+    },
+    {
+      "id": "p1-b8",
+      "type": "paragraph",
+      "page": 1,
+      "reading_order": 8,
+      "bbox": {
+        "x0": 67.94,
+        "y0": 288.25,
+        "x1": 544.12,
+        "y1": 455.63
+      },
+      "text": "Abstract. High-index dielectric resonators support different types of resonant modes. However, it is challenging to achieve a high-Q factor in a single dielectric nanocavity due to the non-Hermitian property of the open system. We present a universal approach of finding out a series of high-Q resonant modes in a single nonspherical dielectric cavity with a rectangular cross section by exploring the quasi bound-state-in-the- continuum (QBIC). Unlike conventional methods relying on heavy brutal force computations (i.e., frequency scanning by the finite difference time domain method), our approach is built upon Mie mode engineering, through which many high-Q modes can be easily achieved by constructing avoid-crossing (or crossing) of the eigenvalue for pair-leaky modes. The calculated Q-factor of mode TE(5,7) can be up to Qtheory = 2.3 × 104 for a freestanding square nanowire (NW) (n = 4), which is 64 times larger than the highest Q-factor (Qtheory ≈ 360) reported so far in a single Si disk. Such high-Q modes can be attributed to suppressed radiation in the corresponding eigenchannels and simultaneously quenched electric (magnetic) field at momentum space. As a proof of concept, we experimentally demonstrate the emergence of the high-Q resonant modes [Q ≈ 211 for mode TE(3,4), Q ≈ 380 for mode TE(3,5), and Q ≈ 294 for mode TM(3,5)] in the scattering spectrum of a single silicon NW.",
+      "text_sha256": "f1611258b6b3c8a146dfcba0c31889cd664c5573f65bb8a95c3f02d6969364d5",
+      "uncertainty": {
+        "level": "medium",
+        "note": "Inline math is recorded as plain characters in reading order; sub/superscript positions and italic or symbol-font variants are not preserved."
+      }
+    },
+    {
+      "id": "p1-b9",
+      "type": "paragraph",
+      "page": 1,
+      "reading_order": 9,
+      "bbox": {
+        "x0": 67.94,
+        "y0": 460.74,
+        "x1": 493.58,
+        "y1": 471.21
+      },
+      "text": "Keywords: Mie resonance; leaky mode; quasi bound state in the continuum; high-Q mode; dielectric nanocavity.",
+      "text_sha256": "4d819da3b6be90bc7710d0e02253958ce4963d93bda89dd583ad9afd656c5ca8"
+    },
+    {
+      "id": "p1-b10",
+      "type": "paragraph",
+      "page": 1,
+      "reading_order": 10,
+      "bbox": {
+        "x0": 67.94,
+        "y0": 476.73,
+        "x1": 532.14,
+        "y1": 497.12
+      },
+      "text": "Received Oct. 26, 2020; revised manuscript received Dec. 19, 2020; accepted for publication Dec. 29, 2020; published online Feb. 3, 2021.",
+      "text_sha256": "f62e6688779ccaf02bca579500566d836722770753578bd34114d0a008e6e804"
+    },
+    {
+      "id": "p1-b11",
+      "type": "paragraph",
+      "page": 1,
+      "reading_order": 11,
+      "bbox": {
+        "x0": 68.45,
+        "y0": 503.09,
+        "x1": 532.13,
+        "y1": 523.54
+      },
+      "text": "© The Authors. Published by SPIE and CLP under a Creative Commons Attribution 4.0 Unported License. Distribution or reproduction of this work in whole or in part requires full attribution of the original publication, including its DOI.",
+      "text_sha256": "65f146285e7776f8e296de8c1d3b73d76694c750749a75f57d70da8ba3aac84a"
+    },
+    {
+      "id": "p1-b12",
+      "type": "paragraph",
+      "page": 1,
+      "reading_order": 12,
+      "bbox": {
+        "x0": 68.45,
+        "y0": 529.0,
+        "x1": 190.37,
+        "y1": 539.47
+      },
+      "text": "[DOI: 10.1117/1.AP.3.1.016004]",
+      "text_sha256": "1f42d5ba9e53d50e1ab5f76eaca422af17beec6579dda3f8cd9d6254d86e4865"
+    },
+    {
+      "id": "p1-b13",
+      "type": "heading",
+      "page": 1,
+      "reading_order": 13,
+      "bbox": {
+        "x0": 44.01,
+        "y0": 582.6,
+        "x1": 127.41,
+        "y1": 596.56
+      },
+      "text": "1 Introduction",
+      "text_sha256": "c9234967b670c32478644b4236ec8fd2f351225696cacbcd0fad1f1838b95170"
+    },
+    {
+      "id": "p1-b14",
+      "type": "paragraph",
+      "page": 1,
+      "reading_order": 14,
+      "bbox": {
+        "x0": 44.01,
+        "y0": 598.78,
+        "x1": 297.84,
+        "y1": 700.0
+      },
+      "text": "The Q-factor of a cavity is defined as the energy dissipation per unit circle versus the energy stored in the resonator. In general, it is desirable to have a high-Q factor optical resonance since it allows us to achieve extreme energy confinement that can significantly reduce the threshold of lasing and enhance non- linearly the light–matter interaction. The widely used methods of realizing high-Q modes are built upon the photonic crystal cavity or whispery gallery cavity.1,2 Recently, another popular concept called bound-state-in-the-continuum (BIC) has triggered",
+      "text_sha256": "f22ec8c0366f20cdbb53da18fbdb9ca970cb5aa89b7ffd329599735a1eadad18"
+    },
+    {
+      "id": "p1-b15",
+      "type": "paragraph",
+      "page": 1,
+      "reading_order": 15,
+      "bbox": {
+        "x0": 314.27,
+        "y0": 581.23,
+        "x1": 568.03,
+        "y1": 748.02
+      },
+      "text": "extensive interest because it is capable of realizing an infinitely large Q-factor in the extended system, such as a photonic crystal slab or a dielectric metasurface.3–7 However, the on-chip lasing source requires a high-Q resonator being of the subwavelength scale.8 Subwavelength high-index dielectric nanostructure, such as rectangular dielectric nanowire (NW) and cuboid,9–11 has emerged as a promising platform to realize CMOS-compatible nanophotonics since it supports Mie-type resonances (also known as leaky mode resonance) with reduced dissipation loss.12,13 The value of the Q-factor for leaky mode resonances, however, is finite in a subwavelength dielectric resonator as a non-Hermitian system. Recently, it has been demonstrated that a single dielectric structure can support a high-Q cavity mode, realized in several specific examples [also referred to as quasi- BIC (QBIC)].14–21 Despite that, it is still necessary to develop a",
+      "text_sha256": "41d6e9993e7a2f7100815885759da2103fe8022c45df56b00b7ed1e6c173b586",
+      "continues_from": "p1-b14"
+    },
+    {
+      "id": "p1-b16",
+      "type": "footnote",
+      "page": 1,
+      "reading_order": 16,
+      "bbox": {
+        "x0": 44.01,
+        "y0": 717.86,
+        "x1": 268.05,
+        "y1": 726.83
+      },
+      "text": "*Address all correspondence to Andrey E. Miroshnichenko,",
+      "text_sha256": "5ddce0450d961cca12839e098b6fed74bb085308eb1218ed31e026341416dd0a"
+    },
+    {
+      "id": "p1-b17",
+      "type": "footnote",
+      "page": 1,
+      "reading_order": 17,
+      "bbox": {
+        "x0": 44.01,
+        "y0": 717.86,
+        "x1": 297.82,
+        "y1": 735.79
+      },
+      "text": null,
+      "uncertainty": {
+        "level": "high",
+        "note": "a printed e-mail address, withheld from this record because the repository personal-data guard rejects e-mail addresses"
+      }
+    },
+    {
+      "id": "p1-b18",
+      "type": "footnote",
+      "page": 1,
+      "reading_order": 18,
+      "bbox": {
+        "x0": 44.01,
+        "y0": 737.62,
+        "x1": 155.94,
+        "y1": 747.24
+      },
+      "text": "†These authors contributed equally.",
+      "text_sha256": "79a5f6b631f3facc1868431a7fd8fbe39e03fc29a8f4475d8b470dacbf4e97a3"
+    },
+    {
+      "id": "p1-b19",
+      "type": "footer",
+      "page": 1,
+      "reading_order": 19,
+      "bbox": {
+        "x0": 44.01,
+        "y0": 763.73,
+        "x1": 127.98,
+        "y1": 774.69
+      },
+      "text": "Advanced Photonics",
+      "text_sha256": "8952fe8cc5369b7f05b1f551784ec02f25ab7d5497e47b715418163f3ce05b4e"
+    },
+    {
+      "id": "p1-b20",
+      "type": "page_number",
+      "page": 1,
+      "reading_order": 20,
+      "bbox": {
+        "x0": 286.26,
+        "y0": 763.73,
+        "x1": 325.8,
+        "y1": 774.69
+      },
+      "text": "016004-1",
+      "text_sha256": "3b5024af82e7a40b944c0fb4ed412ba5eb64ea37480d6b021ec7e893ade199e8"
+    },
+    {
+      "id": "p1-b21",
+      "type": "footer",
+      "page": 1,
+      "reading_order": 21,
+      "bbox": {
+        "x0": 460.99,
+        "y0": 762.51,
+        "x1": 568.01,
+        "y1": 774.69
+      },
+      "text": "Jan/Feb 2021 • Vol. 3(1)",
+      "text_sha256": "134081a059a2bc261381c0592aa5389b0f958c4bacf53208c8ad83d2b9d067d4"
+    },
+    {
+      "id": "p1-b22",
+      "type": "footer",
+      "page": 1,
+      "reading_order": 22,
+      "bbox": {
+        "x0": 9.0,
+        "y0": 773.57,
+        "x1": 316.27,
+        "y1": 789.57
+      },
+      "text": "Downloaded From: https://www.spiedigitallibrary.org/journals/Advanced-Photonics on 04 May 2023 Terms of Use: https://www.spiedigitallibrary.org/terms-of-use",
+      "text_sha256": "ff969ba235fafa2383b75734b6916c97d82aea93da1c07ea83d14413bba7dc66"
+    },
+    {
+      "id": "p2-b1",
+      "type": "header",
+      "page": 2,
+      "reading_order": 23,
+      "bbox": {
+        "x0": 129.28,
+        "y0": 26.81,
+        "x1": 482.82,
+        "y1": 38.77
+      },
+      "text": "Huang et al.: Pushing the limit of high-Q mode of a single dielectric nanocavity",
+      "text_sha256": "74a7c7297d6864f68ffec9f5ee3caea291eaddaa3a3451b4f9a3f9be553ae048"
+    },
+    {
+      "id": "p2-b2",
+      "type": "paragraph",
+      "page": 2,
+      "reading_order": 24,
+      "bbox": {
+        "x0": 44.01,
+        "y0": 62.18,
+        "x1": 297.82,
+        "y1": 129.38
+      },
+      "text": "robust approach of finding out all high-Q modes in dielectric cavities of arbitrary shapes, including structures with a rectan- gular cross section for both two-dimensional (2D) and three- dimensional (3D) cases (i.e., rectangular wire, cylinder with finite thickness, and cuboid) since they can be easily fabricated with current nanofabrication technology.",
+      "text_sha256": "b35383c0de15f5e93b6217f29fce90843afb554e614774ad83ce050f63434f68",
+      "continues_from": "p1-b15"
+    },
+    {
+      "id": "p2-b3",
+      "type": "paragraph",
+      "page": 2,
+      "reading_order": 25,
+      "bbox": {
+        "x0": 44.01,
+        "y0": 128.36,
+        "x1": 297.84,
+        "y1": 370.61
+      },
+      "text": "In this article, we report a robust method to find such a high- Q mode in a single nonspherical cavity with a rectangular cross section (i.e., rectangular NW, cuboid, and disk). We demonstrate our analysis based on a rectangular NW under transverse electric (TE) polarization. It turns out that the high-Q modes can be treated as a superposition of TE(m, l) and TE(m − 2, l + 2) or TE(m, l) and TE(m + 2, l − 2) modes accompanied by the avoid-crossing features of the real part of the eigenvalues at a given size ratio R. Following these general rules, we can immediately find and construct many different high-Q modes. We demonstrate that the Q-factor of mode TE(5,7) in a square NW can be as high as 2.3 × 104. The strong confinement of the electric field corresponds to the suppression of the radiation in limited leaky channels or radiation quenching to a minimum in the momentum space. This conclusion can also be generalized to other geometries, such as rectangular NW with transverse magnetic polarization, single cylinder with finite thickness, cuboid, etc. Moreover, we experimentally verify the existence of high-Q modes supported by a single Si NW in the scattering spectrum. Our results may find applications in boosting light– matter interaction, such as the nonlinear optics effect, strong coupling, and lasers.",
+      "text_sha256": "99918e3eee4470d5d5447367d34e0d2727e85ae761e5c9f8a41e4b9881a150f3",
+      "uncertainty": {
+        "level": "medium",
+        "note": "Inline math is recorded as plain characters in reading order; sub/superscript positions and italic or symbol-font variants are not preserved."
+      }
+    },
+    {
+      "id": "p2-b4",
+      "type": "heading",
+      "page": 2,
+      "reading_order": 26,
+      "bbox": {
+        "x0": 44.01,
+        "y0": 378.56,
+        "x1": 193.95,
+        "y1": 392.52
+      },
+      "text": "2 Results and Discussion",
+      "text_sha256": "ce556026b99e9d3b8348681205a97467a6cbebe9381379092a1adb5e6710fa2d"
+    },
+    {
+      "id": "p2-b5",
+      "type": "heading",
+      "page": 2,
+      "reading_order": 27,
+      "bbox": {
+        "x0": 44.01,
+        "y0": 400.02,
+        "x1": 255.43,
+        "y1": 411.98
+      },
+      "text": "2.1 General Design Principle of High-Q Modes",
+      "text_sha256": "87545055dcc710cec5f20166fb30fddf6d467bf731da4e630b9270f1ad72bad5"
+    },
+    {
+      "id": "p2-b6",
+      "type": "paragraph",
+      "page": 2,
+      "reading_order": 28,
+      "bbox": {
+        "x0": 44.01,
+        "y0": 418.06,
+        "x1": 297.88,
+        "y1": 749.28
+      },
+      "text": "Originally, Friedrich and Wintgen suggested that interference between two modes causes avoid-crossing and leads to the for- mation of BIC with an infinite Q-factor.22 The avoided crossing was used to realize BIC in quantum,23 optics,14–21,24 and acoustic systems.25 When the system deviates from the ideal situation (i.e., destructive interference among different diffraction chan- nels), it will convert the ideal BIC into QBIC with a finite Q- factor. The formation of BIC and QBIC can be well described by the two-level system (see Sec. 1 and Fig. S1 in the Supplemental Materials). Here, we demonstrated that from the leaky mode perspective, many QBIC can be found in a single dielectric nanocavity with a rectangular cross section by constructing avoid-crossing of pair modes. Without loss of generality, we consider the eigenmodes (named leaky modes) of a rectangular NW with refractive index n = 4 under TE polarization with the electric field along the z direction while the background medium is air. The cross section of the rectangle is in the XOY plane while the NW is infinitely long along the z axis, assuming the width and height of the NW are a and b, respectively. The size ratio of the NW is defined as R = b/a. In previous work,11,26,27 we have demonstrated that the leaky modes (also known as Mie resonance mode) supported by the single dielectric nanostructure play the dominant role in describing its optical properties (i.e., absorption/scattering). All the leaky modes can be rigorously calculated by the finite element method (FEM) with commercial software COMSOL-Multiphysics. The complex eigenvalues can describe them N = nωb/c = Nreal − iNimag, where ω is the complex eigenfrequency of the leaky mode and c is the speed of light. It allows expressing the Q-factor in the following form Q = Nreal/(2 × Nimag).",
+      "text_sha256": "079c6beb669dcc583e1703d4eb460237884db87f70fd3ff6733612471af30faa",
+      "uncertainty": {
+        "level": "medium",
+        "note": "Inline math is recorded as plain characters in reading order; sub/superscript positions and italic or symbol-font variants are not preserved."
+      }
+    },
+    {
+      "id": "p2-b7",
+      "type": "paragraph",
+      "page": 2,
+      "reading_order": 29,
+      "bbox": {
+        "x0": 314.27,
+        "y0": 62.18,
+        "x1": 568.09,
+        "y1": 207.11
+      },
+      "text": "Linear dependence between Nreal and the size ratio R has been shown for modes TE(m, l),11 where m and l correspond to the number of peaks of the electric field within the NW in the x and y dimensions. The expression can be written as Nreal ≈ (m − 1)πR + (n − 1)π. Due to the linear relationship, the avoided crossing of eigenvalues can be easily constructed for a pair of modes TE(m, l) and TE(m − 2, l + 2) or TE(m, l) and TE(m + 2, l − 2) while the size ratio is tuned. Consequently, high-Q and low-Q modes are realized at the critical size ratio, where avoided crossing occurs. Typically, high-Q and low-Q modes can be divided into four categories (see Table S1 in the Supplemental Materials): (1) type I: l = m + 2; (2) type II: m ≤ l < m + 2, (3) type III: l > m + 2, and (4) type IV: l < m.",
+      "text_sha256": "ef19c2ed8bc21e7970efe0ce46c36ad129457d1841e12ded021e4faf77fa68a4",
+      "uncertainty": {
+        "level": "medium",
+        "note": "Inline math is recorded as plain characters in reading order; sub/superscript positions and italic or symbol-font variants are not preserved."
+      }
+    },
+    {
+      "id": "p2-b8",
+      "type": "paragraph",
+      "page": 2,
+      "reading_order": 30,
+      "bbox": {
+        "x0": 314.27,
+        "y0": 205.67,
+        "x1": 568.08,
+        "y1": 449.98
+      },
+      "text": "Figures 1(a) and 1(b) show Nreal and the Q-factor as a func- tion of the size ratio R for modes TE(3,5) and TE(5,3) which belong to type I. Interestingly, the Q-factor reaches its maximum value of 3300 at R = 1 for TE(3,5) while the avoid-crossing occurs for Nreal in these two modes. Other high-Q modes fall within the category of type I, such as TE(1,3) and TE(2,4), can be found at the same critical ratio R = 1 (see Fig. S2 in the Supplemental Materials). Figures 1(c) and 1(d) show the Q-factor and a/λ (or ka/2π) for mode TE(m, m + 2) while the value of m increases from 1 to 5. The Q-factor can be up to 2.3 × 104 for mode TE(5,7) while the resonant wavelength is still larger than the width of the square NW. Even higher Q-factors can be obtained for TE(m, m + 2) with m > 5. For instance, for m = 6, the Q-factor can get up to 2.98 × 105. The resonant wavelength, however, will become smaller than the width of the square NW. Thus, there is a balance between the high-Q and the dimensions of the structure. Another inter- esting point is that a/λ shows a linear dependence on m. Such a linear relationship can be explained from the ray optics perspec- tive (see Sec. S2 and Fig. S3 in the Supplemental Materials).14,28 It can help to facilitate the process of finding modes even with a higher Q-factor for large m.",
+      "text_sha256": "b5e97021d5a56dc4e91f7c7ab271f8e81d7c168ad8b219a1051f4293a5f28358",
+      "uncertainty": {
+        "level": "medium",
+        "note": "Inline math is recorded as plain characters in reading order; sub/superscript positions and italic or symbol-font variants are not preserved."
+      }
+    },
+    {
+      "id": "p2-b9",
+      "type": "paragraph",
+      "page": 2,
+      "reading_order": 31,
+      "bbox": {
+        "x0": 314.27,
+        "y0": 448.54,
+        "x1": 568.14,
+        "y1": 726.02
+      },
+      "text": "Following the same approach, many high-Q modes belong- ing to types II and III can be found. As an example of type II, Figs. 1(e) and 1(f) show the Nreal and Q-factor as a function of size ratio R for a pair of modes TE(5,2) and TE(3,4). Different from the case of type I, the anticrossing feature appears at R = 0.855, and the Q factor for TE(3,4) reaches the maximum value of 1309, while it is 33 for mode TE(5,2). More type II high-Q modes are presented in Fig. S4 in the Supplemental Materials. Note that the critical ratio R is always between 0 and 1 (see Fig. S5 in the Supplemental Materials). We also plot the Q-factor and a/λ for a high-Q mode TE(m, m + 1) as a function of m. Similarly, the Q-factor increases sharply with m and can reach the value of 2.94 × 104 for the mode TE(6,7). We also found that a/λ is directly proportional to m. Another example of the type II mode TE(m, m) is shown in Fig. S6 in the Supplemental Materials. The type III case is similar to type II and, therefore, the relevant results are put in Fig. S7 in the Supplemental Materials. For the type IV, note that the complex eigenvalue N = nωb/c of TE(m, l) for the size ratio R = b/a is the same as the eigenvalue N = nωa/c for TE(l, m) for the size ratio R = a/b. Therefore, if type II or type III pair modes TE(l, m) and TE(l + 2, m − 2) display avoid-crossing features at the critical ratio R and the Q-factor of TE(l, m) has a maxi- mum value, TE(m, l) and TE(m − 2, l + 2) will show avoided crossing at 1/R, and TE(m, l) will have the largest Q-factor.",
+      "text_sha256": "9e1a3e0babfeb3d978f1964d1508fa239955041bd639648d62830cf9e470b2e6",
+      "uncertainty": {
+        "level": "medium",
+        "note": "Inline math is recorded as plain characters in reading order; sub/superscript positions and italic or symbol-font variants are not preserved."
+      }
+    },
+    {
+      "id": "p2-b10",
+      "type": "paragraph",
+      "page": 2,
+      "reading_order": 32,
+      "bbox": {
+        "x0": 314.27,
+        "y0": 724.58,
+        "x1": 568.01,
+        "y1": 748.02
+      },
+      "text": "We confirm the existence of such high-Q modes at the criti- cal size ratio by calculating the energy density mapping and",
+      "text_sha256": "97678427ace18d2c2a0cddfab8d8f25f20dfd318de27780a91671611160b1c4b"
+    },
+    {
+      "id": "p2-b11",
+      "type": "footer",
+      "page": 2,
+      "reading_order": 33,
+      "bbox": {
+        "x0": 44.01,
+        "y0": 763.73,
+        "x1": 127.98,
+        "y1": 774.69
+      },
+      "text": "Advanced Photonics",
+      "text_sha256": "8952fe8cc5369b7f05b1f551784ec02f25ab7d5497e47b715418163f3ce05b4e"
+    },
+    {
+      "id": "p2-b12",
+      "type": "page_number",
+      "page": 2,
+      "reading_order": 34,
+      "bbox": {
+        "x0": 286.26,
+        "y0": 763.73,
+        "x1": 325.8,
+        "y1": 774.69
+      },
+      "text": "016004-2",
+      "text_sha256": "c9465aa249dc7cae1f0729e838d80070bc259978a53f11b92d576c2951ee41b7"
+    },
+    {
+      "id": "p2-b13",
+      "type": "footer",
+      "page": 2,
+      "reading_order": 35,
+      "bbox": {
+        "x0": 460.99,
+        "y0": 762.51,
+        "x1": 568.01,
+        "y1": 774.69
+      },
+      "text": "Jan/Feb 2021 • Vol. 3(1)",
+      "text_sha256": "134081a059a2bc261381c0592aa5389b0f958c4bacf53208c8ad83d2b9d067d4"
+    },
+    {
+      "id": "p2-b14",
+      "type": "footer",
+      "page": 2,
+      "reading_order": 36,
+      "bbox": {
+        "x0": 9.0,
+        "y0": 773.57,
+        "x1": 316.27,
+        "y1": 789.57
+      },
+      "text": "Downloaded From: https://www.spiedigitallibrary.org/journals/Advanced-Photonics on 04 May 2023 Terms of Use: https://www.spiedigitallibrary.org/terms-of-use",
+      "text_sha256": "ff969ba235fafa2383b75734b6916c97d82aea93da1c07ea83d14413bba7dc66"
+    },
+    {
+      "id": "p3-b1",
+      "type": "header",
+      "page": 3,
+      "reading_order": 37,
+      "bbox": {
+        "x0": 129.28,
+        "y0": 26.81,
+        "x1": 482.82,
+        "y1": 38.77
+      },
+      "text": "Huang et al.: Pushing the limit of high-Q mode of a single dielectric nanocavity",
+      "text_sha256": "74a7c7297d6864f68ffec9f5ee3caea291eaddaa3a3451b4f9a3f9be553ae048"
+    },
+    {
+      "id": "p3-b2",
+      "type": "figure",
+      "page": 3,
+      "reading_order": 38,
+      "bbox": {
+        "x0": 56.0,
+        "y0": 67.0,
+        "x1": 556.0,
+        "y1": 270.0
+      },
+      "graphic": {
+        "kind": "figure"
+      },
+      "text": null
+    },
+    {
+      "id": "p3-b3",
+      "type": "caption",
+      "page": 3,
+      "reading_order": 39,
+      "bbox": {
+        "x0": 115.79,
+        "y0": 278.52,
+        "x1": 496.32,
+        "y1": 333.62
+      },
+      "text": "Fig. 1 Properties of the high-Q modes in the single rectangular NW. (a), (b) Real part and Q-factor of the eigenvalue of modes TE(3,5) and TE(5,3) (type I) as functions of size ratio R. (c), (d) Q- factor and a/λ as functions of m for high-Q mode TE(m, m + 2) at the critical ratio. (e), (f) Real part and Q-factor of the eigenvalue of modes TE(3,4) and TE(5,2) versus the size ratio R. (g), (h) Q-factor and a/λ, as functions of m for high-Q mode TE(m, m + 1) at the critical ratio.",
+      "text_sha256": "1952e0072dfa26c2f716f2e211b02460adc08daf42de2fad3766f392ac90d4c4",
+      "caption_for": "p3-b2",
+      "uncertainty": {
+        "level": "medium",
+        "note": "Inline math is recorded as plain characters in reading order; sub/superscript positions and italic or symbol-font variants are not preserved."
+      }
+    },
+    {
+      "id": "p3-b4",
+      "type": "paragraph",
+      "page": 3,
+      "reading_order": 40,
+      "bbox": {
+        "x0": 44.01,
+        "y0": 350.88,
+        "x1": 297.84,
+        "y1": 451.68
+      },
+      "text": "scattering efficiency mapping versus both the size ratio and the normalized frequency ka. Here, the incident wave is TE polari- zation with the electric field along the z axis. For some leaky modes such as TE(2,4) and TE(4,2), the eigenfield presents an antisymmetric distribution, and they cannot be excited by a normal incident wave. Therefore, the incident angle is set to 15 deg with respect to the y axis to excite all of the eigenmodes. For a given size ratio, each peak in the energy density can be perfectly correlated to one of the leaky modes. From Fig. 2(a),",
+      "text_sha256": "f7cabc745ff880833a8a9cfad53d86a824f183a43f937fca41707874b769579f",
+      "continues_from": "p2-b10"
+    },
+    {
+      "id": "p3-b5",
+      "type": "figure",
+      "page": 3,
+      "reading_order": 41,
+      "bbox": {
+        "x0": 51.0,
+        "y0": 473.0,
+        "x1": 291.0,
+        "y1": 662.0
+      },
+      "graphic": {
+        "kind": "figure"
+      },
+      "text": null
+    },
+    {
+      "id": "p3-b6",
+      "type": "caption",
+      "page": 3,
+      "reading_order": 42,
+      "bbox": {
+        "x0": 44.01,
+        "y0": 670.96,
+        "x1": 297.84,
+        "y1": 747.71
+      },
+      "text": "Fig. 2 Total energy density and scattering efficiency for the rec- tangular NW with different size ratios. (a), (b) Logarithm total energy density and scattering efficiency mapping versus R and ka. Two modes TE(3,5) and TE(5,3) are labeled as black and red circles. (c), (d) Logarithm of total energy density and scattering efficiency mapping versus R and ka. Two modes TE(3,4) and TE(5,2) are labeled as black and red circles.",
+      "text_sha256": "f494b7565c2bc8f4cdb2adec014b738a0879a074f0f08b8b512117c724a3aee8",
+      "caption_for": "p3-b5"
+    },
+    {
+      "id": "p3-b7",
+      "type": "paragraph",
+      "page": 3,
+      "reading_order": 43,
+      "bbox": {
+        "x0": 314.27,
+        "y0": 350.88,
+        "x1": 568.04,
+        "y1": 472.83
+      },
+      "text": "an excellent agreement can be found between the resonant peaks in the mapping and the real part of the eigenvalue Nreal = ka for pair modes TE(3,5) and TE(5,3). Furthermore, the line width of the resonant peak indeed becomes the narrowest at R = 1, which means that the Q-factor reaches the maximum value. The narrowing effect of linewidth can also be found in scattering spectrum mapping, as shown in Fig. 2(b). A similar phenome- non can also be applied to other pair modes TE(3,4) and TE(5,2) [Figs. 4(c) and 4(d)], TE(2,3) and TE(4,1) [Figs. S8(a) and S8(b) in the Supplemental Materials], TE(2,4) and TE(4,2) [Figs. S8(c) and S8(d) in the Supplemental Materials].",
+      "text_sha256": "db623c86b94dfb1001504340e532fd5f3bd04c5d8244ff0f0adbd0d9e654d860",
+      "continues_from": "p3-b4",
+      "uncertainty": {
+        "level": "medium",
+        "note": "Inline math is recorded as plain characters in reading order; sub/superscript positions and italic or symbol-font variants are not preserved."
+      }
+    },
+    {
+      "id": "p3-b8",
+      "type": "heading",
+      "page": 3,
+      "reading_order": 44,
+      "bbox": {
+        "x0": 314.27,
+        "y0": 487.1,
+        "x1": 515.93,
+        "y1": 510.0
+      },
+      "text": "2.2 Physical Explanation of High-Q Mode by Multipole Decomposition",
+      "text_sha256": "a8dfcecf1a4a2d8abe599bf135cd655ec57c5642bf13a4a01a4081bafcff5dfc"
+    },
+    {
+      "id": "p3-b9",
+      "type": "paragraph",
+      "page": 3,
+      "reading_order": 45,
+      "bbox": {
+        "x0": 314.27,
+        "y0": 515.61,
+        "x1": 568.04,
+        "y1": 616.04
+      },
+      "text": "To get a better insight into radiative properties of the high-Q modes, we employ the multipole expansion.29–31 Here, we again consider the case of NW at oblique incidence (θ = 15 deg) with TE polarization. Figure 3(a) shows scattering efficiency contrib- uted by multipoles for a square NW. Two resonant peaks can be observed at ka = 3.89 and ka = 3.97, which are related to the low-Q mode TE(5,3) and high-Q mode TE(3,5). The scattering efficiency around ka = 3.97 is dominated by a single multipole, electric quadrupole (m = 2), exhibiting a sharp Fano profile.32,33",
+      "text_sha256": "86d3ddcb9dcc7f9cbd609e37996665235c5648a4daf90bc67f693e79e8a0f583",
+      "uncertainty": {
+        "level": "medium",
+        "note": "Inline math is recorded as plain characters in reading order; sub/superscript positions and italic or symbol-font variants are not preserved."
+      }
+    },
+    {
+      "id": "p3-b10",
+      "type": "paragraph",
+      "page": 3,
+      "reading_order": 46,
+      "bbox": {
+        "x0": 314.27,
+        "y0": 615.07,
+        "x1": 568.11,
+        "y1": 748.02
+      },
+      "text": "In contrast, there are two dominant multipoles in the scattering efficiency for the low-Q mode around ka = 3.89. This is also confirmed by the multipole analysis on the two eigenmodes TE(3,5) and TE(5,3). Indeed, from Fig. 3(b), there are two radiation channels (m = 0 and m = 4) for mode TE(5,3), but only one dominant radiation channel (m = 2) exists for mode TE(3,5). Each multipole can be considered as an independent channel for the radiating decay. Thus, coupling to more leaky channels with a larger radiation intensity will, in general, reduce the Q-factor. That is why it is expected that high-Q modes should couple to only one radiative channel with a small leak- age, described by a single multipole.",
+      "text_sha256": "b9ddb87b78776de391ca24f2609daaf11615a087590bf5e6d2394c1393a4309f",
+      "uncertainty": {
+        "level": "medium",
+        "note": "Inline math is recorded as plain characters in reading order; sub/superscript positions and italic or symbol-font variants are not preserved."
+      }
+    },
+    {
+      "id": "p3-b11",
+      "type": "footer",
+      "page": 3,
+      "reading_order": 47,
+      "bbox": {
+        "x0": 44.01,
+        "y0": 763.73,
+        "x1": 127.98,
+        "y1": 774.69
+      },
+      "text": "Advanced Photonics",
+      "text_sha256": "8952fe8cc5369b7f05b1f551784ec02f25ab7d5497e47b715418163f3ce05b4e"
+    },
+    {
+      "id": "p3-b12",
+      "type": "page_number",
+      "page": 3,
+      "reading_order": 48,
+      "bbox": {
+        "x0": 286.26,
+        "y0": 763.73,
+        "x1": 325.8,
+        "y1": 774.69
+      },
+      "text": "016004-3",
+      "text_sha256": "cb71c5cad287d0fa8ab64c7fecc7f8f95f97b5a9ada2ec814559621222679f38"
+    },
+    {
+      "id": "p3-b13",
+      "type": "footer",
+      "page": 3,
+      "reading_order": 49,
+      "bbox": {
+        "x0": 460.99,
+        "y0": 762.51,
+        "x1": 568.01,
+        "y1": 774.69
+      },
+      "text": "Jan/Feb 2021 • Vol. 3(1)",
+      "text_sha256": "134081a059a2bc261381c0592aa5389b0f958c4bacf53208c8ad83d2b9d067d4"
+    },
+    {
+      "id": "p3-b14",
+      "type": "footer",
+      "page": 3,
+      "reading_order": 50,
+      "bbox": {
+        "x0": 9.0,
+        "y0": 773.57,
+        "x1": 316.27,
+        "y1": 789.57
+      },
+      "text": "Downloaded From: https://www.spiedigitallibrary.org/journals/Advanced-Photonics on 04 May 2023 Terms of Use: https://www.spiedigitallibrary.org/terms-of-use",
+      "text_sha256": "ff969ba235fafa2383b75734b6916c97d82aea93da1c07ea83d14413bba7dc66"
+    },
+    {
+      "id": "p4-b1",
+      "type": "header",
+      "page": 4,
+      "reading_order": 51,
+      "bbox": {
+        "x0": 129.28,
+        "y0": 26.81,
+        "x1": 482.82,
+        "y1": 38.77
+      },
+      "text": "Huang et al.: Pushing the limit of high-Q mode of a single dielectric nanocavity",
+      "text_sha256": "74a7c7297d6864f68ffec9f5ee3caea291eaddaa3a3451b4f9a3f9be553ae048"
+    },
+    {
+      "id": "p4-b2",
+      "type": "figure",
+      "page": 4,
+      "reading_order": 52,
+      "bbox": {
+        "x0": 56.0,
+        "y0": 67.0,
+        "x1": 556.0,
+        "y1": 419.0
+      },
+      "graphic": {
+        "kind": "figure"
+      },
+      "text": null
+    },
+    {
+      "id": "p4-b3",
+      "type": "caption",
+      "page": 4,
+      "reading_order": 53,
+      "bbox": {
+        "x0": 115.79,
+        "y0": 428.14,
+        "x1": 496.32,
+        "y1": 539.81
+      },
+      "text": "Fig. 3 Multipole analysis of the high-Q modes. (a) Multipolar contribution on the scattering cross section of the square NW under the excitation oblique incidence plane wave (θ = 15 deg). (b), (c) Multipole analysis and Fourier transformation on the eigenfields of two modes TE(3,5) and TE(5,3). (d), E(k 0) obtained from a Fourier transformation of eigenfields for two modes. (e) Multipolar contribution on scattering cross section of the rectangular NW with R = 0.855 excited by the obliquely incident plane wave (θ = 15 deg). (f), (g) Multipole analysis and Fourier transformation on the eigenfields of two modes TE(3,4) and TE(5,2). (h) E(k 0) obtained from Fourier transformation of eigenfields for two modes. (i) Decomposition of TE(3,5) for the rectan- gular NW into TE61 and TE22 of eigenmodes for the circular NW. (j) Decomposition of TE(5,3) for the rectangular NW into TE42 and TE03 of eigenmodes for the circular NW.",
+      "text_sha256": "e09bb055279944d3b327df49cdd13c0e95271af3e0f8a7a53c1630ce4c8d5ebb",
+      "caption_for": "p4-b2",
+      "uncertainty": {
+        "level": "medium",
+        "note": "Inline math is recorded as plain characters in reading order; sub/superscript positions and italic or symbol-font variants are not preserved."
+      }
+    },
+    {
+      "id": "p4-b4",
+      "type": "paragraph",
+      "page": 4,
+      "reading_order": 54,
+      "bbox": {
+        "x0": 44.01,
+        "y0": 560.25,
+        "x1": 297.84,
+        "y1": 748.02
+      },
+      "text": "Importantly, we can also find these radiation channels by carefully comparing its eigenfield distribution to the electric field distribution of the eigenmode for an infinite cylinder. For example, for mode TE(3,5), its eigenfield may be regarded as a superposition of eigenmodes TE22 and TE61 for the cylinder in Fig. 3(i), which serve as the orthogonal basis for the multipole expansion method. The radiation contribution of TE22 is much larger than that of TE61 from the field distribution. That also explains that m = 2 dominates the radiation for TE(3,5). At the same time, the eigenfield of TE(5,3) may be viewed as the superposition of eigenmodes TE03 and TE42 for the cylinder, as shown in Fig. 3(j). Moreover, the radiation intensity for both channels in TE(3,5) is much lower than the counterparts in TE(5,3). From the perspective of the radiation channel, we may attribute the extreme confinement of TE(3,5) to the fact that these two leaky channels are more confined compared with leaky channels of TE(5,3). This explanation also works for the",
+      "text_sha256": "f0d283283b7ecbcd7bb95844dd2f551b50c992ba5d9c4b1e1e51fa9bc2d40e8c",
+      "uncertainty": {
+        "level": "medium",
+        "note": "Inline math is recorded as plain characters in reading order; sub/superscript positions and italic or symbol-font variants are not preserved."
+      }
+    },
+    {
+      "id": "p4-b5",
+      "type": "paragraph",
+      "page": 4,
+      "reading_order": 55,
+      "bbox": {
+        "x0": 314.27,
+        "y0": 560.25,
+        "x1": 568.09,
+        "y1": 748.02
+      },
+      "text": "modes TE(3,4) and TE(5,2) belonging to the category of type II [see Figs. 3(e) and 3(f) and Fig. S9 in the Supplemental Materials]. Ideally, the eigenmode with the closest field profile to the eigenmode TEml (m > 1 and l = 1) in the cylinder will always have a high Q-factor because there is only one leaky channel with the minimum radiation intensity. The larger mode number m is, the higher the Q-factor. This concept has been successfully applied to design the whisper gallery mode with an ultrahigh Q-factor.2 We also find a similar phenomenon in a relatively low-order mode. For example, mode TE(2,4) for NW with R = 1 and TE(2,3) for NW with R = 0.775 reach maximum values of 885 and 145, respectively. Multipole analy- sis of the eigenfield indicates that only one radiation channel exists for these two modes (see Fig. S10 in the Supplemental Materials). The major leaky channels for TE(2,3) and TE(2,4) are eigenmodes TE31 and TE41 of the cylinder, respectively (see Figs. S11(a) and S11(b) and Figs. S11(e) and S11(f) in",
+      "text_sha256": "fbffadc3cab7be7e777c126541b60327b2f18341b07df7f38566a7a16790a3ba",
+      "continues_from": "p4-b4",
+      "uncertainty": {
+        "level": "medium",
+        "note": "Inline math is recorded as plain characters in reading order; sub/superscript positions and italic or symbol-font variants are not preserved."
+      }
+    },
+    {
+      "id": "p4-b6",
+      "type": "footer",
+      "page": 4,
+      "reading_order": 56,
+      "bbox": {
+        "x0": 44.01,
+        "y0": 763.73,
+        "x1": 127.98,
+        "y1": 774.69
+      },
+      "text": "Advanced Photonics",
+      "text_sha256": "8952fe8cc5369b7f05b1f551784ec02f25ab7d5497e47b715418163f3ce05b4e"
+    },
+    {
+      "id": "p4-b7",
+      "type": "page_number",
+      "page": 4,
+      "reading_order": 57,
+      "bbox": {
+        "x0": 286.26,
+        "y0": 763.73,
+        "x1": 325.8,
+        "y1": 774.69
+      },
+      "text": "016004-4",
+      "text_sha256": "8a53d7dc12451b49ce646890f8a0dcbc5d60cbece4e43c3c41fe0d6db029759b"
+    },
+    {
+      "id": "p4-b8",
+      "type": "footer",
+      "page": 4,
+      "reading_order": 58,
+      "bbox": {
+        "x0": 460.99,
+        "y0": 762.51,
+        "x1": 568.01,
+        "y1": 774.69
+      },
+      "text": "Jan/Feb 2021 • Vol. 3(1)",
+      "text_sha256": "134081a059a2bc261381c0592aa5389b0f958c4bacf53208c8ad83d2b9d067d4"
+    },
+    {
+      "id": "p4-b9",
+      "type": "footer",
+      "page": 4,
+      "reading_order": 59,
+      "bbox": {
+        "x0": 9.0,
+        "y0": 773.57,
+        "x1": 316.27,
+        "y1": 789.57
+      },
+      "text": "Downloaded From: https://www.spiedigitallibrary.org/journals/Advanced-Photonics on 04 May 2023 Terms of Use: https://www.spiedigitallibrary.org/terms-of-use",
+      "text_sha256": "ff969ba235fafa2383b75734b6916c97d82aea93da1c07ea83d14413bba7dc66"
+    },
+    {
+      "id": "p5-b1",
+      "type": "header",
+      "page": 5,
+      "reading_order": 60,
+      "bbox": {
+        "x0": 129.28,
+        "y0": 26.81,
+        "x1": 482.82,
+        "y1": 38.77
+      },
+      "text": "Huang et al.: Pushing the limit of high-Q mode of a single dielectric nanocavity",
+      "text_sha256": "74a7c7297d6864f68ffec9f5ee3caea291eaddaa3a3451b4f9a3f9be553ae048"
+    },
+    {
+      "id": "p5-b2",
+      "type": "paragraph",
+      "page": 5,
+      "reading_order": 61,
+      "bbox": {
+        "x0": 44.01,
+        "y0": 62.6,
+        "x1": 297.83,
+        "y1": 140.5
+      },
+      "text": "the Supplemental Materials]. Both have better field confinement than eigenmode TE12 and eigenmode TE22 that are main radi- ation channel of modes TE(4,1) and TE(4,2), respectively [see Figs. S11(c) and S11(d) and Figs. S11(g) and S11(h) in the Supplemental Materials]. In fact, the suppressed electric dipole that is realized by an in-phase magnetic dipole and an electrical quadrupole34 is essential for building a magnetic mirror.",
+      "text_sha256": "7cf5478e4633bfd0a2e65f3188f477dc777d55be378c3247559cd275a9905b7f",
+      "continues_from": "p4-b5"
+    },
+    {
+      "id": "p5-b3",
+      "type": "paragraph",
+      "page": 5,
+      "reading_order": 62,
+      "bbox": {
+        "x0": 44.01,
+        "y0": 139.47,
+        "x1": 297.89,
+        "y1": 311.1
+      },
+      "text": "The radiative properties of an arbitrary source can also be analyzed in momentum space. It is known that only the nonzero current “on-the-shell” in k-space contributes to the far-field radiation.35 Thus, it is instructive to analyze the electric field in momentum space of the high-Q mode at the critical ratio to get a more profound physical insight. To do this, we perform the Fourier transform on the eigenfield of the high-Q modes shown in Figs. 3(c) and 3(g). Here, it is worth pointing out that the electric field E(k0) contributes to the outward radiation only when k2x + k2y = k20. Therefore, we extract E(k0) on the white circle boundary k2x + k2y = k20 and plot them in Figs. 3(d) and 3(h). Indeed, the radiation field E(k0) of the high-Q mode has a much lower amplitude, and the radiation channel is nar- rower. For the resonant mode with an extremely high Q-factor, E(k0) approaches zero at the circle boundary (k2x + k2y = k20).",
+      "text_sha256": "d99ee0a5e66970c84849aef790803334b4fdda0b603094c3df5c358af15c2ed1",
+      "uncertainty": {
+        "level": "medium",
+        "note": "Inline math is recorded as plain characters in reading order; sub/superscript positions and italic or symbol-font variants are not preserved."
+      }
+    },
+    {
+      "id": "p5-b4",
+      "type": "heading",
+      "page": 5,
+      "reading_order": 63,
+      "bbox": {
+        "x0": 44.02,
+        "y0": 323.25,
+        "x1": 276.59,
+        "y1": 335.22
+      },
+      "text": "2.3 High-Q Modes in Rectangular NW for TM Case",
+      "text_sha256": "0ffb88854bf5b02f7a8e4eba3089cf8becb470e94252c339286c79035b6d52f3"
+    },
+    {
+      "id": "p5-b5",
+      "type": "paragraph",
+      "page": 5,
+      "reading_order": 64,
+      "bbox": {
+        "x0": 44.02,
+        "y0": 341.24,
+        "x1": 297.81,
+        "y1": 474.08
+      },
+      "text": "The above phenomenon can also be generalized to the rectan- gular NW with TM polarization. However, it is interesting that avoid-crossing is not always the prerequisite of realizing a high-Q mode in TM cases. For example, as shown in Figs. 4(a) and 4(b), mode TM(2,3) reaches the maximum Q-factor while crossing happens between pair modes TM(2,3) and TM(4,1). More crossing cases can be found for pair modes TM(3,3) and TM(5,1) in Figs. S12(a) and S12(b) in the Supplemental Materials, TM(4,4) and TM(6,2) in Figs. S12(c) and S12(d) in the Supplemental Materials. Figures 4(c) and 4(d) show the case of pair modes TM(3,4) and TM(5,2), where the high-Q mode happens at the avoided crossing. More avoided crossing",
+      "text_sha256": "452fe8603cda81cbf985554be79fd8073b0e0bcb982610378976e60eecfd51d5"
+    },
+    {
+      "id": "p5-b6",
+      "type": "figure",
+      "page": 5,
+      "reading_order": 65,
+      "bbox": {
+        "x0": 51.0,
+        "y0": 495.0,
+        "x1": 290.0,
+        "y1": 684.0
+      },
+      "graphic": {
+        "kind": "figure"
+      },
+      "text": null
+    },
+    {
+      "id": "p5-b7",
+      "type": "caption",
+      "page": 5,
+      "reading_order": 66,
+      "bbox": {
+        "x0": 44.01,
+        "y0": 692.61,
+        "x1": 297.84,
+        "y1": 747.71
+      },
+      "text": "Fig. 4 High-Q mode for the TM case. (a), (b) Real part and Q-factor of the eigenvalue for modes TM(2,3) and TM(4,1) as functions of the size ratio R. (c), (d) Real part and Q-factor of the eigenvalue for modes TM(3,4) and TM(5,2) versus the size ratio R.",
+      "text_sha256": "9858abcd5e57f965cfe07b317193cda7a5853844bfcea9ff83f2d386936f49cc",
+      "caption_for": "p5-b6"
+    },
+    {
+      "id": "p5-b8",
+      "type": "paragraph",
+      "page": 5,
+      "reading_order": 67,
+      "bbox": {
+        "x0": 314.27,
+        "y0": 62.18,
+        "x1": 568.04,
+        "y1": 272.87
+      },
+      "text": "cases can be found between modes TM(m, m + 2) and TM(m + 2, m), such as TM(2,4) and TM(4,2) in Figs. 4(e) and 4(f), and TM(3,5) and TM(5,3) in Figs. S13(a) and S13(b) in the Supplemental Materials. It is entirely different from the cases of TE polarization, in which avoid-crossing is the necessary con- dition to realize the high-Q mode. Such a difference is also re- flected in the mode evolutions (see Fig. S14 in the Supplemental Materials). For TE(2,3) and TE(4,1), the modes interchange with each other while the structure crosses the critical size ratio may suggest a relatively strong coupling between these two modes.36,37 Nevertheless, modes TM(2,3) and TM(4,1) remain similar field profiles, which may indicate a weak coupling between them (see Sec. S3, Table S2, and Fig. S15 in the Supplemental Materials). In addition, we also perform the multi- pole analysis on the eigenmode at different size ratios for both TE and TM cases. It can be found that the channel m = 1 for both cases is reduced to a minimum at a critical size ratio (see Fig. S16 in the Supplemental Materials). Thus, the high-Q mode, on the other hand, can be regarded as an anapole state38,39",
+      "text_sha256": "af29aeb525aadaa0863df968b901b239787ae92ee5fcb9bcc752646fa8eec243",
+      "continues_from": "p5-b5",
+      "uncertainty": {
+        "level": "medium",
+        "note": "Inline math is recorded as plain characters in reading order; sub/superscript positions and italic or symbol-font variants are not preserved."
+      }
+    },
+    {
+      "id": "p5-b9",
+      "type": "paragraph",
+      "page": 5,
+      "reading_order": 68,
+      "bbox": {
+        "x0": 314.27,
+        "y0": 271.91,
+        "x1": 568.06,
+        "y1": 548.29
+      },
+      "text": "for which the radiation can be significantly quenched due to the total elimination of one leaky channel. In addition, Q-factor and a/λ versus m for the high-Q mode TM(m, m + 2), TM(m, m + 1), and TM(m, m) are calculated and shown in Fig. S17 in the Supplemental Materials. The Q-factor can be up to 2.15 × 104 for mode TM(5,5) with a = 0.975λ (subwave- length scale). Moreover, similar to the TE case, almost linear dependence can be found between m and a/λ. Also, we plot the critical size ratio versus m for high-Q mode TM(m, m + 2), TM(m, m + 1), and TM(m, m), which can be found in Fig. S18 in the Supplemental Materials. The high-Q mode for the TM case is also well explained by multipole analysis on the eigenmode (see Fig. S19 in the Supplemental Materials). Importantly, these high-Q modes are not limited to the dielectric structure with the high refractive indices, such as for 4. Figure S20 in the Supplemental Materials shows the different high-Q modes of a rectangular NW as the refractive index varies from 2 to 8. One interesting thing is that the Q-factor does not always monotonically increase with the increasing refractive index. For example, the Q-factor for the high-Q mode TE(2,4) increases much faster than that of the high-Q mode TE(3,5), which becomes saturated for n ≥ 4. Therefore, the refractive index- dependent Q-factor can help us to immediately find which mode should be chosen when a high-Q factor is desired for semicon- ductors with a different refractive index.",
+      "text_sha256": "5423ef262493f840fae8f03ba68bf9d8e6958e4a1df4db99c96b0d1bc55919cb",
+      "uncertainty": {
+        "level": "medium",
+        "note": "Inline math is recorded as plain characters in reading order; sub/superscript positions and italic or symbol-font variants are not preserved."
+      }
+    },
+    {
+      "id": "p5-b10",
+      "type": "heading",
+      "page": 5,
+      "reading_order": 69,
+      "bbox": {
+        "x0": 314.27,
+        "y0": 563.81,
+        "x1": 509.67,
+        "y1": 575.77
+      },
+      "text": "2.4 High-Q Modes in a Single Nanoparticle",
+      "text_sha256": "1a749eaea18f473a98265be168a5ea881f066794abf4c0879d35629e80f1d5d8"
+    },
+    {
+      "id": "p5-b11",
+      "type": "paragraph",
+      "page": 5,
+      "reading_order": 70,
+      "bbox": {
+        "x0": 314.27,
+        "y0": 581.38,
+        "x1": 568.04,
+        "y1": 748.02
+      },
+      "text": "So far, we only discuss how to find the QBIC-induced high-Q mode in a single rectangular NW. The above approach can also be applied to a 3-D nonspherical structure, including the cuboid and cylinder with finite thickness. Here, we use a single cuboid as an example to demonstrate how to find a high-Q mode. For the sake of convenience and without loss of generality, a = b and R = c/a are assumed. Also, the mode number along x is chosen as 1 for simplicity. We first consider magnetic eigenm- odes M(1,2,3) and M(1,4,1) in the YOZ plane. Remarkably, from Figs. 5(a) and 5(b), a similar anticrossing feature can be observed for these two modes, and the Q-factor reaches a maximum of 325 at R = 0.795. The results of multipole analy- sis on the modes M(1,4,1) and M(1,2,3) indicate that the main radiation channels are l = 1 and m = 2, l = 3 and m = 1, re- spectively [see Fig. 6(a)]. Careful examination on the eigenfield",
+      "text_sha256": "7ec86c1f60e4053e6d329f8630838af08fac32a7a793ec0c36ba68e450f62e95",
+      "uncertainty": {
+        "level": "medium",
+        "note": "Inline math is recorded as plain characters in reading order; sub/superscript positions and italic or symbol-font variants are not preserved."
+      }
+    },
+    {
+      "id": "p5-b12",
+      "type": "footer",
+      "page": 5,
+      "reading_order": 71,
+      "bbox": {
+        "x0": 44.01,
+        "y0": 763.73,
+        "x1": 127.98,
+        "y1": 774.69
+      },
+      "text": "Advanced Photonics",
+      "text_sha256": "8952fe8cc5369b7f05b1f551784ec02f25ab7d5497e47b715418163f3ce05b4e"
+    },
+    {
+      "id": "p5-b13",
+      "type": "page_number",
+      "page": 5,
+      "reading_order": 72,
+      "bbox": {
+        "x0": 286.26,
+        "y0": 763.73,
+        "x1": 325.8,
+        "y1": 774.69
+      },
+      "text": "016004-5",
+      "text_sha256": "511145dd286bd4a8342a858382c8ace7cfd4a0004c1ad9de63238080f4ed9bbc"
+    },
+    {
+      "id": "p5-b14",
+      "type": "footer",
+      "page": 5,
+      "reading_order": 73,
+      "bbox": {
+        "x0": 460.99,
+        "y0": 762.51,
+        "x1": 568.01,
+        "y1": 774.69
+      },
+      "text": "Jan/Feb 2021 • Vol. 3(1)",
+      "text_sha256": "134081a059a2bc261381c0592aa5389b0f958c4bacf53208c8ad83d2b9d067d4"
+    },
+    {
+      "id": "p5-b15",
+      "type": "footer",
+      "page": 5,
+      "reading_order": 74,
+      "bbox": {
+        "x0": 9.0,
+        "y0": 773.57,
+        "x1": 316.27,
+        "y1": 789.57
+      },
+      "text": "Downloaded From: https://www.spiedigitallibrary.org/journals/Advanced-Photonics on 04 May 2023 Terms of Use: https://www.spiedigitallibrary.org/terms-of-use",
+      "text_sha256": "ff969ba235fafa2383b75734b6916c97d82aea93da1c07ea83d14413bba7dc66"
+    },
+    {
+      "id": "p6-b1",
+      "type": "header",
+      "page": 6,
+      "reading_order": 75,
+      "bbox": {
+        "x0": 129.28,
+        "y0": 26.81,
+        "x1": 482.82,
+        "y1": 38.77
+      },
+      "text": "Huang et al.: Pushing the limit of high-Q mode of a single dielectric nanocavity",
+      "text_sha256": "74a7c7297d6864f68ffec9f5ee3caea291eaddaa3a3451b4f9a3f9be553ae048"
+    },
+    {
+      "id": "p6-b2",
+      "type": "figure",
+      "page": 6,
+      "reading_order": 76,
+      "bbox": {
+        "x0": 56.0,
+        "y0": 67.0,
+        "x1": 556.0,
+        "y1": 268.0
+      },
+      "graphic": {
+        "kind": "figure"
+      },
+      "text": null
+    },
+    {
+      "id": "p6-b3",
+      "type": "caption",
+      "page": 6,
+      "reading_order": 77,
+      "bbox": {
+        "x0": 115.79,
+        "y0": 276.37,
+        "x1": 496.31,
+        "y1": 353.35
+      },
+      "text": "Fig. 5 High-Q mode for the single 3D nanoparticle. (a), (b) Real part and Q-factor of the eigen- value for the magnetic eigenmode M(1,2,3) and M(1,4,1) in the single cuboid as functions of the size ratio R = c/a while a = b. (c), (d) Real part and Q-factor of the eigenvalue for the magnetic eigenmode M(1,2,4) and M(1,4,2) as functions of the size ratio R = c/a of a cuboid. (e), (f) Real part and Q-factor of the eigenvalue for the electric eigenmode E(1,2,3) and E(1,4,1) as functions of the size ratio R = c/a of the cuboid. (g), (h) Real part and Q-factor of the eigenvalue for the electric eigenmode E(1,2,4) and E(1,4,2) as functions of the size ratio R = c/a of a cuboid.",
+      "text_sha256": "10bd68d61fe8cfa87979789ee75a9335665600196691d85f4865de8579deb474",
+      "caption_for": "p6-b2",
+      "uncertainty": {
+        "level": "medium",
+        "note": "Inline math is recorded as plain characters in reading order; sub/superscript positions and italic or symbol-font variants are not preserved."
+      }
+    },
+    {
+      "id": "p6-b4",
+      "type": "paragraph",
+      "page": 6,
+      "reading_order": 78,
+      "bbox": {
+        "x0": 44.01,
+        "y0": 370.61,
+        "x1": 297.84,
+        "y1": 580.38
+      },
+      "text": "distribution tells us that these two channels can be linked to eigenmodes M12 and M31 for sphere nanoparticles. E(k0) ob- tained from a Fourier transform on the eigenfield has a much lower amplitude for M(1,2,3) than that of mode M(1,4,1) [see Fig. 6(b)]. It again confirms that the radiation is suppressed to a minimum. Another example of high-Q and low-Q modes, M(1,4,2) and M(1,2,4), are shown in Figs. 5(c) and 5(d). The Q-factor is up to >1000. Different from the 2D NW case, a single cuboid can support both electric and magnetic eigen- modes. The conclusion drawn from magnetic modes can also be applied to electric modes. Following a similar approach, we find another two electric high-Q modes, E(1,2,3) [see Figs. 5(e) and 5(f)] and E(1,2,4) [see Figs. 5(g) and 5(h)]. However, these two are a little bit different. The mode features for E(1,2,3) and E(1,4,1) are crossing while anticrossing occurs for pair electric modes E(1,4,2) and E(1,2,4). Other high-Q modes in a single cuboid can be found in Fig. S21 in the Supplemental Materials. Besides, we want to point out that such a strategy also works for a cuboid with a ≠ b. Those high-Q modes can",
+      "text_sha256": "acfdd0ace70fb5c74c75b7e35d5399759940f8d5b2b4b874faafa9b5f2d9ca6f",
+      "continues_from": "p5-b11",
+      "uncertainty": {
+        "level": "medium",
+        "note": "Inline math is recorded as plain characters in reading order; sub/superscript positions and italic or symbol-font variants are not preserved."
+      }
+    },
+    {
+      "id": "p6-b5",
+      "type": "paragraph",
+      "page": 6,
+      "reading_order": 79,
+      "bbox": {
+        "x0": 314.27,
+        "y0": 370.62,
+        "x1": 568.13,
+        "y1": 647.56
+      },
+      "text": "be constructed using a similar way. In fact, we can treat the sin- gle cuboid as a truncated rectangular NW. When the length of the z axis becomes finite for the NW, we will expect the increase of Q-factor because there is confinement in the third dimension for the 3D cuboid compared to the NW, which is demonstrated in Fig. S22 in the Supplemental Materials. Last, another typical example of a single particle is a cylinder with finite thickness. We present two pairs of magnetic high-Q modes of a single disk in Fig. S23 in the Supplemental Materials. One is magnetic mode M(1,2,3) and M(1,4,1) while the other is magnetic mode M(1,2,4) and M(1,4,2). Similarly, electric high-Q modes, such as E(1,2,3) and E(1,2,4), can be found and shown in Fig. S24 in the Supplemental Materials. The design principles are the same, and we shall not repeat them here. Note that in Refs. 17 and 36, the modes M(1,2,3) and M(1,4,1) are also described as Mie mode and Fabry–Perot mode. However, not all pair high-Q and low-Q modes can be regarded as Mie mode and Fabry– Perot mode. For example, both modes M(1,4,2) and M(1,2,4) belong to Mie mode. A similar phenomenon can also be found in a single 2D rectangular NW. For example, pair modes TE(2,4) and TE(4,2), TE(3,4) and TE(5,2), TE(3,5) and TE(5,3), TM(2,4) and TM(4,2), TM(3,4) and TM(5,2), cannot be categorized into Mie mode and Fabry–Perot mode. Therefore, our strategy represents the perfect solution of finding all high-Q modes in a single dielectric nanocavity with a rectangular cross section.",
+      "text_sha256": "5562bfbfb5e96f5efe3828c8656ecb0789eb59a4630ea7fba0407bd8012831a0",
+      "continues_from": "p6-b4"
+    },
+    {
+      "id": "p6-b6",
+      "type": "figure",
+      "page": 6,
+      "reading_order": 80,
+      "bbox": {
+        "x0": 51.0,
+        "y0": 601.0,
+        "x1": 290.0,
+        "y1": 706.0
+      },
+      "graphic": {
+        "kind": "figure"
+      },
+      "text": null
+    },
+    {
+      "id": "p6-b7",
+      "type": "caption",
+      "page": 6,
+      "reading_order": 81,
+      "bbox": {
+        "x0": 44.01,
+        "y0": 714.84,
+        "x1": 297.85,
+        "y1": 747.71
+      },
+      "text": "Fig. 6 (a) Multipole analysis on the eigenfields for two modes of the cuboid, M(1,4,1) and M(1,2,3). (b) E(k0) distribution for two modes.",
+      "text_sha256": "47e85b0c924358ec1765a6405330630a2fb7b02c1ef2f0835a946b4b3e9b46e3",
+      "caption_for": "p6-b6",
+      "uncertainty": {
+        "level": "medium",
+        "note": "Inline math is recorded as plain characters in reading order; sub/superscript positions and italic or symbol-font variants are not preserved."
+      }
+    },
+    {
+      "id": "p6-b8",
+      "type": "heading",
+      "page": 6,
+      "reading_order": 82,
+      "bbox": {
+        "x0": 314.27,
+        "y0": 661.02,
+        "x1": 566.94,
+        "y1": 689.31
+      },
+      "text": "3 Experimental Verification of High-Q Mode in Single Si NW",
+      "text_sha256": "4b6db98b35c3be7c560c137e2b9c730cf389fe21a38e00ff9ad90978f67d8866"
+    },
+    {
+      "id": "p6-b9",
+      "type": "paragraph",
+      "page": 6,
+      "reading_order": 83,
+      "bbox": {
+        "x0": 314.27,
+        "y0": 691.47,
+        "x1": 568.03,
+        "y1": 748.02
+      },
+      "text": "We move to experimentally demonstrate the high-Q factor by exploring the scattering characteristics of a single rectangular silicon NW on a quartz substrate. Mode TE(3,4) is used to real- ize the high-Q mode at 1390 nm. The length of Si NW is 20 μm in real fabrication to mimic the behavior of NW (see Fig. S22 in",
+      "text_sha256": "6b24fa961fa86b36cca0bef87bdce730e3e06bf6bea0b85b137233ad18893c11"
+    },
+    {
+      "id": "p6-b10",
+      "type": "footer",
+      "page": 6,
+      "reading_order": 84,
+      "bbox": {
+        "x0": 44.01,
+        "y0": 763.73,
+        "x1": 127.98,
+        "y1": 774.69
+      },
+      "text": "Advanced Photonics",
+      "text_sha256": "8952fe8cc5369b7f05b1f551784ec02f25ab7d5497e47b715418163f3ce05b4e"
+    },
+    {
+      "id": "p6-b11",
+      "type": "page_number",
+      "page": 6,
+      "reading_order": 85,
+      "bbox": {
+        "x0": 286.26,
+        "y0": 763.73,
+        "x1": 325.8,
+        "y1": 774.69
+      },
+      "text": "016004-6",
+      "text_sha256": "ce94be140b9c86505616a1d6e4b69412e2d6aa1a509eff7f559870850d8c5021"
+    },
+    {
+      "id": "p6-b12",
+      "type": "footer",
+      "page": 6,
+      "reading_order": 86,
+      "bbox": {
+        "x0": 460.99,
+        "y0": 762.51,
+        "x1": 568.01,
+        "y1": 774.69
+      },
+      "text": "Jan/Feb 2021 • Vol. 3(1)",
+      "text_sha256": "134081a059a2bc261381c0592aa5389b0f958c4bacf53208c8ad83d2b9d067d4"
+    },
+    {
+      "id": "p6-b13",
+      "type": "footer",
+      "page": 6,
+      "reading_order": 87,
+      "bbox": {
+        "x0": 9.0,
+        "y0": 773.57,
+        "x1": 316.27,
+        "y1": 789.57
+      },
+      "text": "Downloaded From: https://www.spiedigitallibrary.org/journals/Advanced-Photonics on 04 May 2023 Terms of Use: https://www.spiedigitallibrary.org/terms-of-use",
+      "text_sha256": "ff969ba235fafa2383b75734b6916c97d82aea93da1c07ea83d14413bba7dc66"
+    },
+    {
+      "id": "p7-b1",
+      "type": "header",
+      "page": 7,
+      "reading_order": 88,
+      "bbox": {
+        "x0": 129.28,
+        "y0": 26.81,
+        "x1": 482.82,
+        "y1": 38.77
+      },
+      "text": "Huang et al.: Pushing the limit of high-Q mode of a single dielectric nanocavity",
+      "text_sha256": "74a7c7297d6864f68ffec9f5ee3caea291eaddaa3a3451b4f9a3f9be553ae048"
+    },
+    {
+      "id": "p7-b2",
+      "type": "figure",
+      "page": 7,
+      "reading_order": 89,
+      "bbox": {
+        "x0": 106.0,
+        "y0": 67.0,
+        "x1": 506.0,
+        "y1": 199.0
+      },
+      "graphic": {
+        "kind": "figure"
+      },
+      "text": null
+    },
+    {
+      "id": "p7-b3",
+      "type": "caption",
+      "page": 7,
+      "reading_order": 90,
+      "bbox": {
+        "x0": 202.07,
+        "y0": 207.94,
+        "x1": 409.98,
+        "y1": 218.93
+      },
+      "text": "Fig. 7 Schematic drawing of measurement system.",
+      "text_sha256": "5328607bf885c03fad4eb4746e02506c4ab155b9fadfa75488846f0b93160bb7",
+      "caption_for": "p7-b2"
+    },
+    {
+      "id": "p7-b4",
+      "type": "paragraph",
+      "page": 7,
+      "reading_order": 91,
+      "bbox": {
+        "x0": 44.01,
+        "y0": 236.19,
+        "x1": 297.88,
+        "y1": 414.15
+      },
+      "text": "the Supplemental Materials). The fabrication of a series of NWs with different widths is described as follows. First, the amor- phous silicon thin film with a thickness of 825 nm is deposited on glass substrate with plasma-enhanced chemical vapor depo- sition (Oxford PlasmaLab System 100). Subsequently, positive electroresist was spin-coated over the film. We then exposed the resist by applying electron-beam lithography (Raith 150) and developed. A 50-nm Cr film was evaporated onto the sample, followed by the lift-off process to generate Cr masks. Using re- active ion etching processes, Cr rectangles were transferred to the silicon film. The residual Cr disks were further removed by wet Cr etching. The scatterings of the fabricated sample were measured using a home-built white-light spectroscopy setup in a confocal configuration, as shown in Fig. 7. The sample was backside illuminated by a white-light source (fiber-coupled tungsten halogen light bulb). A polarizer is put between the",
+      "text_sha256": "4766664aa3f0b9124a580e2f7fb08e09c3e0a4c1716ea312c4214023eeaf010f",
+      "continues_from": "p6-b9"
+    },
+    {
+      "id": "p7-b5",
+      "type": "paragraph",
+      "page": 7,
+      "reading_order": 92,
+      "bbox": {
+        "x0": 314.27,
+        "y0": 236.2,
+        "x1": 568.01,
+        "y1": 358.93
+      },
+      "text": "focal lens and light source to control the linear polarization of the incidence wave. Using a 20 × NA = 0.4 objective and a di- aphragm, the light transmitted through the sample in the normal direction was then collected and directed to the spectrometer (Princeton Instruments Acton SP 2300 monochromator with Andor DU490A-1.7 InGaAs array detector). Considering there is no absorption from the fabricated silicon material in the NIR range, the scattering cross sections were then estimated using the approximate relation Csca ∼ 1 − T, where T is the measured transmission (normalized to the transmission of the substrate when no NW is presented) in the normal direction.",
+      "text_sha256": "cbc95cd8bafb9c108bd011b92a0c763d7e47406e1373dfddbd170b6e87c60d18",
+      "continues_from": "p7-b4",
+      "uncertainty": {
+        "level": "medium",
+        "note": "Inline math is recorded as plain characters in reading order; sub/superscript positions and italic or symbol-font variants are not preserved."
+      }
+    },
+    {
+      "id": "p7-b6",
+      "type": "paragraph",
+      "page": 7,
+      "reading_order": 93,
+      "bbox": {
+        "x0": 314.27,
+        "y0": 357.91,
+        "x1": 568.03,
+        "y1": 414.21
+      },
+      "text": "Figure 8(a) shows the schematic drawing of the dielectric NW on quartz substrate, while Figs. 8(b) and 8(c) show the mea- sured and simulated scattering spectrum of a single NW with different size ratios. The structure is illuminated by an incidence wave with a TE polarization (the electric field is parallel to the",
+      "text_sha256": "3ae6db65f4a1796adb7db522e5a05854a68d6ac09ad153d9afa492ac0ae8eec4",
+      "uncertainty": {
+        "level": "medium",
+        "note": "Inline math is recorded as plain characters in reading order; sub/superscript positions and italic or symbol-font variants are not preserved."
+      }
+    },
+    {
+      "id": "p7-b7",
+      "type": "figure",
+      "page": 7,
+      "reading_order": 94,
+      "bbox": {
+        "x0": 56.0,
+        "y0": 435.0,
+        "x1": 556.0,
+        "y1": 651.0
+      },
+      "graphic": {
+        "kind": "figure"
+      },
+      "text": null
+    },
+    {
+      "id": "p7-b8",
+      "type": "caption",
+      "page": 7,
+      "reading_order": 95,
+      "bbox": {
+        "x0": 115.79,
+        "y0": 660.01,
+        "x1": 496.32,
+        "y1": 747.71
+      },
+      "text": "Fig. 8 Experimental verification of high-Q mode in the single silicon NW on quartz. (a) Schematic drawing of the single Si NW on a quartz substrate under normal incidence for TE polarization. (b) Experimentally measured scattering spectrum for the single NW with a = 970 nm and b = 825 nm. Top inset is the eigenfield E distribution of mode TE(3,4) while the bottom inset is an SEM image of fabricated Si NW (the bar in the inset is 500 nm). (c) Simulation and measured scattering spectra for the single NW with different widths while the thickness of the NW is fixed as 825 nm. High-Q modes are indicated with arrows. (d) Extracted Q-factor and (e) Nreal for pair modes TE(3,4) and TE(5,2) as a function of the size ratio.",
+      "text_sha256": "c081f0e0463f73d95dafb6b22f736ccec9c677855b14bc6c60ec7ddf0a39b03a",
+      "caption_for": "p7-b7",
+      "uncertainty": {
+        "level": "medium",
+        "note": "Inline math is recorded as plain characters in reading order; sub/superscript positions and italic or symbol-font variants are not preserved."
+      }
+    },
+    {
+      "id": "p7-b9",
+      "type": "footer",
+      "page": 7,
+      "reading_order": 96,
+      "bbox": {
+        "x0": 44.01,
+        "y0": 763.73,
+        "x1": 127.98,
+        "y1": 774.69
+      },
+      "text": "Advanced Photonics",
+      "text_sha256": "8952fe8cc5369b7f05b1f551784ec02f25ab7d5497e47b715418163f3ce05b4e"
+    },
+    {
+      "id": "p7-b10",
+      "type": "page_number",
+      "page": 7,
+      "reading_order": 97,
+      "bbox": {
+        "x0": 286.26,
+        "y0": 763.73,
+        "x1": 325.8,
+        "y1": 774.69
+      },
+      "text": "016004-7",
+      "text_sha256": "a7116fc6bbc0b52a7f8d12cddf9920d9947c123bdde00bc917bdf11a2058c7b3"
+    },
+    {
+      "id": "p7-b11",
+      "type": "footer",
+      "page": 7,
+      "reading_order": 98,
+      "bbox": {
+        "x0": 460.99,
+        "y0": 762.51,
+        "x1": 568.01,
+        "y1": 774.69
+      },
+      "text": "Jan/Feb 2021 • Vol. 3(1)",
+      "text_sha256": "134081a059a2bc261381c0592aa5389b0f958c4bacf53208c8ad83d2b9d067d4"
+    },
+    {
+      "id": "p7-b12",
+      "type": "footer",
+      "page": 7,
+      "reading_order": 99,
+      "bbox": {
+        "x0": 9.0,
+        "y0": 773.57,
+        "x1": 316.27,
+        "y1": 789.57
+      },
+      "text": "Downloaded From: https://www.spiedigitallibrary.org/journals/Advanced-Photonics on 04 May 2023 Terms of Use: https://www.spiedigitallibrary.org/terms-of-use",
+      "text_sha256": "ff969ba235fafa2383b75734b6916c97d82aea93da1c07ea83d14413bba7dc66"
+    },
+    {
+      "id": "p8-b1",
+      "type": "header",
+      "page": 8,
+      "reading_order": 100,
+      "bbox": {
+        "x0": 129.28,
+        "y0": 26.81,
+        "x1": 482.82,
+        "y1": 38.77
+      },
+      "text": "Huang et al.: Pushing the limit of high-Q mode of a single dielectric nanocavity",
+      "text_sha256": "74a7c7297d6864f68ffec9f5ee3caea291eaddaa3a3451b4f9a3f9be553ae048"
+    },
+    {
+      "id": "p8-b2",
+      "type": "paragraph",
+      "page": 8,
+      "reading_order": 101,
+      "bbox": {
+        "x0": 44.01,
+        "y0": 62.6,
+        "x1": 297.88,
+        "y1": 383.54
+      },
+      "text": "infinite axis of the NW). Good agreement can be found between numerical calculation based on the FEM method and experi- mental results. The resonant frequency and Q-factor are ex- tracted by the standard Fano fitting procedure (see Sec. 4 and Figs. S25 and S26 in the Supplemental Materials).22 It can be also found that the resonant frequency shows avoided crossing at R = 0.868, around which the Q-factor reaches a maximum value of 211. A slight shift of the critical size ratio may be attrib- uted to the imperfect vertical sidewall of the NW. The measured Q-factor is lower than the theoretical prediction because of the presence of glass substrate, which reduces the index contrast and causes more leakage into the substrate. Also, the refractive index of Si here is 3.36, lower than the value of n = 4 we used in the previous discussion. These two combined effects make the measured Q-factor reduce six times compared with the theoreti- cal prediction shown in Fig. 1(f). Note that the Q-factor can be further improved to about 746 by suspending the NW, which can be realized by wet etching SiO2 underneath using HF acid. We also demonstrate that the Q-factor for the mode TE(3,5) can reach 380 for a silicon NW on quartz substrate with the thick- ness being 1130 nm (see Fig. S27 in the Supplemental Materials) while the Q-factor can be up to 294 for TM(3,5) (see Fig. S28 in the Supplemental Materials). Here, we want to point out that the measured Q-factor is comparable to that of QBIC in Refs. 40–42. The higher Q-factor can be realized with high-order QBIC in a single cuboid or disk, such as M(1,2,4). Also, the Q-factor can be further improved by putting a dielec- tric cuboid or disk on epsilon near zero substrate or putting a mirror around the cuboid or disk.41,42",
+      "text_sha256": "077f8fedecd51fc32d33be7daa426384204c5df4483da40054ce6bda50d20b95",
+      "continues_from": "p7-b6",
+      "uncertainty": {
+        "level": "medium",
+        "note": "Inline math is recorded as plain characters in reading order; sub/superscript positions and italic or symbol-font variants are not preserved."
+      }
+    },
+    {
+      "id": "p8-b3",
+      "type": "heading",
+      "page": 8,
+      "reading_order": 102,
+      "bbox": {
+        "x0": 44.01,
+        "y0": 397.1,
+        "x1": 123.01,
+        "y1": 411.06
+      },
+      "text": "4 Conclusion",
+      "text_sha256": "4c86c18b63b02066ea0621deca3ea23e95f8457714462d88205cbd2d38f54c1b"
+    },
+    {
+      "id": "p8-b4",
+      "type": "paragraph",
+      "page": 8,
+      "reading_order": 103,
+      "bbox": {
+        "x0": 44.01,
+        "y0": 413.22,
+        "x1": 297.91,
+        "y1": 591.15
+      },
+      "text": "We developed a robust approach to explore high-Q super-cavity modes in a single dielectric structure with a rectangular cross section, which includes a 2D rectangular NW, 3D disk, and cuboids. Such supercavity modes, also called as a quasi bound- state-in-the-continuum, are found by constructing the avoid- crossing or crossing for pair leaky modes (high-Q and low-Q modes). The Q-factor of TE(5,7) can be up to 2.3 × 104 even for a square NW with n = 4. The strong confinement of the electric field for these supercavity modes can be explained as the suppression of the radiation in limited leaky channels or radiation quenching to a minimum in the momentum space. We also experimentally confirm this type of high-Q mode in a single Si subwavelength NW. Our findings provide a general guiding principle to design an extreme high-Q mode with a relatively small material volume and will find applications in lasing,40,43 en- hanced nonlinear harmonic generation,41,44,45 and strong coupling.",
+      "text_sha256": "1c1dba2c8e256c7a1c134fb79917d0aa69c93c7e93db12875a6bae87055af28d",
+      "uncertainty": {
+        "level": "medium",
+        "note": "Inline math is recorded as plain characters in reading order; sub/superscript positions and italic or symbol-font variants are not preserved."
+      }
+    },
+    {
+      "id": "p8-b5",
+      "type": "heading",
+      "page": 8,
+      "reading_order": 104,
+      "bbox": {
+        "x0": 44.01,
+        "y0": 601.31,
+        "x1": 134.32,
+        "y1": 614.27
+      },
+      "text": "Acknowledgments",
+      "text_sha256": "4be0f860ee3560910d50596233fe802eeecf0972c7a9de427a76ae9a622e2ea1"
+    },
+    {
+      "id": "p8-b6",
+      "type": "paragraph",
+      "page": 8,
+      "reading_order": 105,
+      "bbox": {
+        "x0": 44.01,
+        "y0": 618.87,
+        "x1": 297.87,
+        "y1": 741.16
+      },
+      "text": "A.E.M. was supported by the UNSW Scientia Fellowship pro- gram. M.R. appreciates support from the Royal Society and the Wolfson Foundation, as well as the UK Research and Innovation Future Leaders Fellowship (MR/T040513/1). D.N. acknowledges support from the Australian Research Council Centre of Excellence for Transformative Meta-Optical Systems (CE20010001). The authors sincerely thank the support from the Australian Research Council Discovery Project (DP200101353) and the Linkage Project (LP180100904). The authors acknowl- edge the use of the Australian National Fabrication Facility (ANFF), the ACT Node.",
+      "text_sha256": "08d3b6bc256fb8e2cb4840a617798cdafef2fb738d1529d91b46e8adfd629ada"
+    },
+    {
+      "id": "p8-b7",
+      "type": "heading",
+      "page": 8,
+      "reading_order": 106,
+      "bbox": {
+        "x0": 314.27,
+        "y0": 63.75,
+        "x1": 371.83,
+        "y1": 76.7
+      },
+      "text": "References",
+      "text_sha256": "69824d3b0e70ca6aaa0da1613b65fd914c442bf1f7ad1bb22bcdfbdfe1a05e39"
+    },
+    {
+      "id": "p8-b8",
+      "type": "reference_entry",
+      "page": 8,
+      "reading_order": 107,
+      "bbox": {
+        "x0": 318.75,
+        "y0": 80.66,
+        "x1": 568.02,
+        "y1": 101.99
+      },
+      "text": "1. Y. Akahane et al., “High-Q photonic nanocavity in a two- dimensional photonic crystal,” Nature 425(6961), 944–947 (2003).",
+      "text_sha256": "3bed96d702027c3e443308d42742e489eb9cc9abb55d66fe9112bbcd0f618656"
+    },
+    {
+      "id": "p8-b9",
+      "type": "reference_entry",
+      "page": 8,
+      "reading_order": 108,
+      "bbox": {
+        "x0": 318.75,
+        "y0": 100.62,
+        "x1": 568.06,
+        "y1": 121.94
+      },
+      "text": "2. K. J. Vahala, “Optical microcavities,” Nature 424(6950), 839–846 (2003).",
+      "text_sha256": "225164932d6e7e2f5e50b354c23fd7e1fddc547e66328bf7716b696572889584"
+    },
+    {
+      "id": "p8-b10",
+      "type": "reference_entry",
+      "page": 8,
+      "reading_order": 109,
+      "bbox": {
+        "x0": 318.75,
+        "y0": 120.52,
+        "x1": 568.02,
+        "y1": 141.84
+      },
+      "text": "3. C. W. Hsu et al., “Observation of trapped light within the radiation continuum,” Nature 499(7457), 188–191 (2013).",
+      "text_sha256": "9d0002b6ad9945edf50b23fa8d9370c119689e7b0a979b95393d41245a7e13f5"
+    },
+    {
+      "id": "p8-b11",
+      "type": "reference_entry",
+      "page": 8,
+      "reading_order": 110,
+      "bbox": {
+        "x0": 318.75,
+        "y0": 140.47,
+        "x1": 568.0,
+        "y1": 161.79
+      },
+      "text": "4. C. W. Hsu et al., “Bound states in the continuum,” Nat. Rev. Mater. 1(9), 16048 (2016).",
+      "text_sha256": "4c03dfa6493e8cc55ece940e9e5cbe15b68cc954195909a8b7e30c713ea818ef"
+    },
+    {
+      "id": "p8-b12",
+      "type": "reference_entry",
+      "page": 8,
+      "reading_order": 111,
+      "bbox": {
+        "x0": 318.75,
+        "y0": 160.37,
+        "x1": 568.03,
+        "y1": 181.69
+      },
+      "text": "5. A. Kodigala et al., “Lasing action from photonic bound states in continuum,” Nature 541(7636), 196–199 (2017).",
+      "text_sha256": "90cc4489f90004c01140a9a5fe4b9bd2d1333754ca99fdbdeff6da1c0988d1b0"
+    },
+    {
+      "id": "p8-b13",
+      "type": "reference_entry",
+      "page": 8,
+      "reading_order": 112,
+      "bbox": {
+        "x0": 318.75,
+        "y0": 180.33,
+        "x1": 568.1,
+        "y1": 201.65
+      },
+      "text": "6. S. T. Ha et al., “Directional lasing in resonant semiconductor nano- antenna arrays,” Nat. Nanotechnol. 13(11), 1042–1047 (2018).",
+      "text_sha256": "5e2bc4ff74b79e625d10690c23ab6362f0b3168cb7ffa922bde6d68a4e52a14c"
+    },
+    {
+      "id": "p8-b14",
+      "type": "reference_entry",
+      "page": 8,
+      "reading_order": 113,
+      "bbox": {
+        "x0": 318.75,
+        "y0": 200.23,
+        "x1": 568.05,
+        "y1": 221.55
+      },
+      "text": "7. Z. Liu et al., “High-Q quasibound states in the continuum for non- linear metasurfaces,” Phys. Rev. Lett. 123(25), 253901 (2017).",
+      "text_sha256": "4def2eba6ebbc6360179a5ea502d5eb1063cf0e8a33955468a7fe536ae2df4be"
+    },
+    {
+      "id": "p8-b15",
+      "type": "reference_entry",
+      "page": 8,
+      "reading_order": 114,
+      "bbox": {
+        "x0": 318.75,
+        "y0": 220.18,
+        "x1": 568.04,
+        "y1": 241.45
+      },
+      "text": "8. Q. Song et al., “Near-IR subwavelength microdisk lasers,” Appl. Phys. Lett. 94(6), 061109 (2009).",
+      "text_sha256": "3b643202563a67b1bfde0314ff3c605e42a0c9e4cac5e6075df21db25184c352"
+    },
+    {
+      "id": "p8-b16",
+      "type": "reference_entry",
+      "page": 8,
+      "reading_order": 115,
+      "bbox": {
+        "x0": 318.75,
+        "y0": 240.08,
+        "x1": 568.0,
+        "y1": 271.38
+      },
+      "text": "9. P. E. Landreman et al., “Fabry–Perot description for Mie resonan- ces of rectangular dielectric nanowire optical resonators,” Opt. Express 24(26), 29760–29772 (2016).",
+      "text_sha256": "ff62eca8aec6340e779a80978c48e5888ac21a34c9aa89f3696ad75b46e9ba3a"
+    },
+    {
+      "id": "p8-b17",
+      "type": "reference_entry",
+      "page": 8,
+      "reading_order": 116,
+      "bbox": {
+        "x0": 314.27,
+        "y0": 269.96,
+        "x1": 568.04,
+        "y1": 291.28
+      },
+      "text": "10. D. J. Traviss et al., “Antenna resonances in low aspect ratio semi- conductor nanowires,” Opt. Express 23(17), 22771–22787 (2015).",
+      "text_sha256": "2cea0619ac8fa3d55be543db6c2606f87a1d88870e70ab34b087261c19091723"
+    },
+    {
+      "id": "p8-b18",
+      "type": "reference_entry",
+      "page": 8,
+      "reading_order": 117,
+      "bbox": {
+        "x0": 314.27,
+        "y0": 289.92,
+        "x1": 568.01,
+        "y1": 321.16
+      },
+      "text": "11. L. Huang, Y. Yu, and L. Cao, “General modal properties of optical resonances in subwavelength nonspherical dielectric structures,” Nano Lett. 13(8), 3559–3565 (2013).",
+      "text_sha256": "dc0a4f62696a7fabdede85a1777798a5591996a60e457bf98caebd7b63b5ca2f"
+    },
+    {
+      "id": "p8-b19",
+      "type": "reference_entry",
+      "page": 8,
+      "reading_order": 118,
+      "bbox": {
+        "x0": 314.27,
+        "y0": 319.8,
+        "x1": 567.99,
+        "y1": 341.12
+      },
+      "text": "12. A. I. Kuznetsov et al., “Optically resonant dielectric nanostruc- tures,” Science. 354(6314), aag2472 (2016).",
+      "text_sha256": "807f3073b4185c0a5d244ee38ded021150a99163a1451544568cde4fd1886718"
+    },
+    {
+      "id": "p8-b20",
+      "type": "reference_entry",
+      "page": 8,
+      "reading_order": 119,
+      "bbox": {
+        "x0": 314.27,
+        "y0": 339.69,
+        "x1": 568.03,
+        "y1": 361.01
+      },
+      "text": "13. Y. S. Kivshar and A. E. Miroshnichenko, “Meta-optics with Mie resonances,” Opt. Photonic News 28(1), 24–31 (2017).",
+      "text_sha256": "fa9f862e81c575ea81754dc403f36e6e29989fece97d36a69956eadb5289e748"
+    },
+    {
+      "id": "p8-b21",
+      "type": "reference_entry",
+      "page": 8,
+      "reading_order": 120,
+      "bbox": {
+        "x0": 314.27,
+        "y0": 359.65,
+        "x1": 568.11,
+        "y1": 390.89
+      },
+      "text": "14. J. Wiersig, “Formation of long-lived, scarlike modes near avoided resonance crossings in optical microcavities,” Phys. Rev. Lett. 97(25), 253901 (2006).",
+      "text_sha256": "c032d8f84eb93d8123f8ffd7455f7f7437c6de2a6c1f114f4814eac127d636fd"
+    },
+    {
+      "id": "p8-b22",
+      "type": "reference_entry",
+      "page": 8,
+      "reading_order": 121,
+      "bbox": {
+        "x0": 314.27,
+        "y0": 389.53,
+        "x1": 568.01,
+        "y1": 420.82
+      },
+      "text": "15. Q. H. Song and H. Cao, “Improving optical confinement in nano- structures via external mode coupling,” Phys. Rev. Lett. 105(5), 053902 (2010).",
+      "text_sha256": "a04e16aa7724f0d60332c717f764dca03f25d818c3b6884568845f6399a62e22"
+    },
+    {
+      "id": "p8-b23",
+      "type": "reference_entry",
+      "page": 8,
+      "reading_order": 122,
+      "bbox": {
+        "x0": 314.27,
+        "y0": 419.4,
+        "x1": 568.01,
+        "y1": 450.7
+      },
+      "text": "16. H. Cao and J. Wiersig, “Dielectric microcavities: model systems for wave chaos and non-Hermitian physics,” Rev. Mod. Phys. 87(1), 61–111 (2015).",
+      "text_sha256": "eba1877e18ce6912121129887bf43ab9badffd09d95374af31be49c0add557e8"
+    },
+    {
+      "id": "p8-b24",
+      "type": "reference_entry",
+      "page": 8,
+      "reading_order": 123,
+      "bbox": {
+        "x0": 314.27,
+        "y0": 449.28,
+        "x1": 568.03,
+        "y1": 470.6
+      },
+      "text": "17. M. V. Rybin et al., “High-Q supercavity modes in subwavelength dielectric resonators,” Phys. Rev. Lett. 119(24), 243901 (2017).",
+      "text_sha256": "660230639b34ea2a2c0ab47b31911a9c583618ddb2626f95131a81f54594fbc4"
+    },
+    {
+      "id": "p8-b25",
+      "type": "reference_entry",
+      "page": 8,
+      "reading_order": 124,
+      "bbox": {
+        "x0": 314.27,
+        "y0": 469.23,
+        "x1": 568.0,
+        "y1": 500.48
+      },
+      "text": "18. W. Chen, Y. Chen, and W. Liu, “Multipolar conversion induced subwavelength high-Q Kerker supermodes with unidirectional radiations,” Laser Photonics Rev. 13(9), 1900067 (2019).",
+      "text_sha256": "63da0af936c8cdbeee282b1a1f8754b79ccf2bea58e55346f6315e0ef80b64be"
+    },
+    {
+      "id": "p8-b26",
+      "type": "reference_entry",
+      "page": 8,
+      "reading_order": 125,
+      "bbox": {
+        "x0": 314.27,
+        "y0": 499.11,
+        "x1": 568.02,
+        "y1": 540.33
+      },
+      "text": "19. S. Gladyshev, K. Frizyuk, and A. Bogdanov, “Symmetry analysis and multipole classification of eigenmodes in electromagnetic resonators for engineering their optical properties,” Phys. Rev. B 102(7), 075103 (2020).",
+      "text_sha256": "45ae488e000eb7722e39deac2303691ab01fbc72d72b907da607cc1e7e9a0b99"
+    },
+    {
+      "id": "p8-b27",
+      "type": "reference_entry",
+      "page": 8,
+      "reading_order": 126,
+      "bbox": {
+        "x0": 314.27,
+        "y0": 538.97,
+        "x1": 568.05,
+        "y1": 570.26
+      },
+      "text": "20. I. Volkovskava et al., “Multipolar second-harmonic generation from high-Q quasi-BIC states in subwavelength resonators,” Nanophotonics 9(12), 3953–3963 (2020).",
+      "text_sha256": "7acf0c97bc130fb7ed27e409f8d5df7d7881a04dcef946608ab500e967f64c19"
+    },
+    {
+      "id": "p8-b28",
+      "type": "reference_entry",
+      "page": 8,
+      "reading_order": 127,
+      "bbox": {
+        "x0": 314.27,
+        "y0": 568.84,
+        "x1": 567.99,
+        "y1": 590.16
+      },
+      "text": "21. M. Odit et al., “Observation of supercavity modes in subwave- length dielectric resonators,” Adv. Mater. (2020).",
+      "text_sha256": "1c6d51928acc4ff474c33f08e68ff1776eaa8f30a80a037510872d327fd7d178"
+    },
+    {
+      "id": "p8-b29",
+      "type": "reference_entry",
+      "page": 8,
+      "reading_order": 128,
+      "bbox": {
+        "x0": 314.27,
+        "y0": 588.8,
+        "x1": 568.03,
+        "y1": 610.07
+      },
+      "text": "22. H. Friedrich and D. Wintgen, “Interfering resonances and bound states in the continuum,” Phys. Rev. A 32(6), 3231–3242 (1985).",
+      "text_sha256": "6e1639e378c36a0067e18fa850c8ca9b6ef6825755ea8a4e197ce35f27e8df19"
+    },
+    {
+      "id": "p8-b30",
+      "type": "reference_entry",
+      "page": 8,
+      "reading_order": 129,
+      "bbox": {
+        "x0": 314.27,
+        "y0": 608.7,
+        "x1": 568.05,
+        "y1": 640.0
+      },
+      "text": "23. A. F. Sadreev, E. N. Bulgakov, and I. Rotter, “Bound states in the continuum in open quantum billiards with a variable shape,” Phys. Rev. B 73(23), 235342 (2006).",
+      "text_sha256": "a0089ba3b49a9e49728fcfcad4da472314e265c3b18d5a1f6e81d1681904282b"
+    },
+    {
+      "id": "p8-b31",
+      "type": "reference_entry",
+      "page": 8,
+      "reading_order": 130,
+      "bbox": {
+        "x0": 314.27,
+        "y0": 638.58,
+        "x1": 568.01,
+        "y1": 669.88
+      },
+      "text": "24. K. N. Pichugin and A. F. Sadreev, “Interaction between coaxial dielectric disks enhances the Q factor,” J. Appl. Phys. 126(9), 093105 (2019).",
+      "text_sha256": "3639fea0d121a8ef79f9d66e1099fe2c04a7af4014bce39e28ee32bf0667588c"
+    },
+    {
+      "id": "p8-b32",
+      "type": "reference_entry",
+      "page": 8,
+      "reading_order": 131,
+      "bbox": {
+        "x0": 314.27,
+        "y0": 668.51,
+        "x1": 568.01,
+        "y1": 689.78
+      },
+      "text": "25. A. A. Lyapina et al., “Bound states in the continuum in open acoustic resonators,” J. Fluid. Mech. 780, 370–387 (2015).",
+      "text_sha256": "bc5c2580f5b35562d5f447452a8312803521a4fc9dc70ab0181c49c1b099349f"
+    },
+    {
+      "id": "p8-b33",
+      "type": "reference_entry",
+      "page": 8,
+      "reading_order": 132,
+      "bbox": {
+        "x0": 314.27,
+        "y0": 688.41,
+        "x1": 567.99,
+        "y1": 719.65
+      },
+      "text": "26. Y. Yu and L. Cao, “Coupled leaky mode theory for light absorp- tion in 2D, 1D, and 0D semiconductor nanostructures,” Opt. Express 20(13), 13847–13856 (2012).",
+      "text_sha256": "90122257ad0d2f2f085c6ebaca1ef5a546f8b89d6d5f57c1acbd7332c2a4b84e"
+    },
+    {
+      "id": "p8-b34",
+      "type": "reference_entry",
+      "page": 8,
+      "reading_order": 133,
+      "bbox": {
+        "x0": 314.27,
+        "y0": 718.29,
+        "x1": 567.97,
+        "y1": 739.61
+      },
+      "text": "27. L. Cao et al., “Engineering light absorption in semiconductor nanowire devices,” Nat. Mater. 8(8), 643–647 (2009).",
+      "text_sha256": "837f3f76bb9ab08c2c2b67f9240f91917438e74ce83f4d5419f8439ed61c8c8f"
+    },
+    {
+      "id": "p8-b35",
+      "type": "footer",
+      "page": 8,
+      "reading_order": 134,
+      "bbox": {
+        "x0": 44.01,
+        "y0": 763.73,
+        "x1": 127.98,
+        "y1": 774.69
+      },
+      "text": "Advanced Photonics",
+      "text_sha256": "8952fe8cc5369b7f05b1f551784ec02f25ab7d5497e47b715418163f3ce05b4e"
+    },
+    {
+      "id": "p8-b36",
+      "type": "page_number",
+      "page": 8,
+      "reading_order": 135,
+      "bbox": {
+        "x0": 286.26,
+        "y0": 763.73,
+        "x1": 325.8,
+        "y1": 774.69
+      },
+      "text": "016004-8",
+      "text_sha256": "6cb455c862676d2b0ddff93d7ac92d9105df569a1d463aea74359636df9ade10"
+    },
+    {
+      "id": "p8-b37",
+      "type": "footer",
+      "page": 8,
+      "reading_order": 136,
+      "bbox": {
+        "x0": 460.99,
+        "y0": 762.51,
+        "x1": 568.01,
+        "y1": 774.69
+      },
+      "text": "Jan/Feb 2021 • Vol. 3(1)",
+      "text_sha256": "134081a059a2bc261381c0592aa5389b0f958c4bacf53208c8ad83d2b9d067d4"
+    },
+    {
+      "id": "p8-b38",
+      "type": "footer",
+      "page": 8,
+      "reading_order": 137,
+      "bbox": {
+        "x0": 9.0,
+        "y0": 773.57,
+        "x1": 316.27,
+        "y1": 789.57
+      },
+      "text": "Downloaded From: https://www.spiedigitallibrary.org/journals/Advanced-Photonics on 04 May 2023 Terms of Use: https://www.spiedigitallibrary.org/terms-of-use",
+      "text_sha256": "ff969ba235fafa2383b75734b6916c97d82aea93da1c07ea83d14413bba7dc66"
+    },
+    {
+      "id": "p9-b1",
+      "type": "header",
+      "page": 9,
+      "reading_order": 138,
+      "bbox": {
+        "x0": 129.28,
+        "y0": 26.81,
+        "x1": 482.82,
+        "y1": 38.77
+      },
+      "text": "Huang et al.: Pushing the limit of high-Q mode of a single dielectric nanocavity",
+      "text_sha256": "74a7c7297d6864f68ffec9f5ee3caea291eaddaa3a3451b4f9a3f9be553ae048"
+    },
+    {
+      "id": "p9-b2",
+      "type": "reference_entry",
+      "page": 9,
+      "reading_order": 139,
+      "bbox": {
+        "x0": 44.01,
+        "y0": 61.96,
+        "x1": 297.74,
+        "y1": 83.28
+      },
+      "text": "28. J. Wiersig, “Hexagonal dielectric resonators and microcrystal lasers,” Phys. Rev. A. 67(2), 023807 (2003).",
+      "text_sha256": "514c3fd9057b218d5aa61701f3c9839d624e9bafac0b83a930ea228e0eff1fce"
+    },
+    {
+      "id": "p9-b3",
+      "type": "reference_entry",
+      "page": 9,
+      "reading_order": 140,
+      "bbox": {
+        "x0": 44.01,
+        "y0": 81.91,
+        "x1": 297.79,
+        "y1": 113.15
+      },
+      "text": "29. S. Q. Li and K. B. Crozier, “Origin of the anapole condition as revealed by a simple expansion beyond the toroidal multipole,” Phys. Rev. B 97(24), 245423 (2018).",
+      "text_sha256": "508f614d59ef1053465aa7e4cca5b3f8c14c629f5080a1d9a56d64bfb165cdc0"
+    },
+    {
+      "id": "p9-b4",
+      "type": "reference_entry",
+      "page": 9,
+      "reading_order": 141,
+      "bbox": {
+        "x0": 44.02,
+        "y0": 111.79,
+        "x1": 297.81,
+        "y1": 143.03
+      },
+      "text": "30. P. Grahn, A. Shevchenko, and M. Kaivola, “Electromagnetic multipole theory for optical nanomaterials,” New J. Phys. 14(9), 093033 (2012).",
+      "text_sha256": "183355bf3855fb83ebd1ea48ec56aef02fc030e9bb5f82d8deb22a54e0587358"
+    },
+    {
+      "id": "p9-b5",
+      "type": "reference_entry",
+      "page": 9,
+      "reading_order": 142,
+      "bbox": {
+        "x0": 44.01,
+        "y0": 141.66,
+        "x1": 297.81,
+        "y1": 172.91
+      },
+      "text": "31. W. Chen, Y. Chen, and W. Liu, “Singularities and Poincaré indices of electromagnetic multipoles,” Phys. Rev. Lett. 122(15), 153907 (2019).",
+      "text_sha256": "df1315dfa09a1f052a74bc0989da87f605619b1b4872563c1a470b23fafa2ee8"
+    },
+    {
+      "id": "p9-b6",
+      "type": "reference_entry",
+      "page": 9,
+      "reading_order": 143,
+      "bbox": {
+        "x0": 44.01,
+        "y0": 171.54,
+        "x1": 297.79,
+        "y1": 202.84
+      },
+      "text": "32. A. E. Miroshnichenko, S. Flach, and Y. S. Kivshar, “Fano reso- nances in nanoscale structures,” Rev. Mod. Phys. 82(3), 2257– 2298 (2010).",
+      "text_sha256": "5bbcb23af1c8467ae5df2bfa21ea77e7ce884bf264324edfe74101c5ebce5a74"
+    },
+    {
+      "id": "p9-b7",
+      "type": "reference_entry",
+      "page": 9,
+      "reading_order": 144,
+      "bbox": {
+        "x0": 44.01,
+        "y0": 201.42,
+        "x1": 297.87,
+        "y1": 232.72
+      },
+      "text": "33. M. I. Tribelsky and A. E. Miroshnichenko, “Giant in-particle field concentration and Fano resonances at light scattering by high- refractive index particles,” Phys. Rev. A 93(5), 053837 (2016).",
+      "text_sha256": "07145351c41ba459ef871ef81c0a73d20bf7e48a8b6fb91b437123c5a066fc97"
+    },
+    {
+      "id": "p9-b8",
+      "type": "reference_entry",
+      "page": 9,
+      "reading_order": 145,
+      "bbox": {
+        "x0": 44.01,
+        "y0": 231.35,
+        "x1": 297.78,
+        "y1": 262.59
+      },
+      "text": "34. A. K. Gonzalez-Alcalde et al., “Magnetic mirror metasurface based on the in-phase excitation of magnetic dipole andelectric quadrupole resonances,” J. Appl. Phys. 125, 243103 (2019).",
+      "text_sha256": "73a22ad2ba2d2fa9212425c2ca9e629c045a65f80b96ddf389aadfc4239680ee"
+    },
+    {
+      "id": "p9-b9",
+      "type": "reference_entry",
+      "page": 9,
+      "reading_order": 146,
+      "bbox": {
+        "x0": 44.01,
+        "y0": 261.23,
+        "x1": 297.8,
+        "y1": 282.49
+      },
+      "text": "35. K. Kim and E. Wolf, “Non-radiating monochromatic sources and their fields,” Opt. Commun. 59(1), 1–6 (1986).",
+      "text_sha256": "862b15085b2dfd73e456224291e9c1eec1262bd93f4791289d2e733f5b097420"
+    },
+    {
+      "id": "p9-b10",
+      "type": "reference_entry",
+      "page": 9,
+      "reading_order": 147,
+      "bbox": {
+        "x0": 44.01,
+        "y0": 281.13,
+        "x1": 297.8,
+        "y1": 312.42
+      },
+      "text": "36. A. A. Bogdanov et al., “Bound states in the continuum and Fano resonances in the strong mode coupling regime,” Adv. Photonics 1(1), 016001 (2019).",
+      "text_sha256": "ed67f69ee81958d0eb8302bd02cf09716e054ac90c724044127484a52951c79c"
+    },
+    {
+      "id": "p9-b11",
+      "type": "reference_entry",
+      "page": 9,
+      "reading_order": 148,
+      "bbox": {
+        "x0": 44.01,
+        "y0": 311.0,
+        "x1": 297.78,
+        "y1": 332.32
+      },
+      "text": "37. L. Zhang et al., “Photonic-crystal exciton-polaritons in monolayer semiconductors,” Nat. Commun. 9(1), 713 (2018).",
+      "text_sha256": "1459ce655d1833f81b3bd077a9c7f1dd2c906c0ea764d84cefad900f27f75857"
+    },
+    {
+      "id": "p9-b12",
+      "type": "reference_entry",
+      "page": 9,
+      "reading_order": 149,
+      "bbox": {
+        "x0": 44.01,
+        "y0": 330.96,
+        "x1": 297.78,
+        "y1": 352.28
+      },
+      "text": "38. A. E. Miroshnichenko et al., “Nonradiating anapole modes in dielectric nanoparticles,” Nat. Commun. 6(1), 8069 (2015).",
+      "text_sha256": "fd40b49d0eb1a638e6ac89f0e329a1680a41af81b275ccca48b5a280214bae98"
+    },
+    {
+      "id": "p9-b13",
+      "type": "reference_entry",
+      "page": 9,
+      "reading_order": 150,
+      "bbox": {
+        "x0": 44.01,
+        "y0": 350.86,
+        "x1": 297.78,
+        "y1": 372.18
+      },
+      "text": "39. L. Xu et al., “Boosting third-harmonic generation by a mirror- enhanced anapole resonator,” Light. Sci. Appl. 7(1), 44 (2018).",
+      "text_sha256": "a16f8832e38927da3188e764443776b7dd3626e78bc274cedae2603431290b45"
+    },
+    {
+      "id": "p9-b14",
+      "type": "reference_entry",
+      "page": 9,
+      "reading_order": 151,
+      "bbox": {
+        "x0": 44.01,
+        "y0": 370.82,
+        "x1": 297.79,
+        "y1": 402.06
+      },
+      "text": "40. V. Mylnikov et al., “Lasing action in single subwavelength par- ticles supporting supercavity modes,” ACS Nano 14(6), 7338– 7346 (2020).",
+      "text_sha256": "b12294b1a69ee194dcab0707903d805133bd487fddc3ba4e9fa6f8c1bbbc7e68"
+    },
+    {
+      "id": "p9-b15",
+      "type": "reference_entry",
+      "page": 9,
+      "reading_order": 152,
+      "bbox": {
+        "x0": 44.01,
+        "y0": 400.7,
+        "x1": 297.79,
+        "y1": 422.02
+      },
+      "text": "41. K. Koshelev et al., “Subwavelength dielectric resonators for non- linear nanophotonics,” Science 367(6475), 288–292 (2020).",
+      "text_sha256": "2cfc8edfaf119f77221d5d3040f687d65a6f6fd840c708625c32fea47c668bce"
+    },
+    {
+      "id": "p9-b16",
+      "type": "reference_entry",
+      "page": 9,
+      "reading_order": 153,
+      "bbox": {
+        "x0": 44.01,
+        "y0": 420.59,
+        "x1": 297.79,
+        "y1": 441.91
+      },
+      "text": "42. M. P. Nezhad et al., “Room-temperature subwavelength metallo- dielectric lasers,” Nat. Photonics 4(6), 395–399 (2010).",
+      "text_sha256": "be3ab4abdf7783b99762e8758bee0671e6c7aaa27e47bfefd140b440dd3808b3"
+    },
+    {
+      "id": "p9-b17",
+      "type": "reference_entry",
+      "page": 9,
+      "reading_order": 154,
+      "bbox": {
+        "x0": 44.01,
+        "y0": 440.55,
+        "x1": 297.8,
+        "y1": 461.87
+      },
+      "text": "43. C. Huang et al., “Ultrafast control of vortex microlasers,” Science 367(6481), 1018–1021 (2020).",
+      "text_sha256": "17a7adf06a108571176690f62e341677c463df320dc0e7315ffbec2e2b28edd1"
+    },
+    {
+      "id": "p9-b18",
+      "type": "reference_entry",
+      "page": 9,
+      "reading_order": 155,
+      "bbox": {
+        "x0": 44.01,
+        "y0": 460.45,
+        "x1": 297.81,
+        "y1": 491.75
+      },
+      "text": "44. L. Carletti et al., “Giant nonlinear response at the nanoscale driven by bound states in the continuum,” Phys. Rev. Lett. 121(3), 033903 (2018).",
+      "text_sha256": "b1bd0ae092849aed3ebc87b48928f6edcf68a70731dd288b85f05a88901f4175"
+    },
+    {
+      "id": "p9-b19",
+      "type": "reference_entry",
+      "page": 9,
+      "reading_order": 156,
+      "bbox": {
+        "x0": 44.01,
+        "y0": 490.33,
+        "x1": 297.89,
+        "y1": 511.65
+      },
+      "text": "45. L. Xu et al., “Dynamic nonlinear image tuning through magnetic dipole quasi-BIC ultrathin resonators,” Adv. Sci. 6, 1802119 (2019).",
+      "text_sha256": "7730b0ae6193bec67112cd2214abe27fce7f2871e154d2ce182164a03b39c44c"
+    },
+    {
+      "id": "p9-b20",
+      "type": "paragraph",
+      "page": 9,
+      "reading_order": 157,
+      "bbox": {
+        "x0": 314.27,
+        "y0": 63.01,
+        "x1": 568.09,
+        "y1": 132.75
+      },
+      "text": "Lujun Huang received his bachelor degree in physics from East China Normal University, China, in 2008 and his PhD in material science and engineering from North Carolina State University, USA, in 2017. Then, he has been working as a research associate at University of New South Wales, Australia, since 2018. His current research interests focus on dielectric nanophotonics, Non-Hermitian physics, and light matter inter- action of 2D transition metal dichalcogenide.",
+      "text_sha256": "6cad3921eff4aa79acaf4263606fce336a9ca61b5ed04441746b6e3b821ce8bd"
+    },
+    {
+      "id": "p9-b21",
+      "type": "paragraph",
+      "page": 9,
+      "reading_order": 158,
+      "bbox": {
+        "x0": 314.27,
+        "y0": 144.7,
+        "x1": 568.1,
+        "y1": 234.4
+      },
+      "text": "Lei Xu is a senior lecturer in Electrical Engineering at Department of Engineering in School of Science & Technology. He obtained his PhD in optics from Nankai University, China, in 2014, followed by postdocs at Nankai University, Australian National University, and University of New South Wales, Canberra. His research interests are nanophotonics, optoelectronics meta-devices, low carbon technologies (i.e. solar energy harvesting, as well as innovative radiative cooling for energy saving), and bio-photonics (i.e. tissue engineering via light, and wearable optical sensors).",
+      "text_sha256": "70bc74c867815a980c1e71c5e4bef16cfb6a6720af7b6a6a5fb4439ea0090f57"
+    },
+    {
+      "id": "p9-b22",
+      "type": "paragraph",
+      "page": 9,
+      "reading_order": 159,
+      "bbox": {
+        "x0": 314.27,
+        "y0": 246.35,
+        "x1": 568.11,
+        "y1": 316.1
+      },
+      "text": "Mohsen Rahmani is an associate professor in Nottingham Trent University. He received his PhD from the National University of Singapore in 2013. He is a senior member of IEEE and his research interests span over nonlinear nanophotonics and optical metasurfaces. He is a recipient of several prestigious recognitions, including the Australian Eureka Prize (2018), and Early Career Medal from the International Union of Pure and Applied Physics (2017).",
+      "text_sha256": "62bf96160291b47ee7b47c6f9ec5e03b6f402a0172ad67f54af0fbdee1f06613"
+    },
+    {
+      "id": "p9-b23",
+      "type": "paragraph",
+      "page": 9,
+      "reading_order": 160,
+      "bbox": {
+        "x0": 314.27,
+        "y0": 328.05,
+        "x1": 568.09,
+        "y1": 407.77
+      },
+      "text": "Dragomir Neshev is a professor in physics at the Australian National University (ANU) and the director of the Australian Research Council Centre of Excellence for Transformative Meta-Optical Systems (TMOS). He received his PhD from Sofia University, Bulgaria, in 1999. Since then he has worked in the field of optics at several research centres and joint the ANU in 2002. His activities span over several branches of optics, including periodic photonic structures, singular optics, plasmonics, and optical metasurfaces.",
+      "text_sha256": "7252d5435dadfcf4756f1d6e858ce1f6afa94b34acc46ec38f22051c04d09bae"
+    },
+    {
+      "id": "p9-b24",
+      "type": "paragraph",
+      "page": 9,
+      "reading_order": 161,
+      "bbox": {
+        "x0": 314.27,
+        "y0": 419.41,
+        "x1": 568.1,
+        "y1": 509.36
+      },
+      "text": "Andrey E. Miroshnichenko received his PhD from the Max‐Planck Institute for Physics of Complex Systems in Dresden, Germany, in 2003. In 2004, he moved to Australian National University. During that time, he made fundamentally important contributions to the field of photonic crys- tals and bringing the concept of the Fano resonances to nanophotonics. In 2017, he moved to the University of New South Wales Canberra. The topics of his research are nanophotonics, nonlinear and quantum optics, and resonant interaction of light with nanoclusters, including optical nano- antennas and metamaterials.",
+      "text_sha256": "60a85000c191f6c0e738e318754f6ac5255ef5aebe2d54140372441e07f580c1"
+    },
+    {
+      "id": "p9-b25",
+      "type": "footer",
+      "page": 9,
+      "reading_order": 162,
+      "bbox": {
+        "x0": 44.01,
+        "y0": 763.73,
+        "x1": 127.98,
+        "y1": 774.69
+      },
+      "text": "Advanced Photonics",
+      "text_sha256": "8952fe8cc5369b7f05b1f551784ec02f25ab7d5497e47b715418163f3ce05b4e"
+    },
+    {
+      "id": "p9-b26",
+      "type": "page_number",
+      "page": 9,
+      "reading_order": 163,
+      "bbox": {
+        "x0": 286.26,
+        "y0": 763.73,
+        "x1": 325.8,
+        "y1": 774.69
+      },
+      "text": "016004-9",
+      "text_sha256": "a3f33938e4596df32e7351bc8bba6dd7d2e1142f21ec4e1b2aee6dcb9d99bcd6"
+    },
+    {
+      "id": "p9-b27",
+      "type": "footer",
+      "page": 9,
+      "reading_order": 164,
+      "bbox": {
+        "x0": 460.99,
+        "y0": 762.51,
+        "x1": 568.01,
+        "y1": 774.69
+      },
+      "text": "Jan/Feb 2021 • Vol. 3(1)",
+      "text_sha256": "134081a059a2bc261381c0592aa5389b0f958c4bacf53208c8ad83d2b9d067d4"
+    },
+    {
+      "id": "p9-b28",
+      "type": "footer",
+      "page": 9,
+      "reading_order": 165,
+      "bbox": {
+        "x0": 9.0,
+        "y0": 773.57,
+        "x1": 316.27,
+        "y1": 789.57
+      },
+      "text": "Downloaded From: https://www.spiedigitallibrary.org/journals/Advanced-Photonics on 04 May 2023 Terms of Use: https://www.spiedigitallibrary.org/terms-of-use",
+      "text_sha256": "ff969ba235fafa2383b75734b6916c97d82aea93da1c07ea83d14413bba7dc66"
+    }
+  ],
+  "provenance": {
+    "proposed_by": {
+      "tool": "extraction-pilot-drafts",
+      "version": "3",
+      "options_sha256": "b74e6f2f9c021751643a9a5d2e4451944b229defbcf37f11c98141324265f7b4"
+    },
+    "review": {
+      "status": "reviewed",
+      "reviewer": "agent-claude-sonnet-5-5",
+      "reviewed_at": "2026-11-12T16:31:27Z",
+      "basis": "page_image_inspection"
+    }
+  },
+  "references": {
+    "entries": [
+      {
+        "id": "ref1",
+        "ordinal": 1,
+        "page": 8,
+        "block_id": "p8-b8",
+        "raw": "1. Y. Akahane et al., “High-Q photonic nanocavity in a two- dimensional photonic crystal,” Nature 425(6961), 944–947 (2003).",
+        "raw_sha256": "3bed96d702027c3e443308d42742e489eb9cc9abb55d66fe9112bbcd0f618656",
+        "fields": {
+          "authors": [
+            {
+              "family": "Akahane",
+              "given": "Y."
+            }
+          ],
+          "title": "High-Q photonic nanocavity in a two-dimensional photonic crystal",
+          "venue": "Nature",
+          "year": 2003
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref2",
+        "ordinal": 2,
+        "page": 8,
+        "block_id": "p8-b9",
+        "raw": "2. K. J. Vahala, “Optical microcavities,” Nature 424(6950), 839–846 (2003).",
+        "raw_sha256": "225164932d6e7e2f5e50b354c23fd7e1fddc547e66328bf7716b696572889584",
+        "fields": {
+          "authors": [
+            {
+              "family": "Vahala",
+              "given": "K. J."
+            }
+          ],
+          "title": "Optical microcavities",
+          "venue": "Nature",
+          "year": 2003
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref3",
+        "ordinal": 3,
+        "page": 8,
+        "block_id": "p8-b10",
+        "raw": "3. C. W. Hsu et al., “Observation of trapped light within the radiation continuum,” Nature 499(7457), 188–191 (2013).",
+        "raw_sha256": "9d0002b6ad9945edf50b23fa8d9370c119689e7b0a979b95393d41245a7e13f5",
+        "fields": {
+          "authors": [
+            {
+              "family": "Hsu",
+              "given": "C. W."
+            }
+          ],
+          "title": "Observation of trapped light within the radiation continuum",
+          "venue": "Nature",
+          "year": 2013
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref4",
+        "ordinal": 4,
+        "page": 8,
+        "block_id": "p8-b11",
+        "raw": "4. C. W. Hsu et al., “Bound states in the continuum,” Nat. Rev. Mater. 1(9), 16048 (2016).",
+        "raw_sha256": "4c03dfa6493e8cc55ece940e9e5cbe15b68cc954195909a8b7e30c713ea818ef",
+        "fields": {
+          "authors": [
+            {
+              "family": "Hsu",
+              "given": "C. W."
+            }
+          ],
+          "title": "Bound states in the continuum",
+          "venue": "Nat. Rev. Mater.",
+          "year": 2016
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref5",
+        "ordinal": 5,
+        "page": 8,
+        "block_id": "p8-b12",
+        "raw": "5. A. Kodigala et al., “Lasing action from photonic bound states in continuum,” Nature 541(7636), 196–199 (2017).",
+        "raw_sha256": "90cc4489f90004c01140a9a5fe4b9bd2d1333754ca99fdbdeff6da1c0988d1b0",
+        "fields": {
+          "authors": [
+            {
+              "family": "Kodigala",
+              "given": "A."
+            }
+          ],
+          "title": "Lasing action from photonic bound states in continuum",
+          "venue": "Nature",
+          "year": 2017
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref6",
+        "ordinal": 6,
+        "page": 8,
+        "block_id": "p8-b13",
+        "raw": "6. S. T. Ha et al., “Directional lasing in resonant semiconductor nano- antenna arrays,” Nat. Nanotechnol. 13(11), 1042–1047 (2018).",
+        "raw_sha256": "5e2bc4ff74b79e625d10690c23ab6362f0b3168cb7ffa922bde6d68a4e52a14c",
+        "fields": {
+          "authors": [
+            {
+              "family": "Ha",
+              "given": "S. T."
+            }
+          ],
+          "title": "Directional lasing in resonant semiconductor nano-antenna arrays",
+          "venue": "Nat. Nanotechnol.",
+          "year": 2018
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref7",
+        "ordinal": 7,
+        "page": 8,
+        "block_id": "p8-b14",
+        "raw": "7. Z. Liu et al., “High-Q quasibound states in the continuum for non- linear metasurfaces,” Phys. Rev. Lett. 123(25), 253901 (2017).",
+        "raw_sha256": "4def2eba6ebbc6360179a5ea502d5eb1063cf0e8a33955468a7fe536ae2df4be",
+        "fields": {
+          "authors": [
+            {
+              "family": "Liu",
+              "given": "Z."
+            }
+          ],
+          "title": "High-Q quasibound states in the continuum for nonlinear metasurfaces",
+          "venue": "Phys. Rev. Lett.",
+          "year": 2017
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref8",
+        "ordinal": 8,
+        "page": 8,
+        "block_id": "p8-b15",
+        "raw": "8. Q. Song et al., “Near-IR subwavelength microdisk lasers,” Appl. Phys. Lett. 94(6), 061109 (2009).",
+        "raw_sha256": "3b643202563a67b1bfde0314ff3c605e42a0c9e4cac5e6075df21db25184c352",
+        "fields": {
+          "authors": [
+            {
+              "family": "Song",
+              "given": "Q."
+            }
+          ],
+          "title": "Near-IR subwavelength microdisk lasers",
+          "venue": "Appl. Phys. Lett.",
+          "year": 2009
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref9",
+        "ordinal": 9,
+        "page": 8,
+        "block_id": "p8-b16",
+        "raw": "9. P. E. Landreman et al., “Fabry–Perot description for Mie resonan- ces of rectangular dielectric nanowire optical resonators,” Opt. Express 24(26), 29760–29772 (2016).",
+        "raw_sha256": "ff62eca8aec6340e779a80978c48e5888ac21a34c9aa89f3696ad75b46e9ba3a",
+        "fields": {
+          "authors": [
+            {
+              "family": "Landreman",
+              "given": "P. E."
+            }
+          ],
+          "title": "Fabry–Perot description for Mie resonances of rectangular dielectric nanowire optical resonators",
+          "venue": "Opt. Express",
+          "year": 2016
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref10",
+        "ordinal": 10,
+        "page": 8,
+        "block_id": "p8-b17",
+        "raw": "10. D. J. Traviss et al., “Antenna resonances in low aspect ratio semi- conductor nanowires,” Opt. Express 23(17), 22771–22787 (2015).",
+        "raw_sha256": "2cea0619ac8fa3d55be543db6c2606f87a1d88870e70ab34b087261c19091723",
+        "fields": {
+          "authors": [
+            {
+              "family": "Traviss",
+              "given": "D. J."
+            }
+          ],
+          "title": "Antenna resonances in low aspect ratio semiconductor nanowires",
+          "venue": "Opt. Express",
+          "year": 2015
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref11",
+        "ordinal": 11,
+        "page": 8,
+        "block_id": "p8-b18",
+        "raw": "11. L. Huang, Y. Yu, and L. Cao, “General modal properties of optical resonances in subwavelength nonspherical dielectric structures,” Nano Lett. 13(8), 3559–3565 (2013).",
+        "raw_sha256": "dc0a4f62696a7fabdede85a1777798a5591996a60e457bf98caebd7b63b5ca2f",
+        "fields": {
+          "authors": [
+            {
+              "family": "Huang",
+              "given": "L."
+            },
+            {
+              "family": "Yu",
+              "given": "Y."
+            },
+            {
+              "family": "Cao",
+              "given": "L."
+            }
+          ],
+          "title": "General modal properties of optical resonances in subwavelength nonspherical dielectric structures",
+          "venue": "Nano Lett.",
+          "year": 2013
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref12",
+        "ordinal": 12,
+        "page": 8,
+        "block_id": "p8-b19",
+        "raw": "12. A. I. Kuznetsov et al., “Optically resonant dielectric nanostruc- tures,” Science. 354(6314), aag2472 (2016).",
+        "raw_sha256": "807f3073b4185c0a5d244ee38ded021150a99163a1451544568cde4fd1886718",
+        "fields": {
+          "authors": [
+            {
+              "family": "Kuznetsov",
+              "given": "A. I."
+            }
+          ],
+          "title": "Optically resonant dielectric nanostructures",
+          "venue": "Science.",
+          "year": 2016
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref13",
+        "ordinal": 13,
+        "page": 8,
+        "block_id": "p8-b20",
+        "raw": "13. Y. S. Kivshar and A. E. Miroshnichenko, “Meta-optics with Mie resonances,” Opt. Photonic News 28(1), 24–31 (2017).",
+        "raw_sha256": "fa9f862e81c575ea81754dc403f36e6e29989fece97d36a69956eadb5289e748",
+        "fields": {
+          "authors": [
+            {
+              "family": "Kivshar",
+              "given": "Y. S."
+            },
+            {
+              "family": "Miroshnichenko",
+              "given": "A. E."
+            }
+          ],
+          "title": "Meta-optics with Mie resonances",
+          "venue": "Opt. Photonic News",
+          "year": 2017
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref14",
+        "ordinal": 14,
+        "page": 8,
+        "block_id": "p8-b21",
+        "raw": "14. J. Wiersig, “Formation of long-lived, scarlike modes near avoided resonance crossings in optical microcavities,” Phys. Rev. Lett. 97(25), 253901 (2006).",
+        "raw_sha256": "c032d8f84eb93d8123f8ffd7455f7f7437c6de2a6c1f114f4814eac127d636fd",
+        "fields": {
+          "authors": [
+            {
+              "family": "Wiersig",
+              "given": "J."
+            }
+          ],
+          "title": "Formation of long-lived, scarlike modes near avoided resonance crossings in optical microcavities",
+          "venue": "Phys. Rev. Lett.",
+          "year": 2006
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref15",
+        "ordinal": 15,
+        "page": 8,
+        "block_id": "p8-b22",
+        "raw": "15. Q. H. Song and H. Cao, “Improving optical confinement in nano- structures via external mode coupling,” Phys. Rev. Lett. 105(5), 053902 (2010).",
+        "raw_sha256": "a04e16aa7724f0d60332c717f764dca03f25d818c3b6884568845f6399a62e22",
+        "fields": {
+          "authors": [
+            {
+              "family": "Song",
+              "given": "Q. H."
+            },
+            {
+              "family": "Cao",
+              "given": "H."
+            }
+          ],
+          "title": "Improving optical confinement in nanostructures via external mode coupling",
+          "venue": "Phys. Rev. Lett.",
+          "year": 2010
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref16",
+        "ordinal": 16,
+        "page": 8,
+        "block_id": "p8-b23",
+        "raw": "16. H. Cao and J. Wiersig, “Dielectric microcavities: model systems for wave chaos and non-Hermitian physics,” Rev. Mod. Phys. 87(1), 61–111 (2015).",
+        "raw_sha256": "eba1877e18ce6912121129887bf43ab9badffd09d95374af31be49c0add557e8",
+        "fields": {
+          "authors": [
+            {
+              "family": "Cao",
+              "given": "H."
+            },
+            {
+              "family": "Wiersig",
+              "given": "J."
+            }
+          ],
+          "title": "Dielectric microcavities: model systems for wave chaos and non-Hermitian physics",
+          "venue": "Rev. Mod. Phys.",
+          "year": 2015
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref17",
+        "ordinal": 17,
+        "page": 8,
+        "block_id": "p8-b24",
+        "raw": "17. M. V. Rybin et al., “High-Q supercavity modes in subwavelength dielectric resonators,” Phys. Rev. Lett. 119(24), 243901 (2017).",
+        "raw_sha256": "660230639b34ea2a2c0ab47b31911a9c583618ddb2626f95131a81f54594fbc4",
+        "fields": {
+          "authors": [
+            {
+              "family": "Rybin",
+              "given": "M. V."
+            }
+          ],
+          "title": "High-Q supercavity modes in subwavelength dielectric resonators",
+          "venue": "Phys. Rev. Lett.",
+          "year": 2017
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref18",
+        "ordinal": 18,
+        "page": 8,
+        "block_id": "p8-b25",
+        "raw": "18. W. Chen, Y. Chen, and W. Liu, “Multipolar conversion induced subwavelength high-Q Kerker supermodes with unidirectional radiations,” Laser Photonics Rev. 13(9), 1900067 (2019).",
+        "raw_sha256": "63da0af936c8cdbeee282b1a1f8754b79ccf2bea58e55346f6315e0ef80b64be",
+        "fields": {
+          "authors": [
+            {
+              "family": "Chen",
+              "given": "W."
+            },
+            {
+              "family": "Chen",
+              "given": "Y."
+            },
+            {
+              "family": "Liu",
+              "given": "W."
+            }
+          ],
+          "title": "Multipolar conversion induced subwavelength high-Q Kerker supermodes with unidirectional radiations",
+          "venue": "Laser Photonics Rev.",
+          "year": 2019
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref19",
+        "ordinal": 19,
+        "page": 8,
+        "block_id": "p8-b26",
+        "raw": "19. S. Gladyshev, K. Frizyuk, and A. Bogdanov, “Symmetry analysis and multipole classification of eigenmodes in electromagnetic resonators for engineering their optical properties,” Phys. Rev. B 102(7), 075103 (2020).",
+        "raw_sha256": "45ae488e000eb7722e39deac2303691ab01fbc72d72b907da607cc1e7e9a0b99",
+        "fields": {
+          "authors": [
+            {
+              "family": "Gladyshev",
+              "given": "S."
+            },
+            {
+              "family": "Frizyuk",
+              "given": "K."
+            },
+            {
+              "family": "Bogdanov",
+              "given": "A."
+            }
+          ],
+          "title": "Symmetry analysis and multipole classification of eigenmodes in electromagnetic resonators for engineering their optical properties",
+          "venue": "Phys. Rev. B",
+          "year": 2020
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref20",
+        "ordinal": 20,
+        "page": 8,
+        "block_id": "p8-b27",
+        "raw": "20. I. Volkovskava et al., “Multipolar second-harmonic generation from high-Q quasi-BIC states in subwavelength resonators,” Nanophotonics 9(12), 3953–3963 (2020).",
+        "raw_sha256": "7acf0c97bc130fb7ed27e409f8d5df7d7881a04dcef946608ab500e967f64c19",
+        "fields": {
+          "authors": [
+            {
+              "family": "Volkovskava",
+              "given": "I."
+            }
+          ],
+          "title": "Multipolar second-harmonic generation from high-Q quasi-BIC states in subwavelength resonators",
+          "venue": "Nanophotonics",
+          "year": 2020
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref21",
+        "ordinal": 21,
+        "page": 8,
+        "block_id": "p8-b28",
+        "raw": "21. M. Odit et al., “Observation of supercavity modes in subwave- length dielectric resonators,” Adv. Mater. (2020).",
+        "raw_sha256": "1c6d51928acc4ff474c33f08e68ff1776eaa8f30a80a037510872d327fd7d178",
+        "fields": {
+          "authors": [
+            {
+              "family": "Odit",
+              "given": "M."
+            }
+          ],
+          "title": "Observation of supercavity modes in subwavelength dielectric resonators",
+          "venue": "Adv. Mater.",
+          "year": 2020
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref22",
+        "ordinal": 22,
+        "page": 8,
+        "block_id": "p8-b29",
+        "raw": "22. H. Friedrich and D. Wintgen, “Interfering resonances and bound states in the continuum,” Phys. Rev. A 32(6), 3231–3242 (1985).",
+        "raw_sha256": "6e1639e378c36a0067e18fa850c8ca9b6ef6825755ea8a4e197ce35f27e8df19",
+        "fields": {
+          "authors": [
+            {
+              "family": "Friedrich",
+              "given": "H."
+            },
+            {
+              "family": "Wintgen",
+              "given": "D."
+            }
+          ],
+          "title": "Interfering resonances and bound states in the continuum",
+          "venue": "Phys. Rev. A",
+          "year": 1985
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref23",
+        "ordinal": 23,
+        "page": 8,
+        "block_id": "p8-b30",
+        "raw": "23. A. F. Sadreev, E. N. Bulgakov, and I. Rotter, “Bound states in the continuum in open quantum billiards with a variable shape,” Phys. Rev. B 73(23), 235342 (2006).",
+        "raw_sha256": "a0089ba3b49a9e49728fcfcad4da472314e265c3b18d5a1f6e81d1681904282b",
+        "fields": {
+          "authors": [
+            {
+              "family": "Sadreev",
+              "given": "A. F."
+            },
+            {
+              "family": "Bulgakov",
+              "given": "E. N."
+            },
+            {
+              "family": "Rotter",
+              "given": "I."
+            }
+          ],
+          "title": "Bound states in the continuum in open quantum billiards with a variable shape",
+          "venue": "Phys. Rev. B",
+          "year": 2006
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref24",
+        "ordinal": 24,
+        "page": 8,
+        "block_id": "p8-b31",
+        "raw": "24. K. N. Pichugin and A. F. Sadreev, “Interaction between coaxial dielectric disks enhances the Q factor,” J. Appl. Phys. 126(9), 093105 (2019).",
+        "raw_sha256": "3639fea0d121a8ef79f9d66e1099fe2c04a7af4014bce39e28ee32bf0667588c",
+        "fields": {
+          "authors": [
+            {
+              "family": "Pichugin",
+              "given": "K. N."
+            },
+            {
+              "family": "Sadreev",
+              "given": "A. F."
+            }
+          ],
+          "title": "Interaction between coaxial dielectric disks enhances the Q factor",
+          "venue": "J. Appl. Phys.",
+          "year": 2019
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref25",
+        "ordinal": 25,
+        "page": 8,
+        "block_id": "p8-b32",
+        "raw": "25. A. A. Lyapina et al., “Bound states in the continuum in open acoustic resonators,” J. Fluid. Mech. 780, 370–387 (2015).",
+        "raw_sha256": "bc5c2580f5b35562d5f447452a8312803521a4fc9dc70ab0181c49c1b099349f",
+        "fields": {
+          "authors": [
+            {
+              "family": "Lyapina",
+              "given": "A. A."
+            }
+          ],
+          "title": "Bound states in the continuum in open acoustic resonators",
+          "venue": "J. Fluid. Mech.",
+          "year": 2015
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref26",
+        "ordinal": 26,
+        "page": 8,
+        "block_id": "p8-b33",
+        "raw": "26. Y. Yu and L. Cao, “Coupled leaky mode theory for light absorp- tion in 2D, 1D, and 0D semiconductor nanostructures,” Opt. Express 20(13), 13847–13856 (2012).",
+        "raw_sha256": "90122257ad0d2f2f085c6ebaca1ef5a546f8b89d6d5f57c1acbd7332c2a4b84e",
+        "fields": {
+          "authors": [
+            {
+              "family": "Yu",
+              "given": "Y."
+            },
+            {
+              "family": "Cao",
+              "given": "L."
+            }
+          ],
+          "title": "Coupled leaky mode theory for light absorption in 2D, 1D, and 0D semiconductor nanostructures",
+          "venue": "Opt. Express",
+          "year": 2012
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref27",
+        "ordinal": 27,
+        "page": 8,
+        "block_id": "p8-b34",
+        "raw": "27. L. Cao et al., “Engineering light absorption in semiconductor nanowire devices,” Nat. Mater. 8(8), 643–647 (2009).",
+        "raw_sha256": "837f3f76bb9ab08c2c2b67f9240f91917438e74ce83f4d5419f8439ed61c8c8f",
+        "fields": {
+          "authors": [
+            {
+              "family": "Cao",
+              "given": "L."
+            }
+          ],
+          "title": "Engineering light absorption in semiconductor nanowire devices",
+          "venue": "Nat. Mater.",
+          "year": 2009
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref28",
+        "ordinal": 28,
+        "page": 9,
+        "block_id": "p9-b2",
+        "raw": "28. J. Wiersig, “Hexagonal dielectric resonators and microcrystal lasers,” Phys. Rev. A. 67(2), 023807 (2003).",
+        "raw_sha256": "514c3fd9057b218d5aa61701f3c9839d624e9bafac0b83a930ea228e0eff1fce",
+        "fields": {
+          "authors": [
+            {
+              "family": "Wiersig",
+              "given": "J."
+            }
+          ],
+          "title": "Hexagonal dielectric resonators and microcrystal lasers",
+          "venue": "Phys. Rev. A.",
+          "year": 2003
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref29",
+        "ordinal": 29,
+        "page": 9,
+        "block_id": "p9-b3",
+        "raw": "29. S. Q. Li and K. B. Crozier, “Origin of the anapole condition as revealed by a simple expansion beyond the toroidal multipole,” Phys. Rev. B 97(24), 245423 (2018).",
+        "raw_sha256": "508f614d59ef1053465aa7e4cca5b3f8c14c629f5080a1d9a56d64bfb165cdc0",
+        "fields": {
+          "authors": [
+            {
+              "family": "Li",
+              "given": "S. Q."
+            },
+            {
+              "family": "Crozier",
+              "given": "K. B."
+            }
+          ],
+          "title": "Origin of the anapole condition as revealed by a simple expansion beyond the toroidal multipole",
+          "venue": "Phys. Rev. B",
+          "year": 2018
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref30",
+        "ordinal": 30,
+        "page": 9,
+        "block_id": "p9-b4",
+        "raw": "30. P. Grahn, A. Shevchenko, and M. Kaivola, “Electromagnetic multipole theory for optical nanomaterials,” New J. Phys. 14(9), 093033 (2012).",
+        "raw_sha256": "183355bf3855fb83ebd1ea48ec56aef02fc030e9bb5f82d8deb22a54e0587358",
+        "fields": {
+          "authors": [
+            {
+              "family": "Grahn",
+              "given": "P."
+            },
+            {
+              "family": "Shevchenko",
+              "given": "A."
+            },
+            {
+              "family": "Kaivola",
+              "given": "M."
+            }
+          ],
+          "title": "Electromagnetic multipole theory for optical nanomaterials",
+          "venue": "New J. Phys.",
+          "year": 2012
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref31",
+        "ordinal": 31,
+        "page": 9,
+        "block_id": "p9-b5",
+        "raw": "31. W. Chen, Y. Chen, and W. Liu, “Singularities and Poincaré indices of electromagnetic multipoles,” Phys. Rev. Lett. 122(15), 153907 (2019).",
+        "raw_sha256": "df1315dfa09a1f052a74bc0989da87f605619b1b4872563c1a470b23fafa2ee8",
+        "fields": {
+          "authors": [
+            {
+              "family": "Chen",
+              "given": "W."
+            },
+            {
+              "family": "Chen",
+              "given": "Y."
+            },
+            {
+              "family": "Liu",
+              "given": "W."
+            }
+          ],
+          "title": "Singularities and Poincaré indices of electromagnetic multipoles",
+          "venue": "Phys. Rev. Lett.",
+          "year": 2019
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref32",
+        "ordinal": 32,
+        "page": 9,
+        "block_id": "p9-b6",
+        "raw": "32. A. E. Miroshnichenko, S. Flach, and Y. S. Kivshar, “Fano reso- nances in nanoscale structures,” Rev. Mod. Phys. 82(3), 2257– 2298 (2010).",
+        "raw_sha256": "5bbcb23af1c8467ae5df2bfa21ea77e7ce884bf264324edfe74101c5ebce5a74",
+        "fields": {
+          "authors": [
+            {
+              "family": "Miroshnichenko",
+              "given": "A. E."
+            },
+            {
+              "family": "Flach",
+              "given": "S."
+            },
+            {
+              "family": "Kivshar",
+              "given": "Y. S."
+            }
+          ],
+          "title": "Fano resonances in nanoscale structures",
+          "venue": "Rev. Mod. Phys.",
+          "year": 2010
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref33",
+        "ordinal": 33,
+        "page": 9,
+        "block_id": "p9-b7",
+        "raw": "33. M. I. Tribelsky and A. E. Miroshnichenko, “Giant in-particle field concentration and Fano resonances at light scattering by high- refractive index particles,” Phys. Rev. A 93(5), 053837 (2016).",
+        "raw_sha256": "07145351c41ba459ef871ef81c0a73d20bf7e48a8b6fb91b437123c5a066fc97",
+        "fields": {
+          "authors": [
+            {
+              "family": "Tribelsky",
+              "given": "M. I."
+            },
+            {
+              "family": "Miroshnichenko",
+              "given": "A. E."
+            }
+          ],
+          "title": "Giant in-particle field concentration and Fano resonances at light scattering by high-refractive index particles",
+          "venue": "Phys. Rev. A",
+          "year": 2016
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref34",
+        "ordinal": 34,
+        "page": 9,
+        "block_id": "p9-b8",
+        "raw": "34. A. K. Gonzalez-Alcalde et al., “Magnetic mirror metasurface based on the in-phase excitation of magnetic dipole andelectric quadrupole resonances,” J. Appl. Phys. 125, 243103 (2019).",
+        "raw_sha256": "73a22ad2ba2d2fa9212425c2ca9e629c045a65f80b96ddf389aadfc4239680ee",
+        "fields": {
+          "authors": [
+            {
+              "family": "Gonzalez-Alcalde",
+              "given": "A. K."
+            }
+          ],
+          "title": "Magnetic mirror metasurface based on the in-phase excitation of magnetic dipole andelectric quadrupole resonances",
+          "venue": "J. Appl. Phys.",
+          "year": 2019
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref35",
+        "ordinal": 35,
+        "page": 9,
+        "block_id": "p9-b9",
+        "raw": "35. K. Kim and E. Wolf, “Non-radiating monochromatic sources and their fields,” Opt. Commun. 59(1), 1–6 (1986).",
+        "raw_sha256": "862b15085b2dfd73e456224291e9c1eec1262bd93f4791289d2e733f5b097420",
+        "fields": {
+          "authors": [
+            {
+              "family": "Kim",
+              "given": "K."
+            },
+            {
+              "family": "Wolf",
+              "given": "E."
+            }
+          ],
+          "title": "Non-radiating monochromatic sources and their fields",
+          "venue": "Opt. Commun.",
+          "year": 1986
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref36",
+        "ordinal": 36,
+        "page": 9,
+        "block_id": "p9-b10",
+        "raw": "36. A. A. Bogdanov et al., “Bound states in the continuum and Fano resonances in the strong mode coupling regime,” Adv. Photonics 1(1), 016001 (2019).",
+        "raw_sha256": "ed67f69ee81958d0eb8302bd02cf09716e054ac90c724044127484a52951c79c",
+        "fields": {
+          "authors": [
+            {
+              "family": "Bogdanov",
+              "given": "A. A."
+            }
+          ],
+          "title": "Bound states in the continuum and Fano resonances in the strong mode coupling regime",
+          "venue": "Adv. Photonics",
+          "year": 2019
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref37",
+        "ordinal": 37,
+        "page": 9,
+        "block_id": "p9-b11",
+        "raw": "37. L. Zhang et al., “Photonic-crystal exciton-polaritons in monolayer semiconductors,” Nat. Commun. 9(1), 713 (2018).",
+        "raw_sha256": "1459ce655d1833f81b3bd077a9c7f1dd2c906c0ea764d84cefad900f27f75857",
+        "fields": {
+          "authors": [
+            {
+              "family": "Zhang",
+              "given": "L."
+            }
+          ],
+          "title": "Photonic-crystal exciton-polaritons in monolayer semiconductors",
+          "venue": "Nat. Commun.",
+          "year": 2018
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref38",
+        "ordinal": 38,
+        "page": 9,
+        "block_id": "p9-b12",
+        "raw": "38. A. E. Miroshnichenko et al., “Nonradiating anapole modes in dielectric nanoparticles,” Nat. Commun. 6(1), 8069 (2015).",
+        "raw_sha256": "fd40b49d0eb1a638e6ac89f0e329a1680a41af81b275ccca48b5a280214bae98",
+        "fields": {
+          "authors": [
+            {
+              "family": "Miroshnichenko",
+              "given": "A. E."
+            }
+          ],
+          "title": "Nonradiating anapole modes in dielectric nanoparticles",
+          "venue": "Nat. Commun.",
+          "year": 2015
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref39",
+        "ordinal": 39,
+        "page": 9,
+        "block_id": "p9-b13",
+        "raw": "39. L. Xu et al., “Boosting third-harmonic generation by a mirror- enhanced anapole resonator,” Light. Sci. Appl. 7(1), 44 (2018).",
+        "raw_sha256": "a16f8832e38927da3188e764443776b7dd3626e78bc274cedae2603431290b45",
+        "fields": {
+          "authors": [
+            {
+              "family": "Xu",
+              "given": "L."
+            }
+          ],
+          "title": "Boosting third-harmonic generation by a mirror-enhanced anapole resonator",
+          "venue": "Light. Sci. Appl.",
+          "year": 2018
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref40",
+        "ordinal": 40,
+        "page": 9,
+        "block_id": "p9-b14",
+        "raw": "40. V. Mylnikov et al., “Lasing action in single subwavelength par- ticles supporting supercavity modes,” ACS Nano 14(6), 7338– 7346 (2020).",
+        "raw_sha256": "b12294b1a69ee194dcab0707903d805133bd487fddc3ba4e9fa6f8c1bbbc7e68",
+        "fields": {
+          "authors": [
+            {
+              "family": "Mylnikov",
+              "given": "V."
+            }
+          ],
+          "title": "Lasing action in single subwavelength particles supporting supercavity modes",
+          "venue": "ACS Nano",
+          "year": 2020
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref41",
+        "ordinal": 41,
+        "page": 9,
+        "block_id": "p9-b15",
+        "raw": "41. K. Koshelev et al., “Subwavelength dielectric resonators for non- linear nanophotonics,” Science 367(6475), 288–292 (2020).",
+        "raw_sha256": "2cfc8edfaf119f77221d5d3040f687d65a6f6fd840c708625c32fea47c668bce",
+        "fields": {
+          "authors": [
+            {
+              "family": "Koshelev",
+              "given": "K."
+            }
+          ],
+          "title": "Subwavelength dielectric resonators for nonlinear nanophotonics",
+          "venue": "Science",
+          "year": 2020
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref42",
+        "ordinal": 42,
+        "page": 9,
+        "block_id": "p9-b16",
+        "raw": "42. M. P. Nezhad et al., “Room-temperature subwavelength metallo- dielectric lasers,” Nat. Photonics 4(6), 395–399 (2010).",
+        "raw_sha256": "be3ab4abdf7783b99762e8758bee0671e6c7aaa27e47bfefd140b440dd3808b3",
+        "fields": {
+          "authors": [
+            {
+              "family": "Nezhad",
+              "given": "M. P."
+            }
+          ],
+          "title": "Room-temperature subwavelength metallo-dielectric lasers",
+          "venue": "Nat. Photonics",
+          "year": 2010
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref43",
+        "ordinal": 43,
+        "page": 9,
+        "block_id": "p9-b17",
+        "raw": "43. C. Huang et al., “Ultrafast control of vortex microlasers,” Science 367(6481), 1018–1021 (2020).",
+        "raw_sha256": "17a7adf06a108571176690f62e341677c463df320dc0e7315ffbec2e2b28edd1",
+        "fields": {
+          "authors": [
+            {
+              "family": "Huang",
+              "given": "C."
+            }
+          ],
+          "title": "Ultrafast control of vortex microlasers",
+          "venue": "Science",
+          "year": 2020
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref44",
+        "ordinal": 44,
+        "page": 9,
+        "block_id": "p9-b18",
+        "raw": "44. L. Carletti et al., “Giant nonlinear response at the nanoscale driven by bound states in the continuum,” Phys. Rev. Lett. 121(3), 033903 (2018).",
+        "raw_sha256": "b1bd0ae092849aed3ebc87b48928f6edcf68a70731dd288b85f05a88901f4175",
+        "fields": {
+          "authors": [
+            {
+              "family": "Carletti",
+              "given": "L."
+            }
+          ],
+          "title": "Giant nonlinear response at the nanoscale driven by bound states in the continuum",
+          "venue": "Phys. Rev. Lett.",
+          "year": 2018
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref45",
+        "ordinal": 45,
+        "page": 9,
+        "block_id": "p9-b19",
+        "raw": "45. L. Xu et al., “Dynamic nonlinear image tuning through magnetic dipole quasi-BIC ultrathin resonators,” Adv. Sci. 6, 1802119 (2019).",
+        "raw_sha256": "7730b0ae6193bec67112cd2214abe27fce7f2871e154d2ce182164a03b39c44c",
+        "fields": {
+          "authors": [
+            {
+              "family": "Xu",
+              "given": "L."
+            }
+          ],
+          "title": "Dynamic nonlinear image tuning through magnetic dipole quasi-BIC ultrathin resonators",
+          "venue": "Adv. Sci.",
+          "year": 2019
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      }
+    ],
+    "markers": []
+  }
+}

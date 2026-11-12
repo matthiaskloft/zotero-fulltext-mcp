@@ -1,0 +1,1177 @@
+{
+  "schema_version": 1,
+  "record_kind": "expectation",
+  "record_id": "pilot-sle-blockchain-education",
+  "document": {
+    "pdf_sha256": "dbc437b2f2c442e91658e6e5bee8e973422577b3adce8af523cf3bf17bae1484",
+    "title": "Exploring blockchain technology and its potential applications for education",
+    "page_count": 10,
+    "corpus_id": "sle-blockchain-education"
+  },
+  "scope": {
+    "kind": "pages",
+    "physical_pages": [
+      10
+    ]
+  },
+  "pages": [
+    {
+      "physical_page": 10,
+      "printed_label": null,
+      "geometry": {
+        "unit": "pt",
+        "origin": "top-left",
+        "frame": "displayed",
+        "box": "cropbox",
+        "rotation": 0,
+        "width": 595.276,
+        "height": 793.701
+      },
+      "render": {
+        "renderer": "pymupdf",
+        "renderer_version": "1.28.0",
+        "dpi": 150,
+        "image_sha256": "e99625993a6b6533b1f3dee41e1c826f7749dd8b62cf2b2a4e13eff4adc736dc"
+      },
+      "body_start": {
+        "block_id": "p10-b3"
+      },
+      "body_end": {
+        "block_id": "p10-b39"
+      }
+    }
+  ],
+  "blocks": [
+    {
+      "id": "p10-b1",
+      "type": "header",
+      "page": 10,
+      "reading_order": 1,
+      "bbox": {
+        "x0": 55.69,
+        "y0": 32.39,
+        "x1": 230.01,
+        "y1": 43.42
+      },
+      "text": "Chen et al. Smart Learning Environments (2018) 5:1",
+      "text_sha256": "9397d01171a1701c6ff0d9b7549458e030543ca9ba44c1b5faaa84e055f791fe"
+    },
+    {
+      "id": "p10-b2",
+      "type": "header",
+      "page": 10,
+      "reading_order": 2,
+      "bbox": {
+        "x0": 490.98,
+        "y0": 33.24,
+        "x1": 539.58,
+        "y1": 43.24
+      },
+      "text": "Page 10 of 10",
+      "text_sha256": "9602c92b1569ef20418030c4dcb212030ed6d6faa0cdb26c96a9d23e2b3418df"
+    },
+    {
+      "id": "p10-b3",
+      "type": "heading",
+      "page": 10,
+      "reading_order": 3,
+      "bbox": {
+        "x0": 116.64,
+        "y0": 89.78,
+        "x1": 186.73,
+        "y1": 99.48
+      },
+      "text": "Authors’ information",
+      "text_sha256": "5256ec654bfff8b6424f60ef569ccf014a75a02d41754e2cc9077cb6266d6ec5"
+    },
+    {
+      "id": "p10-b4",
+      "type": "paragraph",
+      "page": 10,
+      "reading_order": 4,
+      "bbox": {
+        "x0": 116.64,
+        "y0": 98.94,
+        "x1": 476.93,
+        "y1": 117.45
+      },
+      "text": "Dr. Guang Chen is Assistant Professor in the School of Educational Technology, Faculty of Education, Beijing Normal University. His current research interest is cognitive development in information age and smart learning environments.",
+      "text_sha256": "deb80745cbccb4a30a20767d4ee2d70b39b68974c3143c1ccc4b3516c351b2e6"
+    },
+    {
+      "id": "p10-b5",
+      "type": "paragraph",
+      "page": 10,
+      "reading_order": 5,
+      "bbox": {
+        "x0": 116.64,
+        "y0": 116.96,
+        "x1": 470.3,
+        "y1": 135.48
+      },
+      "text": "Bing Xu is a Master in the School of Educational Technology, Faculty of Education, Beijing Normal University. Her current research interest is smart learning environments and digital reading.",
+      "text_sha256": "725b4e819987f42576af31bc2f7874bd07a40da8be8abd3fb9bb445e525d7abd"
+    },
+    {
+      "id": "p10-b6",
+      "type": "paragraph",
+      "page": 10,
+      "reading_order": 6,
+      "bbox": {
+        "x0": 116.64,
+        "y0": 134.94,
+        "x1": 472.4,
+        "y1": 153.45
+      },
+      "text": "Manli Lu is a Master in the School of Educational Technology, Faculty of Education, Beijing Normal University. Her current research interest is online synchronous learning and smart learning environments.",
+      "text_sha256": "3a71627ea7830b61ecb75b6b90f6509f05e016a21da23af070a15eac6e73865f"
+    },
+    {
+      "id": "p10-b7",
+      "type": "paragraph",
+      "page": 10,
+      "reading_order": 7,
+      "bbox": {
+        "x0": 116.64,
+        "y0": 152.96,
+        "x1": 476.25,
+        "y1": 180.44
+      },
+      "text": "Dr. Nian-Shing Chen is Chair Professor in the Department of Information Management at the National Sun Yat-sen University, Taiwan. His current research interests include assessing e-Learning course performance; online synchronous teaching & learning; mobile & ubiquitous learning; Natural user interface & Game-based learning.",
+      "text_sha256": "12890df0d6987bf771540e30be943812cf28468a5050bed62cca1fe4dadf1d3f"
+    },
+    {
+      "id": "p10-b8",
+      "type": "heading",
+      "page": 10,
+      "reading_order": 8,
+      "bbox": {
+        "x0": 116.64,
+        "y0": 188.96,
+        "x1": 195.63,
+        "y1": 198.46
+      },
+      "text": "Consent for publication",
+      "text_sha256": "cc0e7035fb185138fb90c70b20c9078a3e60ce6d3d0de9f1612d27515a8bf14a"
+    },
+    {
+      "id": "p10-b9",
+      "type": "paragraph",
+      "page": 10,
+      "reading_order": 9,
+      "bbox": {
+        "x0": 116.64,
+        "y0": 197.98,
+        "x1": 472.21,
+        "y1": 225.45
+      },
+      "text": "Neither this manuscript nor any significant part of it is under consideration for publication elsewhere or published or available elsewhere in a manner that could be construed as a prior or duplicate publication of the same or substantially overlapping content.",
+      "text_sha256": "6e4a61dabe345a244256ce43df94c0d3809144756d887d4d2c09552d93e61682"
+    },
+    {
+      "id": "p10-b10",
+      "type": "heading",
+      "page": 10,
+      "reading_order": 10,
+      "bbox": {
+        "x0": 116.64,
+        "y0": 233.98,
+        "x1": 184.8,
+        "y1": 243.48
+      },
+      "text": "Competing interests",
+      "text_sha256": "9abdb71c61909fcbda986b221203187a32a089656a81ea1f1147df607f367b55"
+    },
+    {
+      "id": "p10-b11",
+      "type": "paragraph",
+      "page": 10,
+      "reading_order": 11,
+      "bbox": {
+        "x0": 116.64,
+        "y0": 242.93,
+        "x1": 298.14,
+        "y1": 252.43
+      },
+      "text": "The authors declare that they have no competing interests.",
+      "text_sha256": "c9afbf8333458e9ebad4dc79254a235880ca4cb3d8dd43e1c52fe937d3ab02e5"
+    },
+    {
+      "id": "p10-b12",
+      "type": "heading",
+      "page": 10,
+      "reading_order": 12,
+      "bbox": {
+        "x0": 116.64,
+        "y0": 268.78,
+        "x1": 194.02,
+        "y1": 281.36
+      },
+      "text": "Publisher’s Note",
+      "text_sha256": "864a1ccfee30263e475f16d2f62e593eb02df489a160c545e603f5dc89ecc830"
+    },
+    {
+      "id": "p10-b13",
+      "type": "paragraph",
+      "page": 10,
+      "reading_order": 13,
+      "bbox": {
+        "x0": 116.64,
+        "y0": 280.24,
+        "x1": 463.86,
+        "y1": 289.74
+      },
+      "text": "Springer Nature remains neutral with regard to jurisdictional claims in published maps and institutional affiliations.",
+      "text_sha256": "e23de2474afa8657899fd15dffc7f7d06b7a72343c3a6c58c795a9da5cb9e548"
+    },
+    {
+      "id": "p10-b14",
+      "type": "heading",
+      "page": 10,
+      "reading_order": 14,
+      "bbox": {
+        "x0": 116.64,
+        "y0": 298.27,
+        "x1": 164.89,
+        "y1": 307.77
+      },
+      "text": "Author details",
+      "text_sha256": "37df1019715359df173fa9d26d75e501c4a6f3c840f28a9320cc171621656ed8"
+    },
+    {
+      "id": "p10-b15",
+      "type": "paragraph",
+      "page": 10,
+      "reading_order": 15,
+      "bbox": {
+        "x0": 116.64,
+        "y0": 305.64,
+        "x1": 451.81,
+        "y1": 334.75
+      },
+      "text": "1School of Educational Technology, Faculty of Education, Beijing Normal University, Beijing, China. 2Beijing Key Laboratory of Education Technology, Beijing Normal University, Beijing, China. 3Department of Information Management, National Sun Yat-sen University, Kaohsiung, Taiwan.",
+      "text_sha256": "c279b7bf30f984530560d7ed81600e47ae7953eec3b78b66db23f210da93b2c7"
+    },
+    {
+      "id": "p10-b16",
+      "type": "paragraph",
+      "page": 10,
+      "reading_order": 16,
+      "bbox": {
+        "x0": 116.64,
+        "y0": 343.23,
+        "x1": 304.18,
+        "y1": 352.73
+      },
+      "text": "Received: 5 September 2017 Accepted: 21 December 2017",
+      "text_sha256": "29b05410b54997269396824fd2c0cfc59d1d70f187c84a2cb63d61161d716f16"
+    },
+    {
+      "id": "p10-b17",
+      "type": "paragraph",
+      "page": 10,
+      "reading_order": 17,
+      "bbox": {
+        "x0": 117.0,
+        "y0": 352.5,
+        "x1": 237.0,
+        "y1": 363.0
+      },
+      "text": "Published online: 03 January 2018",
+      "text_sha256": "1d9db0b440fed9e8d649d949c43d103c5b7f280766deda7bc5ab6a994a1a9fd1",
+      "uncertainty": {
+        "level": "low",
+        "note": "set in a different typeface and absent from the text layer; transcribed from the page image"
+      }
+    },
+    {
+      "id": "p10-b18",
+      "type": "heading",
+      "page": 10,
+      "reading_order": 18,
+      "bbox": {
+        "x0": 116.64,
+        "y0": 370.27,
+        "x1": 153.83,
+        "y1": 379.77
+      },
+      "text": "References",
+      "text_sha256": "69824d3b0e70ca6aaa0da1613b65fd914c442bf1f7ad1bb22bcdfbdfe1a05e39"
+    },
+    {
+      "id": "p10-b19",
+      "type": "reference_entry",
+      "page": 10,
+      "reading_order": 19,
+      "bbox": {
+        "x0": 116.64,
+        "y0": 379.02,
+        "x1": 437.47,
+        "y1": 397.7
+      },
+      "text": "R Beck, JS Czepluch, N Lollike, S Malone, Blockchain – The Gateway to Trust-Free Cryptographic Transactions. In Research Papers from ECIS2016, (Istanbul, 2016)",
+      "text_sha256": "a309f43ac9aec7514f7c57730be7e5008a2a54871f0a649122c91129a3823927"
+    },
+    {
+      "id": "p10-b20",
+      "type": "reference_entry",
+      "page": 10,
+      "reading_order": 20,
+      "bbox": {
+        "x0": 116.64,
+        "y0": 397.4,
+        "x1": 460.47,
+        "y1": 415.73
+      },
+      "text": "M Chung, J Kim, The internet information and technology research directions based on the fourth industrial revolution. KSII Trans. Internet Inf. Syst. 10(3), 1311–1320 (2016)",
+      "text_sha256": "d78fce85a9e859aac98738f7b7b97be899334f9d620d48a57da24dc848bb4aac"
+    },
+    {
+      "id": "p10-b21",
+      "type": "reference_entry",
+      "page": 10,
+      "reading_order": 21,
+      "bbox": {
+        "x0": 116.64,
+        "y0": 415.02,
+        "x1": 374.33,
+        "y1": 424.68
+      },
+      "text": "R Collins, Blockchain: A new architecture for digital content. EContent 39(8), 22–23 (2016)",
+      "text_sha256": "2c4ec87beda0725be168ce335ad6c81a6e5f40d67a4372d6136ea5ae8f2a7b6c"
+    },
+    {
+      "id": "p10-b22",
+      "type": "reference_entry",
+      "page": 10,
+      "reading_order": 22,
+      "bbox": {
+        "x0": 116.64,
+        "y0": 424.39,
+        "x1": 459.31,
+        "y1": 442.71
+      },
+      "text": "P Devine, Blockchain learning: can crypto-currency methods be appropriated to enhance online learning? Presented at the ALT Online Winter Conference 2015, Online, (United Kingdom, 2015)",
+      "text_sha256": "c7d0a5b661bb76ac93520e1948a0a5fbe6e67d86e47d5f2b090970ab9c900f4b"
+    },
+    {
+      "id": "p10-b23",
+      "type": "reference_entry",
+      "page": 10,
+      "reading_order": 23,
+      "bbox": {
+        "x0": 116.64,
+        "y0": 442.06,
+        "x1": 454.68,
+        "y1": 460.68
+      },
+      "text": "K Fanning, DP Centers, Blockchain and its coming impact on financial services. J. Corp. Account. Finance 27(5), 53–57 (2016) https://doi.org/10.1002/jcaf.22179",
+      "text_sha256": "856ff6be8b469a5e72544b42dbac81cfba7081e700a7396c9b19a5fc64813afc"
+    },
+    {
+      "id": "p10-b24",
+      "type": "reference_entry",
+      "page": 10,
+      "reading_order": 24,
+      "bbox": {
+        "x0": 116.64,
+        "y0": 460.04,
+        "x1": 457.33,
+        "y1": 478.71
+      },
+      "text": "S Haber, WS Stornetta, How to time-stamp a digital document. J. Cryptol. 3(2), 99–111 (1991) https://doi.org/10. 1007/BF00196791",
+      "text_sha256": "0bc4b6e08b93f025a65d5e752960503a85d4d05d1b6d0a47b7bc9cfcb58e4383"
+    },
+    {
+      "id": "p10-b25",
+      "type": "reference_entry",
+      "page": 10,
+      "reading_order": 25,
+      "bbox": {
+        "x0": 116.64,
+        "y0": 478.06,
+        "x1": 457.67,
+        "y1": 496.68
+      },
+      "text": "MB Hoy, An introduction to the Blockchain and its implications for libraries and medicine. Med. Ref. Serv. Q. 36(3), 273–279 (2017) https://doi.org/10.1080/02763869.2017.1332261",
+      "text_sha256": "a08e2d31926175989a0ab63e1108b5ecb68e1804ecd83547e1c70fe5699f2183"
+    },
+    {
+      "id": "p10-b26",
+      "type": "reference_entry",
+      "page": 10,
+      "reading_order": 26,
+      "bbox": {
+        "x0": 116.64,
+        "y0": 496.39,
+        "x1": 456.82,
+        "y1": 514.71
+      },
+      "text": "A Kosba, A Miller, E Shi, Z Wen, C Papamanthou, in 2016 IEEE Symposium on Security and Privacy (SP). Hawk: The Blockchain Model of Cryptography and Privacy-Preserving Smart Contracts (2016), pp. 839–858 https://doi.org/10.1109/SP.2016.55",
+      "text_sha256": "9497b2ad2479159a7621357b2803341b335d7051ffb9269e295f5922cb2cdef9"
+    },
+    {
+      "id": "p10-b27",
+      "type": "reference_entry",
+      "page": 10,
+      "reading_order": 27,
+      "bbox": {
+        "x0": 116.64,
+        "y0": 514.06,
+        "x1": 431.42,
+        "y1": 532.68
+      },
+      "text": "D Kraft, Difficulty control for blockchain-based consensus systems. Peer Peer Netw. Appl. 9(2), 397–413 (2016) https://doi.org/10.1007/s12083-015-0347-x",
+      "text_sha256": "49481143bfce498dea5e5185a3ae043f53642f714f221d0256a186a851084d2d"
+    },
+    {
+      "id": "p10-b28",
+      "type": "reference_entry",
+      "page": 10,
+      "reading_order": 28,
+      "bbox": {
+        "x0": 116.64,
+        "y0": 532.39,
+        "x1": 439.03,
+        "y1": 541.7
+      },
+      "text": "S Nakamoto, Bitcoin: A peer-to-peer electronic cash system. (2008) Retrieved from https://bitcoin.org/bitcoin.pdf",
+      "text_sha256": "f82610d5748b155f85101eecf30fdaebfaffc123d689266e0a50509647007129"
+    },
+    {
+      "id": "p10-b29",
+      "type": "reference_entry",
+      "page": 10,
+      "reading_order": 29,
+      "bbox": {
+        "x0": 116.64,
+        "y0": 541.05,
+        "x1": 406.23,
+        "y1": 559.72
+      },
+      "text": "M Peck, A blockchain currency that beat s bitcoin on privacy. IEEE Spectr. 53(12), 11–13 (2016) https://doi.org/10.1109/MSPEC.2016.7761864",
+      "text_sha256": "094061adfcc447702fcfef1be8c6c32ce97d8ae5ca9de73da5262f0f832a45f3"
+    },
+    {
+      "id": "p10-b30",
+      "type": "reference_entry",
+      "page": 10,
+      "reading_order": 30,
+      "bbox": {
+        "x0": 116.64,
+        "y0": 559.37,
+        "x1": 398.44,
+        "y1": 568.68
+      },
+      "text": "K Schwab, The Fourth Industrial Revolution (The Crown Publishing Group, New York City, NY, 2017)",
+      "text_sha256": "4d4fbb2c09f4b22ccc3657e5f4ab7c62a7a9b5cf44cdb5e6c40761499dfc58d3"
+    },
+    {
+      "id": "p10-b31",
+      "type": "reference_entry",
+      "page": 10,
+      "reading_order": 31,
+      "bbox": {
+        "x0": 116.64,
+        "y0": 568.39,
+        "x1": 453.06,
+        "y1": 586.71
+      },
+      "text": "M Sharples, J Domingue, in The Blockchain and Kudos: A Distributed System for Educational Record, Reputation and Reward. Adaptive and adaptable learning (Springer, Cham, 2016), pp. 490–496 https://doi.org/10.1007/978-3-319-45153-4_48",
+      "text_sha256": "caf25b5d2018ca2d7e3eb296383c8556f0025762371b520da588e2c83ff86cde"
+    },
+    {
+      "id": "p10-b32",
+      "type": "reference_entry",
+      "page": 10,
+      "reading_order": 32,
+      "bbox": {
+        "x0": 116.64,
+        "y0": 586.06,
+        "x1": 434.43,
+        "y1": 604.68
+      },
+      "text": "DJ Skiba, The potential of Blockchain in education and health care. Nurs. Educ. Perspect. 38(4), 220–221 (2017) https://doi.org/10.1097/01.NEP.0000000000000190",
+      "text_sha256": "bcc63ed2cd36270eec2b6d42f3c90c650c775cbd9d4d47944753cb8b9aca32ae"
+    },
+    {
+      "id": "p10-b33",
+      "type": "reference_entry",
+      "page": 10,
+      "reading_order": 33,
+      "bbox": {
+        "x0": 116.64,
+        "y0": 604.04,
+        "x1": 393.4,
+        "y1": 613.7
+      },
+      "text": "M Swan, Blockchain: Blueprint for a New Economy, 1st edn. (O’Reilly Media, Sebastopol, CA, 2015)",
+      "text_sha256": "7b0639b60ea5269abfe1e83de350cf5625a95cb320f789f10d6b439fed413f70"
+    },
+    {
+      "id": "p10-b34",
+      "type": "reference_entry",
+      "page": 10,
+      "reading_order": 34,
+      "bbox": {
+        "x0": 116.64,
+        "y0": 613.4,
+        "x1": 460.68,
+        "y1": 631.73
+      },
+      "text": "F Tschorsch, B Scheuermann, Bitcoin and beyond: A technical survey on decentralized digital currencies. IEEE Commun. Surv. Tutorials 18(3), 2084–2123 (2016) https://doi.org/10.1109/COMST.2016.2535718",
+      "text_sha256": "c0b7f5b2bcea65143bb1a61e2a5a13207cfc1bb266fb8f6ff4db1c230624e2e1"
+    },
+    {
+      "id": "p10-b35",
+      "type": "reference_entry",
+      "page": 10,
+      "reading_order": 35,
+      "bbox": {
+        "x0": 116.64,
+        "y0": 631.02,
+        "x1": 437.54,
+        "y1": 640.68
+      },
+      "text": "S Underwood, Blockchain beyond Bitcoin. Commun. ACM 59(11), 15–17 (2016) https://doi.org/10.1145/2994581",
+      "text_sha256": "cf19dda6f75819d078b3a676cc3b202a957da68b9a2a5b33313c8050aa58af9f"
+    },
+    {
+      "id": "p10-b36",
+      "type": "reference_entry",
+      "page": 10,
+      "reading_order": 36,
+      "bbox": {
+        "x0": 116.64,
+        "y0": 640.03,
+        "x1": 443.47,
+        "y1": 658.71
+      },
+      "text": "M Vukolić, in The Quest for Scalable Blockchain Fabric: Proof-of-Work vs. BFT Replication. Open problems in network security (Springer, Cham, 2015), pp. 112–125 https://doi.org/10.1007/978-3-319-39028-4_9",
+      "text_sha256": "c26ad672ccc7cb122882db22ddeeaaef6d73c6b68bc785e05df1b9bd61e86c2b"
+    },
+    {
+      "id": "p10-b37",
+      "type": "reference_entry",
+      "page": 10,
+      "reading_order": 37,
+      "bbox": {
+        "x0": 116.64,
+        "y0": 658.41,
+        "x1": 411.1,
+        "y1": 676.68
+      },
+      "text": "H Wang, K Chen, D Xu, A maturity model for blockchain adoption. Financ. Innov. 2(1), 12 (2016) https://doi.org/10.1186/s40854-016-0031-z",
+      "text_sha256": "6c9d43e9b8994e1f156696b8e62f88c9f93d6707d438444653357c8077543348"
+    },
+    {
+      "id": "p10-b38",
+      "type": "reference_entry",
+      "page": 10,
+      "reading_order": 38,
+      "bbox": {
+        "x0": 116.64,
+        "y0": 676.03,
+        "x1": 450.96,
+        "y1": 694.71
+      },
+      "text": "J Yli-Huumo, D Ko, S Choi, S Park, K Smolander, Where is current research on Blockchain technology?—A systematic review. PLoS One 11(10), e0163477 (2016) https://doi.org/10.1371/journal.pone.0163477",
+      "text_sha256": "8f5081f81a63c537106e382b3a89b3b9f3490ac7510204d72b2e5bfcb4782445"
+    },
+    {
+      "id": "p10-b39",
+      "type": "reference_entry",
+      "page": 10,
+      "reading_order": 39,
+      "bbox": {
+        "x0": 116.64,
+        "y0": 694.42,
+        "x1": 461.2,
+        "y1": 721.7
+      },
+      "text": "Z Zheng, S Xie, H Dai, X Chen, H Wang, in 2017 IEEE International Congress on Big Data (BigData Congress). An Overview of Blockchain Technology: Architecture, Consensus, and Future Trends (2017), pp. 557–564 https://doi.org/10.1109/ BigDataCongress.2017.85",
+      "text_sha256": "ae5cac376641e0669da64c2b686d86cac3e2e3b6a7517b8f142ca4d44e46b1e8"
+    }
+  ],
+  "provenance": {
+    "proposed_by": {
+      "tool": "extraction-pilot-drafts",
+      "version": "3",
+      "options_sha256": "b74e6f2f9c021751643a9a5d2e4451944b229defbcf37f11c98141324265f7b4"
+    },
+    "review": {
+      "status": "reviewed",
+      "reviewer": "agent-claude-sonnet-5-5",
+      "reviewed_at": "2026-11-12T16:26:58Z",
+      "basis": "page_image_inspection"
+    }
+  },
+  "references": {
+    "entries": [
+      {
+        "id": "ref1",
+        "ordinal": 1,
+        "page": 10,
+        "block_id": "p10-b19",
+        "raw": "R Beck, JS Czepluch, N Lollike, S Malone, Blockchain – The Gateway to Trust-Free Cryptographic Transactions. In Research Papers from ECIS2016, (Istanbul, 2016)",
+        "raw_sha256": "a309f43ac9aec7514f7c57730be7e5008a2a54871f0a649122c91129a3823927",
+        "fields": {
+          "authors": [
+            {
+              "family": "Beck",
+              "given": "R"
+            },
+            {
+              "family": "Czepluch",
+              "given": "JS"
+            },
+            {
+              "family": "Lollike",
+              "given": "N"
+            },
+            {
+              "family": "Malone",
+              "given": "S"
+            }
+          ],
+          "title": "Blockchain – The Gateway to Trust-Free Cryptographic Transactions",
+          "venue": "Research Papers from ECIS2016",
+          "year": 2016
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref2",
+        "ordinal": 2,
+        "page": 10,
+        "block_id": "p10-b20",
+        "raw": "M Chung, J Kim, The internet information and technology research directions based on the fourth industrial revolution. KSII Trans. Internet Inf. Syst. 10(3), 1311–1320 (2016)",
+        "raw_sha256": "d78fce85a9e859aac98738f7b7b97be899334f9d620d48a57da24dc848bb4aac",
+        "fields": {
+          "authors": [
+            {
+              "family": "Chung",
+              "given": "M"
+            },
+            {
+              "family": "Kim",
+              "given": "J"
+            }
+          ],
+          "title": "The internet information and technology research directions based on the fourth industrial revolution",
+          "venue": "KSII Trans. Internet Inf. Syst.",
+          "year": 2016
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref3",
+        "ordinal": 3,
+        "page": 10,
+        "block_id": "p10-b21",
+        "raw": "R Collins, Blockchain: A new architecture for digital content. EContent 39(8), 22–23 (2016)",
+        "raw_sha256": "2c4ec87beda0725be168ce335ad6c81a6e5f40d67a4372d6136ea5ae8f2a7b6c",
+        "fields": {
+          "authors": [
+            {
+              "family": "Collins",
+              "given": "R"
+            }
+          ],
+          "title": "Blockchain: A new architecture for digital content",
+          "venue": "EContent",
+          "year": 2016
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref4",
+        "ordinal": 4,
+        "page": 10,
+        "block_id": "p10-b22",
+        "raw": "P Devine, Blockchain learning: can crypto-currency methods be appropriated to enhance online learning? Presented at the ALT Online Winter Conference 2015, Online, (United Kingdom, 2015)",
+        "raw_sha256": "c7d0a5b661bb76ac93520e1948a0a5fbe6e67d86e47d5f2b090970ab9c900f4b",
+        "fields": {
+          "authors": [
+            {
+              "family": "Devine",
+              "given": "P"
+            }
+          ],
+          "title": "Blockchain learning: can crypto-currency methods be appropriated to enhance online learning?",
+          "venue": "ALT Online Winter Conference 2015",
+          "year": 2015
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref5",
+        "ordinal": 5,
+        "page": 10,
+        "block_id": "p10-b23",
+        "raw": "K Fanning, DP Centers, Blockchain and its coming impact on financial services. J. Corp. Account. Finance 27(5), 53–57 (2016) https://doi.org/10.1002/jcaf.22179",
+        "raw_sha256": "856ff6be8b469a5e72544b42dbac81cfba7081e700a7396c9b19a5fc64813afc",
+        "fields": {
+          "authors": [
+            {
+              "family": "Fanning",
+              "given": "K"
+            },
+            {
+              "family": "Centers",
+              "given": "DP"
+            }
+          ],
+          "title": "Blockchain and its coming impact on financial services",
+          "venue": "J. Corp. Account. Finance",
+          "year": 2016
+        },
+        "doi": {
+          "status": "present",
+          "value": "10.1002/jcaf.22179"
+        }
+      },
+      {
+        "id": "ref6",
+        "ordinal": 6,
+        "page": 10,
+        "block_id": "p10-b24",
+        "raw": "S Haber, WS Stornetta, How to time-stamp a digital document. J. Cryptol. 3(2), 99–111 (1991) https://doi.org/10. 1007/BF00196791",
+        "raw_sha256": "0bc4b6e08b93f025a65d5e752960503a85d4d05d1b6d0a47b7bc9cfcb58e4383",
+        "fields": {
+          "authors": [
+            {
+              "family": "Haber",
+              "given": "S"
+            },
+            {
+              "family": "Stornetta",
+              "given": "WS"
+            }
+          ],
+          "title": "How to time-stamp a digital document",
+          "venue": "J. Cryptol.",
+          "year": 1991
+        },
+        "doi": {
+          "status": "present",
+          "value": "10.1007/BF00196791"
+        }
+      },
+      {
+        "id": "ref7",
+        "ordinal": 7,
+        "page": 10,
+        "block_id": "p10-b25",
+        "raw": "MB Hoy, An introduction to the Blockchain and its implications for libraries and medicine. Med. Ref. Serv. Q. 36(3), 273–279 (2017) https://doi.org/10.1080/02763869.2017.1332261",
+        "raw_sha256": "a08e2d31926175989a0ab63e1108b5ecb68e1804ecd83547e1c70fe5699f2183",
+        "fields": {
+          "authors": [
+            {
+              "family": "Hoy",
+              "given": "MB"
+            }
+          ],
+          "title": "An introduction to the Blockchain and its implications for libraries and medicine",
+          "venue": "Med. Ref. Serv. Q.",
+          "year": 2017
+        },
+        "doi": {
+          "status": "present",
+          "value": "10.1080/02763869.2017.1332261"
+        }
+      },
+      {
+        "id": "ref8",
+        "ordinal": 8,
+        "page": 10,
+        "block_id": "p10-b26",
+        "raw": "A Kosba, A Miller, E Shi, Z Wen, C Papamanthou, in 2016 IEEE Symposium on Security and Privacy (SP). Hawk: The Blockchain Model of Cryptography and Privacy-Preserving Smart Contracts (2016), pp. 839–858 https://doi.org/10.1109/SP.2016.55",
+        "raw_sha256": "9497b2ad2479159a7621357b2803341b335d7051ffb9269e295f5922cb2cdef9",
+        "fields": {
+          "authors": [
+            {
+              "family": "Kosba",
+              "given": "A"
+            },
+            {
+              "family": "Miller",
+              "given": "A"
+            },
+            {
+              "family": "Shi",
+              "given": "E"
+            },
+            {
+              "family": "Wen",
+              "given": "Z"
+            },
+            {
+              "family": "Papamanthou",
+              "given": "C"
+            }
+          ],
+          "title": "Hawk: The Blockchain Model of Cryptography and Privacy-Preserving Smart Contracts",
+          "venue": "2016 IEEE Symposium on Security and Privacy (SP)",
+          "year": 2016
+        },
+        "doi": {
+          "status": "present",
+          "value": "10.1109/SP.2016.55"
+        }
+      },
+      {
+        "id": "ref9",
+        "ordinal": 9,
+        "page": 10,
+        "block_id": "p10-b27",
+        "raw": "D Kraft, Difficulty control for blockchain-based consensus systems. Peer Peer Netw. Appl. 9(2), 397–413 (2016) https://doi.org/10.1007/s12083-015-0347-x",
+        "raw_sha256": "49481143bfce498dea5e5185a3ae043f53642f714f221d0256a186a851084d2d",
+        "fields": {
+          "authors": [
+            {
+              "family": "Kraft",
+              "given": "D"
+            }
+          ],
+          "title": "Difficulty control for blockchain-based consensus systems",
+          "venue": "Peer Peer Netw. Appl.",
+          "year": 2016
+        },
+        "doi": {
+          "status": "present",
+          "value": "10.1007/s12083-015-0347-x"
+        }
+      },
+      {
+        "id": "ref10",
+        "ordinal": 10,
+        "page": 10,
+        "block_id": "p10-b28",
+        "raw": "S Nakamoto, Bitcoin: A peer-to-peer electronic cash system. (2008) Retrieved from https://bitcoin.org/bitcoin.pdf",
+        "raw_sha256": "f82610d5748b155f85101eecf30fdaebfaffc123d689266e0a50509647007129",
+        "fields": {
+          "authors": [
+            {
+              "family": "Nakamoto",
+              "given": "S"
+            }
+          ],
+          "title": "Bitcoin: A peer-to-peer electronic cash system",
+          "year": 2008
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref11",
+        "ordinal": 11,
+        "page": 10,
+        "block_id": "p10-b29",
+        "raw": "M Peck, A blockchain currency that beat s bitcoin on privacy. IEEE Spectr. 53(12), 11–13 (2016) https://doi.org/10.1109/MSPEC.2016.7761864",
+        "raw_sha256": "094061adfcc447702fcfef1be8c6c32ce97d8ae5ca9de73da5262f0f832a45f3",
+        "fields": {
+          "authors": [
+            {
+              "family": "Peck",
+              "given": "M"
+            }
+          ],
+          "title": "A blockchain currency that beat s bitcoin on privacy",
+          "venue": "IEEE Spectr.",
+          "year": 2016
+        },
+        "doi": {
+          "status": "present",
+          "value": "10.1109/MSPEC.2016.7761864"
+        }
+      },
+      {
+        "id": "ref12",
+        "ordinal": 12,
+        "page": 10,
+        "block_id": "p10-b30",
+        "raw": "K Schwab, The Fourth Industrial Revolution (The Crown Publishing Group, New York City, NY, 2017)",
+        "raw_sha256": "4d4fbb2c09f4b22ccc3657e5f4ab7c62a7a9b5cf44cdb5e6c40761499dfc58d3",
+        "fields": {
+          "authors": [
+            {
+              "family": "Schwab",
+              "given": "K"
+            }
+          ],
+          "title": "The Fourth Industrial Revolution",
+          "venue": "The Crown Publishing Group",
+          "year": 2017
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref13",
+        "ordinal": 13,
+        "page": 10,
+        "block_id": "p10-b31",
+        "raw": "M Sharples, J Domingue, in The Blockchain and Kudos: A Distributed System for Educational Record, Reputation and Reward. Adaptive and adaptable learning (Springer, Cham, 2016), pp. 490–496 https://doi.org/10.1007/978-3-319-45153-4_48",
+        "raw_sha256": "caf25b5d2018ca2d7e3eb296383c8556f0025762371b520da588e2c83ff86cde",
+        "fields": {
+          "authors": [
+            {
+              "family": "Sharples",
+              "given": "M"
+            },
+            {
+              "family": "Domingue",
+              "given": "J"
+            }
+          ],
+          "title": "The Blockchain and Kudos: A Distributed System for Educational Record, Reputation and Reward",
+          "venue": "Adaptive and adaptable learning",
+          "year": 2016
+        },
+        "doi": {
+          "status": "present",
+          "value": "10.1007/978-3-319-45153-4_48"
+        }
+      },
+      {
+        "id": "ref14",
+        "ordinal": 14,
+        "page": 10,
+        "block_id": "p10-b32",
+        "raw": "DJ Skiba, The potential of Blockchain in education and health care. Nurs. Educ. Perspect. 38(4), 220–221 (2017) https://doi.org/10.1097/01.NEP.0000000000000190",
+        "raw_sha256": "bcc63ed2cd36270eec2b6d42f3c90c650c775cbd9d4d47944753cb8b9aca32ae",
+        "fields": {
+          "authors": [
+            {
+              "family": "Skiba",
+              "given": "DJ"
+            }
+          ],
+          "title": "The potential of Blockchain in education and health care",
+          "venue": "Nurs. Educ. Perspect.",
+          "year": 2017
+        },
+        "doi": {
+          "status": "present",
+          "value": "10.1097/01.NEP.0000000000000190"
+        }
+      },
+      {
+        "id": "ref15",
+        "ordinal": 15,
+        "page": 10,
+        "block_id": "p10-b33",
+        "raw": "M Swan, Blockchain: Blueprint for a New Economy, 1st edn. (O’Reilly Media, Sebastopol, CA, 2015)",
+        "raw_sha256": "7b0639b60ea5269abfe1e83de350cf5625a95cb320f789f10d6b439fed413f70",
+        "fields": {
+          "authors": [
+            {
+              "family": "Swan",
+              "given": "M"
+            }
+          ],
+          "title": "Blockchain: Blueprint for a New Economy",
+          "venue": "O’Reilly Media",
+          "year": 2015
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      },
+      {
+        "id": "ref16",
+        "ordinal": 16,
+        "page": 10,
+        "block_id": "p10-b34",
+        "raw": "F Tschorsch, B Scheuermann, Bitcoin and beyond: A technical survey on decentralized digital currencies. IEEE Commun. Surv. Tutorials 18(3), 2084–2123 (2016) https://doi.org/10.1109/COMST.2016.2535718",
+        "raw_sha256": "c0b7f5b2bcea65143bb1a61e2a5a13207cfc1bb266fb8f6ff4db1c230624e2e1",
+        "fields": {
+          "authors": [
+            {
+              "family": "Tschorsch",
+              "given": "F"
+            },
+            {
+              "family": "Scheuermann",
+              "given": "B"
+            }
+          ],
+          "title": "Bitcoin and beyond: A technical survey on decentralized digital currencies",
+          "venue": "IEEE Commun. Surv. Tutorials",
+          "year": 2016
+        },
+        "doi": {
+          "status": "present",
+          "value": "10.1109/COMST.2016.2535718"
+        }
+      },
+      {
+        "id": "ref17",
+        "ordinal": 17,
+        "page": 10,
+        "block_id": "p10-b35",
+        "raw": "S Underwood, Blockchain beyond Bitcoin. Commun. ACM 59(11), 15–17 (2016) https://doi.org/10.1145/2994581",
+        "raw_sha256": "cf19dda6f75819d078b3a676cc3b202a957da68b9a2a5b33313c8050aa58af9f",
+        "fields": {
+          "authors": [
+            {
+              "family": "Underwood",
+              "given": "S"
+            }
+          ],
+          "title": "Blockchain beyond Bitcoin",
+          "venue": "Commun. ACM",
+          "year": 2016
+        },
+        "doi": {
+          "status": "present",
+          "value": "10.1145/2994581"
+        }
+      },
+      {
+        "id": "ref18",
+        "ordinal": 18,
+        "page": 10,
+        "block_id": "p10-b36",
+        "raw": "M Vukolić, in The Quest for Scalable Blockchain Fabric: Proof-of-Work vs. BFT Replication. Open problems in network security (Springer, Cham, 2015), pp. 112–125 https://doi.org/10.1007/978-3-319-39028-4_9",
+        "raw_sha256": "c26ad672ccc7cb122882db22ddeeaaef6d73c6b68bc785e05df1b9bd61e86c2b",
+        "fields": {
+          "authors": [
+            {
+              "family": "Vukolić",
+              "given": "M"
+            }
+          ],
+          "title": "The Quest for Scalable Blockchain Fabric: Proof-of-Work vs. BFT Replication",
+          "venue": "Open problems in network security",
+          "year": 2015
+        },
+        "doi": {
+          "status": "present",
+          "value": "10.1007/978-3-319-39028-4_9"
+        }
+      },
+      {
+        "id": "ref19",
+        "ordinal": 19,
+        "page": 10,
+        "block_id": "p10-b37",
+        "raw": "H Wang, K Chen, D Xu, A maturity model for blockchain adoption. Financ. Innov. 2(1), 12 (2016) https://doi.org/10.1186/s40854-016-0031-z",
+        "raw_sha256": "6c9d43e9b8994e1f156696b8e62f88c9f93d6707d438444653357c8077543348",
+        "fields": {
+          "authors": [
+            {
+              "family": "Wang",
+              "given": "H"
+            },
+            {
+              "family": "Chen",
+              "given": "K"
+            },
+            {
+              "family": "Xu",
+              "given": "D"
+            }
+          ],
+          "title": "A maturity model for blockchain adoption",
+          "venue": "Financ. Innov.",
+          "year": 2016
+        },
+        "doi": {
+          "status": "present",
+          "value": "10.1186/s40854-016-0031-z"
+        }
+      },
+      {
+        "id": "ref20",
+        "ordinal": 20,
+        "page": 10,
+        "block_id": "p10-b38",
+        "raw": "J Yli-Huumo, D Ko, S Choi, S Park, K Smolander, Where is current research on Blockchain technology?—A systematic review. PLoS One 11(10), e0163477 (2016) https://doi.org/10.1371/journal.pone.0163477",
+        "raw_sha256": "8f5081f81a63c537106e382b3a89b3b9f3490ac7510204d72b2e5bfcb4782445",
+        "fields": {
+          "authors": [
+            {
+              "family": "Yli-Huumo",
+              "given": "J"
+            },
+            {
+              "family": "Ko",
+              "given": "D"
+            },
+            {
+              "family": "Choi",
+              "given": "S"
+            },
+            {
+              "family": "Park",
+              "given": "S"
+            },
+            {
+              "family": "Smolander",
+              "given": "K"
+            }
+          ],
+          "title": "Where is current research on Blockchain technology?—A systematic review",
+          "venue": "PLoS One",
+          "year": 2016
+        },
+        "doi": {
+          "status": "present",
+          "value": "10.1371/journal.pone.0163477"
+        }
+      },
+      {
+        "id": "ref21",
+        "ordinal": 21,
+        "page": 10,
+        "block_id": "p10-b39",
+        "raw": "Z Zheng, S Xie, H Dai, X Chen, H Wang, in 2017 IEEE International Congress on Big Data (BigData Congress). An Overview of Blockchain Technology: Architecture, Consensus, and Future Trends (2017), pp. 557–564 https://doi.org/10.1109/ BigDataCongress.2017.85",
+        "raw_sha256": "ae5cac376641e0669da64c2b686d86cac3e2e3b6a7517b8f142ca4d44e46b1e8",
+        "fields": {
+          "authors": [
+            {
+              "family": "Zheng",
+              "given": "Z"
+            },
+            {
+              "family": "Xie",
+              "given": "S"
+            },
+            {
+              "family": "Dai",
+              "given": "H"
+            },
+            {
+              "family": "Chen",
+              "given": "X"
+            },
+            {
+              "family": "Wang",
+              "given": "H"
+            }
+          ],
+          "title": "An Overview of Blockchain Technology: Architecture, Consensus, and Future Trends",
+          "venue": "2017 IEEE International Congress on Big Data (BigData Congress)",
+          "year": 2017
+        },
+        "doi": {
+          "status": "present",
+          "value": "10.1109/BigDataCongress.2017.85"
+        }
+      }
+    ],
+    "markers": []
+  }
+}
