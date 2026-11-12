@@ -1,0 +1,234 @@
+{
+  "schema_version": 1,
+  "record_kind": "expectation",
+  "record_id": "pilot-metapsych-lavaan-invariance",
+  "document": {
+    "pdf_sha256": "3c9404cdb2e4a7aeeaaa4ed1f417dffb7da2ec8f6f47d21fadda7054113a296e",
+    "title": "Tutorial in Longitudinal Measurement Invariance and Cross-lagged Panel Models Using Lavaan",
+    "page_count": 20,
+    "corpus_id": "metapsych-lavaan-invariance"
+  },
+  "scope": {
+    "kind": "pages",
+    "physical_pages": [
+      18
+    ]
+  },
+  "pages": [
+    {
+      "physical_page": 18,
+      "printed_label": "18",
+      "geometry": {
+        "unit": "pt",
+        "origin": "top-left",
+        "frame": "displayed",
+        "box": "cropbox",
+        "rotation": 0,
+        "width": 595.276,
+        "height": 841.89
+      },
+      "render": {
+        "renderer": "pymupdf",
+        "renderer_version": "1.28.0",
+        "dpi": 150,
+        "image_sha256": "da594909726c197ae290f7ebd85c62eae273124952860ad431354dfba4e58afd"
+      },
+      "body_start": {
+        "block_id": "p18-b3"
+      },
+      "body_end": {
+        "block_id": "p18-b5"
+      }
+    }
+  ],
+  "blocks": [
+    {
+      "id": "p18-b1",
+      "type": "page_number",
+      "page": 18,
+      "reading_order": 1,
+      "bbox": {
+        "x0": 44.94,
+        "y0": 57.39,
+        "x1": 60.87,
+        "y1": 71.68
+      },
+      "text": "18",
+      "text_sha256": "4ec9599fc203d176a301536c2e091a19bc852759b255bd6818810a42c5fed14a"
+    },
+    {
+      "id": "p18-b2",
+      "type": "header",
+      "page": 18,
+      "reading_order": 2,
+      "bbox": {
+        "x0": 265.22,
+        "y0": 61.16,
+        "x1": 332.91,
+        "y1": 71.65
+      },
+      "text": "MACKINNON ET AL.",
+      "text_sha256": "84c242eb1e2fd5de4f71fecd2168e6dd65a78a69929d14746ac64890712a2080"
+    },
+    {
+      "id": "p18-b3",
+      "type": "reference_entry",
+      "page": 18,
+      "reading_order": 3,
+      "bbox": {
+        "x0": 44.94,
+        "y0": 84.63,
+        "x1": 290.51,
+        "y1": 147.34
+      },
+      "text": "Wetzel, E., Brown, A., Hill, P., Chung, J., Robins, R., & Roberts, B. (2017). The narcissism epidemic is dead; long live the narcissism epidemic. Psychological Science, 28(12), 1833-1847. https://doi.org/10.1177/0956797617724208",
+      "text_sha256": "b02146190a99538cf7bb343074d9d5ece871f4fd6b82fb5bdf4daf2dbbec06ec"
+    },
+    {
+      "id": "p18-b4",
+      "type": "reference_entry",
+      "page": 18,
+      "reading_order": 4,
+      "bbox": {
+        "x0": 44.94,
+        "y0": 145.35,
+        "x1": 291.02,
+        "y1": 232.3
+      },
+      "text": "Widaman, K., Ferrer, E., & Conger, R. (2010). Factorial invariance within longitudinal structural equation models: Measuring the same con- struct across time. Child Development Per- spectives, 4(1), 10-18. https://doi.org/10.1111/j.1750- 8606.2009.00110.x",
+      "text_sha256": "f67c2654e22ea672a56badfbd0ea370290c0bf44f3f73791a569a93d2528bb92"
+    },
+    {
+      "id": "p18-b5",
+      "type": "reference_entry",
+      "page": 18,
+      "reading_order": 5,
+      "bbox": {
+        "x0": 44.94,
+        "y0": 230.31,
+        "x1": 293.64,
+        "y1": 353.74
+      },
+      "text": "Widaman, K. F., & Reise, S. P. (1997). Exploring the measurement invariance of psychological instruments: Applications in the substance use domain. In K. J. Bryant, M. Windle, & S. G. West (Eds.), The science of prevention: Methodological advances from alcohol and substance abuse research (pp. 281–324). Washington, DC: American Psychological Association.",
+      "text_sha256": "839874e420754bbb7dcb3f8648ffbc91928389fc191d3cc19e0a69129904b1b0"
+    }
+  ],
+  "provenance": {
+    "proposed_by": {
+      "tool": "extraction-pilot-drafts",
+      "version": "3",
+      "options_sha256": "b74e6f2f9c021751643a9a5d2e4451944b229defbcf37f11c98141324265f7b4"
+    },
+    "review": {
+      "status": "reviewed",
+      "reviewer": "agent-claude-sonnet-5-5",
+      "reviewed_at": "2026-11-12T16:27:23Z",
+      "basis": "page_image_inspection"
+    }
+  },
+  "references": {
+    "entries": [
+      {
+        "id": "ref1",
+        "ordinal": 1,
+        "page": 18,
+        "block_id": "p18-b3",
+        "raw": "Wetzel, E., Brown, A., Hill, P., Chung, J., Robins, R., & Roberts, B. (2017). The narcissism epidemic is dead; long live the narcissism epidemic. Psychological Science, 28(12), 1833-1847. https://doi.org/10.1177/0956797617724208",
+        "raw_sha256": "b02146190a99538cf7bb343074d9d5ece871f4fd6b82fb5bdf4daf2dbbec06ec",
+        "fields": {
+          "authors": [
+            {
+              "family": "Wetzel",
+              "given": "E."
+            },
+            {
+              "family": "Brown",
+              "given": "A."
+            },
+            {
+              "family": "Hill",
+              "given": "P."
+            },
+            {
+              "family": "Chung",
+              "given": "J."
+            },
+            {
+              "family": "Robins",
+              "given": "R."
+            },
+            {
+              "family": "Roberts",
+              "given": "B."
+            }
+          ],
+          "title": "The narcissism epidemic is dead; long live the narcissism epidemic",
+          "venue": "Psychological Science",
+          "year": 2017
+        },
+        "doi": {
+          "status": "present",
+          "value": "10.1177/0956797617724208"
+        }
+      },
+      {
+        "id": "ref2",
+        "ordinal": 2,
+        "page": 18,
+        "block_id": "p18-b4",
+        "raw": "Widaman, K., Ferrer, E., & Conger, R. (2010). Factorial invariance within longitudinal structural equation models: Measuring the same con- struct across time. Child Development Per- spectives, 4(1), 10-18. https://doi.org/10.1111/j.1750- 8606.2009.00110.x",
+        "raw_sha256": "f67c2654e22ea672a56badfbd0ea370290c0bf44f3f73791a569a93d2528bb92",
+        "fields": {
+          "authors": [
+            {
+              "family": "Widaman",
+              "given": "K."
+            },
+            {
+              "family": "Ferrer",
+              "given": "E."
+            },
+            {
+              "family": "Conger",
+              "given": "R."
+            }
+          ],
+          "title": "Factorial invariance within longitudinal structural equation models: Measuring the same construct across time",
+          "venue": "Child Development Perspectives",
+          "year": 2010
+        },
+        "doi": {
+          "status": "present",
+          "value": "10.1111/j.1750-8606.2009.00110.x"
+        }
+      },
+      {
+        "id": "ref3",
+        "ordinal": 3,
+        "page": 18,
+        "block_id": "p18-b5",
+        "raw": "Widaman, K. F., & Reise, S. P. (1997). Exploring the measurement invariance of psychological instruments: Applications in the substance use domain. In K. J. Bryant, M. Windle, & S. G. West (Eds.), The science of prevention: Methodological advances from alcohol and substance abuse research (pp. 281–324). Washington, DC: American Psychological Association.",
+        "raw_sha256": "839874e420754bbb7dcb3f8648ffbc91928389fc191d3cc19e0a69129904b1b0",
+        "fields": {
+          "authors": [
+            {
+              "family": "Widaman",
+              "given": "K. F."
+            },
+            {
+              "family": "Reise",
+              "given": "S. P."
+            }
+          ],
+          "title": "Exploring the measurement invariance of psychological instruments: Applications in the substance use domain",
+          "venue": "The science of prevention: Methodological advances from alcohol and substance abuse research",
+          "year": 1997
+        },
+        "doi": {
+          "status": "absent_in_source"
+        }
+      }
+    ],
+    "markers": []
+  }
+}
