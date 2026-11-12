@@ -208,3 +208,77 @@ def test_image_ocr_unavailable_is_extraction_failed(monkeypatch):
     _fake_ocr(monkeypatch, ok=False)
     with pytest.raises(ExtractionFailed, match="server down"):
         observe_pdf(CORPUS_PDF, pages=[1], options={"image_ocr": True})
+
+
+def test_reference_tail_from_previous_page_is_kept():
+    md = "## References \n\npp. 12-34.\n[7] Doe, J. (2020). A study.\n[8] Roe, R. (2019). Another. \n\n"
+    blocks, state = _blocks(md)
+    assert [b["type"] for b in blocks] == ["heading", "reference_entry", "reference_entry", "reference_entry"]
+    assert blocks[1]["text"] == "pp. 12-34."
+    assert len(state["entries"]) == 2 and state["entries"][0]["raw"].startswith("[7]")
+    covered = "".join(md[b["output_span"]["start"]:b["output_span"]["end"]] for b in blocks)
+    assert "".join(covered.split()) == "".join(md.split())
+
+
+def test_fully_bold_caption_and_strict_folio():
+    blocks, _ = _blocks("**Table 1. Descriptive statistics** \n\ncivil \n\n")
+    assert [b["type"] for b in blocks] == ["caption", "paragraph"]
+    for word in ("civil", "mix", "mild"):
+        assert not observe._ROMAN_FOLIO.match(word)
+    for folio in ("12", "iv", "XIV", "xxxix"):
+        assert observe._ROMAN_FOLIO.match(folio)
+    blocks, _ = _blocks("Text. \n\nxii \n\n")
+    assert blocks[-1]["type"] == "page_number"
+
+
+def test_identity_pins_package_version(result):
+    options = result.extractor["options"]
+    assert "zotero_pdf_text_version" in options and "zotero_pdf_text_git" in options
+
+
+def test_ocr_plans_on_joined_markdown(monkeypatch):
+    from zotero_pdf_text import image_ocr
+
+    seen = []
+    real = image_ocr.plan_crops
+    monkeypatch.setattr(image_ocr, "plan_crops", lambda body, *a, **k: seen.append(body) or real(body, *a, **k))
+    _fake_ocr(monkeypatch)
+    res = observe_pdf(CORPUS_PDF, pages=[1], options={"image_ocr": True})
+    assert len(seen) == 1 and seen[0].count("CORPUSMARK-FIG-006") == 1  # whole document, one call
+    assert verify_output_spans(res.observation, res.markdown) == []
+
+
+def test_failed_crop_ocr_is_extraction_failed(monkeypatch):
+    from zotero_pdf_text import image_ocr
+    from zotero_pdf_text._ollama_client import OllamaError
+
+    _fake_ocr(monkeypatch)
+    calls = []
+
+    def flaky(base_url, model, prompt, png, timeout=0):
+        calls.append(png)
+        if len(calls) == 1:
+            raise OllamaError("synthetic crop failure")
+        return "x = 1"
+
+    monkeypatch.setattr(image_ocr, "generate", flaky)
+    with pytest.raises(ExtractionFailed, match="synthetic crop failure"):
+        observe_pdf(CORPUS_PDF, pages=[1], options={"image_ocr": True})
+
+
+def _shape(blocks):
+    return [(b["id"], b["type"], b["page"], b.get("text")) for b in blocks]
+
+
+def test_section_state_carries_across_unselected_pages(monkeypatch):
+    # Page 1 opens the reference list; page 2 continues it. Page-scoped and whole-document runs must agree.
+    pages = [(1, "## References \n\n[1] Doe, J. (2020). A study. \n\n"), (2, "[2] Roe, R. (2019). Another. \n\n")]
+    from zotero_pdf_text import converter
+
+    monkeypatch.setattr(observe, "_extract_pages", lambda *a, **k: (pages, False, Path(".")))
+    monkeypatch.setattr(converter, "_run_extractor", lambda *a, **k: None)
+    whole = observe_pdf(CORPUS_PDF, pages=[1, 2])
+    only2 = observe_pdf(CORPUS_PDF, pages=[2])
+    assert [b["type"] for b in only2.observation["blocks"]] == ["reference_entry"]
+    assert _shape(only2.observation["blocks"]) == _shape([b for b in whole.observation["blocks"] if b["page"] == 2])
+    assert verify_output_spans(only2.observation, only2.markdown) == []

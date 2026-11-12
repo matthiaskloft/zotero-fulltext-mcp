@@ -304,7 +304,7 @@ captions (label emphasised or followed by `.`/`:`, so "Table 3 reports ..." stay
 adjacency to a table or figure, figures (the `![](...)` crop placeholders production always leaves, typed `image`, and pymupdf4llm picture-text regions, no
 text so their internals are not scored as prose), a trailing bare number as `page_number`, and
 reference entries under a References/Bibliography heading (DOI `present`/`not_found` by pattern,
-`raw` verbatim). Not detected: bounding boxes, page `render`, equation numbers, table spans and
+`raw` verbatim). Caption linking is a heuristic: a caption points at the immediately preceding block of the matching kind (figure or table) if it has none yet, else the following one. Reference lists are recognised only under a `#` heading whose text is References, Bibliography or similar; lines before the first `[n]` of a paragraph (a tail carried over from the previous page) become their own entry-less `reference_entry` block. Crop OCR plans on the joined Markdown as production does, and the record pins the package version and `git describe`. `observe_pdf` is not meant for concurrent threads (it sets `PYTHONPATH` for the extractor subprocess under a lock). Not detected: bounding boxes, page `render`, equation numbers, table spans and
 cross-page `continues_from`/`truncated`, footnotes, running headers (pymupdf4llm drops them), reference
 `fields`, citation markers (the scorer lists them as unscored), and display equations when crop OCR is
 off (they stay crop placeholders, typed figure, so `equation_match` fails by design). Known scorer mismatches: pymupdf4llm often leaves the next

@@ -25,6 +25,7 @@ import os
 import re
 import subprocess
 import tempfile
+import threading
 import time
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
@@ -37,7 +38,10 @@ from .records import options_sha256, sha256_bytes, sha256_text, validate_record
 OBSERVER_NAME = "extraction-observe"
 OBSERVER_VERSION = "1"
 DEFAULT_TIMEOUT_S = 600
-_ROMAN_FOLIO = re.compile(r"^(?:\d{1,4}|[ivxlcdm]{1,7}|[IVXLCDM]{1,7})$")
+# A folio is digits or a strict roman numeral below 400 (no m/d, so "mix", "mild", "civil" are words).
+_ROMAN = r"(?:c{0,3})(?:xc|xl|l?x{0,3})(?:ix|iv|v?i{0,3})"
+_ROMAN_FOLIO = re.compile(r"^(?:\d{1,4}|(?=[ivxlc])" + _ROMAN + r"|(?=[IVXLC])" + _ROMAN.upper() + r")$")
+_ENV_LOCK = threading.Lock()
 
 
 class ExtractionFailed(Exception):
@@ -67,7 +71,7 @@ _PICTURE_END = "<!-- End of picture text -->"
 # A sentence that merely opens with a label ("Table 3 reports ...") is a cross-reference, not a caption.
 _LABEL = r"(?:figure|fig\.?|table|tab\.?|abbildung|abb\.?|tabelle)"
 _CAPTION_EMPHASISED = re.compile(r"^[\s#>]*(?:\*\*|__|\*|_)\s*" + _LABEL + r"\s*\d+[A-Za-z]?\s*[.:]?\s*(?:\*\*|__|\*|_)", re.I)
-_CAPTION_SEPARATED = re.compile(r"^[\s#>]*" + _LABEL + r"\s*\d+[A-Za-z]?\s*[.:]\s", re.I)
+_CAPTION_SEPARATED = re.compile(r"^[\s#>*_]*" + _LABEL + r"\s*\d+[A-Za-z]?\s*[.:]\s", re.I)
 _TABLE_LABEL = re.compile(r"^[\s#>*_]*(?:table|tab\.?|tabelle)", re.I)
 _FIGURE_LABEL = re.compile(r"^[\s#>*_]*(?:figure|fig\.?|abbildung|abb\.?)", re.I)
 _REFERENCES_HEADING = re.compile(
@@ -255,21 +259,31 @@ def _item_spans(raw: _Raw, text: str) -> list[tuple[int, int]]:
     return [(a, b) for a, b in items]
 
 
-def _reference_spans(raw: _Raw) -> list[tuple[int, int]]:
-    """Entries of one reference-list paragraph: one per numbered line when every non-blank line
-    starts a numbered entry, else the whole block is one entry (wrapped lines stay together)."""
-    starts = [(i, line) for i, line in enumerate(raw.lines) if _REFERENCE_START.match(line)]
-    if len(starts) < 2:
-        return [(raw.start, raw.end)]
+def _reference_spans(raw: _Raw) -> list[tuple[int, int, bool]]:
+    """Pieces of one reference-list paragraph as ``(start, end, starts_entry)``. Each numbered line
+    (``[n]`` or ``n.``) opens an entry. Lines before the first numbered line (a wrapped tail carried
+    over from the previous page) are their own piece with ``starts_entry`` False, so no text is lost.
+    A paragraph with fewer than two numbered lines and no leading tail is one entry."""
+    starts = [i for i, line in enumerate(raw.lines) if _REFERENCE_START.match(line)]
+    if not starts:
+        return [(raw.start, raw.end, True)]
+    if len(starts) < 2 and starts[0] == 0:
+        return [(raw.start, raw.end, True)]
     offsets, offset = [], raw.start
     for line in raw.lines:
         offsets.append(offset)
         offset += len(line) + 1
-    spans = []
-    for n, (i, _line) in enumerate(starts):
-        last = (starts[n + 1][0] if n + 1 < len(starts) else len(raw.lines)) - 1
-        spans.append((offsets[i], offsets[last] + len(raw.lines[last].rstrip())))
-    return spans
+
+    def span(first: int, last: int) -> tuple[int, int]:
+        return offsets[first], offsets[last] + len(raw.lines[last].rstrip())
+
+    pieces: list[tuple[int, int, bool]] = []
+    if starts[0] > 0:
+        pieces.append((*span(0, starts[0] - 1), False))
+    for n, i in enumerate(starts):
+        last = (starts[n + 1] if n + 1 < len(starts) else len(raw.lines)) - 1
+        pieces.append((*span(i, last), True))
+    return pieces
 
 
 def _is_caption(text: str) -> bool:
@@ -334,11 +348,13 @@ def build_page_blocks(
             block = new_block("page_number", raw.start, raw.end)
             block["text"] = raw_text
         elif state["in_references"]:
-            for a, b in _reference_spans(raw):
+            for a, b, starts_entry in _reference_spans(raw):
                 entry_block = new_block("reference_entry", a, b)
                 entry_block["text"] = page_text[a:b]
+                entry_block["text_sha256"] = sha256_text(page_text[a:b])
                 out.append(entry_block)
-                _add_entry(entries, entry_block, page, page_text[a:b])
+                if starts_entry:
+                    _add_entry(entries, entry_block, page, page_text[a:b])
             continue
         elif _is_caption(raw_text):
             block = new_block("caption", raw.start, raw.end)
@@ -387,19 +403,23 @@ def _link_captions(blocks: list[dict[str, Any]]) -> None:
 
 @contextlib.contextmanager
 def _package_importable() -> Iterator[None]:
-    """The extractor subprocess must import the same ``zotero_pdf_text`` this process uses."""
+    """The extractor subprocess must import the same ``zotero_pdf_text`` this process uses.
+
+    Mutates ``os.environ`` for the duration, guarded by a lock: ``observe_pdf`` is not meant to be
+    called from concurrent threads (use processes); the lock only keeps the environment consistent."""
     import zotero_pdf_text
 
     root = str(Path(zotero_pdf_text.__file__).resolve().parent.parent)
-    previous = os.environ.get("PYTHONPATH")
-    os.environ["PYTHONPATH"] = root if not previous else root + os.pathsep + previous
-    try:
-        yield
-    finally:
-        if previous is None:
-            os.environ.pop("PYTHONPATH", None)
-        else:
-            os.environ["PYTHONPATH"] = previous
+    with _ENV_LOCK:
+        previous = os.environ.get("PYTHONPATH")
+        os.environ["PYTHONPATH"] = root if not previous else root + os.pathsep + previous
+        try:
+            yield
+        finally:
+            if previous is None:
+                os.environ.pop("PYTHONPATH", None)
+            else:
+                os.environ["PYTHONPATH"] = previous
 
 
 def _extract_pages(pdf_path: Path, workdir: Path, timeout_s: int) -> tuple[list[tuple[int, str]], bool, Path]:
@@ -440,23 +460,50 @@ def _enrich_with_ocr(page_texts: list[tuple[int, str]], images_dir: Path, has_ma
     status = image_ocr.probe(config.base_url, config.model)
     if not status.ok:
         raise ExtractionFailed(f"image OCR unavailable: {status.detail}")
-    plans = []
-    spans = []
+    # Plan and run on the joined body, as production does (crop classification looks at neighbouring
+    # lines, which can lie on the adjacent page), then split the result back at the page offsets.
+    joined = "".join(text for _page, text in page_texts)
+    plans = image_ocr._run_ocr(image_ocr.plan_crops(joined, images_dir, has_math=has_math), settings=config, images_dir=images_dir)
+    # _run_ocr reports a failed crop on the plan instead of raising; a run with failures is not an OCR run.
+    failed = [plan for plan in plans if plan.error and plan.crop_class != image_ocr.CLASS_SKIP]
+    if failed:
+        first = "; ".join(f"{plan.ref.link}: {plan.error}" for plan in failed[:3])
+        raise ExtractionFailed(f"image OCR failed for {len(failed)} of {len(plans)} crops (first: {first})")
+    replacements = [
+        (plan.ref.span, image_ocr.render_replacement(plan.crop_class, plan.ocr_text, plan.ref.markup))
+        for plan in plans if plan.ocr_text
+    ]
+    enriched_joined = image_ocr.splice(joined, replacements)
+    enriched, old_start, new_start = [], 0, 0
     for page, text in page_texts:
-        page_plans = image_ocr.plan_crops(text, images_dir, has_math=has_math)
-        plans.extend(page_plans)
-        spans.append(len(page_plans))
-    plans = image_ocr._run_ocr(plans, settings=config, images_dir=images_dir)
-    enriched, cursor = [], 0
-    for (page, text), count in zip(page_texts, spans):
-        chunk = plans[cursor:cursor + count]
-        cursor += count
-        replacements = [
-            (plan.ref.span, image_ocr.render_replacement(plan.crop_class, plan.ocr_text, plan.ref.markup))
-            for plan in chunk if plan.ocr_text
-        ]
-        enriched.append((page, image_ocr.splice(text, replacements)))
+        old_end = old_start + len(text)
+        grown = sum(len(new) - (end - start) for (start, end), new in replacements if old_start <= start < old_end)
+        enriched.append((page, enriched_joined[new_start:new_start + len(text) + grown]))
+        old_start, new_start = old_end, new_start + len(text) + grown
     return enriched, config.model
+
+
+def _package_version() -> str:
+    from importlib import metadata
+
+    try:
+        return metadata.version("zotero-fulltext-mcp")
+    except metadata.PackageNotFoundError:
+        return "unknown"
+
+
+def _package_git_describe() -> str:
+    """``git describe --always --dirty`` of the package checkout, or "" when not a git checkout."""
+    import zotero_pdf_text
+
+    try:
+        done = subprocess.run(
+            ["git", "describe", "--always", "--dirty"], cwd=Path(zotero_pdf_text.__file__).resolve().parent,
+            capture_output=True, text=True, timeout=10, check=True,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    return done.stdout.strip()
 
 
 def _page_entries(pdf_path: Path, pages: Sequence[int] | None) -> tuple[list[dict[str, Any]], int, str]:
@@ -546,10 +593,18 @@ def observe_pdf(
     state: dict[str, Any] = {"order": 0, "in_references": False, "entries": []}
     blocks: list[dict[str, Any]] = []
     base = 0
-    for number in selected:
+    chosen = set(selected)
+    # Walk every page in order so section state (inside the reference list) is the same as in a
+    # whole-document run; blocks are kept only for the selected pages.
+    for number in sorted(by_page):
         text = by_page[number]
-        blocks.extend(build_page_blocks(number, text, base, markdown_sha, state, markdown))
-        base += len(text)
+        if number in chosen:
+            blocks.extend(build_page_blocks(number, text, base, markdown_sha, state, markdown))
+            base += len(text)
+        else:
+            scratch = {"order": 0, "in_references": state["in_references"], "entries": []}
+            build_page_blocks(number, text, 0, sha256_text(text), scratch, text)
+            state["in_references"] = scratch["in_references"]
 
     extractor_options: dict[str, Any] = {
         "image_ocr": use_ocr,
@@ -560,6 +615,8 @@ def observe_pdf(
         "pymupdf4llm_version": pymupdf4llm.__version__,
         "pymupdf_version": pymupdf.VersionBind,
         "observer": f"{OBSERVER_NAME}/{OBSERVER_VERSION}",
+        "zotero_pdf_text_version": _package_version(),
+        "zotero_pdf_text_git": _package_git_describe(),
     }
     if use_ocr:
         extractor_options["image_ocr_model"] = ocr_model
