@@ -163,8 +163,9 @@ caption links resolving to table/figure blocks, page numbers within `page_count`
 bounding boxes inside the page geometry (with the tolerance above), continuation chains, table cells inside and not overlapping in the grid, anchors
 on their own page, marker and entry links resolving, text/raw/options hash round-trips, and run
 cross-references and metric version pins. Scorers should load truth through
-`load_reviewed_expectation`, which refuses drafts. No external-benchmark adapter or sampling tool
-exists yet.
+`load_reviewed_expectation`, which refuses drafts. The olmOCR adapter
+([olmocr-bench-feasibility.md](olmocr-bench-feasibility.md)) and the pilot selection/draft tooling
+([extraction-pilot-review.md](extraction-pilot-review.md)) now exist.
 
 ## Extraction scorer (E1, package B)
 
@@ -273,3 +274,7 @@ section counts as an empty list wherever the expectation has references.
   cross-references (see its docstring). `tests/test_extraction_scorer.py` proves each makes the
   relevant deciding strict check fail on synthetic records, including across page breaks, while the
   clean case passes.
+
+## Pilot selection and draft tooling (E2, no labels)
+
+Selection, draft proposals and the review procedure: [extraction-pilot-review.md](extraction-pilot-review.md).
