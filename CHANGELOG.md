@@ -7,6 +7,15 @@ All notable changes to this project are documented here. Format loosely follows
 
 ### Added
 
+- Reviewed E2 pilot expectations under `benchmarks/extraction/expectations/pilot/`: 20 stratum pages
+  from 13 documents plus two whole papers (39 pages), with a test that loads every committed record.
+  **These labels were reviewed by an AI agent (Claude Sonnet 5.5), not by a human**, so any baseline
+  computed against them must be reported with that caveat. The third whole paper
+  (`jlmr-onet-content-model`) is not labelled. Pages left uncertain, and the labelling conventions,
+  are listed in `docs/extraction-pilot-review.md`.
+
+### Added
+
 - Extraction run harness (roadmap E1/E2): `tools/run_extraction_pilot.py` runs an extractor over the
   reviewed pilot pages, verifies cached PDFs against the manifest pins, scores each page, and writes a
   schema-valid `run` record plus a human-readable summary outside the repo. Drafts are refused,
