@@ -5,6 +5,8 @@ All notable changes to this project are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.16.1] - 2026-11-12
+
 ### Added
 
 - Internal extraction-evaluation artifact schemas (roadmap E1, package A): versioned JSON Schemas
@@ -1249,7 +1251,8 @@ author's own machine.
 
 Initial import of the Zotero full-text conversion pipeline, CLI, and MCP server. Not tagged.
 
-[Unreleased]: https://github.com/matthiaskloft/zotero-fulltext-mcp/compare/v0.16.0...HEAD
+[Unreleased]: https://github.com/matthiaskloft/zotero-fulltext-mcp/compare/v0.16.1...HEAD
+[0.16.1]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.16.1
 [0.16.0]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.16.0
 [0.15.2]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.15.2
 [0.15.1]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.15.1
