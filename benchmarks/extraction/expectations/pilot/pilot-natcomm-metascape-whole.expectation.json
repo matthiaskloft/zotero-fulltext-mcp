@@ -775,8 +775,8 @@
         "x1": 552.7,
         "y1": 123.59
       },
-      "text": "from various model organism databases, such as SGD21, Fly- Base22, WormBase23, etc. Source identifiers are mapped onto a unique Entrez Gene ID list prior to analyses, as a significant number of bioinformatics knowledgebases underlying Metascape rely on Entrez Gene IDs as their primary keys. Deprecated Entrez Gene IDs are also recognized and replaced by successor IDs when encountered.",
-      "text_sha256": "9d243ce6800ddada0de8f39889b847ffcdb106991bffb4fe713f1be13cbf3cf5",
+      "text": "from various model organism databases, such as SGD21, FlyBase22, WormBase23, etc. Source identifiers are mapped onto a unique Entrez Gene ID list prior to analyses, as a significant number of bioinformatics knowledgebases underlying Metascape rely on Entrez Gene IDs as their primary keys. Deprecated Entrez Gene IDs are also recognized and replaced by successor IDs when encountered.",
+      "text_sha256": "800145058eb55391563516219a822cd9cde4af9278c5358aeb96f4319d1ebacf",
       "continues_from": "p3-b8"
     },
     {
@@ -1593,8 +1593,8 @@
         "x1": 552.7,
         "y1": 416.46
       },
-      "text": "While interactome analysis is implemented in Babelomics53, Intermine44, and ConsensusPathDB54, Metascape’s interactome analysis is distinguished by two notable features. First, in addition to the BioGrid knowledgebase, Metascape integrates the more recent human interactome datasets InWeb_IM55 and Omni- Path56, resulting in a tripling of human interactome coverage (Supplementary Figure 13). Second, Metascape automatically extracts protein complexes and annotates their respective functions (Fig. 2h, Supplementary Figure 12). Compared to existing visualization approaches (Fig. 2f), Metascape is designed to highlight dense interactome neighborhoods and facilitate the interpretation of interactome data in a biological context; it further integrates with Cytoscape29 to leverage its rich set of visualization and interactive features.",
-      "text_sha256": "43bb0f880eb342aa4e0d1214caee0c5a3315ecf30c91d9c56a1be5619ea20009"
+      "text": "While interactome analysis is implemented in Babelomics53, Intermine44, and ConsensusPathDB54, Metascape’s interactome analysis is distinguished by two notable features. First, in addition to the BioGrid knowledgebase, Metascape integrates the more recent human interactome datasets InWeb_IM55 and OmniPath56, resulting in a tripling of human interactome coverage (Supplementary Figure 13). Second, Metascape automatically extracts protein complexes and annotates their respective functions (Fig. 2h, Supplementary Figure 12). Compared to existing visualization approaches (Fig. 2f), Metascape is designed to highlight dense interactome neighborhoods and facilitate the interpretation of interactome data in a biological context; it further integrates with Cytoscape29 to leverage its rich set of visualization and interactive features.",
+      "text_sha256": "e0bd05d331eccf8230470c9064fafadd54e7d6d36ae71fd6006a6d63ebd8949c"
     },
     {
       "id": "p8-b12",
@@ -2677,8 +2677,8 @@
         "x1": 272.64,
         "y1": 600.75
       },
-      "text": "50. Carmona-Saez, P., Chagoyen, M., Tirado, F., Carazo, J. M. & Pascual- Montano, A. GENECODIS: a web-based tool for finding significant concurrent annotations in gene lists. Genome Biol. 8, R3 (2007).",
-      "text_sha256": "3966f8d1125a8088ea71ec9d2dc590dcde195f4611775f09d6dbb4d53ac8a104"
+      "text": "50. Carmona-Saez, P., Chagoyen, M., Tirado, F., Carazo, J. M. & Pascual-Montano, A. GENECODIS: a web-based tool for finding significant concurrent annotations in gene lists. Genome Biol. 8, R3 (2007).",
+      "text_sha256": "8a44c571328209e1fd86cb9d04624e67223e06bc1aec177ee06aa0c78a45c103"
     },
     {
       "id": "p10-b32",
@@ -2887,8 +2887,8 @@
         "x1": 552.65,
         "y1": 362.0
       },
-      "text": "Supplementary Information accompanies this paper at https://doi.org/10.1038/s41467- 019-09234-6.",
-      "text_sha256": "8145b1000eb0fc3421463b951d8d47e75c8f2cc702d7b0a78626c4acd2e580a3"
+      "text": "Supplementary Information accompanies this paper at https://doi.org/10.1038/s41467-019-09234-6.",
+      "text_sha256": "32de8c87c2c76031722709590caba71c33463dc23f8d8107cc06692412a7e29a"
     },
     {
       "id": "p10-b47",
@@ -4209,8 +4209,8 @@
         "ordinal": 50,
         "page": 10,
         "block_id": "p10-b31",
-        "raw": "50. Carmona-Saez, P., Chagoyen, M., Tirado, F., Carazo, J. M. & Pascual- Montano, A. GENECODIS: a web-based tool for finding significant concurrent annotations in gene lists. Genome Biol. 8, R3 (2007).",
-        "raw_sha256": "3966f8d1125a8088ea71ec9d2dc590dcde195f4611775f09d6dbb4d53ac8a104",
+        "raw": "50. Carmona-Saez, P., Chagoyen, M., Tirado, F., Carazo, J. M. & Pascual-Montano, A. GENECODIS: a web-based tool for finding significant concurrent annotations in gene lists. Genome Biol. 8, R3 (2007).",
+        "raw_sha256": "8a44c571328209e1fd86cb9d04624e67223e06bc1aec177ee06aa0c78a45c103",
         "fields": {
           "authors": [
             {
@@ -4230,7 +4230,7 @@
               "given": "J. M."
             },
             {
-              "family": "Pascual- Montano",
+              "family": "Pascual-Montano",
               "given": "A."
             }
           ],

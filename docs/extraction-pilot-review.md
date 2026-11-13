@@ -163,7 +163,7 @@ Conventions the agent applied (decide once, state plainly):
   words) or, on pages with no text layer, against the page image; soft versus real was decided from
   the same word elsewhere in the document, the reference title in the record's own `fields`, and
   otherwise from standard spelling. Joined and kept pairs are enforced by
-  `tests/test_extraction_pilot_labels.py`, which rejects any other `letter- lowercase` sequence.
+  `tests/test_extraction_pilot_labels.py`, which rejects any other `letter- ` sequence (also before capitals and digits, in reference fields too). The six Stam table cells such as `Ge- Ca10(Ir4As8)(Fe2As2)5` keep their space because the page prints it.
   Residual doubt remains for compounds that appear only once, at a line end (for example
   `photo-induced`, `multi-platform`, `over-represented`).
 - Sub- and superscripts are recorded as plain characters in reading order (`m2p2`, `k2x`), without
