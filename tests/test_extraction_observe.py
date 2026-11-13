@@ -695,3 +695,20 @@ def test_folio_decision_follows_the_references_heading_on_the_same_page():
 def test_article_page_folio_stays_a_folio_inside_a_reference_list():
     blocks, _ = _blocks_with("## References \n\n1. Doe, J. A study. \n\n016004-8 \n\n")
     assert blocks[-1]["type"] == "page_number"
+
+
+def test_continuation_block_is_chained_and_validates_across_pages(monkeypatch):
+    pages = [
+        (1, "## References \n\n- Doe, J. A study of the\n\n"),
+        (2, "- things https://doi.org/10.1234/abc.5\n\n"),
+    ]
+    from zotero_pdf_text import converter
+
+    monkeypatch.setattr(observe, "_extract_pages", lambda *a, **k: (pages, False, Path(".")))
+    monkeypatch.setattr(converter, "_run_extractor", lambda *a, **k: None)
+    res = observe_pdf(CORPUS_PDF, pages=[1, 2])  # validate_record runs inside observe_pdf
+    blocks = [b for b in res.observation["blocks"] if b["type"] == "reference_entry"]
+    assert blocks[1]["continues_from"] == blocks[0]["id"]
+    (entry,) = res.observation["references"]["entries"]
+    assert entry["block_id"] == blocks[0]["id"] and entry["end_page"] == 2
+    assert entry["doi"] == {"status": "present", "value": "10.1234/abc.5"}

@@ -633,6 +633,12 @@ def _entry_or_fragment(state: dict[str, Any], block: dict[str, Any], page: int, 
         entry["raw"] = f"{entry['raw']} {text}"
         entry["raw_sha256"] = sha256_text(entry["raw"])
         entry["doi"] = _doi_payload(entry["raw"])
+        # The fragment joins the entry's block chain, so the scorer treats its text as the entry's
+        # and it cannot also satisfy an unrelated body-text expectation.
+        block["continues_from"] = pred["tail"]
+        pred["tail"] = block["id"]
+        if block["page"] != entry["page"]:
+            entry["end_page"] = block["page"]
 
 
 def _add_entry(state: dict[str, Any], block: dict[str, Any], page: int, raw: str) -> None:
@@ -644,7 +650,7 @@ def _add_entry(state: dict[str, Any], block: dict[str, Any], page: int, raw: str
         "raw": raw, "raw_sha256": sha256_text(raw), "doi": doi_payload,
     }
     entries.append(entry)
-    state["pred"] = {"raw": raw, "entry": None if state.get("scratch") else entry}
+    state["pred"] = {"raw": raw, "entry": None if state.get("scratch") else entry, "tail": block["id"]}
 
 
 def _link_captions(blocks: list[dict[str, Any]]) -> None:
