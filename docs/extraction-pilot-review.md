@@ -151,8 +151,21 @@ about 240 table rows, so it was left out rather than done hastily. Held-out docu
 
 Conventions the agent applied (decide once, state plainly):
 
-- Text is whitespace-normalised by the scorer, so line breaks are joined with a space and a
-  line-end hyphen is kept as printed (`micros- copy`); ligatures are spelled out (`fi`, `fl`).
+- Text is whitespace-normalised by the scorer, so line breaks are joined with a space; ligatures
+  are spelled out (`fi`, `fl`).
+- A hyphen that exists only because a word was split at a line break is layout, not transcription,
+  and is not recorded: the word is joined (`criti- cal` is `critical`, `rectan- gular` is
+  `rectangular`, `modi- fication` is `modification`). Real hyphens are kept, including real
+  hyphens that happen to fall at a line end (`high-` at the end of a line before `quality` is
+  `high-quality`; `Q-factor`, `two-dimensional`, `bound-state-in-the-continuum`). A suspended
+  hyphen in a coordination keeps its space (`single- and multiple-list`, `Meta- and Orthogonal`,
+  `pre- and post-study`). Each break was checked against the PDF text layer (line numbers of the
+  words) or, on pages with no text layer, against the page image; soft versus real was decided from
+  the same word elsewhere in the document, the reference title in the record's own `fields`, and
+  otherwise from standard spelling. Joined and kept pairs are enforced by
+  `tests/test_extraction_pilot_labels.py`, which rejects any other `letter- ` sequence (also before capitals and digits, in reference fields too). The six Stam table cells such as `Ge- Ca10(Ir4As8)(Fe2As2)5` keep their space because the page prints it.
+  Residual doubt remains for compounds that appear only once, at a line end (for example
+  `photo-induced`, `multi-platform`, `over-represented`).
 - Sub- and superscripts are recorded as plain characters in reading order (`m2p2`, `k2x`), without
   markup, and font variants (bold, calligraphic, blackboard) as the plain letter. Paragraphs with
   such inline math carry `uncertainty: medium`; inline stacked fractions and products with no
