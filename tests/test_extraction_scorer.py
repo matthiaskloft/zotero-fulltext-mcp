@@ -1010,7 +1010,7 @@ def test_reference_end_page_must_agree_when_stated(chain_exp):
     ("a ** b ** c", "a ** b ** c"),
     ("2 * 3 * 4", "2 * 3 * 4"),
     ("snake_case_name and __init__x", "snake_case_name and __init__x"),
-    ("_italic_ and *italic*", "_italic_ and *italic*"),
+    ("_italic_ and *italic*", "italic and *italic*"),
     ("**bold**text", "**bold**text"),
     ("- 5 apples", "5 apples"),
 ])
@@ -1635,3 +1635,72 @@ def test_unassessed_pages_expected_text_cannot_claim_a_verified_blocks_occurrenc
     score = _rescore(exp, obs)
     assert ("text_precision", "hdB") not in _decisive(score), _decisive(score)
     assert any(c["name"] == "text_precision" and c["subject"] == "hdB" and c["passed"] for c in score["checks"])
+
+
+# --- scorer version 4: field-less observations, inline markup, span-boundary spaces -------------
+
+
+def test_observation_without_parsed_fields_is_not_scored_rather_than_failed(exp, obs):
+    for entry in obs["references"]["entries"]:
+        entry.pop("fields", None)
+    score = _rescore(exp, obs)
+    assert "reference_field_accuracy" not in {n for n, _ in _failed(score)}
+    reasons = [i["reason"] for i in score["not_scored"] if i["metric"] == "reference_field_accuracy"]
+    assert reasons and all("observation has no parsed fields" in r for r in reasons)
+    assert _metric(score, "reference_field_accuracy") is None
+
+
+def test_wrong_parsed_fields_still_fail(exp, obs):
+    _entry(obs, "r1")["fields"] = {"year": 1999}
+    score = _rescore(exp, obs)
+    assert ("reference_field_accuracy", "r1") in _failed(score) and score["verdict"] == "failed"
+
+
+@pytest.mark.parametrize("observed,expected", [
+    ("a<sup>2</sup> and H<sub>2</sub>O", "a2 and H2O"),
+    ("<u>under</u> <i>it</i> <b>bo</b> <em>em</em> <strong>st</strong>", "under it bo em st"),
+    ("</SUP>x<Sup>", "x"),
+    ("_italic_ words", "italic words"),
+    ("see _Nature_, 2020", "see Nature, 2020"),
+    ("__strong__ and _soft_", "strong and soft"),
+    ("a<span>b</span> <sup class='x'>1", "a<span>b</span> <sup class='x'>1"),
+    ("snake_case and my_var_name", "snake_case and my_var_name"),
+    ("x_1 + y_2", "x_1 + y_2"),
+    ("a _ b _ c", "a _ b _ c"),
+    ("a * b and *single*", "a * b and *single*"),
+    ("_unpaired", "_unpaired"),
+])
+def test_observed_markup_stripping(observed, expected):
+    from extraction.scorer import _strip_markup
+
+    assert _strip_markup(observed) == expected
+
+
+def test_inline_tags_and_italics_are_stripped_from_observed_text_only(exp, obs):
+    text = next(b for b in obs["blocks"] if b["id"] == "p2")["text"]
+    _set_text(obs, "p2", f"<i>{text}</i>")
+    assert _rescore(exp, obs)["verdict"] == "passed"
+    # Expected text is never stripped: the same wrapping on the expectation side does not cancel out.
+    exp2 = copy.deepcopy(exp)
+    block = next(b for b in exp2["blocks"] if b["id"] == "p2")
+    block["text"] = f"<i>{text}</i>"
+    block["text_sha256"] = sha256_text(block["text"])
+    _set_text(obs, "p2", text)
+    assert ("text_presence", "p2") in _decisive(_rescore(exp2, obs))
+
+
+def test_space_before_punctuation_is_tolerant_only(exp, obs):
+    from extraction.scorer import _loose, _strict
+
+    assert _strict("Babelomics53 , Intermine") != _strict("Babelomics53, Intermine")
+    assert _loose("Babelomics53 , Intermine") == _loose("Babelomics53, Intermine")
+    assert _loose("word .") == _loose("word.") and _loose("a ; b : c") == _loose("a; b: c")
+    assert _loose("f( x )") == _loose("f(x)") and _loose("[ 1 ]") == _loose("[1]")
+    # Spaces between words, and after a comma or full stop, still count.
+    assert _loose("a b") != _loose("ab") and _loose("a, b") != _loose("a,b")
+    text = next(b for b in obs["blocks"] if b["id"] == "p1")["text"]
+    _set_text(obs, "p1", text.replace("Group A.", "Group A ."))
+    score = _rescore(exp, obs)
+    assert ("text_presence", "p1") in _decisive(score) and score["verdict"] == "failed"
+    assert any(c["name"] == "text_presence" and c["subject"] == "p1" and c["mode"] == "tolerant"
+               and c["passed"] and c.get("tolerant_only") for c in score["checks"])

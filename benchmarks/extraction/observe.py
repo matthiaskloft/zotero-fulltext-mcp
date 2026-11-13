@@ -36,7 +36,7 @@ from typing import Any
 from .records import options_sha256, sha256_bytes, sha256_text, validate_record
 
 OBSERVER_NAME = "extraction-observe"
-OBSERVER_VERSION = "1"
+OBSERVER_VERSION = "2"
 DEFAULT_TIMEOUT_S = 600
 # A folio is digits or a strict roman numeral below 400 (no m/d, so "mix", "mild", "civil" are words).
 _ROMAN = r"(?:c{0,3})(?:xc|xl|l?x{0,3})(?:ix|iv|v?i{0,3})"
@@ -280,7 +280,7 @@ def _reference_spans(raw: _Raw) -> list[tuple[int, int, bool]]:
     A paragraph with fewer than two numbered lines and no leading tail is one entry."""
     starts = [i for i, line in enumerate(raw.lines) if _REFERENCE_START.match(line)]
     if not starts:
-        return [(raw.start, raw.end, True)]
+        return _unnumbered_spans(raw)
     if len(starts) < 2 and starts[0] == 0:
         return [(raw.start, raw.end, True)]
     offsets, offset = [], raw.start
@@ -297,6 +297,57 @@ def _reference_spans(raw: _Raw) -> list[tuple[int, int, bool]]:
     for n, i in enumerate(starts):
         last = (starts[n + 1] if n + 1 < len(starts) else len(raw.lines)) - 1
         pieces.append((*span(i, last), True))
+    return pieces
+
+
+# Unnumbered reference lists: an entry opens with author initials and a surname ("R Beck, ...",
+# "JS Czepluch, ...") or a surname and initials ("Beck, R. ..."). Some extractors run the whole list
+# into one line, so a start is also accepted inside a line, but only where the previous token closes
+# an entry (a ``)``, a digit, a trailing dot, a URL or a stray dash separator).
+_INITIALS_START = r"[A-Z]{1,3}\s+[A-Z][\w'’\-]+,"
+_SURNAME_START = r"[A-Z][\w'’\-]+(?:\s[A-Z][\w'’\-]+)?,\s+[A-Z]\.(?:\s|[A-Z]\.)"
+_ENTRY_START_LINE = re.compile(r"^[ 	]*(?:" + _INITIALS_START + "|" + _SURNAME_START + ")")
+_ENTRY_START_INLINE = re.compile(r"[ 	]+(?=" + _INITIALS_START + ")")
+_ACRONYM_NOT_INITIALS = frozenset({"ACM", "IEE", "APA", "BMC", "OSA", "AIP", "IOP", "MIT", "NIH", "SPIE", "SIAM"})
+_DASHES = frozenset({"-", "–", "—"})
+
+
+def _closes_entry(previous_text: str) -> bool:
+    tokens = previous_text.split()
+    if not tokens:
+        return False
+    last = tokens[-1]
+    return last[-1] in ").0123456789" or "://" in last or last.startswith("www.") or last in _DASHES
+
+
+def _unnumbered_spans(raw: _Raw) -> list[tuple[int, int, bool]]:
+    """Split an unnumbered reference paragraph at every position that clearly opens a new entry
+    (see ``_ENTRY_START_LINE`` / ``_ENTRY_START_INLINE``). No such position: one entry, as before."""
+    text = "\n".join(raw.lines)
+    cuts: list[int] = []
+    offset = 0
+    for i, line in enumerate(raw.lines):
+        if i > 0 and _ENTRY_START_LINE.match(line) and _closes_entry(text[:offset]):
+            cuts.append(offset + len(line) - len(line.lstrip()))
+        for m in _ENTRY_START_INLINE.finditer(line):
+            if m.start() == 0 or line[m.end():m.end() + 3].split(" ")[0] in _ACRONYM_NOT_INITIALS:
+                continue
+            if _closes_entry(text[:offset + m.start()]):
+                cuts.append(offset + m.end())
+        offset += len(line) + 1
+    cuts = sorted(set(cuts))
+    if not cuts:
+        return [(raw.start, raw.end, True)]
+    bounds = [0, *cuts]
+    pieces: list[tuple[int, int, bool]] = []
+    for n, a in enumerate(bounds):
+        b = bounds[n + 1] if n + 1 < len(bounds) else len(text)
+        piece = text[a:b].rstrip()
+        tokens = piece.rsplit(None, 1)
+        if len(tokens) == 2 and tokens[1] in _DASHES:
+            piece = tokens[0].rstrip()
+        if piece:
+            pieces.append((raw.start + a, raw.start + a + len(piece), not (n == 0 and piece[0].islower())))
     return pieces
 
 
@@ -328,7 +379,8 @@ def build_page_blocks(
         state["order"] += 1
         return block
 
-    last_index = len(raws) - 1
+    furniture = state.get("furniture", frozenset())
+    roles = _page_roles(raws, furniture)
     for index, raw in enumerate(raws):
         raw_text = page_text[raw.start:raw.end]
         if raw.type == "heading" and _is_caption(raw_text):
@@ -352,17 +404,23 @@ def build_page_blocks(
             block["graphic"] = {"kind": "image" if raw.lines[0].lstrip().startswith("![") else "figure"}
         elif raw.type == "list_item":
             for a, b in _item_spans(raw, page_text):
+                if state["in_references"]:
+                    # A bullet is list syntax, not reference text; a numbered marker is printed text.
+                    marker = _BULLET.match(page_text[a:b])
+                    a += marker.end() if marker else 0
                 item = new_block("reference_entry" if state["in_references"] else "list_item", a, b)
                 item["text"] = page_text[a:b]
                 out.append(item)
-                if state["in_references"]:
+                # An unnumbered item that starts in lower case continues the previous entry.
+                if state["in_references"] and not (
+                        page_text[a].islower() and not _REFERENCE_START.match(page_text[a:b])):
                     _add_entry(state, item, page, page_text[a:b])
             continue
+        elif roles[index] is not None:
+            block = new_block(roles[index], raw.start, raw.end)
+            block["text"] = raw_text
         elif raw.type == "other":
             block = new_block("other", raw.start, raw.end)
-            block["text"] = raw_text
-        elif index == last_index and _ROMAN_FOLIO.match(raw_text.strip()):
-            block = new_block("page_number", raw.start, raw.end)
             block["text"] = raw_text
         elif state["in_references"]:
             for a, b, starts_entry in _reference_spans(raw):
@@ -384,6 +442,64 @@ def build_page_blocks(
         out.append(block)
     _link_captions(out)
     return out
+
+
+_BULLET = re.compile(r"[-*+\u2022][ \t]+")
+_HTML_TAG = re.compile(r"</?[a-zA-Z][^>]*>")
+_URL = re.compile(r"(?:https?://|www\.)\S+", re.I)
+MAX_FURNITURE_CHARS = 250
+EDGE_BLOCKS = 8
+# A folio (digits or roman numeral) or a section-page folio such as "016004-8".
+_FOLIO = re.compile(r"^(?:" + _ROMAN_FOLIO.pattern + r"|\d{1,8}[-\u2013.]\d{1,4})$")
+
+
+def _furniture_key(raw: _Raw) -> str | None:
+    """Letters-only key of a short single-line paragraph (digits, punctuation and URLs dropped, so a
+    running header or footer with a changing page number or issue maps to one key); None otherwise."""
+    if raw.type != "paragraph" or len(raw.lines) != 1:
+        return None
+    line = raw.lines[0].strip()
+    if not line or len(line) > MAX_FURNITURE_CHARS or _REFERENCE_START.match(line) or _is_caption(line):
+        return None
+    key = re.sub(r"[\W\d_]+", "", _URL.sub("", _HTML_TAG.sub("", line))).lower()
+    return key if len(key) >= 4 else None
+
+
+def find_furniture(page_texts: Sequence[tuple[int, str]]) -> frozenset[str]:
+    """Keys of short lines that sit near the top or bottom of at least two pages: running headers
+    and footers. Conservative on purpose: a line must repeat, so unique text is never taken."""
+    pages_of: dict[str, set[int]] = {}
+    for page, text in page_texts:
+        raws = split_blocks(text)
+        edge = {*range(min(EDGE_BLOCKS, len(raws))), *range(max(0, len(raws) - EDGE_BLOCKS), len(raws))}
+        for index in edge:
+            key = _furniture_key(raws[index])
+            if key is not None:
+                pages_of.setdefault(key, set()).add(page)
+    return frozenset(key for key, pages in pages_of.items() if len(pages) >= 2)
+
+
+def _page_roles(raws: Sequence[_Raw], furniture: frozenset[str]) -> list[str | None]:
+    """``header`` / ``footer`` / ``page_number`` per raw block. Furniture is a contiguous run from
+    the top of the page (known running-header lines) or from the bottom (known running-footer lines
+    and folios), page images skipped; a block in the middle of the page is never furniture."""
+    roles: list[str | None] = [None] * len(raws)
+    top = 0
+    while top < len(raws) and (raws[top].type == "figure" or _furniture_key(raws[top]) in furniture):
+        if raws[top].type != "figure":
+            roles[top] = "header"
+        top += 1
+    for index in range(len(raws) - 1, top - 1, -1):
+        raw = raws[index]
+        if raw.type == "figure":
+            continue  # a page image may sit after the footer lines; it neither ends nor joins the run
+        if raw.type == "paragraph" and len(raw.lines) == 1 and _FOLIO.match(raw.lines[0].strip()):
+            roles[index] = "page_number"
+        elif _furniture_key(raw) in furniture:
+            roles[index] = "footer"
+        else:
+            break
+    return roles
 
 
 def _add_entry(state: dict[str, Any], block: dict[str, Any], page: int, raw: str) -> None:
@@ -611,7 +727,8 @@ def observe_pdf(
 
     markdown = "".join(by_page[number] for number in selected)
     markdown_sha = sha256_text(markdown)
-    state: dict[str, Any] = {"order": 0, "in_references": False, "entries": [], "entry_count": 0}
+    furniture = find_furniture(sorted(by_page.items()))
+    state: dict[str, Any] = {"order": 0, "in_references": False, "entries": [], "entry_count": 0, "furniture": furniture}
     blocks: list[dict[str, Any]] = []
     base = 0
     chosen = set(selected)
@@ -624,7 +741,10 @@ def observe_pdf(
             base += len(text)
         else:
             # Counted, not emitted: ordinals are whole-document list positions.
-            scratch = {"order": 0, "in_references": state["in_references"], "entries": [], "entry_count": state["entry_count"]}
+            scratch = {
+                "order": 0, "in_references": state["in_references"], "entries": [], "entry_count": state["entry_count"],
+                "furniture": furniture,
+            }
             build_page_blocks(number, text, 0, sha256_text(text), scratch, text)
             state["in_references"], state["entry_count"] = scratch["in_references"], scratch["entry_count"]
 

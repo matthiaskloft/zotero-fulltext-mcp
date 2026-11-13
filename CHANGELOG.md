@@ -5,6 +5,16 @@ All notable changes to this project are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Fixed
+
+- Extraction baseline scoring (scorer version 4, observer version 2): running headers and footers
+  (found by repetition across pages) and folios are no longer reference entries, so reference
+  ordinals equal the list position; list bullets are not part of an entry's `raw`; unnumbered
+  reference lists that an extractor runs together on one line are split at author-initial starts;
+  `reference_field_accuracy` is unscored (not failed) when the observation has no parsed fields;
+  observed text loses inline `<sup>`/`<sub>`/`<u>`/`<i>`/`<b>`/`<em>`/`<strong>` tags and paired `_`
+  italics; tolerant mode ignores whitespace before `, . ; : ) ]` and after `( [`. Benchmark-side only.
+
 ### Added
 
 - Reviewed E2 pilot expectations under `benchmarks/extraction/expectations/pilot/`: 20 stratum pages
