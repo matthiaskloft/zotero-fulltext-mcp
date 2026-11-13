@@ -680,3 +680,18 @@ def test_omitted_page_fragment_closes_the_document_predecessor(monkeypatch):
     # Same boundaries as the whole run for the selected pages; the omitted page's text is not copied.
     assert [e["raw"] for e in entries] == ["Doe, J. A study of the", "eLife Editorial Team. New report (2020)."]
     assert [e["ordinal"] for e in entries] == [1, 2]
+
+
+def test_folio_decision_follows_the_references_heading_on_the_same_page():
+    body = "Doe, J. A study. \n\n12-14 \n\n"
+    same_page, _ = _blocks_with("## References \n\n" + body)
+    previous_page, _ = _blocks_with(body, in_references=True)
+    assert [b["type"] for b in same_page][1:] == [b["type"] for b in previous_page] == ["reference_entry", "reference_entry"]
+    # A heading that ends the list on the same page makes the number a folio again.
+    after, _ = _blocks_with("## Appendix \n\nText. \n\n12-14 \n\n", in_references=True)
+    assert after[-1]["type"] == "page_number"
+
+
+def test_article_page_folio_stays_a_folio_inside_a_reference_list():
+    blocks, _ = _blocks_with("## References \n\n1. Doe, J. A study. \n\n016004-8 \n\n")
+    assert blocks[-1]["type"] == "page_number"

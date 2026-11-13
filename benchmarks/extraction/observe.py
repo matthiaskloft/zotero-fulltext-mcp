@@ -412,7 +412,7 @@ def build_page_blocks(
         return block
 
     furniture = state.get("furniture", frozenset())
-    roles = _page_roles(raws, furniture, bool(state["in_references"]))
+    roles = _page_roles(raws, furniture, _references_before(raws, page_text, bool(state["in_references"])))
     for index, raw in enumerate(raws):
         raw_text = page_text[raw.start:raw.end]
         if raw.type == "heading" and _is_caption(raw_text):
@@ -495,7 +495,8 @@ def _is_folio(text: str, in_references: bool) -> bool:
     """A page number. Inside a reference list a bare year or a page range is more likely list text."""
     if not _FOLIO.match(text):
         return False
-    return not (in_references and (_YEAR_ONLY.match(text) or re.search(r"[-\u2013]", text)))
+    # An article-page folio such as "016004-8" has a long first part; "12-14" is a page range.
+    return not (in_references and (_YEAR_ONLY.match(text) or re.match(r"\d{1,4}[-\u2013]", text)))
 
 
 def _furniture_key(raw: _Raw) -> str | None:
@@ -538,7 +539,22 @@ def find_furniture(page_texts: Sequence[tuple[int, str]]) -> frozenset[str]:
         if len(pages) >= (2 if "#" in key else 3) and len(sides[key]) == 1 and key not in elsewhere)
 
 
-def _page_roles(raws: Sequence[_Raw], furniture: frozenset[str], in_references: bool = False) -> list[str | None]:
+def _references_before(raws: Sequence[_Raw], page_text: str, start: bool) -> list[bool]:
+    """Per raw block: is it inside a reference list, given the section state on entering the page and
+    any (non-caption) heading before it on the same page?"""
+    inside, current = [], start
+    for raw in raws:
+        inside.append(current)
+        if raw.type == "heading":
+            text = page_text[raw.start:raw.end]
+            if not _is_caption(text):
+                current = bool(_REFERENCES_HEADING.match(text))
+    return inside
+
+
+def _page_roles(
+    raws: Sequence[_Raw], furniture: frozenset[str], in_references: Sequence[bool] | None = None,
+) -> list[str | None]:
     """``header`` / ``footer`` / ``page_number`` per raw block. Furniture is a contiguous run from
     the top of the page (known running-header lines) or from the bottom (known running-footer lines
     and, among the last ``FOLIO_BLOCKS`` blocks, folios), page images skipped; a block in the middle
@@ -556,7 +572,7 @@ def _page_roles(raws: Sequence[_Raw], furniture: frozenset[str], in_references: 
             continue  # a page image may sit after the footer lines; it neither ends nor joins the run
         seen += 1
         if seen <= FOLIO_BLOCKS and raw.type == "paragraph" and len(raw.lines) == 1 and _is_folio(
-                raw.lines[0].strip(), in_references):
+                raw.lines[0].strip(), bool(in_references and in_references[index])):
             roles[index] = "page_number"
         elif _furniture_key(raw) in furniture:
             roles[index] = "footer"
