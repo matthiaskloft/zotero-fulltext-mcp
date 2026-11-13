@@ -382,7 +382,7 @@ def test_repeated_page_furniture_is_found_across_pages():
         (2, "ARTICLE \n\nBody two. \n\nNATURE COMMUNICATIONS | (2019) 10:1524 | https://doi.org/10.1/y \n\n"),
         (3, "Only once \n\nBody three. \n\n9 \n\n"),
     ]
-    assert observe.find_furniture(pages) == {"article", "naturecommunications"}
+    assert observe.find_furniture(pages) == {"article", "naturecommunications##"}
 
 
 def test_repeated_header_lines_around_reference_entries_do_not_shift_ordinals():
@@ -467,3 +467,93 @@ def test_prose_in_an_unnumbered_paragraph_is_not_over_split():
 def test_a_repeated_continued_caption_is_not_furniture():
     pages = [(1, "Table 2. (Continued.) \n\nBody. \n\n"), (2, "Table 2. (Continued.) \n\nBody two. \n\n")]
     assert observe.find_furniture(pages) == frozenset()
+
+
+def _entries_of(markdown: str):
+    _, state = _blocks(markdown)
+    return [e["raw"] for e in state["entries"]]
+
+
+@pytest.mark.parametrize("body", [
+    "R Beck, Blockchain basics. In: Handbook of things (eds) JA Smith, B Jones, Wiley (2016)",
+    "Doe J, Roe R (2019) Title of it. BMJ Open, 3(2) 1-4",
+    "R Beck, A study of CO2 at 5 K Fanning, effects on things, J. Phys. 4(1), 2-3",
+    "R Beck, Chapter. In: Things, ed. by JA Smith, B Jones, Wiley, 2016, pp. 1-9",
+    "R Beck, A study (2016) BMJ Open, 3(2), 1-4",
+])
+def test_single_unnumbered_entries_are_never_cut_inline(body):
+    assert _entries_of(f"## References \n\n{body} \n\n") == [body]
+
+
+def test_inline_cut_needs_a_year_closer_or_a_url_tail():
+    cut = _entries_of("## References \n\nR Beck, One. J. A 1(2), 3-4 (2016) M Chung, Two. J. B 2016) K Fanning, Three. "
+                      "https://x.org/a S Haber, Four. \n\n")
+    assert [c.split(",")[0] for c in cut] == ["R Beck", "M Chung", "K Fanning", "S Haber"]
+
+
+def test_acronym_after_a_year_closer_is_not_an_author():
+    body = "R Beck, One. J. A 1(2), 3-4 (2016) BMJ Open, 3(2), 1-4"
+    assert _entries_of(f"## References \n\n{body} \n\n") == [body]
+
+WORDS = {1: "Apples", 2: "Bananas", 3: "Cherries", 4: "Dates", 5: "Elderberries"}
+
+
+
+def test_repeated_body_lines_are_not_furniture():
+    heading = "## Results \n\n"
+    pages = [(n, f"{heading}{WORDS[n]} alpha. \n\n| a | b |\n|---|---|\n| 1 | 2 |\n\n") for n in range(1, 6)]
+    assert observe.find_furniture(pages) == frozenset()
+    # A short line that repeats at the top of some pages but is body text elsewhere stays text.
+    pages = [(1, "Summary line \n\nBody one. \n\n"), (2, "Summary line \n\nBody two. \n\n"),
+             (3, "".join(f"Filler paragraph {chr(97 + i)}. \n\n" for i in range(9)) + "Summary line \n\n"
+                 + "".join(f"Other paragraph {chr(97 + i)}. \n\n" for i in range(9)))]
+    assert observe.find_furniture(pages) == frozenset()
+
+
+def test_header_on_every_page_is_found_and_needs_one_side():
+    pages = [(n, f"Journal of Things {n} \n\n{WORDS[n]} one. \n\n{WORDS[n]} two. \n\nFooter text \n\n") for n in range(1, 6)]
+    assert observe.find_furniture(pages) == {"journalofthings#", "footertext"}
+    # Same line on top of some pages and at the bottom of others is ambiguous: body text.
+    mixed = [(1, "Same line \n\nBody. \n\n"), (2, "Body. \n\nSame line \n\n"), (3, "Same line \n\nBody. \n\n")]
+    assert observe.find_furniture(mixed) == frozenset()
+
+
+def test_folio_rules():
+    furniture = frozenset()
+    blocks, _ = _blocks_with("Body. \n\n12.5 \n\n", furniture)
+    assert [b["type"] for b in blocks] == ["paragraph", "paragraph"]
+    blocks, _ = _blocks_with("Body. \n\n016004-8 \n\n", furniture)
+    assert [b["type"] for b in blocks] == ["paragraph", "page_number"]
+    blocks, _ = _blocks_with("9 \n\nBody. \n\nMore. \n\nStill. \n\n", furniture)
+    assert blocks[0]["type"] == "paragraph"
+    blocks, _ = _blocks_with("Body. \n\n7 \n\nMore. \n\nStill. \n\n", furniture)
+    assert [b["type"] for b in blocks] == ["paragraph", "paragraph", "paragraph", "paragraph"]
+
+
+def test_lower_case_continuation_is_appended_to_the_previous_entry():
+    md = "## References \n\n- Zed Zheng, Xi Xie. An overview – \n\n- of blockchain https://doi.org/10.1234/abc.5 \n\n"
+    blocks, state = _blocks(md)
+    assert len(state["entries"]) == 1
+    assert state["entries"][0]["raw"] == "Zed Zheng, Xi Xie. An overview – of blockchain https://doi.org/10.1234/abc.5"
+    assert state["entries"][0]["raw_sha256"] == sha256_text(state["entries"][0]["raw"])
+    assert state["entries"][0]["doi"] == {"status": "present", "value": "10.1234/abc.5"}
+
+
+def test_particle_entries_are_entries_not_continuations():
+    first = "## References \n\n- van der Waals, J. D. A study. 2020.\n\n- Roe, R. Another. 2019.\n\n"
+    _, state = _blocks(first)
+    assert [e["raw"][:10] for e in state["entries"]] == ["van der Wa", "Roe, R. An"]
+    mid = "## References \n\n- Doe, J. A study of things, J. X 1, 2-3 \n\n- de la Cruz, M. Another study. 2019.\n\n"
+    _, state = _blocks(mid)
+    assert [e["raw"][:6] for e in state["entries"]] == ["Doe, J", "de la "]
+
+
+def test_lower_case_item_after_a_closed_entry_is_a_new_entry():
+    md = "## References \n\n- Doe, J. A study. 2020.\n\n- some wrapped-looking line\n\n"
+    _, state = _blocks(md)
+    assert len(state["entries"]) == 2
+
+
+def test_lower_case_item_with_no_previous_entry_is_not_dropped():
+    _, state = _blocks("## References \n\n- of blockchain technology (2017)\n\n")
+    assert len(state["entries"]) == 1
