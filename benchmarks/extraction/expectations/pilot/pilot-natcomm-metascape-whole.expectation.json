@@ -375,8 +375,8 @@
         "x1": 409.22,
         "y1": 478.21
       },
-      "text": "A critical component in the interpretation of systems-level studies is the inference of enri- ched biological pathways and protein complexes contained within OMICs datasets. Suc- cessful analysis requires the integration of a broad set of current biological databases and the application of a robust analytical pipeline to produce readily interpretable results. Metascape is a web-based portal designed to provide a comprehensive gene list annotation and analysis resource for experimental biologists. In terms of design features, Metascape combines functional enrichment, interactome analysis, gene annotation, and membership search to leverage over 40 independent knowledgebases within one integrated portal. Additionally, it facilitates comparative analyses of datasets across multiple independent and orthogonal experiments. Metascape provides a significantly simplified user experience through a one- click Express Analysis interface to generate interpretable outputs. Taken together, Metascape is an effective and efficient tool for experimental biologists to comprehensively analyze and interpret OMICs-based studies in the big data era.",
-      "text_sha256": "34c7f0c7d5f08859a718302b64eb2562617a060977c86faae4cc6a5f0db390ee"
+      "text": "A critical component in the interpretation of systems-level studies is the inference of enriched biological pathways and protein complexes contained within OMICs datasets. Successful analysis requires the integration of a broad set of current biological databases and the application of a robust analytical pipeline to produce readily interpretable results. Metascape is a web-based portal designed to provide a comprehensive gene list annotation and analysis resource for experimental biologists. In terms of design features, Metascape combines functional enrichment, interactome analysis, gene annotation, and membership search to leverage over 40 independent knowledgebases within one integrated portal. Additionally, it facilitates comparative analyses of datasets across multiple independent and orthogonal experiments. Metascape provides a significantly simplified user experience through a one-click Express Analysis interface to generate interpretable outputs. Taken together, Metascape is an effective and efficient tool for experimental biologists to comprehensively analyze and interpret OMICs-based studies in the big data era.",
+      "text_sha256": "2d6a47cfb92e589b9b58179f0fb36c09e3340ccce92cca0e1fe88eb5a1afef20"
     },
     {
       "id": "p1-b8",
@@ -476,8 +476,8 @@
         "x1": 292.67,
         "y1": 301.38
       },
-      "text": "It has become a standard practice to employ one or more OMICs assays to deconstruct the molecular mechanisms underlying a biological system. Since each study ultimately results in a list containing dozens or hundreds of gene candidates, it is essential to leverage existing biological knowledge through understanding the representation of known pathways or com- plexes within these datasets. Providing this molecular context can facilitate the interpretation of systems-level data and enable new discoveries. Common queries include: What pathways or bio- chemical complexes are enriched?1; What are the functional roles of identified protein complexes?2; Which candidate proteins are secreted, contain a transmembrane domain, or are otherwise druggable?3; Or are there any chemical probes available for a rapid candidate validation4 ? Critically, when multiple gene lists are analyzed, either from common or orthogonal platforms, the identification of consistent underlying pathways or networks can help decipher authentic signals above the experimental noise5. Conversely, pathways selectively enriched in specific lists can help elucidate critical molecular features that distinguish experimental conditions. Thus, gene-list analysis web portals have become a necessity for modern biological research. For example, DAVID6, a popular web-based annotation tool has been employed by more than 4000 published studies per year since 2014, underscoring the importance of OMICs analysis engines in biological research.",
-      "text_sha256": "6e391620c5164ccde38e00e4f1f9ace344eee266bd81e9d5b1c72d9d87696798"
+      "text": "It has become a standard practice to employ one or more OMICs assays to deconstruct the molecular mechanisms underlying a biological system. Since each study ultimately results in a list containing dozens or hundreds of gene candidates, it is essential to leverage existing biological knowledge through understanding the representation of known pathways or complexes within these datasets. Providing this molecular context can facilitate the interpretation of systems-level data and enable new discoveries. Common queries include: What pathways or biochemical complexes are enriched?1; What are the functional roles of identified protein complexes?2; Which candidate proteins are secreted, contain a transmembrane domain, or are otherwise druggable?3; Or are there any chemical probes available for a rapid candidate validation4 ? Critically, when multiple gene lists are analyzed, either from common or orthogonal platforms, the identification of consistent underlying pathways or networks can help decipher authentic signals above the experimental noise5. Conversely, pathways selectively enriched in specific lists can help elucidate critical molecular features that distinguish experimental conditions. Thus, gene-list analysis web portals have become a necessity for modern biological research. For example, DAVID6, a popular web-based annotation tool has been employed by more than 4000 published studies per year since 2014, underscoring the importance of OMICs analysis engines in biological research.",
+      "text_sha256": "64683aaf2dca5ea0fc9cad027599bbeb9480f56ef2c93d379cbd46038e671b90"
     },
     {
       "id": "p2-b4",
@@ -490,8 +490,8 @@
         "x1": 292.68,
         "y1": 531.55
       },
-      "text": "To guide the development of a next-generation tool, we studied 25 existing data analysis portals7,8, focusing on database updates, coverage of analyses, coherence of interfaces, and interpretability of outputs. While each platform maintains strong feature sets (Supplementary Data 1), multiple portals are required to accomplish a complete systems-level analysis workflow, leading to a fragmented user experience. For example, a user analyzing proteomics data may need to use one tool to convert protein identifiers into gene symbols, a second tool to perform pathway enrichment analysis, a third tool to assess protein interaction networks, followed by other tools to produce high-quality visualizations of the data. Users are not only required to learn the details behind how to use each interface successfully, but they must also learn how to integrate the outputs from multiple types of analyses and file formats in order to generate useful results. For the inexperienced user, this can pose a significant barrier to entry. Thus, it is likely that significant levels of existing biological knowledge are often inadvertently omitted during the analysis of OMICs datasets due to the disintegrated nature of data sources and analysis tools. Ideally, a broad range of biological relation- ships and classifications can be assessed within one integrated portal.",
-      "text_sha256": "76a0b01bea0585adfd00cf12c837fb3ed5894272d20fea211bcc607a091dfd68"
+      "text": "To guide the development of a next-generation tool, we studied 25 existing data analysis portals7,8, focusing on database updates, coverage of analyses, coherence of interfaces, and interpretability of outputs. While each platform maintains strong feature sets (Supplementary Data 1), multiple portals are required to accomplish a complete systems-level analysis workflow, leading to a fragmented user experience. For example, a user analyzing proteomics data may need to use one tool to convert protein identifiers into gene symbols, a second tool to perform pathway enrichment analysis, a third tool to assess protein interaction networks, followed by other tools to produce high-quality visualizations of the data. Users are not only required to learn the details behind how to use each interface successfully, but they must also learn how to integrate the outputs from multiple types of analyses and file formats in order to generate useful results. For the inexperienced user, this can pose a significant barrier to entry. Thus, it is likely that significant levels of existing biological knowledge are often inadvertently omitted during the analysis of OMICs datasets due to the disintegrated nature of data sources and analysis tools. Ideally, a broad range of biological relationships and classifications can be assessed within one integrated portal.",
+      "text_sha256": "3a3b8581a6560d58348afd6ea069664eca19a5973a886ceeb87bcdba47eb77d1"
     },
     {
       "id": "p2-b5",
@@ -504,8 +504,8 @@
         "x1": 292.68,
         "y1": 719.82
       },
-      "text": "Additionally, the increased accessibility of systems-level tech- nology platforms has promoted experimental strategies that rely on orthogonal OMICs approaches, including transcriptome analysis, genetic screens, and proteomics, to interrogate an experimental system. This approach enables a more compre- hensive assessment of the molecular features of a biological process and reduces false positive/negative activities associated with individual platforms9. Thus, meta-analysis of multiple gene lists to identify commonly-enriched and selectively-enriched pathways is likely to become an essential component of large- scale data analysis. Methods for the analysis of multiple gene lists continue to be an area of active investigation, which highlights the necessity to develop analytical strategies that extend beyond the consolidation and analysis of individual lists, and implement approaches that will enable emergent insights that cannot be extracted using current approaches10,11. Our survey found that multi-gene-list meta-analysis is a feature often missing from existing tools (Supplementary Data 1).",
-      "text_sha256": "2e6b804947e1add1f1ad55a76d79ff2bf78bb2c919f365b537c39f87a8fa0e52"
+      "text": "Additionally, the increased accessibility of systems-level technology platforms has promoted experimental strategies that rely on orthogonal OMICs approaches, including transcriptome analysis, genetic screens, and proteomics, to interrogate an experimental system. This approach enables a more comprehensive assessment of the molecular features of a biological process and reduces false positive/negative activities associated with individual platforms9. Thus, meta-analysis of multiple gene lists to identify commonly-enriched and selectively-enriched pathways is likely to become an essential component of large-scale data analysis. Methods for the analysis of multiple gene lists continue to be an area of active investigation, which highlights the necessity to develop analytical strategies that extend beyond the consolidation and analysis of individual lists, and implement approaches that will enable emergent insights that cannot be extracted using current approaches10,11. Our survey found that multi-gene-list meta-analysis is a feature often missing from existing tools (Supplementary Data 1).",
+      "text_sha256": "8fe560c238575fd2f6635383de85d0e573a694c91fac00db1465d58fc6e33a5e"
     },
     {
       "id": "p2-b6",
@@ -532,8 +532,8 @@
         "x1": 552.69,
         "y1": 165.43
       },
-      "text": "propose that biologist-oriented portals would need to incorporate additional critical features, including future-proofing, usability, and interpretability, to maximize their utility. Specifically, analysis portals must continually be kept up to date, since using outdated databases can severely impact analysis and interpretation of OMICs data. It has been estimated that 67% of ~3900 publica- tions in 2015 missed 74% of potential new biological insights as a consequence of the use of obsolete database content in many analysis portals7. This remains a concern to date, as the databases underpinning the interpretation of a majority of published studies are over 2 years old12.",
-      "text_sha256": "3b04d913574083f4747e2332cf2503910ee2018bf30ec24687da223c9bc5d041",
+      "text": "propose that biologist-oriented portals would need to incorporate additional critical features, including future-proofing, usability, and interpretability, to maximize their utility. Specifically, analysis portals must continually be kept up to date, since using outdated databases can severely impact analysis and interpretation of OMICs data. It has been estimated that 67% of ~3900 publications in 2015 missed 74% of potential new biological insights as a consequence of the use of obsolete database content in many analysis portals7. This remains a concern to date, as the databases underpinning the interpretation of a majority of published studies are over 2 years old12.",
+      "text_sha256": "3444b2e01b39ee2a69d97c2f76d199759c9a07cedc89f0b57e51264c870ca0f4",
       "continues_from": "p2-b6"
     },
     {
@@ -547,8 +547,8 @@
         "x1": 552.67,
         "y1": 270.02
       },
-      "text": "Additionally, a well-designed interface that requires a minimal number of user interactions (clicks) reduces the barrier to entry for new users, or those with limited computational training. Nevertheless, simplification must be balanced with providing users sufficient information to understand and, if required, adjust statistical and computational criteria within the analysis work- flow. This feature would provide expanded access to data analysis tools and sources for experimentalists that have limited experi- ence with OMICs analysis, while enabling more advanced users to adjust analytical parameters to customize analyses.",
-      "text_sha256": "1c1481b447d3310a330a2a73794458505c544874f9f44835de64b2aed83cd9e6"
+      "text": "Additionally, a well-designed interface that requires a minimal number of user interactions (clicks) reduces the barrier to entry for new users, or those with limited computational training. Nevertheless, simplification must be balanced with providing users sufficient information to understand and, if required, adjust statistical and computational criteria within the analysis workflow. This feature would provide expanded access to data analysis tools and sources for experimentalists that have limited experience with OMICs analysis, while enabling more advanced users to adjust analytical parameters to customize analyses.",
+      "text_sha256": "2bfdcc4e0dcca50240f80cf0e9c3fcd92785d39446858b542484476a863a9545"
     },
     {
       "id": "p2-b9",
@@ -561,8 +561,8 @@
         "x1": 552.7,
         "y1": 353.71
       },
-      "text": "Furthermore, it is essential that analysis results are readily decipherable, highlighting the key, non-redundant results that will be critical for informing future studies. Platforms that go beyond exporting tabular annotation information to produce graphical summaries of results tend to enhance the global inter- pretation of complex OMICs datasets. The resulting output analyses should also adopt presentation formats that facilitate data dissemination among scientists.",
-      "text_sha256": "8b062a6bc7aecd1c565be0c1ba87a3ac578c8ebdf8c6733d3666c9fd3d9580b9"
+      "text": "Furthermore, it is essential that analysis results are readily decipherable, highlighting the key, non-redundant results that will be critical for informing future studies. Platforms that go beyond exporting tabular annotation information to produce graphical summaries of results tend to enhance the global interpretation of complex OMICs datasets. The resulting output analyses should also adopt presentation formats that facilitate data dissemination among scientists.",
+      "text_sha256": "e42bdebe3353b3912493915aa49964bc80724acffe5b9ff08b282cfebc7257aa"
     },
     {
       "id": "p2-b10",
@@ -575,8 +575,8 @@
         "x1": 552.7,
         "y1": 500.15
       },
-      "text": "With these design criteria in mind, we developed Metascape to harness the best practices of OMICs data analyses that have emerged over the last decade into one integrated portal. Here, we describe the features of this platform, which provide enhanced rendition of systems-level data, designed to promote the devel- opment of actionable hypotheses. These include data-engineering solutions for over 40 knowledgebases, as well as integrated and simplified workflows for gene annotation, membership search, and multi-list comparative analysis. Furthermore, we describe unique graphical outputs that enhance reporting and boost data comprehension. Taken together, Metascape provides an inte- grated and user-friendly web tool designed to facilitate multi- platform OMICs data analysis and interpretation for the experi- mental research community.",
-      "text_sha256": "f707de22cc1535301931398606d7316326fa7a18823c7d86a1e20f9e1bd353c7"
+      "text": "With these design criteria in mind, we developed Metascape to harness the best practices of OMICs data analyses that have emerged over the last decade into one integrated portal. Here, we describe the features of this platform, which provide enhanced rendition of systems-level data, designed to promote the development of actionable hypotheses. These include data-engineering solutions for over 40 knowledgebases, as well as integrated and simplified workflows for gene annotation, membership search, and multi-list comparative analysis. Furthermore, we describe unique graphical outputs that enhance reporting and boost data comprehension. Taken together, Metascape provides an integrated and user-friendly web tool designed to facilitate multi-platform OMICs data analysis and interpretation for the experimental research community.",
+      "text_sha256": "b502be2064d57641bc20912fbfaf6fe10789c41db2fd54b66ea6f95f0508d1a9"
     },
     {
       "id": "p2-b11",
@@ -603,8 +603,8 @@
         "x1": 552.71,
         "y1": 688.42
       },
-      "text": "User experience overview. To illustrate the features and cap- abilities of Metascape, we utilized three previously published influenza genetic screens13–15 as examples in this study (see Methods). These studies utilize genome-wide RNAi screening in cells to identify host factors that modulate influenza replication rates. Specifically, single-gene-list analyses were performed with gene targets identified in the Brass et al. study13, and multi-gene- list analyses were performed with the combination of Brass et al., Karlas et al14., and Konig et al.15 target lists. The step-by-step illustration of the Metascape analysis interface for both single- and multiple-list input scenarios are available in Supplementary Figures 1–7. While these examples showcase the analysis of RNAi functional genomics studies, Metascape is equally capable of analyzing lists of genes from multiple assay types, including transcriptomics, epigenetics, proteomics, and others.",
-      "text_sha256": "464422d07650427a6b2a2fd34e6593c27de76c458c589afb83625e8a6032a0d3"
+      "text": "User experience overview. To illustrate the features and capabilities of Metascape, we utilized three previously published influenza genetic screens13–15 as examples in this study (see Methods). These studies utilize genome-wide RNAi screening in cells to identify host factors that modulate influenza replication rates. Specifically, single-gene-list analyses were performed with gene targets identified in the Brass et al. study13, and multi-gene-list analyses were performed with the combination of Brass et al., Karlas et al14., and Konig et al.15 target lists. The step-by-step illustration of the Metascape analysis interface for both single- and multiple-list input scenarios are available in Supplementary Figures 1–7. While these examples showcase the analysis of RNAi functional genomics studies, Metascape is equally capable of analyzing lists of genes from multiple assay types, including transcriptomics, epigenetics, proteomics, and others.",
+      "text_sha256": "b1dda02785eb5b36b3be5f5a604880c439b8da3feb79aac03cf00e7ff54b6e7d"
     },
     {
       "id": "p2-b13",
@@ -718,8 +718,8 @@
         "x1": 292.64,
         "y1": 349.9
       },
-      "text": "membership search, and enrichment analysis (CAME). An analysis report summarizing key results is produced, accompa- nied by an Excel workbook, a PowerPoint presentation, and a Zip package containing all supporting data files (Fig. 1).",
-      "text_sha256": "1ea297d6de889b4b1d11588ac0d9c18c5165ef6d573d51b49153e73f2b6e758b",
+      "text": "membership search, and enrichment analysis (CAME). An analysis report summarizing key results is produced, accompanied by an Excel workbook, a PowerPoint presentation, and a Zip package containing all supporting data files (Fig. 1).",
+      "text_sha256": "1bd04ea4238887eb78042abb7c86258b99cb593a997d77e1bf2fe9a7d6bb1199",
       "continues_from": "p2-b13"
     },
     {
@@ -747,8 +747,8 @@
         "x1": 292.68,
         "y1": 684.62
       },
-      "text": "The concept behind Express Analysis is to encapsulate the most widely used analysis options and best analysis practices into a streamlined approach. For example, Express Analysis auto- matically includes gene annotation metadata that are likely to provide valuable context for candidate interpretation in most cases, such as their brief description, key biological processes involved, protein functions, subcellular locations, and roles in canonical pathways (Supplementary Figure 3). It incorporates a core set of default ontologies for enrichment analysis, including GO processes16, KEGG pathways17, Reactome gene sets18, canonical pathways19, and CORUM complexes20 (Supplementary Figure 5). Express Analysis also automatically sets statistical filters to remove ontology terms and interactome networks that do not meet minimal statistical requirements (Supplementary Figure 5). As an alternative to the Express Analysis, advanced users can control the four individual steps of the CAME workflow and overwrite default settings through the Custom Analysis workflow (Fig. 1, Supplementary Figures 2–6).",
-      "text_sha256": "82c760e7eae7c642b894cfc4f75f91c400fabf1a78262a583b122aa08629b0dc"
+      "text": "The concept behind Express Analysis is to encapsulate the most widely used analysis options and best analysis practices into a streamlined approach. For example, Express Analysis automatically includes gene annotation metadata that are likely to provide valuable context for candidate interpretation in most cases, such as their brief description, key biological processes involved, protein functions, subcellular locations, and roles in canonical pathways (Supplementary Figure 3). It incorporates a core set of default ontologies for enrichment analysis, including GO processes16, KEGG pathways17, Reactome gene sets18, canonical pathways19, and CORUM complexes20 (Supplementary Figure 5). Express Analysis also automatically sets statistical filters to remove ontology terms and interactome networks that do not meet minimal statistical requirements (Supplementary Figure 5). As an alternative to the Express Analysis, advanced users can control the four individual steps of the CAME workflow and overwrite default settings through the Custom Analysis workflow (Fig. 1, Supplementary Figures 2–6).",
+      "text_sha256": "a43022b179829623b8c76e0b86d5470a4164313b8b8734820370cca1e18598e8"
     },
     {
       "id": "p3-b8",
@@ -775,8 +775,8 @@
         "x1": 552.7,
         "y1": 123.59
       },
-      "text": "from various model organism databases, such as SGD21, Fly- Base22, WormBase23, etc. Source identifiers are mapped onto a unique Entrez Gene ID list prior to analyses, as a significant number of bioinformatics knowledgebases underlying Metascape rely on Entrez Gene IDs as their primary keys. Deprecated Entrez Gene IDs are also recognized and replaced by successor IDs when encountered.",
-      "text_sha256": "9d243ce6800ddada0de8f39889b847ffcdb106991bffb4fe713f1be13cbf3cf5",
+      "text": "from various model organism databases, such as SGD21, FlyBase22, WormBase23, etc. Source identifiers are mapped onto a unique Entrez Gene ID list prior to analyses, as a significant number of bioinformatics knowledgebases underlying Metascape rely on Entrez Gene IDs as their primary keys. Deprecated Entrez Gene IDs are also recognized and replaced by successor IDs when encountered.",
+      "text_sha256": "800145058eb55391563516219a822cd9cde4af9278c5358aeb96f4319d1ebacf",
       "continues_from": "p3-b8"
     },
     {
@@ -804,8 +804,8 @@
         "x1": 552.7,
         "y1": 379.84
       },
-      "text": "Gene annotation. Detailed annotations for genes provide biolo- gical context to serve as important selection criteria when choosing candidates for follow-up studies. Metascape integrates annotation information from over 40 knowledgebases (Supple- mentary Figure 8, Supplementary Data 2), encompassing gene descriptions, gene summaries, disease implications, genomic variants, subcellular localizations, tissue expression, the avail- ability of chemical probes, etc. Express Analysis delivers nine descriptive fields by default, however, as illustrated in Supple- mentary Figure 3, the Custom Analysis feature allows the user to append up to 47 columns of metadata to a gene annotation spreadsheet.",
-      "text_sha256": "f2c7833e38e359100452bc94b1d0b233a34f5eab9f6911e9e4ddda00a60e8a8c"
+      "text": "Gene annotation. Detailed annotations for genes provide biological context to serve as important selection criteria when choosing candidates for follow-up studies. Metascape integrates annotation information from over 40 knowledgebases (Supplementary Figure 8, Supplementary Data 2), encompassing gene descriptions, gene summaries, disease implications, genomic variants, subcellular localizations, tissue expression, the availability of chemical probes, etc. Express Analysis delivers nine descriptive fields by default, however, as illustrated in Supplementary Figure 3, the Custom Analysis feature allows the user to append up to 47 columns of metadata to a gene annotation spreadsheet.",
+      "text_sha256": "bfb82e9ca1eb123f54cc8208be5e4c869ade4f7843abd7910a82c69c40e914eb"
     },
     {
       "id": "p3-b12",
@@ -818,8 +818,8 @@
         "x1": 552.7,
         "y1": 515.85
       },
-      "text": "To assimilate this level of information using current tools, the experimentalist is required to first identify the appropriate knowledgebases that contain the required information. Since many of these portals do not incorporate gene list upload features for batch annotation, users must, in certain cases, search individual gene candidates one at a time. For example, it becomes an onerous undertaking to identify all extracellular proteins through UniProt25, or all chemical probes through DrugBank26, using a list with hundreds of gene candidates. Thus, Metascape’s automated gene annotation feature provides users with detailed annotation information not otherwise easily accessible, aiding in data interpretation of large-scale datasets and providing prior- itization criteria for candidate genes.",
-      "text_sha256": "7e7a0a1e1beca57b6d193d579cdd3a02c1347dcf629b715eb9ee1ff7a752d34e"
+      "text": "To assimilate this level of information using current tools, the experimentalist is required to first identify the appropriate knowledgebases that contain the required information. Since many of these portals do not incorporate gene list upload features for batch annotation, users must, in certain cases, search individual gene candidates one at a time. For example, it becomes an onerous undertaking to identify all extracellular proteins through UniProt25, or all chemical probes through DrugBank26, using a list with hundreds of gene candidates. Thus, Metascape’s automated gene annotation feature provides users with detailed annotation information not otherwise easily accessible, aiding in data interpretation of large-scale datasets and providing prioritization criteria for candidate genes.",
+      "text_sha256": "d186e3429750b9db279a723d67e508b48770ffe01b0c0b67bf0370c8c395bb05"
     },
     {
       "id": "p3-b13",
@@ -832,8 +832,8 @@
         "x1": 552.7,
         "y1": 740.74
       },
-      "text": "Membership search. The membership search feature in the Custom Analysis workflow allows users to apply specific query keywords, such as “infection” or “kinase”, against knowledgebase category term names and description fields, then review and select those matched terms that most accurately describe the process of interest (Supplementary Figure 4). Metascape will then dynamically construct a column of binary flags indicating whe- ther each gene in the input gene list is a member of the matched ontology terms. This allows the user to identify genes with spe- cific functions or features, and reduces the reliance on existing hierarchical ontologies during data interpretation. For example, Metascape offers two approaches to identify transmembrane proteins candidates. First, there are pre-integrated transmem- brane predictions provided by Ensembl27 or UniProt that are extractable through the gene annotation feature as described above. An alternative is to use the Membership tools to search the keyword “transmembrane” within the GO Cellular Component catalog to identify member genes. Although these two approaches are complementary in this specific example, membership search becomes critical when metadata is not readily available through",
-      "text_sha256": "eaf107598e6649b4ee90c68a0328623c9c2057920a5b881767e54e8a41341b89"
+      "text": "Membership search. The membership search feature in the Custom Analysis workflow allows users to apply specific query keywords, such as “infection” or “kinase”, against knowledgebase category term names and description fields, then review and select those matched terms that most accurately describe the process of interest (Supplementary Figure 4). Metascape will then dynamically construct a column of binary flags indicating whether each gene in the input gene list is a member of the matched ontology terms. This allows the user to identify genes with specific functions or features, and reduces the reliance on existing hierarchical ontologies during data interpretation. For example, Metascape offers two approaches to identify transmembrane proteins candidates. First, there are pre-integrated transmembrane predictions provided by Ensembl27 or UniProt that are extractable through the gene annotation feature as described above. An alternative is to use the Membership tools to search the keyword “transmembrane” within the GO Cellular Component catalog to identify member genes. Although these two approaches are complementary in this specific example, membership search becomes critical when metadata is not readily available through",
+      "text_sha256": "70930bf4c97960f9d8081fe97a8f75548c13bba64c0f2a575b0a09ba68edac40"
     },
     {
       "id": "p3-b14",
@@ -902,8 +902,8 @@
         "x1": 292.67,
         "y1": 134.02
       },
-      "text": "pre-integrated data sources. For instance, highlighting known infection-related genes for an influenza study cannot be accom- plished via standard gene annotation. Despite the fact that this knowledge is embedded in the ontology databases, it has not been explicitly compiled in most annotation resources and, thus, is not readily accessible to experimentalists. The binary result data from membership searches can also be visualized within nested pie charts (Supplementary Figure 9).",
-      "text_sha256": "e07836515ac4de315cf90d3f86ab5a4537333c45edf112869070aee9d7c2f2cd",
+      "text": "pre-integrated data sources. For instance, highlighting known infection-related genes for an influenza study cannot be accomplished via standard gene annotation. Despite the fact that this knowledge is embedded in the ontology databases, it has not been explicitly compiled in most annotation resources and, thus, is not readily accessible to experimentalists. The binary result data from membership searches can also be visualized within nested pie charts (Supplementary Figure 9).",
+      "text_sha256": "654e85239bfe92f95e804c586d387cb9f6272a40fdf408626a75c48d7757125c",
       "continues_from": "p3-b13"
     },
     {
@@ -917,8 +917,8 @@
         "x1": 292.66,
         "y1": 432.17
       },
-      "text": "Enrichment clustering. Enrichment analysis comprises the core of most existing gene annotation portals. During enrichment analysis, the input gene list is compared to thousands of gene sets defined by their involvement in specific biological processes, protein localization, enzymatic function, pathway membership, or other features. Gene sets whose members are significantly over- represented in the input gene list are reported to users to serve as putative biological insights into their study. A neglected problem in most current analyses is that redundancies in descriptors and ontologies can often complicate interpretation of the output. For example, ontology terms found in GO form a hierarchical structure of increasing granularity, making the terms inherently redundant. Terms across different ontology sources, such as GO, KEGG, and MSigDB19, etc. can be closely related as well. As a result, functional enrichment analysis can identify overlapping or related terms, making it difficult to extract non-redundant and representative processes to report in the analysis output. This problem is demonstrated in examples from other analysis portals using the Brass list (Fig. 2a, b), which report the enrichment of dozens of highly-related categories. During post-processing of data generated through the Metascape analysis, Kappa simila- rities28 among all pairs of enriched terms are computed and used to first hierarchically cluster terms into a tree then cast subtrees into clusters of similar terms (see Methods). By absorbing most redundancies into representative clusters, enrichment clustering eliminates confounding data interpretation issues that can arise from the reporting of multiple ontologies.",
-      "text_sha256": "7609aff9e3f4bda7d56e7272c3f3271860ff643e487379717888827f56c9226b"
+      "text": "Enrichment clustering. Enrichment analysis comprises the core of most existing gene annotation portals. During enrichment analysis, the input gene list is compared to thousands of gene sets defined by their involvement in specific biological processes, protein localization, enzymatic function, pathway membership, or other features. Gene sets whose members are significantly over-represented in the input gene list are reported to users to serve as putative biological insights into their study. A neglected problem in most current analyses is that redundancies in descriptors and ontologies can often complicate interpretation of the output. For example, ontology terms found in GO form a hierarchical structure of increasing granularity, making the terms inherently redundant. Terms across different ontology sources, such as GO, KEGG, and MSigDB19, etc. can be closely related as well. As a result, functional enrichment analysis can identify overlapping or related terms, making it difficult to extract non-redundant and representative processes to report in the analysis output. This problem is demonstrated in examples from other analysis portals using the Brass list (Fig. 2a, b), which report the enrichment of dozens of highly-related categories. During post-processing of data generated through the Metascape analysis, Kappa similarities28 among all pairs of enriched terms are computed and used to first hierarchically cluster terms into a tree then cast subtrees into clusters of similar terms (see Methods). By absorbing most redundancies into representative clusters, enrichment clustering eliminates confounding data interpretation issues that can arise from the reporting of multiple ontologies.",
+      "text_sha256": "8368cda5ba7bd4aaed9a970efa1869a15abfef5edea70842256a0f5b3ca43168"
     },
     {
       "id": "p4-b5",
@@ -959,8 +959,8 @@
         "x1": 292.67,
         "y1": 740.74
       },
-      "text": "Protein network analysis. Analyzing gene lists in the context of protein interactions can help illuminate biochemical complexes or signal transduction components that govern biological out- puts32. However, a typical gene list of a few hundred human proteins can form highly complicated network layouts, making",
-      "text_sha256": "3ccdaaefabe6e3d29079e9a4e284d6633038a69faf13a2c314601881a1d1fb90"
+      "text": "Protein network analysis. Analyzing gene lists in the context of protein interactions can help illuminate biochemical complexes or signal transduction components that govern biological outputs32. However, a typical gene list of a few hundred human proteins can form highly complicated network layouts, making",
+      "text_sha256": "65b8ae3b3048d06a9ef92b77c28deb261a1655b08d9c261f4fad107d9b2a3fac"
     },
     {
       "id": "p4-b8",
@@ -973,8 +973,8 @@
         "x1": 552.7,
         "y1": 196.78
       },
-      "text": "interpretation difficult. This is readily exemplified by the network output of other analysis portals using the Brass list (Fig. 2f). These are colloquially referred to as hairball networks. Although such large networks are generally statistically significant, they do not yield directly actionable insights unless the experimentalist has specific expectations of the data. To infer more biologically interpretable results, Metascape applies a mature complex iden- tification algorithm called MCODE33 to automatically extract protein complexes embedded in the large network. Taking advantage of Metascape’s functional enrichment analysis cap- ability, the three most significantly enriched ontology terms are combined to annotate putative biological roles for each MCODE complex. As shown in the example, Metascape results are rela- tively simple to visualize and interpret (Fig. 2g, h).",
-      "text_sha256": "80ecc042de64f45f655ec2a94878109a2c82d00f87ee3dccb849c086a092ec7e",
+      "text": "interpretation difficult. This is readily exemplified by the network output of other analysis portals using the Brass list (Fig. 2f). These are colloquially referred to as hairball networks. Although such large networks are generally statistically significant, they do not yield directly actionable insights unless the experimentalist has specific expectations of the data. To infer more biologically interpretable results, Metascape applies a mature complex identification algorithm called MCODE33 to automatically extract protein complexes embedded in the large network. Taking advantage of Metascape’s functional enrichment analysis capability, the three most significantly enriched ontology terms are combined to annotate putative biological roles for each MCODE complex. As shown in the example, Metascape results are relatively simple to visualize and interpret (Fig. 2g, h).",
+      "text_sha256": "fd80b526346fb473bd2585c6aea33a2c6128c30e82ccec20ac3649915ee44bce",
       "continues_from": "p4-b7"
     },
     {
@@ -988,8 +988,8 @@
         "x1": 552.69,
         "y1": 327.57
       },
-      "text": "Multi-gene-list meta-analysis. The proliferation and general adaptation of orthogonal OMICs platforms, including pro- teomics, genomics, functional genetic screens, and metabolomics, has made the meta-analysis of multiple gene lists a critical and largely unaddressed need. Routine comparative approaches include the use of Venn diagrams to identify hits that are com- mon or unique to certain gene lists. We, and others, have pre- viously reported that an overlap between OMICs datasets is more readily apparent at the level of pathways or protein complexes9,34,35, which can be considerably more challenging to implement without extensive computational expertise.",
-      "text_sha256": "0ac21c2edd2a65cebd9f58b594ddd4b1942b9d37de86a909fe661932dacccf16"
+      "text": "Multi-gene-list meta-analysis. The proliferation and general adaptation of orthogonal OMICs platforms, including proteomics, genomics, functional genetic screens, and metabolomics, has made the meta-analysis of multiple gene lists a critical and largely unaddressed need. Routine comparative approaches include the use of Venn diagrams to identify hits that are common or unique to certain gene lists. We, and others, have previously reported that an overlap between OMICs datasets is more readily apparent at the level of pathways or protein complexes9,34,35, which can be considerably more challenging to implement without extensive computational expertise.",
+      "text_sha256": "068b27c9c344a4d2fb04b108b0c612958a772e1cf10a40f8b83f13e4d9b72370"
     },
     {
       "id": "p4-b10",
@@ -1002,8 +1002,8 @@
         "x1": 552.7,
         "y1": 474.01
       },
-      "text": "Metascape has been designed to allow cross comparison of an arbitrary number of gene lists across both gene identities and ontologies. Specifically, upon the submission of multiple gene lists, all candidates are merged into one list, while encoding the original lists as additional binary membership columns (Supple- mentary Fig. 10). This pivoted layout greatly simplifies the representation of analysis results, as both gene annotation and membership search can be applied to the combined list the same way as in a single gene list input. Using a single output spreadsheet to incorporate evidence collected from each gene list thus enables efficient global gene filtering and prioritization. The overlap among the gene lists is visualized using a Circos plot36 (Supplementary Fig. 11), which is a more intuitive and scalable representation compared to a Venn diagram.",
-      "text_sha256": "ffb49ba67ae1b7f38b658d7415b9ff716b0c8abdb5b6dc0dea46107eae716c0c"
+      "text": "Metascape has been designed to allow cross comparison of an arbitrary number of gene lists across both gene identities and ontologies. Specifically, upon the submission of multiple gene lists, all candidates are merged into one list, while encoding the original lists as additional binary membership columns (Supplementary Fig. 10). This pivoted layout greatly simplifies the representation of analysis results, as both gene annotation and membership search can be applied to the combined list the same way as in a single gene list input. Using a single output spreadsheet to incorporate evidence collected from each gene list thus enables efficient global gene filtering and prioritization. The overlap among the gene lists is visualized using a Circos plot36 (Supplementary Fig. 11), which is a more intuitive and scalable representation compared to a Venn diagram.",
+      "text_sha256": "70dbcf70fd54acce20222896baacab9a65e5482ab51fe31aec036aaceee8c091"
     },
     {
       "id": "p4-b11",
@@ -1030,8 +1030,8 @@
         "x1": 552.8,
         "y1": 740.75
       },
-      "text": "Maintaining updated data sources. Metascape integrates over 40 knowledgebases (Supplementary Fig. 8) to support comprehensive analyses over ten highly studied organisms. Over time, some underlying data sources may adopt new access mechanisms, rename file packages, or be impacted by modifications to cross- referenced databases. Even if each data source is 99% robust, a system relying on 40 independent sources can only be 67% reli- able. As the result of this compound effect, unexpected changes are encountered during data synchronization processes at",
-      "text_sha256": "2b4f631e0c96419bb714224f62daf683035edc504799ab2013518dde63bc08a6"
+      "text": "Maintaining updated data sources. Metascape integrates over 40 knowledgebases (Supplementary Fig. 8) to support comprehensive analyses over ten highly studied organisms. Over time, some underlying data sources may adopt new access mechanisms, rename file packages, or be impacted by modifications to cross-referenced databases. Even if each data source is 99% robust, a system relying on 40 independent sources can only be 67% reliable. As the result of this compound effect, unexpected changes are encountered during data synchronization processes at",
+      "text_sha256": "68622c2757f5fa9109d944a5d2f124e0609372ecfb38a32c02c0b2faefd179df"
     },
     {
       "id": "p4-b13",
@@ -1131,8 +1131,8 @@
         "x1": 552.74,
         "y1": 740.74
       },
-      "text": "latest analyses on DAVID indicated 4–10% of the input gene candidates (varied by identifier types) are not recognized. Further analysis of the human GO archive data indicated 44% of anno- tation records have been added or modified since its last update. This is in agreement with a semantic similarity measure suggesting",
-      "text_sha256": "ca491ba32453ca90e48aa5975903f87b0e87e599d549db592526121ec01cc251",
+      "text": "latest analyses on DAVID indicated 4–10% of the input gene candidates (varied by identifier types) are not recognized. Further analysis of the human GO archive data indicated 44% of annotation records have been added or modified since its last update. This is in agreement with a semantic similarity measure suggesting",
+      "text_sha256": "f5c134388a80428e8c416b24442dc13e862fcc2d7031cbb6ff7d825eb3f84e8d",
       "continues_from": "p5-b4"
     },
     {
@@ -1202,8 +1202,8 @@
         "x1": 552.76,
         "y1": 154.02
       },
-      "text": "Fig. 2 Visualizations of functional enrichment and interactome analysis results. a Screenshot of a portion of the directed acyclic graph rendered by Babelomics53 based on enriched GO terms. b Screenshot of a portion of the gene-term association matrix rendered by g:profile42, where enriched GO terms are organized hierarchically. c Screenshot of a portion of the tabular display of enriched terms rendered by DAVID based on all GO terms, KEGG pathways, Reactome, and CORUM. The terms related to “viral gene expression” were missed in the visualizations generated by Babelomics and g:profile, but were identified by DAVID (in cluster 8 with ranks around 20). d Metascape bar graph for viewing top non-redundant enrichment clusters, one per cluster, using a discrete color scale to represent statistical significance. e Metascape enrichment network visualization showing the intra-cluster and inter- cluster similarities of enriched terms, up to ten terms per cluster. Cluster annotations are shown in color code. f A complex interactome network generated by g:profile with the Brass gene list. g Metascape visualization of the interactome network formed by all 121 gene candidates from the Brass list, where the MCODE complexes are colored according to their identities. h Seven MCODE complexes automatically identified in Metascape, colored by their identities. Their functional labels are generated based on the top-three functional enriched terms, if available",
-      "text_sha256": "745770f8969a4d5fcfa0c952dc134fd84660ad6ce9021ce61cd20c1fa00b3e41",
+      "text": "Fig. 2 Visualizations of functional enrichment and interactome analysis results. a Screenshot of a portion of the directed acyclic graph rendered by Babelomics53 based on enriched GO terms. b Screenshot of a portion of the gene-term association matrix rendered by g:profile42, where enriched GO terms are organized hierarchically. c Screenshot of a portion of the tabular display of enriched terms rendered by DAVID based on all GO terms, KEGG pathways, Reactome, and CORUM. The terms related to “viral gene expression” were missed in the visualizations generated by Babelomics and g:profile, but were identified by DAVID (in cluster 8 with ranks around 20). d Metascape bar graph for viewing top non-redundant enrichment clusters, one per cluster, using a discrete color scale to represent statistical significance. e Metascape enrichment network visualization showing the intra-cluster and inter-cluster similarities of enriched terms, up to ten terms per cluster. Cluster annotations are shown in color code. f A complex interactome network generated by g:profile with the Brass gene list. g Metascape visualization of the interactome network formed by all 121 gene candidates from the Brass list, where the MCODE complexes are colored according to their identities. h Seven MCODE complexes automatically identified in Metascape, colored by their identities. Their functional labels are generated based on the top-three functional enriched terms, if available",
+      "text_sha256": "aacb38a2b9b951a150d771a455cf9db7599eedf471ba7e0b2b504dfc9f5ddc1e",
       "caption_for": "p5-b3"
     },
     {
@@ -1333,8 +1333,8 @@
         "x1": 552.69,
         "y1": 322.3
       },
-      "text": "Usage and citation analysis. Metascape has been in development since 2014, and a beta version of the software was initially released in late 2015. The portal usage data, as well as feedback from users, have been decisive in correcting or refining under- lying concepts that drove the architectural design and features of Metascape. Some usage statistics are particularly enlightening. Among all recently recorded analysis sessions, ~78% users chose Express Analysis over Custom Analysis, implying that Express Analysis successfully captures a set of core algorithms and set- tings suitable for the majority of analysis needs. Six percent of analyses contained more than one gene list, indicating a demand for meta-analysis in the current research landscape. Data col- lected on input identifier types indicates gene symbol and syno- nyms are the most widely used (77%), followed by Ensembl identifiers (11%), Entrez Gene ID (4%), and RefSeq (3%). The remaining IDs are mostly UniProt IDs and model-organism- specific IDs. Microarray IDs are hardly used (<0.2%), likely reflecting the shift of the gene expression technology platform from microarrays to next-generation sequencing. About 63% of analyses were performed using human identifiers, followed by 31% using mouse. Other model organisms such as D. rerio, R. norvegicus, A. thalianai, etc. accounted for the remainder. Inter- estingly, 3% usage took advantage of the ortholog mapping fea- ture to mostly cast mouse/rat gene lists into human context for analysis. These data validate a need to support multiple gene/ protein identifiers and multiple model organisms.",
-      "text_sha256": "6f4ad96fb7f13be361aa78bcb410d7968ec82408624fc7af10fff12e647f0968"
+      "text": "Usage and citation analysis. Metascape has been in development since 2014, and a beta version of the software was initially released in late 2015. The portal usage data, as well as feedback from users, have been decisive in correcting or refining underlying concepts that drove the architectural design and features of Metascape. Some usage statistics are particularly enlightening. Among all recently recorded analysis sessions, ~78% users chose Express Analysis over Custom Analysis, implying that Express Analysis successfully captures a set of core algorithms and settings suitable for the majority of analysis needs. Six percent of analyses contained more than one gene list, indicating a demand for meta-analysis in the current research landscape. Data collected on input identifier types indicates gene symbol and synonyms are the most widely used (77%), followed by Ensembl identifiers (11%), Entrez Gene ID (4%), and RefSeq (3%). The remaining IDs are mostly UniProt IDs and model-organism-specific IDs. Microarray IDs are hardly used (<0.2%), likely reflecting the shift of the gene expression technology platform from microarrays to next-generation sequencing. About 63% of analyses were performed using human identifiers, followed by 31% using mouse. Other model organisms such as D. rerio, R. norvegicus, A. thalianai, etc. accounted for the remainder. Interestingly, 3% usage took advantage of the ortholog mapping feature to mostly cast mouse/rat gene lists into human context for analysis. These data validate a need to support multiple gene/ protein identifiers and multiple model organisms.",
+      "text_sha256": "169e2848548594661e06a5b542b63fc93408eb999d7b467d5ddc9de613aa023f"
     },
     {
       "id": "p7-b6",
@@ -1347,8 +1347,8 @@
         "x1": 552.69,
         "y1": 374.63
       },
-      "text": "At the time of writing, our citation survey using Google Scholar identified 62% of the citations have adopted Metascape graphical outputs directly in publications (Supplementary Data 5), under- scoring the utility of tools that generate high-quality data visualizations (Fig. 5a). The top three most used visualizations",
-      "text_sha256": "ec8cc178fab613d31b51bd5e4d5aa52da2643837cb799c2647416687a11b83a3"
+      "text": "At the time of writing, our citation survey using Google Scholar identified 62% of the citations have adopted Metascape graphical outputs directly in publications (Supplementary Data 5), underscoring the utility of tools that generate high-quality data visualizations (Fig. 5a). The top three most used visualizations",
+      "text_sha256": "e743072d84fb07c3d02ce37bdd7983a2173124d400fc040b62335d0a1ab8b9e7"
     },
     {
       "id": "p7-b7",
@@ -1479,8 +1479,8 @@
         "x1": 292.67,
         "y1": 228.19
       },
-      "text": "are the enrichment bar graph, enrichment network, and enrichment heatmap, highlighting the utility of the tool for functional enrichment analyses (Fig. 5b). In addition to graphical outputs, Metascape analysis generates two Excel spreadsheets providing gene annotation and functional enrichment results (Supplementary Data 3, 4, Supplementary Figure 7). These data outputs have been directly used in over 16% of publications as supplementary materials to support analysis conclusions (Sup- plementary Data 5). Since Circos plots and enrichment heatmaps are two visualization tools specifically designed for multiple gene lists only, and a bar graph is only used for a single gene list, we estimated that 70% of the published studies studied a single gene list and 30% studied multiple gene lists. This finding, together with our web portal usage data, highlight the increasing usage of multi-OMICs approaches in current studies, and suggest that meta-analysis has become an important tool for the analysis of OMICs datasets.",
-      "text_sha256": "84ac79b30667156a374df4b0a30bb2b77445f59b8fc00c2e21b6c92643549018",
+      "text": "are the enrichment bar graph, enrichment network, and enrichment heatmap, highlighting the utility of the tool for functional enrichment analyses (Fig. 5b). In addition to graphical outputs, Metascape analysis generates two Excel spreadsheets providing gene annotation and functional enrichment results (Supplementary Data 3, 4, Supplementary Figure 7). These data outputs have been directly used in over 16% of publications as supplementary materials to support analysis conclusions (Supplementary Data 5). Since Circos plots and enrichment heatmaps are two visualization tools specifically designed for multiple gene lists only, and a bar graph is only used for a single gene list, we estimated that 70% of the published studies studied a single gene list and 30% studied multiple gene lists. This finding, together with our web portal usage data, highlight the increasing usage of multi-OMICs approaches in current studies, and suggest that meta-analysis has become an important tool for the analysis of OMICs datasets.",
+      "text_sha256": "f6e98bd3851d0b13fd05ebf7b7a79c203da52c8203b259184cd3a65c88eeb242",
       "continues_from": "p7-b6"
     },
     {
@@ -1522,8 +1522,8 @@
         "x1": 292.68,
         "y1": 500.14
       },
-      "text": "Our study of 25 existing analysis portals found that the underlying databases were often out-of-date (Supplementary Data 1). Although portals such as g:profile42, PANTHER43, TopFun31, InterMine44, GoEast45, and GeneTrail246 provide up- to-date knowledgebases, a significant portion of portals (60%) relied on knowledgebases older than one year (Supplementary Data 1). Due to the inclusion of over 40 unique data sources in Metascape, a fully automated synchronization pipeline becomes unstable due to changes in the underlying resources. This moti- vated us to develop a workflow that combines an automated robot crawling phase with a supervised human review phase (Fig. 4). This data-engineering solution has demonstrated success through our monthly data refresh cycles, providing a viable data syn- chronization model for complex portals facing similar challenges.",
-      "text_sha256": "e55e84d4348cfe1e646ce833f20c4aa46d032828b432d00df2b2c1a8b2e77d49"
+      "text": "Our study of 25 existing analysis portals found that the underlying databases were often out-of-date (Supplementary Data 1). Although portals such as g:profile42, PANTHER43, TopFun31, InterMine44, GoEast45, and GeneTrail246 provide up-to-date knowledgebases, a significant portion of portals (60%) relied on knowledgebases older than one year (Supplementary Data 1). Due to the inclusion of over 40 unique data sources in Metascape, a fully automated synchronization pipeline becomes unstable due to changes in the underlying resources. This motivated us to develop a workflow that combines an automated robot crawling phase with a supervised human review phase (Fig. 4). This data-engineering solution has demonstrated success through our monthly data refresh cycles, providing a viable data synchronization model for complex portals facing similar challenges.",
+      "text_sha256": "7e66dbfb13c70cdf6d1219a836f6a77f11e7705eeaf6fe392186aab6f93d77ca"
     },
     {
       "id": "p8-b7",
@@ -1536,8 +1536,8 @@
         "x1": 292.67,
         "y1": 667.5
       },
-      "text": "In addition to regular database updates, gene annotation and membership search are two features that are not readily addressed by existing portals (Supplementary Data 1). Although the term gene annotation is occasionally used by existing portals as a synonym for enrichment analysis44,47,48, here we consider gene annotation as a method to extract a diverse set of metadata, such as identifying extracellular proteins or associated chemical probes, for hundreds to thousands of gene candidates at once. Membership search is a closely related yet complementary service that dynamically highlights genes known to be involved in spe- cific biology, such as host-pathogen interactions. Typically, retrieving these metadata requires querying specific portals, often one gene at a time, and compiling outputs into a centralized format for analysis. Metascape enables the batch extraction of contents from over 40 databases in an extremely efficient manner (Supplementary Figures 3–4).",
-      "text_sha256": "b082f87bf5f198c9adbf07549b7c70e9a2d26b76597d37a7fd067af256a11636"
+      "text": "In addition to regular database updates, gene annotation and membership search are two features that are not readily addressed by existing portals (Supplementary Data 1). Although the term gene annotation is occasionally used by existing portals as a synonym for enrichment analysis44,47,48, here we consider gene annotation as a method to extract a diverse set of metadata, such as identifying extracellular proteins or associated chemical probes, for hundreds to thousands of gene candidates at once. Membership search is a closely related yet complementary service that dynamically highlights genes known to be involved in specific biology, such as host-pathogen interactions. Typically, retrieving these metadata requires querying specific portals, often one gene at a time, and compiling outputs into a centralized format for analysis. Metascape enables the batch extraction of contents from over 40 databases in an extremely efficient manner (Supplementary Figures 3–4).",
+      "text_sha256": "744993690a36152199f21ad78b5bb441128dd111ac59d671a14b87b52f288a98"
     },
     {
       "id": "p8-b8",
@@ -1550,8 +1550,8 @@
         "x1": 292.67,
         "y1": 740.74
       },
-      "text": "Analyzing multiple gene lists simultaneously through robust meta-analysis is another unmet need in the current OMICs data analysis landscape (Supplementary Data 1). Evaluated portals provide no, or only limited, support for this activity. For example, GoEast45 and agriGO49 provide some meta-analysis functions using a two-step process, where users analyze gene lists indivi- dually first, then reupload their enrichment results for cross",
-      "text_sha256": "ede384ea84c94ec17fdb5a36e0e0b18fe6b6b028f8a6acdee83fd2800bae0b07"
+      "text": "Analyzing multiple gene lists simultaneously through robust meta-analysis is another unmet need in the current OMICs data analysis landscape (Supplementary Data 1). Evaluated portals provide no, or only limited, support for this activity. For example, GoEast45 and agriGO49 provide some meta-analysis functions using a two-step process, where users analyze gene lists individually first, then reupload their enrichment results for cross",
+      "text_sha256": "a31ea30cc2617589c9d13f5f84b147971a44c92afd7c03ab92debb8374922188"
     },
     {
       "id": "p8-b9",
@@ -1564,8 +1564,8 @@
         "x1": 552.69,
         "y1": 186.35
       },
-      "text": "comparison. However, GoEast analyzes a maximum of three lists and agriGO only supports organisms of agricultural relevance. GeneCodis50 supports a maximum of two lists. GoMiner51 can compute enrichment terms for multiple lists in parallel, however, the separate outputs are not further integrated and cross com- pared. g:Cocoa, a component in g:profile, compiles a tabular output conceptually similar to Metascape’s enrichment heatmap. However, it currently lacks an enrichment clustering feature and does not support interactome meta-analysis (Fig. 2b). Metascape’s architecture is designed to support a seamless user experience towards the analysis and visualization of an arbitrary number of gene lists, only limited by available computing time and memory space.",
-      "text_sha256": "cf6dad1b5de1d7295965add178dd267cc980bd0997f746187db809a50cdcfebc",
+      "text": "comparison. However, GoEast analyzes a maximum of three lists and agriGO only supports organisms of agricultural relevance. GeneCodis50 supports a maximum of two lists. GoMiner51 can compute enrichment terms for multiple lists in parallel, however, the separate outputs are not further integrated and cross compared. g:Cocoa, a component in g:profile, compiles a tabular output conceptually similar to Metascape’s enrichment heatmap. However, it currently lacks an enrichment clustering feature and does not support interactome meta-analysis (Fig. 2b). Metascape’s architecture is designed to support a seamless user experience towards the analysis and visualization of an arbitrary number of gene lists, only limited by available computing time and memory space.",
+      "text_sha256": "05b7a09e403a50d5f08dc26ef614042dfb7f0de33509af3a0d7926ceafdf4b0c",
       "continues_from": "p8-b8"
     },
     {
@@ -1579,8 +1579,8 @@
         "x1": 552.69,
         "y1": 270.02
       },
-      "text": "The integration of Circos plots overcomes the limitation of Venn diagrams to graphically visualize the overlaps among many lists (Supplementary Figure 11), and enrichment heatmaps (Fig. 3a) are applicable to the number of lists encountered in practice (Fig. 3a). Metascape also builds on previous imple- mentations of enrichment network maps52 by depicting enriched terms as pie charts, which more readily indicate common and selective pathways enriched across multiple gene lists (Fig. 3b).",
-      "text_sha256": "b76fd9d74e98fe3202d2883f7c83043a96b9e710c5deddc11a73b336bcdbdc2e"
+      "text": "The integration of Circos plots overcomes the limitation of Venn diagrams to graphically visualize the overlaps among many lists (Supplementary Figure 11), and enrichment heatmaps (Fig. 3a) are applicable to the number of lists encountered in practice (Fig. 3a). Metascape also builds on previous implementations of enrichment network maps52 by depicting enriched terms as pie charts, which more readily indicate common and selective pathways enriched across multiple gene lists (Fig. 3b).",
+      "text_sha256": "f600bcbf9fbce6ab158a1fc0bfd132d224c79b1d8659dc1b923368df03fdbb3b"
     },
     {
       "id": "p8-b11",
@@ -1593,8 +1593,8 @@
         "x1": 552.7,
         "y1": 416.46
       },
-      "text": "While interactome analysis is implemented in Babelomics53, Intermine44, and ConsensusPathDB54, Metascape’s interactome analysis is distinguished by two notable features. First, in addition to the BioGrid knowledgebase, Metascape integrates the more recent human interactome datasets InWeb_IM55 and Omni- Path56, resulting in a tripling of human interactome coverage (Supplementary Figure 13). Second, Metascape automatically extracts protein complexes and annotates their respective func- tions (Fig. 2h, Supplementary Figure 12). Compared to existing visualization approaches (Fig. 2f), Metascape is designed to highlight dense interactome neighborhoods and facilitate the interpretation of interactome data in a biological context; it fur- ther integrates with Cytoscape29 to leverage its rich set of visua- lization and interactive features.",
-      "text_sha256": "4650a5b34ded137cb1e4c03df96278f53182809f20eaa9305017cd7e61bfe876"
+      "text": "While interactome analysis is implemented in Babelomics53, Intermine44, and ConsensusPathDB54, Metascape’s interactome analysis is distinguished by two notable features. First, in addition to the BioGrid knowledgebase, Metascape integrates the more recent human interactome datasets InWeb_IM55 and OmniPath56, resulting in a tripling of human interactome coverage (Supplementary Figure 13). Second, Metascape automatically extracts protein complexes and annotates their respective functions (Fig. 2h, Supplementary Figure 12). Compared to existing visualization approaches (Fig. 2f), Metascape is designed to highlight dense interactome neighborhoods and facilitate the interpretation of interactome data in a biological context; it further integrates with Cytoscape29 to leverage its rich set of visualization and interactive features.",
+      "text_sha256": "e0bd05d331eccf8230470c9064fafadd54e7d6d36ae71fd6006a6d63ebd8949c"
     },
     {
       "id": "p8-b12",
@@ -1607,8 +1607,8 @@
         "x1": 552.8,
         "y1": 709.34
       },
-      "text": "Critically, Metascape was designed to provide more inter- pretable and actionable results for experimentalists. The redun- dancy among ontology terms presents a significant obstacle in result interpretation. The primary strategy adopted by existing portals, as seen in g:Profiler42, WebGestalt8, Babelomics53, and others, is to utilize directed acyclic graph (DAG) or tree structures embedded within ontologies such as GO16 (examples in Fig. 2a, b). WebGestalt provides an option only using a subset such as GOSlim16 to reduce redundancy. However, these strategies are not applicable to reduce redundancies across different ontology sour- ces. Metascape and DAVID6, by contrast, adopt a dynamic clus- tering solution that avoids the above-mentioned shortcomings. Metascape further simplifies the result presentation via bar graph (Fig. 2d) and heatmap (Fig. 3a) visualizations, compared to DAVID’s tabular presentation (Fig. 2c). Although p-value is used as the default representation metric for ranking enriched terms, it nevertheless has its limitations. Users may need to consider using alternative metrics, such as the multi-test corrected q-value or the biological context-sensitive enrichment factor. All popular enrichment metrics, including detailed gene counts, are computed and made available for offline analyses. Metascape further enhances the interpretability of analysis results through advanced graphical and spreadsheet outputs, a concise PowerPoint pre- sentation (Supplementary Figure 7), and a journal-style web-based Analysis Report containing additional method descriptions and references (Supplementary Figure 7). Offline analysis is facilitated by a Zip export containing third-party compatible data files, such as the Cytoscape29 and JTreeView57 formats.",
-      "text_sha256": "30357442c63e3e7481cfaae2440f6bec40ef9d0c0f1f418fdd58401fd4b5730e"
+      "text": "Critically, Metascape was designed to provide more interpretable and actionable results for experimentalists. The redundancy among ontology terms presents a significant obstacle in result interpretation. The primary strategy adopted by existing portals, as seen in g:Profiler42, WebGestalt8, Babelomics53, and others, is to utilize directed acyclic graph (DAG) or tree structures embedded within ontologies such as GO16 (examples in Fig. 2a, b). WebGestalt provides an option only using a subset such as GOSlim16 to reduce redundancy. However, these strategies are not applicable to reduce redundancies across different ontology sources. Metascape and DAVID6, by contrast, adopt a dynamic clustering solution that avoids the above-mentioned shortcomings. Metascape further simplifies the result presentation via bar graph (Fig. 2d) and heatmap (Fig. 3a) visualizations, compared to DAVID’s tabular presentation (Fig. 2c). Although p-value is used as the default representation metric for ranking enriched terms, it nevertheless has its limitations. Users may need to consider using alternative metrics, such as the multi-test corrected q-value or the biological context-sensitive enrichment factor. All popular enrichment metrics, including detailed gene counts, are computed and made available for offline analyses. Metascape further enhances the interpretability of analysis results through advanced graphical and spreadsheet outputs, a concise PowerPoint presentation (Supplementary Figure 7), and a journal-style web-based Analysis Report containing additional method descriptions and references (Supplementary Figure 7). Offline analysis is facilitated by a Zip export containing third-party compatible data files, such as the Cytoscape29 and JTreeView57 formats.",
+      "text_sha256": "fd52abc8c953c60915e8ef3d7f1135e54b0c09a58fb69396f1466b5ab59511f8"
     },
     {
       "id": "p8-b13",
@@ -1621,8 +1621,8 @@
         "x1": 552.68,
         "y1": 740.74
       },
-      "text": "In conclusion, Metascape has been designed for experi- mentalists (bench biologists) to apply powerful computational analysis pipelines to analyze and interpret large-scale datasets. To",
-      "text_sha256": "09121e1fca6a0a0524b884faeaba7fd21f98512362bf9dd7da1991c772edbc78"
+      "text": "In conclusion, Metascape has been designed for experimentalists (bench biologists) to apply powerful computational analysis pipelines to analyze and interpret large-scale datasets. To",
+      "text_sha256": "2bbcc7f48475ae44ff67b842472eb9301f7912e62be61ce133d1b901ef3d0170"
     },
     {
       "id": "p8-b14",
@@ -1691,8 +1691,8 @@
         "x1": 292.68,
         "y1": 186.35
       },
-      "text": "ensure that its content is kept current, a new knowledgebase synchronization pipeline was engineered. To address gaps in current analysis tools, Metascape introduces a workflow inte- grating gene annotation, membership analysis, and multi-gene- list meta-analysis capabilities. Its rich set of analysis tools are accessible through a convenient one-click Express Analysis interface and results are communicated via an article-like analysis report. We expect that the wider adoption of Metascape will significantly enhance biological interpretation of OMICs studies by enabling experimentalists to directly analyze their data to identify novel therapeutic targets, mechanisms of action, or molecular insight into disease. Metascape is an open-access resource available at http://metascape.org.",
-      "text_sha256": "4059a3b34888d9e1429e4a78630b0766f57fc6ba4b39c55badb0ed3fbccec8d2",
+      "text": "ensure that its content is kept current, a new knowledgebase synchronization pipeline was engineered. To address gaps in current analysis tools, Metascape introduces a workflow integrating gene annotation, membership analysis, and multi-gene-list meta-analysis capabilities. Its rich set of analysis tools are accessible through a convenient one-click Express Analysis interface and results are communicated via an article-like analysis report. We expect that the wider adoption of Metascape will significantly enhance biological interpretation of OMICs studies by enabling experimentalists to directly analyze their data to identify novel therapeutic targets, mechanisms of action, or molecular insight into disease. Metascape is an open-access resource available at http://metascape.org.",
+      "text_sha256": "8c6118d018a598360fce3b0a2caac9469946e483e382002604c5af61075e0aa6",
       "continues_from": "p8-b13"
     },
     {
@@ -1720,8 +1720,8 @@
         "x1": 292.66,
         "y1": 293.53
       },
-      "text": "Architecture and data source. Metascape is a web resource compatible with all major browsers. The backend knowledgebase is a relational database managed by MySQL. The front-end user interface is implemented by Angular JavaScript fra- mework to provide a rich interactive user experience. The server-side computa- tional logic is mostly implemented in Python and leverages several packages provided by the community (https://pypi.org). Each analysis request is associated with a randomly-generated unique session ID (Supplementary Figure 2), which can be used to access analysis results interactively through the web or to download all result data in a Zip package for offline use, before the data is removed from the server (Supplementary Figure 7).",
-      "text_sha256": "1099c48e00d72cef44a99473971be5af70da7a6841f75d7af5ca44004424e4ea"
+      "text": "Architecture and data source. Metascape is a web resource compatible with all major browsers. The backend knowledgebase is a relational database managed by MySQL. The front-end user interface is implemented by Angular JavaScript framework to provide a rich interactive user experience. The server-side computational logic is mostly implemented in Python and leverages several packages provided by the community (https://pypi.org). Each analysis request is associated with a randomly-generated unique session ID (Supplementary Figure 2), which can be used to access analysis results interactively through the web or to download all result data in a Zip package for offline use, before the data is removed from the server (Supplementary Figure 7).",
+      "text_sha256": "322af308c8e0e5488aaa957233beeab03d8a7e738cfe46017d2aa3520c2b879b"
     },
     {
       "id": "p9-b6",
@@ -1748,8 +1748,8 @@
         "x1": 292.67,
         "y1": 483.96
       },
-      "text": "Functional enrichment analysis. Metascape utilizes the well-adopted hypergeo- metric test58 and Benjamini-Hochberg p-value correction algorithm59 to identify all ontology terms that contain a statistically greater number of genes in common with an input list than expected by chance. By default, Metascape pathway enrichment analysis makes use of Gene Ontology16, KEGG17, Reactome18, MSigDB19, etc. Distinguishing it from many existing portals, Metascape auto- matically clusters enriched terms into non-redundant groups, where it implements similar logic as found in DAVID6. Briefly, pairwise similarities between any two enriched terms are computed based on a Kappa-test score28. The similarity matrix is then hierarchically clustered and a 0.3 similarity threshold is applied to trim the resultant tree into separate clusters. Metascape chooses the most significant (lowest p-value) term within each cluster (Supplementary Data 4) to represent the cluster in bar graph and heatmap representations. The analysis provides other popular enrichment metrics in addition to p-values.",
-      "text_sha256": "21bfb6248cabfe37b9c429467c640b29a529ed6e41b1c31fdcfe80c12ea49708"
+      "text": "Functional enrichment analysis. Metascape utilizes the well-adopted hypergeometric test58 and Benjamini-Hochberg p-value correction algorithm59 to identify all ontology terms that contain a statistically greater number of genes in common with an input list than expected by chance. By default, Metascape pathway enrichment analysis makes use of Gene Ontology16, KEGG17, Reactome18, MSigDB19, etc. Distinguishing it from many existing portals, Metascape automatically clusters enriched terms into non-redundant groups, where it implements similar logic as found in DAVID6. Briefly, pairwise similarities between any two enriched terms are computed based on a Kappa-test score28. The similarity matrix is then hierarchically clustered and a 0.3 similarity threshold is applied to trim the resultant tree into separate clusters. Metascape chooses the most significant (lowest p-value) term within each cluster (Supplementary Data 4) to represent the cluster in bar graph and heatmap representations. The analysis provides other popular enrichment metrics in addition to p-values.",
+      "text_sha256": "e54ffa2016f4f02ffc043dbd3e78d96d557f4ef94191016bc67eac9ade7d704d"
     },
     {
       "id": "p9-b8",
@@ -1762,8 +1762,8 @@
         "x1": 292.67,
         "y1": 589.7
       },
-      "text": "Interactome analysis. Metascape utilizes physical protein–protein interactions captured in BioGrid24 as the main data source. In addition, it integrates more recent human interactome datasets including InWeb_IM55 and OmniPath56 to provide additional interactome coverage (Supplementary Figure 13). Given a list of proteins, it first automatically extracts a protein interaction network formed by these candidates. Then for each connected network component, it iteratively applies the MCODE algorithm33, with modifications for performance improve- ments, to identify densely-connected complexes. For each complex, it further applies function enrichment analysis and uses the top three enriched terms for the annotation of its biological roles (Fig. 2h, Supplementary Figure 12). All network visualizations are generated with Cytoscape29 and exported in multiple formats.",
-      "text_sha256": "f89cf9efb0aa8eb64b971fe9bb377b45c87a0f164ed33fc5ecef4218f88346c6"
+      "text": "Interactome analysis. Metascape utilizes physical protein–protein interactions captured in BioGrid24 as the main data source. In addition, it integrates more recent human interactome datasets including InWeb_IM55 and OmniPath56 to provide additional interactome coverage (Supplementary Figure 13). Given a list of proteins, it first automatically extracts a protein interaction network formed by these candidates. Then for each connected network component, it iteratively applies the MCODE algorithm33, with modifications for performance improvements, to identify densely-connected complexes. For each complex, it further applies function enrichment analysis and uses the top three enriched terms for the annotation of its biological roles (Fig. 2h, Supplementary Figure 12). All network visualizations are generated with Cytoscape29 and exported in multiple formats.",
+      "text_sha256": "5a142ae4194b912a6a16dcc22afd821b21c8ce35727ac354455ef0f32670df7e"
     },
     {
       "id": "p9-b9",
@@ -1790,8 +1790,8 @@
         "x1": 292.68,
         "y1": 733.41
       },
-      "text": "User interface. Supplementary Figures 1–7 describe the Metascape user interface step-by-step for gene-list analyses using the above-mentioned datasets. Screenshots specific to the single gene list analysis are outlined in orange; those specific to the multiple gene list meta-analysis are outlined in green; common screenshot com- ponents are outlined in gray. During the Express Analysis, the submission of gene list(s) (Supplementary Figure 1) directly leads to an analysis report (Supplementary Figure 7) without the need to step through the intermediate operations",
-      "text_sha256": "44bf21bdbd870cb881ddf4b2be2f819d31ec50d1dba7b458751f5ac6bfa6f41d"
+      "text": "User interface. Supplementary Figures 1–7 describe the Metascape user interface step-by-step for gene-list analyses using the above-mentioned datasets. Screenshots specific to the single gene list analysis are outlined in orange; those specific to the multiple gene list meta-analysis are outlined in green; common screenshot components are outlined in gray. During the Express Analysis, the submission of gene list(s) (Supplementary Figure 1) directly leads to an analysis report (Supplementary Figure 7) without the need to step through the intermediate operations",
+      "text_sha256": "46eae520e26798c585471301b30c423f54b6b306904cc10b6cd6024a474d8fd6"
     },
     {
       "id": "p9-b11",
@@ -1804,8 +1804,8 @@
         "x1": 551.03,
         "y1": 68.75
       },
-      "text": "(Supplementary Figures 2–6). Conversely, the detailed analysis interface (Supple- mentary Figures 2–6) is only accessible through Custom Analysis.",
-      "text_sha256": "d80393908f8ce38b987737f56dab7a1606671bcf0f8a6f0cd25718dc48904f93",
+      "text": "(Supplementary Figures 2–6). Conversely, the detailed analysis interface (Supplementary Figures 2–6) is only accessible through Custom Analysis.",
+      "text_sha256": "cc24bb7ba4e58600390b1eb97d389707caad09fc62ea27f2c3fb3b1575206771",
       "continues_from": "p9-b10"
     },
     {
@@ -2649,8 +2649,8 @@
         "x1": 274.54,
         "y1": 557.16
       },
-      "text": "48. McLean, C. Y. et al. GREAT improves functional interpretation of cis- regulatory regions. Nat. Biotechnol. 28, 495–501 (2010).",
-      "text_sha256": "2063d49efb86629eac452620991f12d073c92fc6b5141b6afbff53ddf945e932"
+      "text": "48. McLean, C. Y. et al. GREAT improves functional interpretation of cis-regulatory regions. Nat. Biotechnol. 28, 495–501 (2010).",
+      "text_sha256": "e1bae521de5954fef2121743ba04564b904c6a19da8026358abfd8a2da646e28"
     },
     {
       "id": "p10-b30",
@@ -2677,8 +2677,8 @@
         "x1": 272.64,
         "y1": 600.75
       },
-      "text": "50. Carmona-Saez, P., Chagoyen, M., Tirado, F., Carazo, J. M. & Pascual- Montano, A. GENECODIS: a web-based tool for finding significant concurrent annotations in gene lists. Genome Biol. 8, R3 (2007).",
-      "text_sha256": "3966f8d1125a8088ea71ec9d2dc590dcde195f4611775f09d6dbb4d53ac8a104"
+      "text": "50. Carmona-Saez, P., Chagoyen, M., Tirado, F., Carazo, J. M. & Pascual-Montano, A. GENECODIS: a web-based tool for finding significant concurrent annotations in gene lists. Genome Biol. 8, R3 (2007).",
+      "text_sha256": "8a44c571328209e1fd86cb9d04624e67223e06bc1aec177ee06aa0c78a45c103"
     },
     {
       "id": "p10-b32",
@@ -2887,8 +2887,8 @@
         "x1": 552.65,
         "y1": 362.0
       },
-      "text": "Supplementary Information accompanies this paper at https://doi.org/10.1038/s41467- 019-09234-6.",
-      "text_sha256": "8145b1000eb0fc3421463b951d8d47e75c8f2cc702d7b0a78626c4acd2e580a3"
+      "text": "Supplementary Information accompanies this paper at https://doi.org/10.1038/s41467-019-09234-6.",
+      "text_sha256": "32de8c87c2c76031722709590caba71c33463dc23f8d8107cc06692412a7e29a"
     },
     {
       "id": "p10-b47",
@@ -4165,8 +4165,8 @@
         "ordinal": 48,
         "page": 10,
         "block_id": "p10-b29",
-        "raw": "48. McLean, C. Y. et al. GREAT improves functional interpretation of cis- regulatory regions. Nat. Biotechnol. 28, 495–501 (2010).",
-        "raw_sha256": "2063d49efb86629eac452620991f12d073c92fc6b5141b6afbff53ddf945e932",
+        "raw": "48. McLean, C. Y. et al. GREAT improves functional interpretation of cis-regulatory regions. Nat. Biotechnol. 28, 495–501 (2010).",
+        "raw_sha256": "e1bae521de5954fef2121743ba04564b904c6a19da8026358abfd8a2da646e28",
         "fields": {
           "authors": [
             {
@@ -4209,8 +4209,8 @@
         "ordinal": 50,
         "page": 10,
         "block_id": "p10-b31",
-        "raw": "50. Carmona-Saez, P., Chagoyen, M., Tirado, F., Carazo, J. M. & Pascual- Montano, A. GENECODIS: a web-based tool for finding significant concurrent annotations in gene lists. Genome Biol. 8, R3 (2007).",
-        "raw_sha256": "3966f8d1125a8088ea71ec9d2dc590dcde195f4611775f09d6dbb4d53ac8a104",
+        "raw": "50. Carmona-Saez, P., Chagoyen, M., Tirado, F., Carazo, J. M. & Pascual-Montano, A. GENECODIS: a web-based tool for finding significant concurrent annotations in gene lists. Genome Biol. 8, R3 (2007).",
+        "raw_sha256": "8a44c571328209e1fd86cb9d04624e67223e06bc1aec177ee06aa0c78a45c103",
         "fields": {
           "authors": [
             {
@@ -4230,7 +4230,7 @@
               "given": "J. M."
             },
             {
-              "family": "Pascual- Montano",
+              "family": "Pascual-Montano",
               "given": "A."
             }
           ],

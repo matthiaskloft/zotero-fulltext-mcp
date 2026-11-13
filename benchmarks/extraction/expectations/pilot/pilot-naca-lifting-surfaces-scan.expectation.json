@@ -108,8 +108,8 @@
         "x1": 505,
         "y1": 202
       },
-      "text": "Three cases are examined: the first refers to a biplane having the two wings of the same span. Taking ν′ as the ratio of the induced resistance of this biplane to the resistance of a mon- oplane of the same span carrying the same load, and h/b the ratio of the gap to the span of the wings, we have",
-      "text_sha256": "6df490939c990fb7ea165841f550352d68792bbb38196bdaf2fa4f9a8ae9542e",
+      "text": "Three cases are examined: the first refers to a biplane having the two wings of the same span. Taking ν′ as the ratio of the induced resistance of this biplane to the resistance of a monoplane of the same span carrying the same load, and h/b the ratio of the gap to the span of the wings, we have",
+      "text_sha256": "6a21ab1d8ef78f5007b26f0756eb181c4f76bbe52da91f30eb18aebe13428786",
       "uncertainty": {
         "level": "medium",
         "note": "The symbol after \"Taking\" is a script V with a prime; recorded as nu with a prime, its exact glyph cannot be named."
@@ -210,8 +210,8 @@
         "x1": 522,
         "y1": 528
       },
-      "text": "As regards the value of test results, it is obviously of great importance to examine the question of the influence of the lim- itations imposed on the air-stream in which models are tested.",
-      "text_sha256": "6537a17df36b42478986027e72a55ac9594f8bcc36bb334d275a509af20a5883"
+      "text": "As regards the value of test results, it is obviously of great importance to examine the question of the influence of the limitations imposed on the air-stream in which models are tested.",
+      "text_sha256": "7f8d4f01b3198d01d05603f29f566e8b784ec4eca935da999bdcea37f2d563ae"
     },
     {
       "id": "p5-b10",
@@ -266,8 +266,8 @@
         "x1": 528,
         "y1": 643
       },
-      "text": "The conditions at the limits are: for the first, the nul- lifying of the normal component, wn, of the speed. For the second, the constancy of pressure.",
-      "text_sha256": "9b461a7d1a8cbe7422f0648b5f9cb72d42309680784afd22b321dc48ea5c2dc1"
+      "text": "The conditions at the limits are: for the first, the nullifying of the normal component, wn, of the speed. For the second, the constancy of pressure.",
+      "text_sha256": "a1026d060df41ab3e6b41fb38d1d390de2126b70a2cfca6834fe7fa8cf358f4a"
     },
     {
       "id": "p5-b14",
@@ -339,8 +339,8 @@
         "x1": 517.4,
         "y1": 271
       },
-      "text": "Another problem, that of a wing traversing a free cylin- drical stream, is of practical interest on account of the simple in- stallation required for the experiment.",
-      "text_sha256": "416784ae00143e38c99dbdb953e285a386c85b9ea216d984f26c2f43602d2813"
+      "text": "Another problem, that of a wing traversing a free cylindrical stream, is of practical interest on account of the simple installation required for the experiment.",
+      "text_sha256": "0e4a3c0b27365154b7af7e2343d7c7a58afe14eeaf6aee341cb000c938c1faac"
     },
     {
       "id": "p7-b4",
@@ -402,8 +402,8 @@
         "x1": 518.4,
         "y1": 432
       },
-      "text": "that is, the measured resistance is greater by 1.74 than the resist- ance of the same wing in an unlimited stream.",
-      "text_sha256": "dae3c0c2223a1b1942313951e6b1e76b0c8c6c3311a9aa305337772c7029f1bf"
+      "text": "that is, the measured resistance is greater by 1.74 than the resistance of the same wing in an unlimited stream.",
+      "text_sha256": "2ea90bf2c8786e51a8d34ff7ee23d337c8954b03d139930ea2b6a01f931e5013"
     },
     {
       "id": "p7-b8",
@@ -416,8 +416,8 @@
         "x1": 517.4,
         "y1": 525.6
       },
-      "text": "Finally the author examines the case where the chord of the wing is such that the variation of the speed wn parallel to the gen- eral direction of the stream can no longer be neglected, this lead- ing to a modification of the camber of the wing.",
-      "text_sha256": "3b833c91df9e0d7998fc220d7f5061483ff751daf9df7f16be6d6fbbd7d06224"
+      "text": "Finally the author examines the case where the chord of the wing is such that the variation of the speed wn parallel to the general direction of the stream can no longer be neglected, this leading to a modification of the camber of the wing.",
+      "text_sha256": "6abce606908c966b3c193918a37fa0f11c86219a9c88273aedac0e7d45efb186"
     },
     {
       "id": "p7-b9",

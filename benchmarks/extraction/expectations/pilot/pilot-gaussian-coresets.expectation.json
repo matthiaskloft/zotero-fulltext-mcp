@@ -260,8 +260,8 @@
         "x1": 523.0,
         "y1": 412.23
       },
-      "text": "Theorem 12 Let Cλ be the family of λ-semi-spherical Gaussian mixtures with k compo- nents. Let X ⊂ Rd and m = k(d + 1)(d + 2)/2 − 1. Define fθ : X → [0, ∞) as",
-      "text_sha256": "63fc0318281e1ca5f1898390ba30e64c90f671e0d595c92cce1d246b2b3e54ea",
+      "text": "Theorem 12 Let Cλ be the family of λ-semi-spherical Gaussian mixtures with k components. Let X ⊂ Rd and m = k(d + 1)(d + 2)/2 − 1. Define fθ : X → [0, ∞) as",
+      "text_sha256": "07e27b69ecbe7cd3889f101cd144e96d9a560267d8d109bcaf3dc9047f7ab59c",
       "uncertainty": {
         "level": "medium",
         "note": "Inline math is recorded as plain characters in reading order; blackboard, calligraphic and italic variants and sub/superscript positions are not preserved."

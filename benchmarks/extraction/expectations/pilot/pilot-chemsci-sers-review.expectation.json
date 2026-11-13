@@ -107,8 +107,8 @@
         "x1": 292.98,
         "y1": 226.87
       },
-      "text": "than that of gold and copper, and gold has a much better chemical stability.33 In some specific applications such as catalysis and electrochemistry, transition metals like platinum, palladium, iron, nickel and their alloys with a low SERS enhancement have to be used.34,35 Among them, platinum and palladium are chemically robust, whereas iron and nickel are prone to corrosion. Alkali metals are highly reactive in air and aqueous environments, so they can be only used in vacuum36 or potentially in non-aqueous media. Aluminium is commonly used for applications in the ultraviolet region,37,38 but easily oxidized in air. There are increasing application of using sem- iconducting and dielectric materials (metal oxide, MOs) as SERS substrates,39–41 which display high stability, but the SERS enhancement is weak and enhancement mechanism is still unclear.42–46",
-      "text_sha256": "7638e4fa726815a0d1606c57b93be8a82e73a224e37505a93147bfe3fb3239fa",
+      "text": "than that of gold and copper, and gold has a much better chemical stability.33 In some specific applications such as catalysis and electrochemistry, transition metals like platinum, palladium, iron, nickel and their alloys with a low SERS enhancement have to be used.34,35 Among them, platinum and palladium are chemically robust, whereas iron and nickel are prone to corrosion. Alkali metals are highly reactive in air and aqueous environments, so they can be only used in vacuum36 or potentially in non-aqueous media. Aluminium is commonly used for applications in the ultraviolet region,37,38 but easily oxidized in air. There are increasing application of using semiconducting and dielectric materials (metal oxide, MOs) as SERS substrates,39–41 which display high stability, but the SERS enhancement is weak and enhancement mechanism is still unclear.42–46",
+      "text_sha256": "d6bd2fd9103deea346d3e89c0c785fdc743af913802d523ccb59028d97d3a779",
       "truncated": "start"
     },
     {
@@ -136,8 +136,8 @@
         "x1": 292.96,
         "y1": 370.3
       },
-      "text": "The electrochemical oxidation and reduction cycle(s) (EC- ORC)2 method was often used to prepare SERS substrates in the early stage of SERS. It does not require the use of reducing or protecting agents and thus the obtained substrates have very good stability and clean surfaces.34,47 However, their surfaces usually have random nanostructured features with a wide size and shape distribution.",
-      "text_sha256": "96493e69c8ec37a9eb62f51df0563548344d026f905e063600a5998cf9196595"
+      "text": "The electrochemical oxidation and reduction cycle(s) (EC-ORC)2 method was often used to prepare SERS substrates in the early stage of SERS. It does not require the use of reducing or protecting agents and thus the obtained substrates have very good stability and clean surfaces.34,47 However, their surfaces usually have random nanostructured features with a wide size and shape distribution.",
+      "text_sha256": "29fcb6ae075e27a0da15341a551e80e83a7a9b9f8815db50b9bc8c34ab132e60"
     },
     {
       "id": "p5-b6",
@@ -150,8 +150,8 @@
         "x1": 293.05,
         "y1": 418.15
       },
-      "text": "Over the past 20 years, remarkable efforts have been made to develop nanostructures, such as nanospheres, nanorods, nano- cones, cubes, triangular plates, and octahedra, with well-defined morphologies and size distributions by sol–gel synthesis.48",
-      "text_sha256": "000f46936c29061f3f21ac15de18bb7b604c8d345a619004d9be1128a9e2f4ee"
+      "text": "Over the past 20 years, remarkable efforts have been made to develop nanostructures, such as nanospheres, nanorods, nanocones, cubes, triangular plates, and octahedra, with well-defined morphologies and size distributions by sol–gel synthesis.48",
+      "text_sha256": "d005a5905cc293c9b763879225240fde560a2590bc04fc86c695e0e6749a82f7"
     },
     {
       "id": "p5-b7",
@@ -178,8 +178,8 @@
         "x1": 292.98,
         "y1": 621.39
       },
-      "text": "Solid substrates are more convenient to use compared with colloidal solutions. They can be prepared by self-assembly of the abovementioned nanoparticles on solid supports. Possible interference from SERS signals of the residual protecting agent and reducing agent from the synthesis step should be elimi- nated, for example, by modifying the surface of the gold or silver nanoparticles with iodine ions49 or spermine.50 Substrates prepared by template and photolithography methods are usually clean and high ordered, showing very good unifor- mity.51–53 Most recently, SERS substrates with an area of the wafer scale and high enhancement have been prepared by using photolithography methods.54",
-      "text_sha256": "0d93c1d172b68f579056c7e9e20eee70f240c92daef96cc79d9bafe4f4e79dfe"
+      "text": "Solid substrates are more convenient to use compared with colloidal solutions. They can be prepared by self-assembly of the abovementioned nanoparticles on solid supports. Possible interference from SERS signals of the residual protecting agent and reducing agent from the synthesis step should be eliminated, for example, by modifying the surface of the gold or silver nanoparticles with iodine ions49 or spermine.50 Substrates prepared by template and photolithography methods are usually clean and high ordered, showing very good uniformity.51–53 Most recently, SERS substrates with an area of the wafer scale and high enhancement have been prepared by using photolithography methods.54",
+      "text_sha256": "833410c0bb8cc68702522a6d18d119b3ebed370bd3b93ef967d4a877bda7dcf4"
     },
     {
       "id": "p5-b9",
@@ -192,8 +192,8 @@
         "x1": 292.98,
         "y1": 729.0
       },
-      "text": "3.2.4 Stability of solid substrates. Another central aspect concerning the SERS reproducibility is the inherent structural instability of the hot spots on SERS substrates. The hot spots may undergo structural changes via melting55–57 or diffusion of surface atoms58,59 induced or accelerated by the laser illumina- tion, resulting in a change of the shape, size, and interparticle distance of the nanoparticles.60 Diffusion of surface atoms is a consequence of their lower coordination number compared with interior atoms.61,62 Nanoparticles with anisotropic",
-      "text_sha256": "17562a57a1aac5c3c2775fc60978356e019d58ff47adf6c726d37076fbd3fe13"
+      "text": "3.2.4 Stability of solid substrates. Another central aspect concerning the SERS reproducibility is the inherent structural instability of the hot spots on SERS substrates. The hot spots may undergo structural changes via melting55–57 or diffusion of surface atoms58,59 induced or accelerated by the laser illumination, resulting in a change of the shape, size, and interparticle distance of the nanoparticles.60 Diffusion of surface atoms is a consequence of their lower coordination number compared with interior atoms.61,62 Nanoparticles with anisotropic",
+      "text_sha256": "b36d461508d2f8a8a1e1312598ba81f956ffbcc824e91a6e5c23ecdd9b049889"
     },
     {
       "id": "p5-b10",
@@ -206,8 +206,8 @@
         "x1": 553.77,
         "y1": 131.23
       },
-      "text": "morphologies like nanorods, nanostars,63 and nanocubes, which show high EFs, are more prone to surface diffusion to decrease their surface energy by reshaping the nanoparticles into a more stable structure (spherical shape). This effect many be avoided by decreasing the laser power density and/or expo- sure time64 or modifying the surface with the shells of other metals, metal oxides, or strong adsorbates.65–67",
-      "text_sha256": "3b0f33a9eac3b20e474ed5713d6e359499a6ed3a89ba6792a83b282b7762c87d",
+      "text": "morphologies like nanorods, nanostars,63 and nanocubes, which show high EFs, are more prone to surface diffusion to decrease their surface energy by reshaping the nanoparticles into a more stable structure (spherical shape). This effect many be avoided by decreasing the laser power density and/or exposure time64 or modifying the surface with the shells of other metals, metal oxides, or strong adsorbates.65–67",
+      "text_sha256": "1fdb6d72a81863dd08db4e5ef5e8186e8a65c9be058fa4db14e6f1be18531e13",
       "continues_from": "p5-b9"
     },
     {
@@ -221,8 +221,8 @@
         "x1": 553.76,
         "y1": 442.07
       },
-      "text": "3.2.5 Stability of colloidal substrates. The SERS measure- ment in colloidal solution usually shows a better reproducibility than that on the two-dimensional solid substrate due to the average effect of millions of hot spots in the three-dimensional detection volume compared with the small detection area in the two-dimensional solid substrate. Nevertheless, factors like surface chemistry, charge, adsorbed molecule and external environment, may compromise the stability of the nanoparticle colloids.68 Especially, when aiming at the ultrahigh sensitive detection towards ultralow concentrated target, the detected SERS signal may fluctuate constantly due to the dynamic interaction between target and colloidal nanoparticles, but still better than the condition in solid substrate. Therefore, it is important to understand the factors governing the behaviour of the colloidal nanoparticle to ensure the effective formation and control of nanoparticle aggregates.69 Techniques like dynamic light scattering (DLS),70 in situ transmission electron micros- copy (TEM),71 high-sensitivity flow cytometry (HSFCM)72 and zeta potential measurements73 are useful for measuring the state of colloids during the dynamic aggregating process. Meanwhile, the theoretical approach known as the extended Derjaguin, Landau, Verwey, and Overbeek (x-DLVO) model can be used to determine and predict the state of nanoparticle colloids and buffer compatibility.74 It could be valuable if the SERS community adopts this theoretical method to have a prediction for consistent SERS signals.",
-      "text_sha256": "48666378dcd36aee6fa3977f69931ee3d5591c34ec4b6951f2cc96a32d17f3ef"
+      "text": "3.2.5 Stability of colloidal substrates. The SERS measurement in colloidal solution usually shows a better reproducibility than that on the two-dimensional solid substrate due to the average effect of millions of hot spots in the three-dimensional detection volume compared with the small detection area in the two-dimensional solid substrate. Nevertheless, factors like surface chemistry, charge, adsorbed molecule and external environment, may compromise the stability of the nanoparticle colloids.68 Especially, when aiming at the ultrahigh sensitive detection towards ultralow concentrated target, the detected SERS signal may fluctuate constantly due to the dynamic interaction between target and colloidal nanoparticles, but still better than the condition in solid substrate. Therefore, it is important to understand the factors governing the behaviour of the colloidal nanoparticle to ensure the effective formation and control of nanoparticle aggregates.69 Techniques like dynamic light scattering (DLS),70 in situ transmission electron microscopy (TEM),71 high-sensitivity flow cytometry (HSFCM)72 and zeta potential measurements73 are useful for measuring the state of colloids during the dynamic aggregating process. Meanwhile, the theoretical approach known as the extended Derjaguin, Landau, Verwey, and Overbeek (x-DLVO) model can be used to determine and predict the state of nanoparticle colloids and buffer compatibility.74 It could be valuable if the SERS community adopts this theoretical method to have a prediction for consistent SERS signals.",
+      "text_sha256": "211b4b6b1d97708fc56d45ea98522cfc14c2cca9f88111d53877140d9d802c46"
     },
     {
       "id": "p5-b12",
@@ -249,8 +249,8 @@
         "x1": 553.86,
         "y1": 669.18
       },
-      "text": "3.2.6 Shelf life. Another important aspect in the stability of SERS substrates lies in the shelf life, if their commercialization is desired. For colloidal substrates, increasing the storage time will increase the probability of nanoparticle flocculation due to physical collisions.61 It is necessary to control the surface modi- fication (by capping agent or protective layer via electrostatic repulsion or by stereo protection), the solution media, and the concentration to eliminate the flocculation process and thus to improve the stability of nanoparticles. In comparison, solid substrates are structurally more stable during storage than colloidal substrates. However, contamination or deterioration may occur, and these should be prevented by vacuum protection.",
-      "text_sha256": "c8cb6902851dd3419ea7e6f2154da249d9225a8bcf3e77f62093cc86ae6d2c34"
+      "text": "3.2.6 Shelf life. Another important aspect in the stability of SERS substrates lies in the shelf life, if their commercialization is desired. For colloidal substrates, increasing the storage time will increase the probability of nanoparticle flocculation due to physical collisions.61 It is necessary to control the surface modification (by capping agent or protective layer via electrostatic repulsion or by stereo protection), the solution media, and the concentration to eliminate the flocculation process and thus to improve the stability of nanoparticles. In comparison, solid substrates are structurally more stable during storage than colloidal substrates. However, contamination or deterioration may occur, and these should be prevented by vacuum protection.",
+      "text_sha256": "c8519cdea5fcfbc7851c211c71bbb7e5fa61c6502778fa1c0868d3c156a65b49"
     },
     {
       "id": "p5-b14",
@@ -362,8 +362,8 @@
         "x1": 292.98,
         "y1": 167.05
       },
-      "text": "where the constant A is equal to ITOSTNT/IIS0SISNIS. By a careful experimental design, the analyte and internal standard enhancement (EFT/EFIS) remains constant, and the surface coverage of the internal standard remains unchanged. There- fore, IR will have a linear relationship with the surface coverage of the analyte (ΘT). Moreover, since any source of interference simultaneously affects the signal intensities of both the analyte and the standard, taking the ratio between the signal of the analyte and the internal standard may suppress the interference.29",
-      "text_sha256": "240053d607f5c381215cccb90500201428c5fd3e4a20c12770d5bc12dd233066",
+      "text": "where the constant A is equal to ITOSTNT/IIS0SISNIS. By a careful experimental design, the analyte and internal standard enhancement (EFT/EFIS) remains constant, and the surface coverage of the internal standard remains unchanged. Therefore, IR will have a linear relationship with the surface coverage of the analyte (ΘT). Moreover, since any source of interference simultaneously affects the signal intensities of both the analyte and the standard, taking the ratio between the signal of the analyte and the internal standard may suppress the interference.29",
+      "text_sha256": "c44152ea2c411fd773f752c424f3f00bfe8d007c3fcbfd6ec2e866f715d45bc7",
       "truncated": "start"
     },
     {
@@ -391,8 +391,8 @@
         "x1": 292.98,
         "y1": 561.58
       },
-      "text": "The core-molecule-shell (CMS) approach has been proposed as a solution to the above issues. In CMS, the molecules utilized as the internal standard are embedded between the nano- particle core and the external shell109 so that the signal of the internal standard will not be influenced by the outer environ- ment and the analyte molecules can occupy the full surface of the shell (i.e., a constant ΘIS) (Fig. 4c). Because of this, the competitive adsorption and the dynamic replacement between the internal standard and the analyte is eliminated. In this case, eqn (9) can be expressed as:",
-      "text_sha256": "1566468f1190054382c1df32dcbab9251de31454dd08701395feb402fdb60651"
+      "text": "The core-molecule-shell (CMS) approach has been proposed as a solution to the above issues. In CMS, the molecules utilized as the internal standard are embedded between the nanoparticle core and the external shell109 so that the signal of the internal standard will not be influenced by the outer environment and the analyte molecules can occupy the full surface of the shell (i.e., a constant ΘIS) (Fig. 4c). Because of this, the competitive adsorption and the dynamic replacement between the internal standard and the analyte is eliminated. In this case, eqn (9) can be expressed as:",
+      "text_sha256": "422081ea9f3309af70c4b200f563615416633668588b7a56b641dabe5c5af18f"
     },
     {
       "id": "p8-b6",
@@ -422,8 +422,8 @@
         "x1": 292.96,
         "y1": 714.42
       },
-      "text": "According to eqn (10), if the ratio between the analyte and internal standard enhancements (EFT/EFIS) is constant, IR is linear with respect to the surface coverage of the analyte. This, in turn, expands the linear range of detection and meanwhile the internal standard molecules do not have to exhibit similar spectral and chemical properties to the analyte ones. Further- more, the signal intensities of the analyte and internal standard can be made comparable to each other either by adjusting the surface coverage of the internal standard or by choosing an",
-      "text_sha256": "8466dcd5a842b9d581f781c22ab5327bf2934a14ea7e0487053d0ac9a80ce5f9"
+      "text": "According to eqn (10), if the ratio between the analyte and internal standard enhancements (EFT/EFIS) is constant, IR is linear with respect to the surface coverage of the analyte. This, in turn, expands the linear range of detection and meanwhile the internal standard molecules do not have to exhibit similar spectral and chemical properties to the analyte ones. Furthermore, the signal intensities of the analyte and internal standard can be made comparable to each other either by adjusting the surface coverage of the internal standard or by choosing an",
+      "text_sha256": "46bb51d1378c1e0ef2b11e1b5e9ab77c60deeeeb032e457bf05466d69d3acbca"
     },
     {
       "id": "p8-b8",
@@ -507,8 +507,8 @@
         "x1": 553.76,
         "y1": 633.35
       },
-      "text": "(a) Ensure the reliability of the qualitative analysis. It is important to verify that the SERS signal is indeed from the analyte by performing: (i) analyte titration. The SERS signal should increase with the analyte concentration and may even- tually saturate. This also facilitates the choice of characteristic Raman peaks for the quantitative analysis. (ii) Varying the laser power and illumination time. If the SERS spectral feature is independent of these two factors, it means the observed signal is from the analyte but not interference from potential photo- induced chemical reactions.",
-      "text_sha256": "e8bc92e0d85a87fa002753dfdac6b455c808f4cf266e5be1a049c56769693dac"
+      "text": "(a) Ensure the reliability of the qualitative analysis. It is important to verify that the SERS signal is indeed from the analyte by performing: (i) analyte titration. The SERS signal should increase with the analyte concentration and may eventually saturate. This also facilitates the choice of characteristic Raman peaks for the quantitative analysis. (ii) Varying the laser power and illumination time. If the SERS spectral feature is independent of these two factors, it means the observed signal is from the analyte but not interference from potential photo-induced chemical reactions.",
+      "text_sha256": "c968597e633b481353e4e6f13c49532fdb0eec70f5749c5e0bed5253a4ef75b9"
     },
     {
       "id": "p8-b14",
@@ -521,8 +521,8 @@
         "x1": 553.76,
         "y1": 728.99
       },
-      "text": "(b) Push to the required sensitivity. In practical applications, it is important to maximize the sensitivity by choosing the optimal condition of the substrate, the laser wavelength, and the measurement environment. (i) Gold and silver nano- structures are the most typical SERS substrates, with the former being chemically more stable. Although generally a higher EM enhancement is expected for silver than for gold, the limit of detection (LOD), or the lowest detectable concentration for",
-      "text_sha256": "bb56271622eff576becef5a6ad776d6dd9aacb129e2223d0593f452189ee173a",
+      "text": "(b) Push to the required sensitivity. In practical applications, it is important to maximize the sensitivity by choosing the optimal condition of the substrate, the laser wavelength, and the measurement environment. (i) Gold and silver nanostructures are the most typical SERS substrates, with the former being chemically more stable. Although generally a higher EM enhancement is expected for silver than for gold, the limit of detection (LOD), or the lowest detectable concentration for",
+      "text_sha256": "3b3de15d67040e7c8bfd792901b5bfd869f0c7593c0e454d2f802850c375945c",
       "truncated": "end"
     },
     {
