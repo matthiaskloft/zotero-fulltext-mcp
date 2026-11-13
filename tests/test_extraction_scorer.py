@@ -1704,3 +1704,30 @@ def test_space_before_punctuation_is_tolerant_only(exp, obs):
     assert ("text_presence", "p1") in _decisive(score) and score["verdict"] == "failed"
     assert any(c["name"] == "text_presence" and c["subject"] == "p1" and c["mode"] == "tolerant"
                and c["passed"] and c.get("tolerant_only") for c in score["checks"])
+
+
+def test_continuation_fragment_is_chained_to_its_entry_and_cannot_satisfy_a_footnote(exp, obs):
+    doi = "https://doi.org/10.9999/shared"
+    merged = f"{RAW2} {doi}"
+    exp["blocks"] += [_block("r2c", "reference_entry", 2, 8, doi, continues_from="r2b"),
+                      _block("fn1", "footnote", 2, 9, doi)]
+    entry = next(e for e in exp["references"]["entries"] if e["id"] == "r2")
+    entry.update(raw=merged, raw_sha256=sha256_text(merged), doi={"status": "present", "value": "10.9999/shared"})
+    obs2 = _observation_of(exp)
+    obs2["blocks"] = [b for b in obs2["blocks"] if b["id"] != "fn1"]  # the observation lacks the footnote
+    score = _rescore(exp, obs2)
+    assert ("text_presence", "fn1") in _decisive(score), "the footnote must not be satisfied by the chained DOI block"
+    assert ("reference_segmentation_recall", "r2") not in _decisive(score)
+
+
+def test_negative_control_unchained_fragment_would_satisfy_the_footnote(exp):
+    doi = "https://doi.org/10.9999/shared"
+    exp["blocks"] += [_block("r2c", "reference_entry", 2, 8, doi, continues_from="r2b"),
+                      _block("fn1", "footnote", 2, 9, doi)]
+    merged = f"{RAW2} {doi}"
+    entry = next(e for e in exp["references"]["entries"] if e["id"] == "r2")
+    entry.update(raw=merged, raw_sha256=sha256_text(merged), doi={"status": "present", "value": "10.9999/shared"})
+    obs2 = _observation_of(exp)
+    obs2["blocks"] = [b for b in obs2["blocks"] if b["id"] != "fn1"]
+    next(b for b in obs2["blocks"] if b["id"] == "r2c").pop("continues_from")
+    assert ("text_presence", "fn1") not in _decisive(_rescore(exp, obs2))
