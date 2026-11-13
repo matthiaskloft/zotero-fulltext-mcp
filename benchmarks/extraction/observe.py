@@ -379,7 +379,7 @@ def _unnumbered_spans(raw: _Raw) -> list[tuple[int, int, bool]]:
         if len(tokens) == 2 and tokens[1] in _DASHES:
             piece = tokens[0].rstrip()
         if piece:
-            pieces.append((raw.start + a, raw.start + a + len(piece), not (n == 0 and piece[0].islower())))
+            pieces.append((raw.start + a, raw.start + a + len(piece), True))
     return pieces
 
 
@@ -444,13 +444,7 @@ def build_page_blocks(
                 item["text"] = page_text[a:b]
                 out.append(item)
                 if state["in_references"]:
-                    if _continues_previous_entry(state, page_text[a:b]):
-                        # Evidence of a wrapped entry: the previous one is still open. It is extended
-                        # only if it is an emitted entry of this record; a predecessor on a page that
-                        # is not part of the record leaves this block as an entry-less reference_entry.
-                        _extend_entry(state, page_text[a:b])
-                    else:
-                        _add_entry(state, item, page, page_text[a:b])
+                    _entry_or_fragment(state, item, page, page_text[a:b])
             continue
         elif roles[index] is not None:
             block = new_block(roles[index], raw.start, raw.end)
@@ -459,13 +453,16 @@ def build_page_blocks(
             block = new_block("other", raw.start, raw.end)
             block["text"] = raw_text
         elif state["in_references"]:
-            for a, b, starts_entry in _reference_spans(raw):
+            for number, (a, b, starts_entry) in enumerate(_reference_spans(raw)):
                 entry_block = new_block("reference_entry", a, b)
                 entry_block["text"] = page_text[a:b]
                 entry_block["text_sha256"] = sha256_text(page_text[a:b])
                 out.append(entry_block)
                 if starts_entry:
-                    _add_entry(state, entry_block, page, page_text[a:b])
+                    if number == 0:
+                        _entry_or_fragment(state, entry_block, page, page_text[a:b])
+                    else:
+                        _add_entry(state, entry_block, page, page_text[a:b])
             continue
         elif _is_caption(raw_text):
             block = new_block("caption", raw.start, raw.end)
@@ -586,11 +583,12 @@ _FRAGMENT_ONLY = re.compile(r"^(?:pp?\.\s*\S|(?:doi:\s*)?(?:https?://|www\.|10\.
 
 
 def _continues_previous_entry(state: dict[str, Any], text: str) -> bool:
-    """A lower-case, unnumbered list item continues the previous entry only with evidence: there is a
-    previous entry (the true predecessor in the document, emitted or not), it does not yet look closed
-    (no year closer, URL/DOI tail or final full stop; a trailing dash is a break, not a closer), and
-    the item does not open with a surname particle followed by a capitalised name and a comma."""
-    previous = state.get("last_entry")
+    """Does an unnumbered item or paragraph start continue the previous entry? Only with evidence:
+    there is a document predecessor (``state["pred"]``, tracked on every page, emitted or not), it does
+    not yet look closed (no year closer, URL/DOI tail or final full stop; a trailing dash is a break,
+    not a closer), and the text does not open with a surname particle followed by a capitalised name
+    and a comma. A bare DOI/URL or ``pp.`` fragment always continues it."""
+    previous = state.get("pred")
     if previous is None:
         return False
     if _FRAGMENT_ONLY.match(text):
@@ -602,16 +600,23 @@ def _continues_previous_entry(state: dict[str, Any], text: str) -> bool:
     return last in _DASHES or not _closes_entry(raw, line_boundary=True)
 
 
-def _extend_entry(state: dict[str, Any], text: str) -> None:
-    """Append a continuation fragment to the previous entry's ``raw`` (joined by one space), if that
-    entry is an emitted one of this record. The text of an entry on an unselected page, or one being
-    counted on such a page, is never altered."""
-    entry = state.get("last_entry")
-    if state.get("scratch") or entry is None or not any(entry is e for e in state["entries"]):
+def _entry_or_fragment(state: dict[str, Any], block: dict[str, Any], page: int, text: str) -> None:
+    """Shared by the list-item and paragraph paths: a continuation extends the predecessor, anything
+    else opens an entry. The predecessor state (accumulated raw) is updated by every fragment on every
+    page; the emitted entry is only changed if it belongs to this record and the page is part of it,
+    otherwise the fragment stays an entry-less ``reference_entry`` block."""
+    if not _continues_previous_entry(state, text):
+        _add_entry(state, block, page, text)
         return
-    entry["raw"] = f"{entry['raw']} {text}"
-    entry["raw_sha256"] = sha256_text(entry["raw"])
-    entry["doi"] = _doi_payload(entry["raw"])
+    pred = state["pred"]
+    pred["raw"] = f"{pred['raw']} {text}"
+    entry = pred["entry"]
+    if state.get("scratch"):
+        pred["gap"] = True  # text of an omitted page: never copied into an emitted entry
+    elif entry is not None and not pred.get("gap"):
+        entry["raw"] = f"{entry['raw']} {text}"
+        entry["raw_sha256"] = sha256_text(entry["raw"])
+        entry["doi"] = _doi_payload(entry["raw"])
 
 
 def _add_entry(state: dict[str, Any], block: dict[str, Any], page: int, raw: str) -> None:
@@ -623,7 +628,7 @@ def _add_entry(state: dict[str, Any], block: dict[str, Any], page: int, raw: str
         "raw": raw, "raw_sha256": sha256_text(raw), "doi": doi_payload,
     }
     entries.append(entry)
-    state["last_entry"] = entry
+    state["pred"] = {"raw": raw, "entry": None if state.get("scratch") else entry}
 
 
 def _link_captions(blocks: list[dict[str, Any]]) -> None:
@@ -852,12 +857,12 @@ def observe_pdf(
             # Counted, not emitted: ordinals are whole-document list positions.
             scratch = {
                 "order": 0, "in_references": state["in_references"], "entries": [], "entry_count": state["entry_count"],
-                "scratch": True, "last_entry": state.get("last_entry"),
+                "scratch": True, "pred": state.get("pred"),
                 "furniture": furniture,
             }
             build_page_blocks(number, text, 0, sha256_text(text), scratch, text)
             state["in_references"], state["entry_count"] = scratch["in_references"], scratch["entry_count"]
-            state["last_entry"] = scratch["last_entry"]
+            state["pred"] = scratch["pred"]
 
     extractor_options: dict[str, Any] = {
         "image_ocr": use_ocr,

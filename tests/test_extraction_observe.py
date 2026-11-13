@@ -648,3 +648,35 @@ def test_continuation_across_an_omitted_page_does_not_extend_an_emitted_entry(mo
     assert [e["raw"] for e in entries] == ["Doe, J. A study of the"]
     assert [b["type"] for b in part.observation["blocks"] if b["page"] == 3] == ["reference_entry"]
     assert verify_output_spans(part.observation, part.markdown) == []
+
+
+def test_paragraph_path_particle_first_piece_is_an_entry():
+    md = "## References \n\nvan der Waals, J. D. A study. 2020.\nRoe, R. Another. 2019. \n\n"
+    entries = _entries_of(md)
+    assert [e.split(",")[0] for e in entries] == ["van der Waals", "Roe"]
+
+
+def test_paragraph_path_lower_case_first_piece_continues_an_open_entry():
+    md = "## References \n\nDoe, J. A study of the \n\nthings and stuff (2019).\nRoe, R. Another. 2019. \n\n"
+    _, state = _blocks(md)
+    assert [e["raw"] for e in state["entries"]] == ["Doe, J. A study of the things and stuff (2019).", "Roe, R. Another. 2019."]
+
+
+def test_omitted_page_fragment_closes_the_document_predecessor(monkeypatch):
+    pages = [
+        (1, "## References \n\n- Doe, J. A study of the\n\n"),
+        (2, "- things (2019).\n\n"),
+        (3, "- eLife Editorial Team. New report (2020).\n\n"),
+    ]
+    from zotero_pdf_text import converter
+
+    monkeypatch.setattr(observe, "_extract_pages", lambda *a, **k: (pages, False, Path(".")))
+    monkeypatch.setattr(converter, "_run_extractor", lambda *a, **k: None)
+    whole = observe_pdf(CORPUS_PDF, pages=[1, 2, 3])
+    assert [e["raw"] for e in whole.observation["references"]["entries"]] == [
+        "Doe, J. A study of the things (2019).", "eLife Editorial Team. New report (2020)."]
+    part = observe_pdf(CORPUS_PDF, pages=[1, 3])
+    entries = part.observation["references"]["entries"]
+    # Same boundaries as the whole run for the selected pages; the omitted page's text is not copied.
+    assert [e["raw"] for e in entries] == ["Doe, J. A study of the", "eLife Editorial Team. New report (2020)."]
+    assert [e["ordinal"] for e in entries] == [1, 2]
