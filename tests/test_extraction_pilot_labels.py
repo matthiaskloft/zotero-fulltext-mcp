@@ -9,6 +9,7 @@ recording version.
 
 import json
 import os
+import re
 from pathlib import Path
 
 import pymupdf
@@ -53,3 +54,35 @@ def test_record_matches_pdf_cache_when_available(path):
     if versions != {pymupdf.VersionBind}:
         pytest.skip(f"records were rendered with PyMuPDF {sorted(versions)}, installed {pymupdf.VersionBind}")
     assert pilot_records.check_pilot_expectation(record, MANIFEST, cache) == []
+
+
+# A hyphen that exists only because a word was split at a line break is layout, not transcription, so
+# the labels join it (`critical`, not `criti- cal`) and keep a real hyphen without a space
+# (`high-quality`). The only `letter- lowercase` sequences left are suspended hyphens in a
+# coordination, where the space is real; each was checked against the PDF line layout.
+SUSPENDED_HYPHENS = {
+    ("pilot-natcomm-metascape-whole", "p2-b12", "single- and"),
+    ("pilot-natcomm-metascape-whole", "p9-b28", "Meta- and"),
+    ("pilot-natcomm-metascape-whole", "ref9", "Meta- and"),
+    ("pilot-plosmed-research-findings-false", "p5-b3", "pre- and"),
+}
+_LINE_HYPHEN = re.compile(r"\w+- [a-z]+")
+
+
+def _label_strings(record):
+    for block in record["blocks"]:
+        if isinstance(block.get("text"), str):
+            yield block["id"], block["text"]
+        for cell in (block.get("table") or {}).get("cells", []):
+            yield block["id"], cell["text"]
+    for entry in (record.get("references") or {}).get("entries", []):
+        yield entry["id"], entry["raw"]
+
+
+def test_labels_carry_no_line_break_hyphens():
+    found = set()
+    for path in RECORDS:
+        record = json.loads(path.read_bytes())
+        for where, text in _label_strings(record):
+            found.update((record["record_id"], where, m.group(0)) for m in _LINE_HYPHEN.finditer(text))
+    assert found == SUSPENDED_HYPHENS, (sorted(found - SUSPENDED_HYPHENS), sorted(SUSPENDED_HYPHENS - found))

@@ -94,8 +94,8 @@
         "x1": 202.96,
         "y1": 395.26
       },
-      "text": "Corollary 3: The greater the number and the lesser the selection of tested relationships in a scientific field, the less likely the research findings are to be true. As shown above, the post-study probability that a finding is true (PPV) depends a lot on the pre-study odds (R). Thus, research findings are more likely true in confirmatory designs, such as large phase III randomized controlled trials, or meta-analyses thereof, than in hypothesis-generating experiments. Fields considered highly informative and creative given the wealth of the assembled and tested information, such as microarrays and other high-throughput discovery- oriented research [4,8,17], should have extremely low PPV.",
-      "text_sha256": "6a0924b10b697d52031068f476c8058770402d7d31ca4d2daa0c93e35c515ef4"
+      "text": "Corollary 3: The greater the number and the lesser the selection of tested relationships in a scientific field, the less likely the research findings are to be true. As shown above, the post-study probability that a finding is true (PPV) depends a lot on the pre-study odds (R). Thus, research findings are more likely true in confirmatory designs, such as large phase III randomized controlled trials, or meta-analyses thereof, than in hypothesis-generating experiments. Fields considered highly informative and creative given the wealth of the assembled and tested information, such as microarrays and other high-throughput discovery-oriented research [4,8,17], should have extremely low PPV.",
+      "text_sha256": "fae485b0640fc1ad9e87e7d958af4f321f50f74352a3513b96ee4b7a0a1c6f55"
     },
     {
       "id": "p3-b3",
@@ -440,8 +440,8 @@
         "x1": 199.54,
         "y1": 331.35
       },
-      "text": "As shown, the majority of modern biomedical research is operating in areas with very low pre- and post- study probability for true findings. Let us suppose that in a research field there are no true findings at all to be discovered. History of science teaches us that scientific endeavor has often in the past wasted effort in fields with absolutely no yield of true scientific information, at least based on our current understanding. In such a “null field,” one would ideally expect all observed effect sizes to vary by chance around the null in the absence of bias. The extent that observed findings deviate from what is expected by chance alone would be simply a pure measure of the prevailing bias.",
-      "text_sha256": "e8ca6ad48fef8984b729ae75d41d0c9f60d7e6b7535cc671593ebaf59957509d"
+      "text": "As shown, the majority of modern biomedical research is operating in areas with very low pre- and post-study probability for true findings. Let us suppose that in a research field there are no true findings at all to be discovered. History of science teaches us that scientific endeavor has often in the past wasted effort in fields with absolutely no yield of true scientific information, at least based on our current understanding. In such a “null field,” one would ideally expect all observed effect sizes to vary by chance around the null in the absence of bias. The extent that observed findings deviate from what is expected by chance alone would be simply a pure measure of the prevailing bias.",
+      "text_sha256": "64bf5bf6f80fa413e8834c6e634a5aa174a7bcb064661f1462053e236c26ea43"
     },
     {
       "id": "p5-b4",
@@ -618,7 +618,7 @@
           {
             "row": 2,
             "col": 3,
-            "text": "Confirmatory meta-analysis of good- quality RCTs"
+            "text": "Confirmatory meta-analysis of good-quality RCTs"
           },
           {
             "row": 2,

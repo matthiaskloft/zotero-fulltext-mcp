@@ -7,6 +7,9 @@ All notable changes to this project are documented here. Format loosely follows
 
 ### Added
 
+- Pilot labels no longer record line-break-only hyphens: words split at a line end are joined (`criti- cal` to `critical`), real hyphens are kept without the stray space, and a test rejects any
+  unlisted `letter- lowercase` sequence. Hashes were recomputed for the changed blocks; the convention
+  is in `docs/extraction-pilot-review.md`.
 - Reviewed E2 pilot expectations under `benchmarks/extraction/expectations/pilot/`: 20 stratum pages
   from 13 documents plus two whole papers (39 pages), with a test that loads every committed record.
   **These labels were reviewed by an AI agent (Claude Sonnet 5.5), not by a human**, so any baseline
