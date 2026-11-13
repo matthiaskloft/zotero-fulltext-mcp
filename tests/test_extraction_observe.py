@@ -380,7 +380,8 @@ def test_repeated_page_furniture_is_found_across_pages():
     pages = [
         (1, "ARTICLE \n\nBody one. \n\nNATURE COMMUNICATIONS | (2019) 10:1523 | https://doi.org/10.1/x \n\n"),
         (2, "ARTICLE \n\nBody two. \n\nNATURE COMMUNICATIONS | (2019) 10:1524 | https://doi.org/10.1/y \n\n"),
-        (3, "Only once \n\nBody three. \n\n9 \n\n"),
+        (3, "ARTICLE \n\nBody three. \n\n9 \n\n"),
+        (4, "Only once \n\nBody four. \n\n9 \n\n"),
     ]
     assert observe.find_furniture(pages) == {"article", "naturecommunications##"}
 
@@ -388,6 +389,7 @@ def test_repeated_page_furniture_is_found_across_pages():
 def test_repeated_header_lines_around_reference_entries_do_not_shift_ordinals():
     furniture = observe.find_furniture([
         (1, "ARTICLE \n\nx \n\nFOOTER | 1 \n\n"), (2, "ARTICLE \n\ny \n\nFOOTER | 2 \n\n"),
+        (3, "ARTICLE \n\nz \n\nFOOTER | 3 \n\n"),
     ])
     md = ("ARTICLE \n\n1. Doe, J. A study. 2020.\n2. Roe, R. Another. 2019. \n\n3. Poe, E. Third. 2018. \n\n"
           "9 \n\nFOOTER | 9 \n\n")
@@ -557,3 +559,92 @@ def test_lower_case_item_after_a_closed_entry_is_a_new_entry():
 def test_lower_case_item_with_no_previous_entry_is_not_dropped():
     _, state = _blocks("## References \n\n- of blockchain technology (2017)\n\n")
     assert len(state["entries"]) == 1
+
+
+@pytest.mark.parametrize("tail", [
+    "J Foo, 2016.", "J Foo 3, 1-10.", "J Foo 2016;3:1-10.", "J Foo (2016).", "J Foo (in press).",
+    "J Foo (forthcoming).", "J Foo (n.d.).", "J Foo, forthcoming.",
+])
+def test_inline_cut_after_dotted_year_range_and_press_closers(tail):
+    md = f"## References \n\nR Beck, Title. {tail} JS Czepluch, Other (2017). \n\n"
+    entries = _entries_of(md)
+    assert len(entries) == 2 and entries[1].startswith("JS Czepluch")
+
+
+def test_inline_cut_still_refuses_editor_and_acronym_contexts():
+    for body in [
+        "R Beck, Chapter. In: Things (eds) JA Smith, B Jones, Wiley (2016)",
+        "R Beck, Title. Proc. JA Smith, B Jones, Wiley (2016)",
+        "R Beck, Title (2016). BMJ Open, 3(2), 1-4",
+    ]:
+        assert _entries_of(f"## References \n\n{body} \n\n") == [body]
+
+
+def test_line_boundary_closes_on_bare_year_range_or_forthcoming_but_not_abbreviation():
+    cut = _entries_of("## References \n\nBeck, R. A study. J. Foo 2016\nChung, M. Other. J. Bar 3, 1-10\n"
+                      "Fanning, K. Third. forthcoming\nHaber, S. Fourth. Berlin. \n\n")
+    assert [c.split(",")[0] for c in cut] == ["Beck", "Chung", "Fanning", "Haber"]
+    held = _entries_of("## References \n\nBeck, R. A study. Proc.\nChung, M. Other. J. Phys.\n\n")
+    assert len(held) == 1
+
+
+def test_doi_url_or_pages_fragment_always_continues_the_previous_entry():
+    md = "## References \n\n- Doe, J. A study. 2020.\n\n- https://doi.org/10.1234/abc.5\n\n- pp. 12-14\n\n"
+    _, state = _blocks(md)
+    assert len(state["entries"]) == 1
+    assert state["entries"][0]["doi"] == {"status": "present", "value": "10.1234/abc.5"}
+    assert state["entries"][0]["raw"].endswith("pp. 12-14")
+    # With no previous entry such a fragment is still kept as an entry.
+    _, state = _blocks("## References \n\n- https://doi.org/10.1234/abc.5\n\n")
+    assert len(state["entries"]) == 1
+
+
+def test_abbreviation_final_entry_stays_open_for_a_continuation():
+    md = "## References \n\n- Doe, J. A study. Proc.\n\n- of the things (2019)\n\n"
+    _, state = _blocks(md)
+    assert len(state["entries"]) == 1
+
+
+def test_two_page_documents_need_a_page_number_token_for_furniture():
+    plain = [(1, "Running title \n\nA. \n\n"), (2, "Running title \n\nB. \n\n")]
+    assert observe.find_furniture(plain) == frozenset()
+    numbered = [(1, "Journal of Things 12 \n\nA. \n\n"), (2, "Journal of Things 13 \n\nB. \n\n")]
+    assert observe.find_furniture(numbered) == {"journalofthings#"}
+    three = plain + [(3, "Running title \n\nC. \n\n")]
+    assert observe.find_furniture(three) == {"runningtitle"}
+
+
+def test_year_or_range_inside_a_reference_list_is_not_a_folio():
+    blocks, _ = _blocks_with("1. Doe, J. A study. \n\n2020 \n\n", in_references=True)
+    assert blocks[-1]["type"] == "reference_entry"
+    blocks, _ = _blocks_with("1. Doe, J. A study. \n\n12-14 \n\n", in_references=True)
+    assert blocks[-1]["type"] == "reference_entry"
+    blocks, _ = _blocks_with("1. Doe, J. A study. \n\n57 \n\n", in_references=True)
+    assert blocks[-1]["type"] == "page_number"
+    blocks, _ = _blocks_with("Body. \n\n2020 \n\n")
+    assert blocks[-1]["type"] == "page_number"
+
+
+def test_line_start_acronym_is_not_an_entry_start():
+    body = "Doe J, Roe R (2019) Title of it.\nBMJ Open, 3(2) 1-4"
+    assert len(_entries_of(f"## References \n\n{body} \n\n")) == 1
+
+
+def test_continuation_across_an_omitted_page_does_not_extend_an_emitted_entry(monkeypatch):
+    pages = [
+        (1, "## References \n\n- Doe, J. A study of the\n\n"),
+        (2, "- Roe, R. Another open entry about\n\n"),
+        (3, "- things and stuff (2019)\n\n"),
+    ]
+    from zotero_pdf_text import converter
+
+    monkeypatch.setattr(observe, "_extract_pages", lambda *a, **k: (pages, False, Path(".")))
+    monkeypatch.setattr(converter, "_run_extractor", lambda *a, **k: None)
+    whole = observe_pdf(CORPUS_PDF, pages=[1, 2, 3])
+    assert [e["raw"] for e in whole.observation["references"]["entries"]] == [
+        "Doe, J. A study of the", "Roe, R. Another open entry about things and stuff (2019)"]
+    part = observe_pdf(CORPUS_PDF, pages=[1, 3])
+    entries = part.observation["references"]["entries"]
+    assert [e["raw"] for e in entries] == ["Doe, J. A study of the"]
+    assert [b["type"] for b in part.observation["blocks"] if b["page"] == 3] == ["reference_entry"]
+    assert verify_output_spans(part.observation, part.markdown) == []

@@ -314,25 +314,40 @@ _ACRONYM_NOT_INITIALS = frozenset({
     "PLoS", "PNAS", "SIAM", "SPIE", "OUP", "CUP", "MDPI", "RSC", "ACS", "APS", "EMBO", "JAMA", "NEJM",
 })
 _DASHES = frozenset({"-", "\u2013", "\u2014"})
-_YEAR_CLOSER = re.compile(r"(?:\((?:1[5-9]|20)\d\d[a-z]?\)|(?:1[5-9]|20)\d\d[a-z]?\))[.,;]?$")
+_YEAR = r"(?:1[5-9]|20)\d\d[a-z]?"
+# Inline closers: a year in parentheses or followed by ``)``/full stop/``;`` (Vancouver ``2016;3:1-10.``),
+# a page range ending in a full stop, and "in press"/"forthcoming"/"n.d." forms.
+_INLINE_CLOSER = re.compile(
+    r"(?:\(" + _YEAR + r"\)|" + _YEAR + r"\)|" + _YEAR + r"\.|" + _YEAR + r";\S*\d\.|\d+[-\u2013]\d+\.)[.,;]?$")
+_LINE_CLOSER = re.compile(r"(?:" + _YEAR + r"|\d+[-\u2013]\d+)[.,;]?$")
+_PRESS_TAILS = ("press).", "press)", "forthcoming.", "forthcoming).", "forthcoming)", "n.d.).", "n.d.)")
 _EDITOR_TOKENS = frozenset({"(eds)", "(eds.)", "(ed.)", "(ed)", "eds.", "eds", "ed.", "in:", "by", "in"})
+# A full stop after one of these abbreviations does not end an entry.
+_ABBREVIATIONS = frozenset({"proc", "j", "phys", "rev", "lett", "vol", "no", "ed", "eds"})
 
 
 def _closes_entry(previous_text: str, *, line_boundary: bool = False) -> bool:
     """Does the text before a candidate start end a reference entry? Inline: a year closer
-    (``(2016)``, ``2016)``), a URL or DOI tail, or a stray dash; a line boundary also accepts a
-    trailing full stop. Never after an editor marker (``(eds)``, ``ed. by``, ``In:``)."""
+    (``(2016)``, ``2016)``, ``2016.``, ``2016;3:1-10.``), a page range with a full stop, ``(in press)``/
+    ``forthcoming``/``(n.d.)``, a URL or DOI tail, or a stray dash. A line boundary also accepts a bare
+    trailing year, page range or ``forthcoming``, and a final full stop unless it follows an abbreviation
+    (``Proc.``, ``J.``). Never after an editor marker (``(eds)``, ``ed. by``, ``In:``)."""
     tokens = previous_text.split()
     if not tokens:
         return False
     last = tokens[-1]
-    if last.lower() in _EDITOR_TOKENS:
+    low = last.lower()
+    if low in _EDITOR_TOKENS:
         return False
     if last in _DASHES or "://" in last or last.startswith("www.") or re.search(r"\d/", last):
         return True
-    if _YEAR_CLOSER.search(last):
+    if _INLINE_CLOSER.search(last) or low.endswith(_PRESS_TAILS):
         return True
-    return line_boundary and last.endswith(".")
+    if not line_boundary:
+        return False
+    if _LINE_CLOSER.search(last) or low in ("forthcoming", "press"):
+        return True
+    return last.endswith(".") and low.rstrip(".") not in _ABBREVIATIONS
 
 
 def _unnumbered_spans(raw: _Raw) -> list[tuple[int, int, bool]]:
@@ -342,7 +357,9 @@ def _unnumbered_spans(raw: _Raw) -> list[tuple[int, int, bool]]:
     cuts: list[int] = []
     offset = 0
     for i, line in enumerate(raw.lines):
-        if i > 0 and _ENTRY_START_LINE.match(line) and _closes_entry(text[:offset], line_boundary=True):
+        first_word = line.split(None, 1)[0].rstrip(",") if line.strip() else ""
+        if (i > 0 and first_word not in _ACRONYM_NOT_INITIALS and _ENTRY_START_LINE.match(line)
+                and _closes_entry(text[:offset], line_boundary=True)):
             cuts.append(offset + len(line) - len(line.lstrip()))
         for m in _ENTRY_START_INLINE.finditer(line):
             if m.start() == 0 or line[m.end():].split(None, 1)[0] in _ACRONYM_NOT_INITIALS:
@@ -395,7 +412,7 @@ def build_page_blocks(
         return block
 
     furniture = state.get("furniture", frozenset())
-    roles = _page_roles(raws, furniture)
+    roles = _page_roles(raws, furniture, bool(state["in_references"]))
     for index, raw in enumerate(raws):
         raw_text = page_text[raw.start:raw.end]
         if raw.type == "heading" and _is_caption(raw_text):
@@ -428,7 +445,9 @@ def build_page_blocks(
                 out.append(item)
                 if state["in_references"]:
                     if _continues_previous_entry(state, page_text[a:b]):
-                        # Evidence of a wrapped entry: the previous one is still open.
+                        # Evidence of a wrapped entry: the previous one is still open. It is extended
+                        # only if it is an emitted entry of this record; a predecessor on a page that
+                        # is not part of the record leaves this block as an entry-less reference_entry.
                         _extend_entry(state, page_text[a:b])
                     else:
                         _add_entry(state, item, page, page_text[a:b])
@@ -472,6 +491,16 @@ _FOLIO = re.compile(r"^(?:" + _ROMAN_FOLIO.pattern + r"|\d{1,8}[-\u2013]\d{1,4})
 _NUMBER_TOKEN = re.compile(r"(?<!\w)\d+(?:[-\u2013:./]\d+)*(?!\w)")
 
 
+_YEAR_ONLY = re.compile(r"^(?:19|20)\d\d$")
+
+
+def _is_folio(text: str, in_references: bool) -> bool:
+    """A page number. Inside a reference list a bare year or a page range is more likely list text."""
+    if not _FOLIO.match(text):
+        return False
+    return not (in_references and (_YEAR_ONLY.match(text) or re.search(r"[-\u2013]", text)))
+
+
 def _furniture_key(raw: _Raw) -> str | None:
     """Key of a short single-line paragraph: URLs and tags dropped, page-number-like tokens (bare
     numbers, ranges, ``10:1523``) replaced by ``#``, case and punctuation ignored, so a running
@@ -488,9 +517,9 @@ def _furniture_key(raw: _Raw) -> str | None:
 
 def find_furniture(page_texts: Sequence[tuple[int, str]]) -> frozenset[str]:
     """Keys of short lines that repeat as running headers or footers. A key must sit among the first
-    (or among the last) ``EDGE_BLOCKS`` blocks, always the same side, on at least three pages or on
-    at least half of the pages (never fewer than two), and must never occur as a short line anywhere
-    else on a page. Conservative on purpose: unique or mid-page text is never taken."""
+    (or among the last) ``EDGE_BLOCKS`` blocks, always the same side, on at least three pages (two
+    when the line carries a page-number token, the shape of a journal header), and must never occur as
+    a short line anywhere else on a page. Conservative on purpose: unique or mid-page text is never taken."""
     pages_of: dict[str, set[int]] = {}
     sides: dict[str, set[str]] = {}
     elsewhere: set[str] = set()
@@ -507,13 +536,12 @@ def find_furniture(page_texts: Sequence[tuple[int, str]]) -> frozenset[str]:
                 continue
             pages_of.setdefault(key, set()).add(page)
             sides.setdefault(key, set()).add("top" if top and (not bottom or index < count / 2) else "bottom")
-    needed = max(2, min(3, -(-len(page_texts) // 2)))
     return frozenset(
         key for key, pages in pages_of.items()
-        if len(pages) >= needed and len(sides[key]) == 1 and key not in elsewhere)
+        if len(pages) >= (2 if "#" in key else 3) and len(sides[key]) == 1 and key not in elsewhere)
 
 
-def _page_roles(raws: Sequence[_Raw], furniture: frozenset[str]) -> list[str | None]:
+def _page_roles(raws: Sequence[_Raw], furniture: frozenset[str], in_references: bool = False) -> list[str | None]:
     """``header`` / ``footer`` / ``page_number`` per raw block. Furniture is a contiguous run from
     the top of the page (known running-header lines) or from the bottom (known running-footer lines
     and, among the last ``FOLIO_BLOCKS`` blocks, folios), page images skipped; a block in the middle
@@ -530,7 +558,8 @@ def _page_roles(raws: Sequence[_Raw], furniture: frozenset[str]) -> list[str | N
         if raw.type == "figure":
             continue  # a page image may sit after the footer lines; it neither ends nor joins the run
         seen += 1
-        if seen <= FOLIO_BLOCKS and raw.type == "paragraph" and len(raw.lines) == 1 and _FOLIO.match(raw.lines[0].strip()):
+        if seen <= FOLIO_BLOCKS and raw.type == "paragraph" and len(raw.lines) == 1 and _is_folio(
+                raw.lines[0].strip(), in_references):
             roles[index] = "page_number"
         elif _furniture_key(raw) in furniture:
             roles[index] = "footer"
@@ -553,25 +582,33 @@ _PARTICLE_START = re.compile(
     r"^(?:(?:van|von|de|di|da|le|la|du|ter|del|della|den|der|dos|das|el|al)\s+)+[A-Z][\w'’\-]*,")
 
 
+_FRAGMENT_ONLY = re.compile(r"^(?:pp?\.\s*\S|(?:doi:\s*)?(?:https?://|www\.|10\.\d{4,9}/)\S*$)", re.I)
+
+
 def _continues_previous_entry(state: dict[str, Any], text: str) -> bool:
     """A lower-case, unnumbered list item continues the previous entry only with evidence: there is a
-    previous entry, it does not yet look closed (no year closer, URL/DOI tail or final full stop; a
-    trailing dash is a break, not a closer), and the item does not open with a surname particle
-    followed by a capitalised name and a comma."""
+    previous entry (the true predecessor in the document, emitted or not), it does not yet look closed
+    (no year closer, URL/DOI tail or final full stop; a trailing dash is a break, not a closer), and
+    the item does not open with a surname particle followed by a capitalised name and a comma."""
+    previous = state.get("last_entry")
+    if previous is None:
+        return False
+    if _FRAGMENT_ONLY.match(text):
+        return True  # a bare DOI/URL or a page range cannot open an entry
     if not text[:1].islower() or _REFERENCE_START.match(text) or _PARTICLE_START.match(text):
         return False
-    if not state["entries"]:
-        return False
-    previous = state["entries"][-1]["raw"].rstrip()
-    last = previous.split()[-1] if previous.split() else ""
-    return last in _DASHES or not _closes_entry(previous, line_boundary=True)
+    raw = previous["raw"].rstrip()
+    last = raw.split()[-1] if raw.split() else ""
+    return last in _DASHES or not _closes_entry(raw, line_boundary=True)
 
 
 def _extend_entry(state: dict[str, Any], text: str) -> None:
-    """Append a continuation fragment to the previous entry's ``raw`` (joined by one space)."""
-    if not state["entries"]:
+    """Append a continuation fragment to the previous entry's ``raw`` (joined by one space), if that
+    entry is an emitted one of this record. The text of an entry on an unselected page, or one being
+    counted on such a page, is never altered."""
+    entry = state.get("last_entry")
+    if state.get("scratch") or entry is None or not any(entry is e for e in state["entries"]):
         return
-    entry = state["entries"][-1]
     entry["raw"] = f"{entry['raw']} {text}"
     entry["raw_sha256"] = sha256_text(entry["raw"])
     entry["doi"] = _doi_payload(entry["raw"])
@@ -581,10 +618,12 @@ def _add_entry(state: dict[str, Any], block: dict[str, Any], page: int, raw: str
     entries: list[dict[str, Any]] = state["entries"]
     doi_payload = _doi_payload(raw)
     state["entry_count"] += 1
-    entries.append({
+    entry = {
         "id": f"ref-{state['entry_count']}", "ordinal": state["entry_count"], "page": page, "block_id": block["id"],
         "raw": raw, "raw_sha256": sha256_text(raw), "doi": doi_payload,
-    })
+    }
+    entries.append(entry)
+    state["last_entry"] = entry
 
 
 def _link_captions(blocks: list[dict[str, Any]]) -> None:
@@ -813,10 +852,12 @@ def observe_pdf(
             # Counted, not emitted: ordinals are whole-document list positions.
             scratch = {
                 "order": 0, "in_references": state["in_references"], "entries": [], "entry_count": state["entry_count"],
+                "scratch": True, "last_entry": state.get("last_entry"),
                 "furniture": furniture,
             }
             build_page_blocks(number, text, 0, sha256_text(text), scratch, text)
             state["in_references"], state["entry_count"] = scratch["in_references"], scratch["entry_count"]
+            state["last_entry"] = scratch["last_entry"]
 
     extractor_options: dict[str, Any] = {
         "image_ocr": use_ocr,
