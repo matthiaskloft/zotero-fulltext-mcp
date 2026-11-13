@@ -6,10 +6,12 @@ Benchmark-side only: not shipped, no dependency beyond package A. Every check is
   survive, and tables must match cell by cell at the same grid position. Strict *transcription*
   does treat line wraps and runs of whitespace as equal, ignores block boundaries, and strips
   Markdown markup from the *observed* text only (a heading marker at block start, bullet markers,
-  paired ``**``/``__`` emphasis). Expected text, table cells, LaTeX and raw references are never
+  paired ``**``/``__`` and ``_`` emphasis, inline ``<sup>``/``<sub>``/``<u>``/``<i>``/``<b>``/
+  ``<em>``/``<strong>`` tags). Expected text, table cells, LaTeX and raw references are never
   stripped. Block segmentation is scored separately (``text_segmentation``).
 - ``tolerant``: the same check after NFKC and case folding as well (DOIs also lose their
-  ``doi:``/URL prefix; table header flags are ignored). Labelled as such, reported as separate
+  ``doi:``/URL prefix; table header flags are ignored), and whitespace before ``, . ; : ) ]`` and
+  after ``( [`` is ignored (extractors insert a space at font changes). Labelled as such, reported as separate
   metrics, and never able to turn a strict failure into a pass.
 
 The verdict is tri-state and decided by strict checks alone: ``failed`` when a deciding strict check
@@ -45,7 +47,7 @@ from .records import (
     verify_output_spans,
 )
 
-SCORER_VERSION = "3"
+SCORER_VERSION = "4"
 _METRICS = (
     "text_presence", "text_precision", "text_segmentation", "text_span_hash", "reading_order",
     "table_cell_match", "table_exact", "table_order", "table_precision", "equation_match",
@@ -71,6 +73,13 @@ _BULLET = re.compile(r"^[ \t]*[-*+\u2022][ \t]+")
 # Paired strong emphasis only. The markers must not touch a word character on the outside and must
 # hug non-space text on the inside, so ``x**2 + y**2``, ``a ** b`` and ``a * b`` are left alone.
 _STRONG = re.compile(r"(?<![\w*])(\*\*|__)(?=[^\s*_])(.+?)(?<=[^\s*_])\1(?![\w*])", re.S)
+# Paired single-underscore italics under the same word-boundary rules: ``snake_case``, ``x_1`` and
+# ``a _ b`` are left alone.
+_ITALIC = re.compile(r"(?<![\w_])_(?=[^\s_])(.+?)(?<=[^\s_])_(?![\w_])", re.S)
+# Inline HTML an extractor emits for superscripts, subscripts and font styles (no attributes).
+_INLINE_TAG = re.compile(r"</?(?:sup|sub|u|i|b|em|strong)\s*>", re.I)
+_SPACE_BEFORE_PUNCT = re.compile(r"\s+(?=[,.;:)\]])")
+_SPACE_AFTER_OPEN = re.compile(r"(?<=[(\[])\s+")
 
 Norm = Callable[[str], str]
 Pair = tuple[int, int]
@@ -86,7 +95,8 @@ def _strict(text: str) -> str:
 
 
 def _loose(text: str) -> str:
-    return unicodedata.normalize("NFKC", _strict(text)).casefold()
+    value = unicodedata.normalize("NFKC", _strict(text)).casefold()
+    return _SPACE_AFTER_OPEN.sub("", _SPACE_BEFORE_PUNCT.sub("", value))
 
 
 def _loose_doi(text: str) -> str:
@@ -98,7 +108,8 @@ def _loose_doi(text: str) -> str:
 def _strip_markup(text: str) -> str:
     """Markdown markup an extractor adds to *observed* block text: a heading marker at the start of
     the block, bullet markers (``-``, ``*``, ``+``, bullet) when the block's first line is a list
-    item, and paired ``**``/``__`` emphasis. Ordered-list numbers are kept (they are printed text,
+    item, paired ``**``/``__`` and ``_`` emphasis, and inline ``<sup>``/``<sub>``/``<u>``/``<i>``/
+    ``<b>``/``<em>``/``<strong>`` tags. Ordered-list numbers are kept (they are printed text,
     like section numbers), single ``*``/``_`` are kept, and expected text is never passed through
     here. An expected text that itself starts with ``#`` or a bullet therefore cannot match."""
     heading = _HEADING_START.sub("", text, count=1)
@@ -108,7 +119,7 @@ def _strip_markup(text: str) -> str:
         lines = text.split("\n")
         if _BULLET.match(lines[0]):
             text = "\n".join(_BULLET.sub("", line, count=1) for line in lines)
-    return _STRONG.sub(r"\2", text)
+    return _ITALIC.sub(r"\1", _STRONG.sub(r"\2", _INLINE_TAG.sub("", text)))
 
 
 _MODES: tuple[tuple[str, Norm], ...] = (("strict", _strict), ("tolerant", _loose))
@@ -1137,7 +1148,11 @@ def _check_references(exp: dict[str, Any], obs: dict[str, Any], out: _Checks) ->
                 if seg is None:
                     out.skip("reference_field_accuracy", entry["id"], f"{mode} mode: entry not segmented; fields not scored")
                     continue
-                hits = _field_hits(entry["fields"], seg.get("fields", {}), norm)
+                if not seg.get("fields"):
+                    out.skip("reference_field_accuracy", entry["id"],
+                             f"{mode} mode: observation has no parsed fields")
+                    continue
+                hits = _field_hits(entry["fields"], seg["fields"], norm)
                 if hits:
                     bad = sorted(k for k, ok in hits.items() if not ok)
                     out.add_mode("reference_field_accuracy", mode, entry["id"], (sum(hits.values()), len(hits)),

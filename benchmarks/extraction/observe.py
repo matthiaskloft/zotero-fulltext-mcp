@@ -36,7 +36,7 @@ from typing import Any
 from .records import options_sha256, sha256_bytes, sha256_text, validate_record
 
 OBSERVER_NAME = "extraction-observe"
-OBSERVER_VERSION = "1"
+OBSERVER_VERSION = "2"
 DEFAULT_TIMEOUT_S = 600
 # A folio is digits or a strict roman numeral below 400 (no m/d, so "mix", "mild", "civil" are words).
 _ROMAN = r"(?:c{0,3})(?:xc|xl|l?x{0,3})(?:ix|iv|v?i{0,3})"
@@ -280,7 +280,7 @@ def _reference_spans(raw: _Raw) -> list[tuple[int, int, bool]]:
     A paragraph with fewer than two numbered lines and no leading tail is one entry."""
     starts = [i for i, line in enumerate(raw.lines) if _REFERENCE_START.match(line)]
     if not starts:
-        return [(raw.start, raw.end, True)]
+        return _unnumbered_spans(raw)
     if len(starts) < 2 and starts[0] == 0:
         return [(raw.start, raw.end, True)]
     offsets, offset = [], raw.start
@@ -297,6 +297,89 @@ def _reference_spans(raw: _Raw) -> list[tuple[int, int, bool]]:
     for n, i in enumerate(starts):
         last = (starts[n + 1] if n + 1 < len(starts) else len(raw.lines)) - 1
         pieces.append((*span(i, last), True))
+    return pieces
+
+
+# Unnumbered reference lists: an entry opens with author initials and a surname ("R Beck, ...",
+# "JS Czepluch, ...") or a surname and initials ("Beck, R. ..."). Some extractors run the whole list
+# into one line, so a start is also accepted inside a line, but only after a strong closing context
+# (see ``_closes_entry``): a year closer, a URL/DOI tail or a stray dash separator.
+_INITIALS_START = r"[A-Z]{1,3}\s+[A-Z][\w'\u2019\-]+,"
+_SURNAME_START = r"[A-Z][\w'\u2019\-]+(?:\s[A-Z][\w'\u2019\-]+)?,\s+[A-Z]\.(?:\s|[A-Z]\.)"
+_ENTRY_START_LINE = re.compile(r"^[ \t]*(?:" + _INITIALS_START + "|" + _SURNAME_START + ")")
+_ENTRY_START_INLINE = re.compile(r"[ \t]+(?=" + _INITIALS_START + ")")
+# Journal, publisher and society acronyms that look like initials ("BMJ Open, 3(2)").
+_ACRONYM_NOT_INITIALS = frozenset({
+    "ACM", "AIP", "AMS", "APA", "ASA", "BMC", "BMJ", "IEE", "IEEE", "IOP", "MIT", "NIH", "OSA", "PLOS",
+    "PLoS", "PNAS", "SIAM", "SPIE", "OUP", "CUP", "MDPI", "RSC", "ACS", "APS", "EMBO", "JAMA", "NEJM",
+})
+_DASHES = frozenset({"-", "\u2013", "\u2014"})
+_YEAR = r"(?:1[5-9]|20)\d\d[a-z]?"
+# Inline closers: a year in parentheses or followed by ``)``/full stop/``;`` (Vancouver ``2016;3:1-10.``),
+# a page range ending in a full stop, and "in press"/"forthcoming"/"n.d." forms.
+_INLINE_CLOSER = re.compile(
+    r"(?:\(" + _YEAR + r"\)|" + _YEAR + r"\)|" + _YEAR + r"\.|" + _YEAR + r";\S*\d\.|\d+[-\u2013]\d+\.)[.,;]?$")
+_LINE_CLOSER = re.compile(r"(?:" + _YEAR + r"|\d+[-\u2013]\d+)[.,;]?$")
+_PRESS_TAILS = ("press).", "press)", "forthcoming.", "forthcoming).", "forthcoming)", "n.d.).", "n.d.)")
+_EDITOR_TOKENS = frozenset({"(eds)", "(eds.)", "(ed.)", "(ed)", "eds.", "eds", "ed.", "in:", "by", "in"})
+# A full stop after one of these abbreviations does not end an entry.
+_ABBREVIATIONS = frozenset({"proc", "j", "phys", "rev", "lett", "vol", "no", "ed", "eds"})
+
+
+def _closes_entry(previous_text: str, *, line_boundary: bool = False) -> bool:
+    """Does the text before a candidate start end a reference entry? Inline: a year closer
+    (``(2016)``, ``2016)``, ``2016.``, ``2016;3:1-10.``), a page range with a full stop, ``(in press)``/
+    ``forthcoming``/``(n.d.)``, a URL or DOI tail, or a stray dash. A line boundary also accepts a bare
+    trailing year, page range or ``forthcoming``, and a final full stop unless it follows an abbreviation
+    (``Proc.``, ``J.``). Never after an editor marker (``(eds)``, ``ed. by``, ``In:``)."""
+    tokens = previous_text.split()
+    if not tokens:
+        return False
+    last = tokens[-1]
+    low = last.lower()
+    if low in _EDITOR_TOKENS:
+        return False
+    if last in _DASHES or "://" in last or last.startswith("www.") or re.search(r"\d/", last):
+        return True
+    if _INLINE_CLOSER.search(last) or low.endswith(_PRESS_TAILS):
+        return True
+    if not line_boundary:
+        return False
+    if _LINE_CLOSER.search(last) or low in ("forthcoming", "press"):
+        return True
+    return last.endswith(".") and low.rstrip(".") not in _ABBREVIATIONS
+
+
+def _unnumbered_spans(raw: _Raw) -> list[tuple[int, int, bool]]:
+    """Split an unnumbered reference paragraph at every position that clearly opens a new entry
+    (see ``_ENTRY_START_LINE`` / ``_ENTRY_START_INLINE``). No such position: one entry, as before."""
+    text = "\n".join(raw.lines)
+    cuts: list[int] = []
+    offset = 0
+    for i, line in enumerate(raw.lines):
+        first_word = line.split(None, 1)[0].rstrip(",") if line.strip() else ""
+        if (i > 0 and first_word not in _ACRONYM_NOT_INITIALS and _ENTRY_START_LINE.match(line)
+                and _closes_entry(text[:offset], line_boundary=True)):
+            cuts.append(offset + len(line) - len(line.lstrip()))
+        for m in _ENTRY_START_INLINE.finditer(line):
+            if m.start() == 0 or line[m.end():].split(None, 1)[0] in _ACRONYM_NOT_INITIALS:
+                continue
+            if _closes_entry(text[:offset + m.start()]):
+                cuts.append(offset + m.end())
+        offset += len(line) + 1
+    cuts = sorted(set(cuts))
+    if not cuts:
+        return [(raw.start, raw.end, True)]
+    bounds = [0, *cuts]
+    pieces: list[tuple[int, int, bool]] = []
+    for n, a in enumerate(bounds):
+        b = bounds[n + 1] if n + 1 < len(bounds) else len(text)
+        piece = text[a:b].rstrip()
+        tokens = piece.rsplit(None, 1)
+        if len(tokens) == 2 and tokens[1] in _DASHES:
+            piece = tokens[0].rstrip()
+        if piece:
+            pieces.append((raw.start + a, raw.start + a + len(piece), True))
     return pieces
 
 
@@ -328,7 +411,8 @@ def build_page_blocks(
         state["order"] += 1
         return block
 
-    last_index = len(raws) - 1
+    furniture = state.get("furniture", frozenset())
+    roles = _page_roles(raws, furniture, _references_before(raws, page_text, bool(state["in_references"])))
     for index, raw in enumerate(raws):
         raw_text = page_text[raw.start:raw.end]
         if raw.type == "heading" and _is_caption(raw_text):
@@ -352,26 +436,33 @@ def build_page_blocks(
             block["graphic"] = {"kind": "image" if raw.lines[0].lstrip().startswith("![") else "figure"}
         elif raw.type == "list_item":
             for a, b in _item_spans(raw, page_text):
+                if state["in_references"]:
+                    # A bullet is list syntax, not reference text; a numbered marker is printed text.
+                    marker = _BULLET.match(page_text[a:b])
+                    a += marker.end() if marker else 0
                 item = new_block("reference_entry" if state["in_references"] else "list_item", a, b)
                 item["text"] = page_text[a:b]
                 out.append(item)
                 if state["in_references"]:
-                    _add_entry(state, item, page, page_text[a:b])
+                    _entry_or_fragment(state, item, page, page_text[a:b])
             continue
+        elif roles[index] is not None:
+            block = new_block(roles[index], raw.start, raw.end)
+            block["text"] = raw_text
         elif raw.type == "other":
             block = new_block("other", raw.start, raw.end)
             block["text"] = raw_text
-        elif index == last_index and _ROMAN_FOLIO.match(raw_text.strip()):
-            block = new_block("page_number", raw.start, raw.end)
-            block["text"] = raw_text
         elif state["in_references"]:
-            for a, b, starts_entry in _reference_spans(raw):
+            for number, (a, b, starts_entry) in enumerate(_reference_spans(raw)):
                 entry_block = new_block("reference_entry", a, b)
                 entry_block["text"] = page_text[a:b]
                 entry_block["text_sha256"] = sha256_text(page_text[a:b])
                 out.append(entry_block)
                 if starts_entry:
-                    _add_entry(state, entry_block, page, page_text[a:b])
+                    if number == 0:
+                        _entry_or_fragment(state, entry_block, page, page_text[a:b])
+                    else:
+                        _add_entry(state, entry_block, page, page_text[a:b])
             continue
         elif _is_caption(raw_text):
             block = new_block("caption", raw.start, raw.end)
@@ -386,19 +477,174 @@ def build_page_blocks(
     return out
 
 
-def _add_entry(state: dict[str, Any], block: dict[str, Any], page: int, raw: str) -> None:
+_BULLET = re.compile(r"[-*+\u2022][ \t]+")
+_HTML_TAG = re.compile(r"</?[a-zA-Z][^>]*>")
+_URL = re.compile(r"(?:https?://|www\.)\S+", re.I)
+MAX_FURNITURE_CHARS = 250
+EDGE_BLOCKS = 8
+FOLIO_BLOCKS = 2
+# A folio (digits or roman numeral) or a section-page folio such as "016004-8" (not "12.5").
+_FOLIO = re.compile(r"^(?:" + _ROMAN_FOLIO.pattern + r"|\d{1,8}[-\u2013]\d{1,4})$")
+_NUMBER_TOKEN = re.compile(r"(?<!\w)\d+(?:[-\u2013:./]\d+)*(?!\w)")
+
+
+_YEAR_ONLY = re.compile(r"^(?:19|20)\d\d$")
+
+
+def _is_folio(text: str, in_references: bool) -> bool:
+    """A page number. Inside a reference list a bare year or a page range is more likely list text."""
+    if not _FOLIO.match(text):
+        return False
+    # An article-page folio such as "016004-8" has a long first part; "12-14" is a page range.
+    return not (in_references and (_YEAR_ONLY.match(text) or re.match(r"\d{1,4}[-\u2013]", text)))
+
+
+def _furniture_key(raw: _Raw) -> str | None:
+    """Key of a short single-line paragraph: URLs and tags dropped, page-number-like tokens (bare
+    numbers, ranges, ``10:1523``) replaced by ``#``, case and punctuation ignored, so a running
+    header or footer with a changing page number maps to one key; None otherwise."""
+    if raw.type != "paragraph" or len(raw.lines) != 1:
+        return None
+    line = raw.lines[0].strip()
+    if not line or len(line) > MAX_FURNITURE_CHARS or _REFERENCE_START.match(line) or _is_caption(line):
+        return None
+    text = _NUMBER_TOKEN.sub("#", _URL.sub("", _HTML_TAG.sub("", line)))
+    key = re.sub(r"[^\w#]+|_", "", text).lower()
+    return key if sum(ch.isalpha() for ch in key) >= 4 else None
+
+
+def find_furniture(page_texts: Sequence[tuple[int, str]]) -> frozenset[str]:
+    """Keys of short lines that repeat as running headers or footers. A key must sit among the first
+    (or among the last) ``EDGE_BLOCKS`` blocks, always the same side, on at least three pages (two
+    when the line carries a page-number token, the shape of a journal header), and must never occur as
+    a short line anywhere else on a page. Conservative on purpose: unique or mid-page text is never taken."""
+    pages_of: dict[str, set[int]] = {}
+    sides: dict[str, set[str]] = {}
+    elsewhere: set[str] = set()
+    for page, text in page_texts:
+        raws = split_blocks(text)
+        count = len(raws)
+        for index, raw in enumerate(raws):
+            key = _furniture_key(raw)
+            if key is None:
+                continue
+            top, bottom = index < min(EDGE_BLOCKS, count), index >= count - EDGE_BLOCKS
+            if not (top or bottom):
+                elsewhere.add(key)
+                continue
+            pages_of.setdefault(key, set()).add(page)
+            sides.setdefault(key, set()).add("top" if top and (not bottom or index < count / 2) else "bottom")
+    return frozenset(
+        key for key, pages in pages_of.items()
+        if len(pages) >= (2 if "#" in key else 3) and len(sides[key]) == 1 and key not in elsewhere)
+
+
+def _references_before(raws: Sequence[_Raw], page_text: str, start: bool) -> list[bool]:
+    """Per raw block: is it inside a reference list, given the section state on entering the page and
+    any (non-caption) heading before it on the same page?"""
+    inside, current = [], start
+    for raw in raws:
+        inside.append(current)
+        if raw.type == "heading":
+            text = page_text[raw.start:raw.end]
+            if not _is_caption(text):
+                current = bool(_REFERENCES_HEADING.match(text))
+    return inside
+
+
+def _page_roles(
+    raws: Sequence[_Raw], furniture: frozenset[str], in_references: Sequence[bool] | None = None,
+) -> list[str | None]:
+    """``header`` / ``footer`` / ``page_number`` per raw block. Furniture is a contiguous run from
+    the top of the page (known running-header lines) or from the bottom (known running-footer lines
+    and, among the last ``FOLIO_BLOCKS`` blocks, folios), page images skipped; a block in the middle
+    of the page is never furniture."""
+    roles: list[str | None] = [None] * len(raws)
+    top = 0
+    while top < len(raws) and (raws[top].type == "figure" or _furniture_key(raws[top]) in furniture):
+        if raws[top].type != "figure":
+            roles[top] = "header"
+        top += 1
+    seen = 0
+    for index in range(len(raws) - 1, top - 1, -1):
+        raw = raws[index]
+        if raw.type == "figure":
+            continue  # a page image may sit after the footer lines; it neither ends nor joins the run
+        seen += 1
+        if seen <= FOLIO_BLOCKS and raw.type == "paragraph" and len(raw.lines) == 1 and _is_folio(
+                raw.lines[0].strip(), bool(in_references and in_references[index])):
+            roles[index] = "page_number"
+        elif _furniture_key(raw) in furniture:
+            roles[index] = "footer"
+        else:
+            break
+    return roles
+
+
+def _doi_payload(raw: str) -> dict[str, Any]:
     # Markdown links first: the label if it holds the DOI, else the destination.
     plain = _MD_LINK.sub(lambda m: m.group(1) if _DOI.search(m.group(1)) else m.group(2), raw)
     doi = _DOI.search(plain)
-    entries: list[dict[str, Any]] = state["entries"]
-    doi_payload: dict[str, Any] = {"status": "not_found"}
     if doi:
-        doi_payload = {"status": "present", "value": _clean_doi(doi.group(0))}
+        return {"status": "present", "value": _clean_doi(doi.group(0))}
+    return {"status": "not_found"}
+
+
+# A lower-case surname particle that opens a real entry ("van der Waals, J. D. ...").
+_PARTICLE_START = re.compile(
+    r"^(?:(?:van|von|de|di|da|le|la|du|ter|del|della|den|der|dos|das|el|al)\s+)+[A-Z][\w'’\-]*,")
+
+
+_FRAGMENT_ONLY = re.compile(r"^(?:pp?\.\s*\S|(?:doi:\s*)?(?:https?://|www\.|10\.\d{4,9}/)\S*$)", re.I)
+
+
+def _continues_previous_entry(state: dict[str, Any], text: str) -> bool:
+    """Does an unnumbered item or paragraph start continue the previous entry? Only with evidence:
+    there is a document predecessor (``state["pred"]``, tracked on every page, emitted or not), it does
+    not yet look closed (no year closer, URL/DOI tail or final full stop; a trailing dash is a break,
+    not a closer), and the text does not open with a surname particle followed by a capitalised name
+    and a comma. A bare DOI/URL or ``pp.`` fragment always continues it."""
+    previous = state.get("pred")
+    if previous is None:
+        return False
+    if _FRAGMENT_ONLY.match(text):
+        return True  # a bare DOI/URL or a page range cannot open an entry
+    if not text[:1].islower() or _REFERENCE_START.match(text) or _PARTICLE_START.match(text):
+        return False
+    raw = previous["raw"].rstrip()
+    last = raw.split()[-1] if raw.split() else ""
+    return last in _DASHES or not _closes_entry(raw, line_boundary=True)
+
+
+def _entry_or_fragment(state: dict[str, Any], block: dict[str, Any], page: int, text: str) -> None:
+    """Shared by the list-item and paragraph paths: a continuation extends the predecessor, anything
+    else opens an entry. The predecessor state (accumulated raw) is updated by every fragment on every
+    page; the emitted entry is only changed if it belongs to this record and the page is part of it,
+    otherwise the fragment stays an entry-less ``reference_entry`` block."""
+    if not _continues_previous_entry(state, text):
+        _add_entry(state, block, page, text)
+        return
+    pred = state["pred"]
+    pred["raw"] = f"{pred['raw']} {text}"
+    entry = pred["entry"]
+    if state.get("scratch"):
+        pred["gap"] = True  # text of an omitted page: never copied into an emitted entry
+    elif entry is not None and not pred.get("gap"):
+        entry["raw"] = f"{entry['raw']} {text}"
+        entry["raw_sha256"] = sha256_text(entry["raw"])
+        entry["doi"] = _doi_payload(entry["raw"])
+
+
+def _add_entry(state: dict[str, Any], block: dict[str, Any], page: int, raw: str) -> None:
+    entries: list[dict[str, Any]] = state["entries"]
+    doi_payload = _doi_payload(raw)
     state["entry_count"] += 1
-    entries.append({
+    entry = {
         "id": f"ref-{state['entry_count']}", "ordinal": state["entry_count"], "page": page, "block_id": block["id"],
         "raw": raw, "raw_sha256": sha256_text(raw), "doi": doi_payload,
-    })
+    }
+    entries.append(entry)
+    state["pred"] = {"raw": raw, "entry": None if state.get("scratch") else entry}
 
 
 def _link_captions(blocks: list[dict[str, Any]]) -> None:
@@ -611,7 +857,8 @@ def observe_pdf(
 
     markdown = "".join(by_page[number] for number in selected)
     markdown_sha = sha256_text(markdown)
-    state: dict[str, Any] = {"order": 0, "in_references": False, "entries": [], "entry_count": 0}
+    furniture = find_furniture(sorted(by_page.items()))
+    state: dict[str, Any] = {"order": 0, "in_references": False, "entries": [], "entry_count": 0, "furniture": furniture}
     blocks: list[dict[str, Any]] = []
     base = 0
     chosen = set(selected)
@@ -624,9 +871,14 @@ def observe_pdf(
             base += len(text)
         else:
             # Counted, not emitted: ordinals are whole-document list positions.
-            scratch = {"order": 0, "in_references": state["in_references"], "entries": [], "entry_count": state["entry_count"]}
+            scratch = {
+                "order": 0, "in_references": state["in_references"], "entries": [], "entry_count": state["entry_count"],
+                "scratch": True, "pred": state.get("pred"),
+                "furniture": furniture,
+            }
             build_page_blocks(number, text, 0, sha256_text(text), scratch, text)
             state["in_references"], state["entry_count"] = scratch["in_references"], scratch["entry_count"]
+            state["pred"] = scratch["pred"]
 
     extractor_options: dict[str, Any] = {
         "image_ocr": use_ocr,

@@ -185,13 +185,16 @@ items of those two metrics do not make it incomplete.
 **Markdown markup (extension of the "heading markup" decision).** Real extractor output such as
 `## **Alpha Heading**`, `- first item` or `The **effect** is` must not fail strict. A narrow
 stripping step therefore runs on *observed block text only*: a heading marker at the start of the
-block, bullet markers (`-`, `*`, `+`, bullet) when the block's first line is a list item, and paired
-`**`/`__` emphasis. The emphasis markers must not touch a word character on the outside and must
-hug non-space text inside, so `a * b`, `a ** b` and `x**2 + y**2` are untouched; single `*`/`_`
-(italics) and ordered-list numbers (`1. Introduction` is printed text) are kept. Expected text,
+block, bullet markers (`-`, `*`, `+`, bullet) when the block's first line is a list item, paired
+`**`/`__` emphasis, paired single `_..._` italics, and the inline tags `<sup>`, `<sub>`, `<u>`, `<i>`,
+`<b>`, `<em>`, `<strong>` (openers and closers, no attributes). The emphasis markers must not touch a
+word character on the outside and must hug non-space text inside, so `a * b`, `a ** b`, `x**2 + y**2`,
+`snake_case`, `x_1` and `a _ b` are untouched. Observed `_word_` is stripped as italics, so a literal underscore pair in the source text may then fail strict. Labels flatten sub- and superscripts to plain characters, so observed `10<sup>5</sup>` and expected `105` compare equal in strict (a known limitation: the tags are removed, not interpreted); single `*` (italics) and ordered-list numbers (`1. Introduction` is printed text) are kept. Expected text,
 table cells, LaTeX and raw references are never stripped, which means an expected text that itself
 begins with `#` or a bullet cannot match (record such a block as uncertain). The `tolerant` mode
-additionally applies NFKC and case folding (DOIs lose `doi:`/URL prefixes, LaTeX loses whitespace,
+additionally applies NFKC and case folding and ignores whitespace before `, . ; : ) ]` and after
+`( [` (pymupdf4llm inserts a space at font changes: `Babelomics53 , Intermine`, `word .`; strict keeps
+such a space as a difference) (DOIs lose `doi:`/URL prefixes, LaTeX loses whitespace,
 table header flags are ignored); it is reported as separate metrics, a check that only tolerant
 accepts is flagged `tolerant_only` and counted, and a normalized match is never evidence of
 transcription fidelity.
@@ -265,7 +268,7 @@ section counts as an empty list wherever the expectation has references.
   observation's `output_span` hashes are verified (`output_span_roundtrip`, strict only); the file is
   read byte-exactly so CRLF is preserved.
 - **Output.** `score["metrics"]` entries (`name`, `version`, `mode`, `value`, `n`) fit the run
-  schema; `METRIC_VERSIONS` pins them (scorer version 3). `score_to_result` copies the verdict and
+  schema; `METRIC_VERSIONS` pins them (scorer version 4). `score_to_result` copies the verdict and
   the count of verdict-relevant unscored items into the run result through two optional run-schema
   fields, `verdict` and `unscored_items`, so a partial score cannot read as a pass; `failure_result`
   builds entries for failures, timeouts and missing backends, which carry an error and no metrics.
@@ -304,9 +307,9 @@ captions (label emphasised or followed by `.`/`:`, so "Table 3 reports ..." stay
 adjacency to a table or figure, figures (the `![](...)` crop placeholders production always leaves, typed `image`, and pymupdf4llm picture-text regions, no
 text so their internals are not scored as prose), a trailing bare number as `page_number`, and
 reference entries under a References/Bibliography heading (DOI `present`/`not_found` by pattern,
-`raw` verbatim). Caption linking is a heuristic: a caption points at the immediately preceding block of the matching kind (figure or table) if it has none yet, else the following one. Reference lists are recognised only under a `#` heading whose text is References, Bibliography or similar; lines before the first `[n]` of a paragraph (a tail carried over from the previous page) become their own entry-less `reference_entry` block. Crop OCR plans on the joined Markdown as production does, and the record pins the package version and `git describe`. `observe_pdf` is not meant for concurrent threads (it sets `PYTHONPATH` for the extractor subprocess under a lock). Not detected: bounding boxes, page `render`, equation numbers, table spans and
-cross-page `continues_from`/`truncated`, footnotes, running headers (pymupdf4llm drops them), reference
-`fields`, citation markers (the scorer lists them as unscored), and display equations when crop OCR is
+`raw` verbatim). Caption linking is a heuristic: a caption points at the immediately preceding block of the matching kind (figure or table) if it has none yet, else the following one. Reference lists are recognised only under a `#` heading whose text is References, Bibliography or similar; lines before the first `[n]` of a paragraph (a tail carried over from the previous page) become their own entry-less `reference_entry` block. Reference ordinals count only real entries (the list position), never page furniture. A list-item bullet (`- `) is not part of an entry (the block span starts after it; a printed `1.` stays), and an unnumbered list item that starts in lower case is appended to the previous entry's `raw` only when that entry does not yet look closed (no year closer, URL/DOI tail or final full stop; a trailing dash is a break) and the item does not open with a surname particle (`van der Waals, J.`); otherwise it is a new entry. A bare DOI/URL or `pp.` fragment always continues the previous entry. The previous entry is the true predecessor in the whole document: when it lies on a page that is not part of a page-scoped record, the fragment stays an entry-less `reference_entry` block and no emitted entry is altered. The same rule serves list items and the first piece of an unbulleted paragraph, and the predecessor's open/closed state is updated by every fragment on every page, including omitted ones (their text is never copied into an emitted entry). In an unnumbered list an entry is cut where a line or the middle of a line starts with author initials and a surname (`R Beck, ...`) or a surname and initials (`Beck, R. ...`) and the text before it ends with a year closer (`(2016)`, `2016)`, `2016.`, `2016;3:1-10.`), a page range with a full stop, `(in press)`/`forthcoming`/`(n.d.)`, a URL/DOI tail or a stray dash (which belongs to neither entry); a line boundary also accepts a bare year, page range or `forthcoming` and a final full stop that does not follow an abbreviation (`Proc.`, `J.`, `Phys.`). The acronym exclusion applies to line starts too. Nothing is cut after `(eds)`, `ed. by`, `In:`, and journal/publisher acronyms (`BMJ Open`) are not authors; a paragraph with no such position stays one entry. Running headers and footers are found by repetition: a short single-line paragraph (URLs and tags dropped, page-number-like tokens masked) among the first eight or the last eight blocks, always on the same side, on at least three pages (two if the line carries a page-number token) and never also occurring elsewhere on a page. Only a contiguous run from the top (header) or the bottom (footer) is typed as furniture, page images skipped; a folio (`9`, `iv`, `016004-8`, not `12.5`) among the last two blocks is `page_number` (inside a reference list, decided per block, a bare year or a short range such as `12-14` is not; an article-page folio such as `016004-8` still is). Such lines are no longer paragraphs or reference entries. Not detected: bounding boxes, page `render`, equation numbers, table spans and
+cross-page `continues_from`/`truncated`, footnotes, reference
+`fields` (the scorer then lists `reference_field_accuracy` as unscored, "observation has no parsed fields", instead of failing it), citation markers (the scorer lists them as unscored), and display equations when crop OCR is
 off (they stay crop placeholders, typed figure, so `equation_match` fails by design). Known scorer mismatches: pymupdf4llm often leaves the next
 element's lead-in on a caption's line, so exact caption text fails; heading text carries `#`/`**`
 markup (stripped by the scorer for transcription, so only the informational `text_span_hash` differs).
