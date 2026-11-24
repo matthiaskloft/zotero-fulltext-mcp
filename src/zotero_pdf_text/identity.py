@@ -172,9 +172,36 @@ def extract_isbns(value: str | None) -> list[str]:
         whole = normalize_isbn(run.group(0))
         if whole:
             found.add(whole)
-            continue
-        found.update(isbn for token in run.group(0).split() if (isbn := normalize_isbn(token)))
+        else:
+            found.update(_isbns_in_groups(run.group(0).split()))
     return sorted(found)
+
+
+def _isbns_in_groups(groups: list[str]) -> list[str]:
+    """Valid ISBNs formed by consecutive whitespace-separated digit groups, left to right.
+
+    Handles several space-grouped numbers in one field ("978 0 306 40615 7 978 0 8044 2957 3").
+    From each start, the longest run of groups that is a valid ISBN (13 before 10) is taken and
+    scanning resumes after it; a start with none moves on by one group. Groups are at most a few
+    characters and a candidate stops past 13 digits, so this is linear in the field.
+    """
+    isbns: list[str] = []
+    start = 0
+    while start < len(groups):
+        best_end, best = start, ""
+        digits = 0
+        for end in range(start, len(groups)):
+            digits += len(re.sub(r"[\-\u2010-\u2015]", "", groups[end]))
+            if digits > 13:
+                break
+            if digits in (10, 13) and (isbn := normalize_isbn(" ".join(groups[start : end + 1]))):
+                best_end, best = end, isbn
+        if best:
+            isbns.append(best)
+            start = best_end + 1
+        else:
+            start += 1
+    return isbns
 
 
 def normalize_doi_identifier(value: str | None) -> str:

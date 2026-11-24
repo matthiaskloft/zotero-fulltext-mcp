@@ -79,6 +79,11 @@ class IsbnEdgeCaseTests(unittest.TestCase):
         self.assertEqual(normalize_isbn("ISBN\u201013: 978\u20100\u2010306\u201040615\u20107"), "9780306406157")
         self.assertEqual(normalize_isbn("0306406152 (pbk.) (alk. paper)"), "9780306406157")
         self.assertEqual(extract_isbns("ISBN-13 978 0 306 40615 7"), ["9780306406157"])
+        # Several space-grouped numbers in one field (PR #183 review).
+        both = sorted(["9780306406157", OTHER_BOOK_13])
+        self.assertEqual(extract_isbns("978 0 306 40615 7 978 0 8044 2957 3"), both)
+        self.assertEqual(extract_isbns("0 306 40615 2 0 8044 2957 X"), both)
+        self.assertEqual(extract_isbns("978-0-306-40615-7 0 8044 2957 X"), both)
         self.assertEqual(extract_isbns("ISBN 10: 0306406152; ISBN-13: 9780804429573"), sorted(["9780306406157", OTHER_BOOK_13]))
 
     def test_long_blank_runs_in_a_stored_field_stay_fast(self):
