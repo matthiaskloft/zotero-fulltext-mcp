@@ -5,6 +5,18 @@ All notable changes to this project are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-11-24
+
+### Upgrading
+
+- **Run `zotero-pdf-text rebuild-index` to use the new opt-in stemmed search.** Indexes built by
+  earlier versions lack the stemmed table: exact search keeps working, a `stemming=true` search
+  answers `stemming_unavailable`, and `index-stats`/`library_status` report `schema_current: false`
+  and `stemmed_search: false` until the rebuild. No metadata refresh or reconversion is needed.
+- Prefix terms, `near` mode and `lookup_identifier` work on existing indexes without a rebuild.
+- Re-run `install-mcp` and update your MCP client's registration if it lists enabled tools
+  explicitly, so the new `lookup_identifier` tool is allowed.
+
 ### Fixed
 
 - Extraction baseline scoring (scorer version 4, observer version 2): running headers and footers
@@ -1311,7 +1323,8 @@ author's own machine.
 
 Initial import of the Zotero full-text conversion pipeline, CLI, and MCP server. Not tagged.
 
-[Unreleased]: https://github.com/matthiaskloft/zotero-fulltext-mcp/compare/v0.16.1...HEAD
+[Unreleased]: https://github.com/matthiaskloft/zotero-fulltext-mcp/compare/v0.17.0...HEAD
+[0.17.0]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.17.0
 [0.16.1]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.16.1
 [0.16.0]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.16.0
 [0.15.2]: https://github.com/matthiaskloft/zotero-fulltext-mcp/releases/tag/v0.15.2

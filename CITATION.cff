@@ -2,8 +2,8 @@ cff-version: 1.2.0
 message: "If this software supports your research, please cite it using the metadata below."
 title: "zotero-fulltext-mcp"
 type: software
-version: 0.16.1
-date-released: 2026-11-12
+version: 0.17.0
+date-released: 2026-11-24
 authors:
   - family-names: Kloft
     given-names: Matthias

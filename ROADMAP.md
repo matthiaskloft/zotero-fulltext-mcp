@@ -1,12 +1,12 @@
 # Development Roadmap
 
 What to work on next, and why. Reviewed against local code on **2026-11-24**;
-latest published release: **0.16.1**. Status describes implementation, not live GitHub issue/alert state.
+latest published release: **0.16.1**; **0.17.0** prepared. Status describes implementation, not live GitHub issue/alert state.
 
 ## Current capability
 
 Read-only Zotero PDFs → Markdown → immutable SQLite FTS5 generations → MCP/CLI search.
-Implemented: metadata filters, prefix, proximity and opt-in stemmed search, DOI/ISBN lookup (unreleased),
+Implemented: metadata filters, prefix, proximity and opt-in stemmed search, DOI/ISBN lookup (0.17.0),
 quality/language heuristics, physical page maps where measured,
 verified passage locators, passage images, library audits, crash-safe publication and retrieval
 benchmark harnesses. Production chunks use structure-v1: 1500 characters with up to 150 overlap
@@ -15,7 +15,7 @@ within split paragraphs. Semantic retrieval and automatic context assembly remai
 Released in 0.16.0: Marker whole-paper reconversion and its ML dependencies removed (existing
 Marker records remain readable; remove obsolete `--enable-reconvert` registration flags). Released
 in 0.16.1: the E1 extraction-evaluation schemas, scorer and olmOCR-bench adapter, plus the E2 pilot
-manifest and draft tooling. Since 0.16.1 (unreleased): observation exporter, run harness and
+manifest and draft tooling. Prepared for 0.17.0: observation exporter, run harness and
 agent-reviewed pilot labels for E2, and #77 prefix/`near`/stemmed search and `lookup_identifier`.
 
 Updating the package does not rebuild existing indexes or backfill page maps. Re-chunking can
@@ -73,7 +73,7 @@ repeated headers and assembled context retain source mappings and count toward c
 |---|---|---|---|---|
 | **S1a** | Reviewed evidence judgments, agent trials and size/boundary/overlap sweeps | Validation pending: harness and first measurements shipped | Frozen Markdown; E1/E2 baseline before default promotion | [#107](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/107) |
 | **S4-structure** | Source-block IDs, hierarchy, neighbor links, section labels and production token budgets; preserve equations/captions/table rows | Partial: pages, spans, heading paths and character chunks shipped | S1a; E1/E2 before default promotion | [#108](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/108) prerequisites; [#81](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/81) section scope |
-| **S4-lexical** | Abstract/tag FTS columns, stemming and prefix/proximity search | Partial (unreleased): opt-in `*` prefix terms, `near` mode, opt-in Porter stemming via an external-content table, and DOI/ISBN lookup (#77 C–E, part of F); abstract/tag FTS columns (F) planned; making stemming the default needs S1a evidence | S1a for default changes and new columns; independent of hierarchy where possible | [#77](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/77) C–F |
+| **S4-lexical** | Abstract/tag FTS columns, stemming and prefix/proximity search | Partial (0.17.0): opt-in `*` prefix terms, `near` mode, opt-in Porter stemming via an external-content table, and DOI/ISBN lookup (#77 C–E, part of F); abstract/tag FTS columns (F) planned; making stemming the default needs S1a evidence | S1a for default changes and new columns; independent of hierarchy where possible | [#77](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/77) C–F |
 | **S4a** | Bounded parent/neighbor/caption context and deduplicated path assembly, with per-span citations and explicit gaps | Planned: manual navigation exists | S1a, S4-structure | [#108](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/108) assembly scope |
 | **S5** | Section filtering and reference-entry search; raw bibliography search may precede parsed-entry search | Planned | S4-structure section labels; E4 for parsed entries | [#77](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/77) H; [#81](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/81) |
 | **S6** | Optional semantic paper discovery with an independently published local embedding index/tool | Planned: no production backend | Existing metadata/evaluation; S4-structure for passage extension | [#1](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/1) |
