@@ -17,6 +17,22 @@ All notable changes to this project are documented here. Format loosely follows
 
 ### Added
 
+- Prefix search (#77 D): a query term ending in `*` (at least three characters before it) matches
+  every indexed word with that prefix, e.g. `estimat*` finds `estimate` and `estimation`. Works in
+  `search_fulltext`, `search_within_fulltext` and `search-fts`, with every search mode; in `phrase`
+  mode only the last term may carry it. Field filters keep whole-word matching. Behavior change
+  only for queries that already contained a trailing `*`, which was previously ignored.
+- Proximity search (#77 E): `search_mode="near"` requires at least two query terms within
+  `near_distance` tokens of each other (default 10, at most 100) in any order, between
+  `all_terms` (anywhere in a chunk) and `phrase` (adjacent, in order). New optional
+  `near_distance` parameter on both search tools and `--near-distance` on `search-fts`.
+- `lookup_identifier` MCP tool (#77 F): exact lookup of indexed attachments by DOI (bare, `doi:`
+  or `doi.org` URL, case-insensitive) or ISBN (ISBN-10 or ISBN-13, hyphens allowed, check digit
+  verified, both forms of one book match). Same response shape as `lookup_citation_key`, plus
+  `identifier_type` and `normalized`. Reads existing metadata.
+
+  None of these three needs an index rebuild or schema change, and calls that use neither `*`
+  nor the `near` mode return the same results as before.
 - Pilot labels no longer record line-break-only hyphens: words split at a line end are joined (`criti- cal` to `critical`), real hyphens are kept without the stray space, and a test rejects any
   unlisted `letter- lowercase` sequence. Hashes were recomputed for the changed blocks; the convention
   is in `docs/extraction-pilot-review.md`.

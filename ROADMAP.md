@@ -1,19 +1,22 @@
 # Development Roadmap
 
-What to work on next, and why. Reviewed against local code on **2026-11-05**;
-prepared release **0.16.0** (latest published: 0.15.2). Status describes implementation, not live GitHub issue/alert state.
+What to work on next, and why. Reviewed against local code on **2026-11-24**;
+latest published release: **0.16.1**. Status describes implementation, not live GitHub issue/alert state.
 
 ## Current capability
 
 Read-only Zotero PDFs → Markdown → immutable SQLite FTS5 generations → MCP/CLI search.
-Implemented: metadata filters, quality/language heuristics, physical page maps where measured,
+Implemented: metadata filters, prefix and proximity search, DOI/ISBN lookup (unreleased),
+quality/language heuristics, physical page maps where measured,
 verified passage locators, passage images, library audits, crash-safe publication and retrieval
 benchmark harnesses. Production chunks use structure-v1: 1500 characters with up to 150 overlap
 within split paragraphs. Semantic retrieval and automatic context assembly remain planned.
 
-Prepared for 0.16.0: Marker whole-paper reconversion and its ML dependencies removed; source distributions
-exclude local agent directories. Existing Marker records remain readable. Remove obsolete
-`--enable-reconvert` registration flags. Normal conversion, timeout retries and opt-in local OCR remain.
+Released in 0.16.0: Marker whole-paper reconversion and its ML dependencies removed (existing
+Marker records remain readable; remove obsolete `--enable-reconvert` registration flags). Released
+in 0.16.1: the E1 extraction-evaluation schemas, scorer and olmOCR-bench adapter, plus the E2 pilot
+manifest and draft tooling. Since 0.16.1 (unreleased): observation exporter, run harness and
+agent-reviewed pilot labels for E2, and #77 prefix/`near` search and `lookup_identifier`.
 
 Updating the package does not rebuild existing indexes or backfill page maps. Re-chunking can
 invalidate locators; older extractions need reconversion for measured pages. See
@@ -22,8 +25,10 @@ invalidate locators; older extractions need reconversion for measured pages. See
 
 ## Next milestones
 
-1. **E1/E2 — extraction baseline:** internal artifact schema, reviewed pilot of 20 varied public
-   pages plus a few whole papers, scorer sensitivity checks and a baseline report.
+1. **E2 — extraction baseline:** run the harness over the pilot labels and publish the baseline
+   report. The schema, scorer, exporter, harness and agent-reviewed labels exist; remaining are a
+   human spot-check of those labels, the third whole paper (`jlmr-onet-content-model`) and the
+   report itself. The run needs the cached public PDFs on a host that can download them.
 2. **S1a — retrieval evidence:** owner-reviewed judgments, broader agent trials and budget/overlap
    sweeps on frozen, hashed Markdown. The harness and initial measurements already exist.
 3. **Z1 — compatibility:** supported-version matrix and tests, independently of extraction work.
@@ -51,8 +56,8 @@ Ownership: PDF-to-Markdown/reference fidelity. Detailed decisions and acceptance
 
 | ID | Deliverable | Status | Dependencies | Issue |
 |---|---|---|---|---|
-| **E1** | Internal artifact schema, strict fidelity checks and thin external benchmark adapter | Planned | Existing page maps/corpus pins | [#166](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/166) |
-| **E2 / S3b** | Reviewed page/reference expectations, quality/language calibration and extraction baseline | Partial: acquisition shipped; labels/calibration pending | E1 | [#115](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/115) |
+| **E1** | Internal artifact schema, strict fidelity checks and thin external benchmark adapter | Implemented (0.16.1): schemas, validator, scorer with defect-sensitivity tests, olmOCR-bench adapter; #166's human-review acceptance is met through E2 | — | [#166](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/166) |
+| **E2 / S3b** | Reviewed page/reference expectations, quality/language calibration and extraction baseline | Partial: manifest, exporter, run harness and agent-reviewed pilot labels (20 pages + 2 whole papers) shipped; human spot-check, third whole paper, baseline report and calibration pending | — | [#115](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/115) |
 | **E3 / S3a** | Source-preserving cleanup and isolated extractor comparisons | Partial: initial experiments retained defaults; new transforms/comparisons planned | E1, E2; S1a for retrieval impact | [#111](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/111) |
 | **E4** | Optional GROBID reference parsing and artifact-based validation | Planned | E1, reviewed reference expectations from E2 | [#83](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/83) extraction scope |
 
@@ -68,7 +73,7 @@ repeated headers and assembled context retain source mappings and count toward c
 |---|---|---|---|---|
 | **S1a** | Reviewed evidence judgments, agent trials and size/boundary/overlap sweeps | Validation pending: harness and first measurements shipped | Frozen Markdown; E1/E2 baseline before default promotion | [#107](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/107) |
 | **S4-structure** | Source-block IDs, hierarchy, neighbor links, section labels and production token budgets; preserve equations/captions/table rows | Partial: pages, spans, heading paths and character chunks shipped | S1a; E1/E2 before default promotion | [#108](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/108) prerequisites; [#81](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/81) section scope |
-| **S4-lexical** | Abstract/tag FTS columns, stemming and prefix/proximity search | Planned | S1a; existing metadata; independent of hierarchy where possible | [#77](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/77) C–F |
+| **S4-lexical** | Abstract/tag FTS columns, stemming and prefix/proximity search | Partial (unreleased): opt-in `*` prefix terms, `near` mode and DOI/ISBN lookup (#77 D, E, part of F); stemming (C) and abstract/tag columns (F) planned | S1a for C and new columns; independent of hierarchy where possible | [#77](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/77) C–F |
 | **S4a** | Bounded parent/neighbor/caption context and deduplicated path assembly, with per-span citations and explicit gaps | Planned: manual navigation exists | S1a, S4-structure | [#108](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/108) assembly scope |
 | **S5** | Section filtering and reference-entry search; raw bibliography search may precede parsed-entry search | Planned | S4-structure section labels; E4 for parsed entries | [#77](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/77) H; [#81](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/81) |
 | **S6** | Optional semantic paper discovery with an independently published local embedding index/tool | Planned: no production backend | Existing metadata/evaluation; S4-structure for passage extension | [#1](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/1) |
@@ -97,14 +102,13 @@ Live collection/tag/note browsing belongs to the companion Zotero MCP server.
 
 | ID | Deliverable | Status | Dependencies | Issue |
 |---|---|---|---|---|
-| **M2** | Release merged Marker removal; security follow-up complete | Implemented; 0.16.0 prepared | Release; zero open alerts verified, #92 closed | [#92](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/92) |
 | **M3** | Opt-in curation group on the existing server: state, jobs, review/approval and guarded apply; default remains read-only | Planned; #34 superseded | #134 WP0–WP6; coordinate Z5 before write implementation where practical | [#134](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/134) |
 | **M4** | Reader comments in a sidecar, linked to verified source passages | Planned | Stable locators/lifecycle across S4-structure; embeddings optional | [#2](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/2), [#3](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/3) |
 | **M5** | Large-library stress validation of opt-in image OCR and announcement decision | Validation pending: implementation packaged, unannounced | Reviewed stress run | [#168](https://github.com/matthiaskloft/zotero-fulltext-mcp/issues/168) |
 
 ## Completed work and decision records
 
-- [Roadmap archive](docs/roadmap-archive.md): completed S1/S2/S3/M1, retired hardening track,
+- [Roadmap archive](docs/roadmap-archive.md): completed S1/S2/S3/M1/M2, retired hardening track,
   dropped migration and historical PRs. Completed #79/#80 work stays complete.
 - [Changelog](CHANGELOG.md): release history and unreleased maintenance, including packaging exclusions.
 - [Extraction-quality plan](docs/extraction-quality-plan.md): internal schema, benchmark/model strategy,

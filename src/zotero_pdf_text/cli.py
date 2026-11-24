@@ -409,9 +409,18 @@ def build_parser() -> argparse.ArgumentParser:
     search.add_argument("--year-to", type=int, default=None, help="Latest publication year, inclusive.")
     search.add_argument(
         "--search-mode",
-        choices=("all_terms", "any_terms", "phrase"),
+        choices=("all_terms", "any_terms", "phrase", "near"),
         default="all_terms",
-        help="Match all normalized terms (default), any term, or the normalized phrase.",
+        help=(
+            "Match all normalized terms (default), any term, the normalized phrase, or all terms "
+            "within --near-distance tokens of each other. A term ending in * matches as a prefix."
+        ),
+    )
+    search.add_argument(
+        "--near-distance",
+        type=int,
+        default=None,
+        help="With --search-mode near: maximum tokens between the terms (default 10, at most 100).",
     )
     search.add_argument("--limit", type=int, default=10, help="Maximum results.")
     search.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
@@ -1397,6 +1406,7 @@ def main(argv: list[str] | None = None) -> int:
                 citation_key=args.citation_key,
                 year_from=args.year_from,
                 year_to=args.year_to,
+                near_distance=args.near_distance,
             )
         except (ArtifactError, IndexSchemaUnsupportedError, ValueError) as exc:
             print(str(exc), file=sys.stderr)

@@ -14,9 +14,10 @@ MCP server for clients such as Claude Code and Codex.
 ## What you can do
 
 - **Search across your papers' full text** and narrow results by author, title, citation key,
-  or publication year.
+  or publication year. Match word beginnings (`psychometr*`) or terms close together in any
+  order (`near` mode).
 - **Read the passages behind an answer**, search within one paper, and retrieve papers by
-  their Better BibTeX citation keys. Source locators let your assistant check that a cited
+  their Better BibTeX citation keys, DOIs or ISBNs. Source locators let your assistant check that a cited
   passage has not changed.
 - **Export BibTeX/BibLaTeX references** for the papers you use, with the optional Better BibTeX
   integration enabled and Zotero running.
@@ -236,6 +237,7 @@ Try asking your assistant:
 - “Find papers about measurement invariance and show the passages supporting your answer.”
 - “Find papers by this author from 2018 to 2024.”
 - “Read the methods section of the paper with citation key `smith2024`.”
+- “Do I have the paper with DOI 10.1000/xyz123 indexed? Summarize its sample.”
 - “Export the BibTeX entries for the papers we used.”
 
 Read the retrieved passages before relying on an answer. PDF extraction can lose equations

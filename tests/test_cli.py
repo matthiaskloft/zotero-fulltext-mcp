@@ -1335,6 +1335,27 @@ class SearchCliTests(unittest.TestCase):
         any_terms = build_parser().parse_args(["search-fts", "--query", "topic", "--search-mode", "any_terms"])
         self.assertEqual(any_terms.search_mode, "any_terms")
 
+        near = build_parser().parse_args(
+            ["search-fts", "--query", "a b", "--search-mode", "near", "--near-distance", "3"]
+        )
+        self.assertEqual((near.search_mode, near.near_distance), ("near", 3))
+
+    def test_near_mode_and_prefix_terms_against_a_real_index(self):
+        from test_mcp_server import _build_index
+
+        with tempfile.TemporaryDirectory() as tmp:
+            _, sqlite_path, _ = _build_index(Path(tmp))
+            for argv, expect_hits in (
+                (["--query", "searchab*", "--json"], True),
+                (["--query", "searchable text", "--search-mode", "near", "--near-distance", "1", "--json"], True),
+                (["--query", "searchable text", "--search-mode", "near", "--near-distance", "0", "--json"], False),
+            ):
+                with self.subTest(argv=argv):
+                    output = io.StringIO()
+                    with redirect_stdout(output):
+                        self.assertEqual(main(["search-fts", "--db", str(sqlite_path), *argv]), 0)
+                    self.assertEqual(bool(json.loads(output.getvalue())["results"]), expect_hits)
+
     def test_json_search_result_reports_mode_and_no_results(self):
         with patch("zotero_pdf_text.cli.search_fts", return_value=[]) as search, patch(
             "zotero_pdf_text.cli.resolve_reader_db_path", side_effect=lambda p: p
@@ -1348,7 +1369,7 @@ class SearchCliTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         search.assert_called_once_with(
             Path("unused.sqlite"), "topic", limit=10, search_mode="any_terms",
-            author=None, title=None, citation_key=None, year_from=None, year_to=None,
+            author=None, title=None, citation_key=None, year_from=None, year_to=None, near_distance=None,
         )
         self.assertEqual(json.loads(output.getvalue()), {"search_mode": "any_terms", "no_results": True, "results": []})
 
@@ -1381,6 +1402,9 @@ class SearchCliTests(unittest.TestCase):
                 ["--year-from", "2000"],
                 ["--query", "searchable", "--year-from", "2020", "--year-to", "2010"],
                 ["--query", "searchable", "--year-from", "0"],
+                ["--query", "se*"],
+                ["--query", "searchable", "--search-mode", "near"],
+                ["--query", "searchable text", "--near-distance", "3"],
             ):
                 with self.subTest(argv=argv):
                     stdout, stderr = io.StringIO(), io.StringIO()

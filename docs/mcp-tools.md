@@ -8,11 +8,18 @@ for guidance matched to its enabled capabilities.
 
 The safe default server exposes:
 
-- `search_fulltext(query="", limit=10, search_mode="all_terms", author="", title="", citation_key="", year_from=None, year_to=None)` — ranked search (one hit per paper,
+- `search_fulltext(query="", limit=10, search_mode="all_terms", author="", title="", citation_key="", year_from=None, year_to=None, near_distance=None)` — ranked search (one hit per paper,
   at most 20) over converted body text and
   indexed title/creator/citation-key metadata, with bounded snippets and `matched_fields` showing
   which indexed fields actually matched. `any_terms` is the broader fallback and `phrase`
-  requires normalized words in order. The optional filters narrow the search before ranking and
+  requires normalized words in order. `near` requires at least two terms within `near_distance`
+  tokens of each other (default 10, 0-100) in any order: narrower than `all_terms`, which accepts
+  the terms anywhere in a ~1,500-character chunk, and looser than `phrase`; it suits hyphenated
+  terms such as `meta-analysis`. `near_distance` is rejected with any other mode. A query term
+  ending in `*` (at least three characters before it) matches every indexed word with that
+  prefix, e.g. `estimat*` finds `estimate` and `estimation`; there is no stemming otherwise. In
+  `phrase` mode only the last term may carry `*`; a `*` inside a word is a separator, as before,
+  and filters never take prefixes. The optional filters narrow the search before ranking and
   limits: `author` (matches every creator role, editors included), `title` and `citation_key`
   each require all their words in that field (whole words in any order, case- and
   diacritic-insensitive: `muller` matches `Müller`, `Mueller` does not; no substring or prefix
@@ -23,8 +30,8 @@ The safe default server exposes:
   are inclusive; records whose year is missing or not a plain four-digit year are excluded
   when a year filter is set, and a year filter needs a query or a field filter. Blank strings
   count as absent. Calls without filters behave as before.
-- `search_within_fulltext(attachment_key, query, search_mode="all_terms", limit=10)` — the same
-  search constrained to one indexed attachment (siblings under the same parent item are not
+- `search_within_fulltext(attachment_key, query, search_mode="all_terms", limit=10, near_distance=None)` — the same
+  search (including `near` and `*` prefixes) constrained to one indexed attachment (siblings under the same parent item are not
   searched). It matches converted body text only, so every hit is a passage rather than a
   metadata match. Returns up to `limit` matching chunks of that attachment, ordered by relevance then
   chunk index, each with the same metadata, provenance and `source_locator` as `search_fulltext`.
@@ -96,6 +103,17 @@ The safe default server exposes:
 
   Keep each passage's `source_locator.chunk_sha256` and pass it back when re-reading that chunk
   to cite it, so a replaced passage answers `stale_locator`.
+- `lookup_identifier(identifier)` — the same lookup for a DOI or ISBN stored in the index. The
+  type is detected: a DOI may be bare, `doi:`-prefixed or a `doi.org` URL and is compared
+  case-insensitively; an ISBN may be ISBN-10 or ISBN-13, with or without hyphens or an `ISBN`
+  label, and must have a valid check digit. Both forms of one book match each other, and a stored
+  ISBN field listing several ISBNs matches any of them. The response has `lookup_citation_key`'s
+  fields (`identifier` in place of `citation_key`) plus `identifier_type` (`doi` or `isbn`) and
+  `normalized` (lower-case DOI or ISBN-13). Chapters of one book can share its ISBN, so expect
+  `ambiguous: true` there. Only the local index is searched: `found: false` means no indexed
+  attachment carries the identifier. Anything that is neither a DOI nor a valid ISBN answers
+  `invalid_identifier`. An index built before ISBNs were stored matches no ISBN until it is rebuilt
+  with `rebuild-index --refresh-zotero-metadata`.
 - `list_timeout_candidates(status="pending", limit=10)` — attachments whose primary extractor exceeded its
   scaled timeout budget and fell back to plain-text extraction (or failed outright). Read-only;
   pass a returned `attachment_key` to `skip_timeout_extraction` or `retry_timeout_extraction`.

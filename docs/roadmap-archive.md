@@ -22,6 +22,10 @@ Since v0.11.0, released work includes:
 - **v0.15.1:** first real-library chunking measurements and improved agent search guidance.
 - **v0.15.2:** reconversion, repair, retries and accepted reviews publish Markdown, images and page
   maps into the canonical library, retaining immutable revisions for existing readers (#93).
+- **v0.16.0 (M2, done):** Marker whole-paper reconversion and its ML dependency tree removed;
+  source distributions exclude local agent directories; security follow-up closed (#92).
+- **v0.16.1 (E1):** extraction-evaluation artifact schemas and validator, strict/tolerant scorer
+  with defect-sensitivity tests, olmOCR-bench export adapter, E2 pilot manifest and draft tooling.
 
 
 ## Track 2: Hardening leftovers

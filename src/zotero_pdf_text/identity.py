@@ -92,6 +92,58 @@ def normalize_doi(value: str | None) -> str:
     return value.casefold()
 
 
+# ISBN-10 (nine digits and a digit or X check character) or ISBN-13 (978/979 prefix), once
+# hyphens and spaces inside the number are removed.
+_ISBN_CANDIDATE_RE = re.compile(r"(?<![0-9Xx])(?:97[89][0-9]{10}|[0-9]{9}[0-9Xx])(?![0-9Xx])")
+_ISBN_LABEL_RE = re.compile(r"^\s*isbn(?:-1[03])?\s*:?\s*", flags=re.I)
+
+
+def _isbn13_check_digit(first12: str) -> str:
+    total = sum(int(ch) * (1 if index % 2 == 0 else 3) for index, ch in enumerate(first12))
+    return str((10 - total % 10) % 10)
+
+
+def _isbn10_is_valid(value: str) -> bool:
+    total = sum((10 - index) * (10 if ch in "Xx" else int(ch)) for index, ch in enumerate(value))
+    return total % 11 == 0
+
+
+def _as_isbn13(value: str) -> str:
+    """ISBN-13 form of a 10- or 13-character candidate; an ISBN-10 gets the 978 prefix."""
+    if len(value) == 13:
+        return value
+    first12 = "978" + value[:9]
+    return first12 + _isbn13_check_digit(first12)
+
+
+def normalize_isbn(value: str | None) -> str:
+    """Return the ISBN-13 form of one ISBN, or "" when value is not a valid ISBN-10 or ISBN-13.
+
+    Accepts an optional "ISBN", "ISBN-10:" or "ISBN-13:" label and hyphens or spaces between the
+    digits. The check digit must be valid, so a mistyped number is not silently matched.
+    """
+    if not value:
+        return ""
+    compact = re.sub(r"[\s\-\u2010-\u2015]", "", _ISBN_LABEL_RE.sub("", value))
+    if not _ISBN_CANDIDATE_RE.fullmatch(compact):
+        return ""
+    if len(compact) == 13:
+        return compact if _isbn13_check_digit(compact[:12]) == compact[12] else ""
+    return _as_isbn13(compact.upper()) if _isbn10_is_valid(compact) else ""
+
+
+def extract_isbns(value: str | None) -> list[str]:
+    """ISBN-13 forms of every ISBN in a stored field (Zotero may hold several, space-separated).
+
+    Stored values are not checksum-validated: the field is what the library says, and a lookup
+    with a valid ISBN can only match a stored number with the same digits.
+    """
+    if not value:
+        return []
+    compact = re.sub(r"[\-\u2010-\u2015]", "", value)
+    return sorted({_as_isbn13(match.group(0).upper()) for match in _ISBN_CANDIDATE_RE.finditer(compact)})
+
+
 def extract_year(value: str | None) -> str:
     if not value:
         return ""

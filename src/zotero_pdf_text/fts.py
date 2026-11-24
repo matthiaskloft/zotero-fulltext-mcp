@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Iterable, Literal, TypedDict, cast
 
 from ._atomic import replace_with_retry
+from .identity import extract_isbns, normalize_doi, normalize_isbn
 from .pages import PageMap, page_range, validate_page_map
 from .quality import detect_language, quality_signals_json, score_extraction
 from .zotero_db import read_only_uri
@@ -34,8 +35,19 @@ MAX_SEARCH_RESULTS = 100
 SEARCH_CANDIDATE_MULTIPLIER = 5
 MIN_SEARCH_CANDIDATES = 50
 MAX_SEARCH_CANDIDATES = 500
-SearchMode = Literal["all_terms", "any_terms", "phrase"]
-SEARCH_MODES = frozenset({"all_terms", "any_terms", "phrase"})
+SearchMode = Literal["all_terms", "any_terms", "phrase", "near"]
+SEARCH_MODES = frozenset({"all_terms", "any_terms", "phrase", "near"})
+# search_mode "near": every term within this many tokens of the others (FTS5 NEAR). The default is
+# FTS5's own; the maximum keeps "near" meaningfully narrower than all_terms over a whole chunk.
+DEFAULT_NEAR_DISTANCE = 10
+MAX_NEAR_DISTANCE = 100
+# A query term may end in "*" to match every indexed token starting with it. Short prefixes would
+# match a large share of the vocabulary, so a prefix needs at least this many word characters.
+MIN_PREFIX_CHARS = 3
+PREFIX_MARKER = "*"
+# A word, optionally followed by a "*" that is not itself followed by a word character, so
+# "psychometr*" is a prefix term while "a*b" stays the two plain terms it always was.
+_QUERY_TERM_RE = re.compile(r"\w+(?:\*(?!\w))?", flags=re.UNICODE)
 # Starting guess for how many characters consecutive stored chunks advance by. An index is not
 # required to have been built with the default chunk_chars/overlap_chars, so this is only an
 # initial estimate for the first fetch in _fetch_covering_chunks below, never assumed correct.
@@ -343,6 +355,7 @@ def search_fts(
     citation_key: str | None = None,
     year_from: int | None = None,
     year_to: int | None = None,
+    near_distance: int | None = None,
 ) -> list[SearchResult]:
     """Search the index; with attachment_key, rank that one attachment's chunks instead.
 
@@ -361,14 +374,21 @@ def search_fts(
     (hits then point at chunk 0 as a navigation start, not as evidence). year_from/year_to bound
     metadata.year inclusively and exclude records whose year is not a plain four-digit year. A
     year filter alone is rejected. Filters cannot be combined with attachment_key.
+
+    Query terms (not filters) may end in "*" for prefix matching (at least MIN_PREFIX_CHARS word
+    characters before it; in phrase mode only the last term). search_mode "near" requires every
+    term within near_distance tokens (default DEFAULT_NEAR_DISTANCE) of the others, between
+    all_terms (anywhere in the chunk) and phrase (adjacent, in order); near_distance is rejected
+    with any other mode.
     """
     terms, field_terms, year_from, year_to = _validate_search_request(
         query, limit, search_mode, author=author, title=title, citation_key=citation_key,
         year_from=year_from, year_to=year_to,
     )
+    near_distance = validate_near_distance(near_distance, search_mode)
     if attachment_key is not None and (field_terms or year_from is not None or year_to is not None):
         raise ValueError("attachment_key cannot be combined with author, title, citation_key or year filters")
-    match_query = _compose_match_query(terms, search_mode, field_terms)
+    match_query = _compose_match_query(terms, search_mode, field_terms, near_distance=near_distance)
     # A metadata-only match (field filter, no query) scores every chunk of a record on the same
     # metadata, so bm25 length normalization would pick an arbitrary chunk; take chunk 0, the
     # natural navigation start.
@@ -1019,6 +1039,95 @@ def lookup_citation_key(
         record["chunk_count"] = int(row["chunk_count"])
         records.append(record)
     return {"records": records, "truncated": len(rows) > limit, "parent_keys": parent_keys}
+
+
+IdentifierType = Literal["doi", "isbn"]
+MAX_IDENTIFIER_CHARS = 256
+
+
+def parse_identifier(identifier: str) -> tuple[IdentifierType, str]:
+    """Classify identifier as a DOI or an ISBN and return its normalized form.
+
+    A DOI (bare, "doi:" or a doi.org URL) is case-folded, as DOIs are case-insensitive. An ISBN
+    is returned in ISBN-13 form, so ISBN-10 and ISBN-13 spellings of one book match each other.
+    Anything else, including an ISBN with a wrong check digit, raises ValueError.
+    """
+    if not isinstance(identifier, str) or not identifier.strip() or len(identifier) > MAX_IDENTIFIER_CHARS:
+        raise ValueError(f"identifier must contain 1 to {MAX_IDENTIFIER_CHARS} characters")
+    doi = normalize_doi(identifier)
+    if re.fullmatch(r"10\.\d{4,9}/\S+", doi):
+        return "doi", doi
+    isbn = normalize_isbn(identifier)
+    if isbn:
+        return "isbn", isbn
+    raise ValueError("identifier must be a DOI (10.xxxx/...) or an ISBN-10/ISBN-13 with a valid check digit")
+
+
+def lookup_identifier(
+    db_path: Path,
+    identifier: str,
+    *,
+    limit: int = DEFAULT_CONTEXT_RECORD_LIMIT,
+) -> dict[str, object]:
+    """Return every indexed attachment whose stored DOI or ISBN equals ``identifier``.
+
+    Exact after normalization (see parse_identifier): a stored DOI is compared in the same
+    normalized form, and a stored ISBN field matches when any ISBN it lists does. Nothing is
+    looked up online. The result has the shape of lookup_citation_key's plus ``identifier_type``
+    and ``normalized``. An index that predates the isbn column matches no ISBN.
+
+    The metadata table holds one row per attachment, so normalizing every non-empty value in
+    Python is a cheap scan, and it needs no new index or schema change.
+    """
+    if limit < 1:
+        raise ValueError("limit must be at least 1")
+    identifier_type, normalized = parse_identifier(identifier)
+    con = connect_readonly(db_path)
+    con.row_factory = sqlite3.Row
+    try:
+        columns = {row[1] for row in con.execute("PRAGMA table_info(metadata)").fetchall()}
+        if identifier_type not in columns:
+            matching_ids: list[int] = []
+        else:
+            candidates = con.execute(
+                f"SELECT record_id, {identifier_type} AS value FROM metadata WHERE {identifier_type} != ''"
+            ).fetchall()
+            if identifier_type == "doi":
+                matching_ids = [int(row[0]) for row in candidates if normalize_doi(str(row[1])) == normalized]
+            else:
+                matching_ids = [int(row[0]) for row in candidates if normalized in extract_isbns(str(row[1]))]
+        rows: list[sqlite3.Row] = []
+        for start in range(0, len(matching_ids), INDEXED_STATE_BATCH_SIZE):
+            batch = matching_ids[start : start + INDEXED_STATE_BATCH_SIZE]
+            placeholders = ", ".join("?" for _ in batch)
+            rows.extend(
+                con.execute(
+                    f"""
+                    SELECT metadata.*, (
+                        SELECT COUNT(*) FROM chunks WHERE chunks.record_id = metadata.record_id
+                    ) AS chunk_count
+                    FROM metadata
+                    WHERE record_id IN ({placeholders})
+                    """,
+                    batch,
+                ).fetchall()
+            )
+    finally:
+        con.close()
+    rows.sort(key=lambda row: (str(row["zotero_parent_key"]), str(row["zotero_attachment_key"])))
+    parent_keys = {str(row["zotero_parent_key"]) for row in rows}
+    records = []
+    for row in rows[:limit]:
+        record = {**_metadata_dict(row), **_extended_metadata(row)}
+        record["chunk_count"] = int(row["chunk_count"])
+        records.append(record)
+    return {
+        "identifier_type": identifier_type,
+        "normalized": normalized,
+        "records": records,
+        "truncated": len(rows) > limit,
+        "parent_keys": sorted(parent_keys)[:MAX_LOOKUP_PARENT_KEYS],
+    }
 
 
 # Keys per `IN (...)` query. Older SQLite builds cap bound parameters at 999, and the candidate
@@ -1796,22 +1905,61 @@ def _validate_chunking(chunk_chars: int, overlap_chars: int) -> None:
 _FILTER_COLUMNS = {"author": "creators", "title": "title", "citation_key": "citation_key"}
 
 
-def _normalize_terms(value: str | None, field: str) -> list[str]:
-    """Split a query or filter into searchable word terms; None or blank means not supplied."""
+def _normalize_terms(value: str | None, field: str, *, allow_prefix: bool = False) -> list[str]:
+    """Split a query or filter into searchable word terms; None or blank means not supplied.
+
+    With allow_prefix (the query, never a field filter), a term keeps a trailing PREFIX_MARKER.
+    Without it a "*" is a separator, as it always was.
+    """
     if value is None:
         return []
     if not isinstance(value, str) or len(value) > MAX_QUERY_CHARS:
         raise ValueError(f"{field} must contain 1 to {MAX_QUERY_CHARS} characters")
     if not value.strip():
         return []
-    terms = re.findall(r"[\w]+", value, flags=re.UNICODE)
+    pattern = _QUERY_TERM_RE if allow_prefix else re.compile(r"[\w]+", flags=re.UNICODE)
+    terms = pattern.findall(value)
     if not terms:
         raise ValueError(f"{field} must contain at least one searchable term")
     if len(terms) > MAX_QUERY_TERMS:
         raise ValueError(f"{field} may contain at most {MAX_QUERY_TERMS} searchable terms")
-    if any(len(term) > MAX_QUERY_TERM_CHARS for term in terms):
+    if any(len(term.removesuffix(PREFIX_MARKER)) > MAX_QUERY_TERM_CHARS for term in terms):
         raise ValueError(f"{field} terms may contain at most {MAX_QUERY_TERM_CHARS} characters")
+    if any(
+        term.endswith(PREFIX_MARKER) and len(term) - len(PREFIX_MARKER) < MIN_PREFIX_CHARS for term in terms
+    ):
+        raise ValueError(f"a prefix term needs at least {MIN_PREFIX_CHARS} characters before '{PREFIX_MARKER}'")
     return terms
+
+
+def parse_query_terms(query: str, search_mode: str) -> list[str]:
+    """Validate a query for search_mode and return its terms; raises ValueError with the reason.
+
+    Shared with the MCP boundary so both reject exactly the same queries with the same message.
+    """
+    terms = _normalize_terms(query, "query", allow_prefix=True)
+    if not terms:
+        raise ValueError("query must contain at least one searchable term")
+    _check_terms_for_mode(terms, search_mode)
+    return terms
+
+
+def _check_terms_for_mode(terms: list[str], search_mode: str) -> None:
+    if search_mode == "phrase" and any(term.endswith(PREFIX_MARKER) for term in terms[:-1]):
+        raise ValueError(f"in phrase mode only the last term may end in '{PREFIX_MARKER}'")
+    if search_mode == "near" and len(terms) < 2:
+        raise ValueError("search_mode near needs at least two query terms")
+
+
+def validate_near_distance(near_distance: object, search_mode: str) -> int:
+    """Return the NEAR distance for search_mode near; reject one given with any other mode."""
+    if near_distance is None:
+        return DEFAULT_NEAR_DISTANCE
+    if search_mode != "near":
+        raise ValueError("near_distance applies only to search_mode near")
+    if isinstance(near_distance, bool) or not isinstance(near_distance, int) or not 0 <= near_distance <= MAX_NEAR_DISTANCE:
+        raise ValueError(f"near_distance must be an integer between 0 and {MAX_NEAR_DISTANCE}")
+    return near_distance
 
 
 def _validate_year(value: object, field: str) -> int | None:
@@ -1833,7 +1981,7 @@ def _validate_search_request(
     year_from: object = None,
     year_to: object = None,
 ) -> tuple[list[str], dict[str, list[str]], int | None, int | None]:
-    terms = _normalize_terms(query, "query")
+    terms = _normalize_terms(query, "query", allow_prefix=True)
     field_terms = {
         name: normalized
         for name, value in (("author", author), ("title", title), ("citation_key", citation_key))
@@ -1845,6 +1993,8 @@ def _validate_search_request(
         raise ValueError(f"limit must be between 1 and {MAX_SEARCH_RESULTS}")
     if search_mode not in SEARCH_MODES:
         raise ValueError(f"search_mode must be one of: {', '.join(sorted(SEARCH_MODES))}")
+    if terms:
+        _check_terms_for_mode(terms, search_mode)
     year_low = _validate_year(year_from, "year_from")
     year_high = _validate_year(year_to, "year_to")
     if year_low is not None and year_high is not None and year_low > year_high:
@@ -1852,23 +2002,42 @@ def _validate_search_request(
     return terms, field_terms, year_low, year_high
 
 
-def _match_query(terms: list[str], search_mode: str) -> str:
+def _quote_term(term: str) -> str:
+    r"""One FTS5 phrase for a term: quoted (terms are \w+, so no quote can occur), "*" kept outside."""
+    if term.endswith(PREFIX_MARKER):
+        return '"' + term.removesuffix(PREFIX_MARKER) + '"' + PREFIX_MARKER
+    return '"' + term + '"'
+
+
+def _match_query(terms: list[str], search_mode: str, *, near_distance: int = DEFAULT_NEAR_DISTANCE) -> str:
     if search_mode == "phrase":
-        return '"' + " ".join(terms) + '"'
+        # FTS5 allows a prefix only on a phrase's last token: '"one two thr" *'.
+        last = terms[-1]
+        prefix = PREFIX_MARKER if last.endswith(PREFIX_MARKER) else ""
+        words = [*terms[:-1], last.removesuffix(PREFIX_MARKER)]
+        return '"' + " ".join(words) + '"' + prefix
+    if search_mode == "near":
+        return "NEAR(" + " ".join(_quote_term(term) for term in terms) + f", {int(near_distance)})"
     operator = " AND " if search_mode == "all_terms" else " OR "
-    return operator.join(f'"{term}"' for term in terms)
+    return operator.join(_quote_term(term) for term in terms)
 
 
-def _compose_match_query(terms: list[str], search_mode: str, field_terms: dict[str, list[str]]) -> str:
+def _compose_match_query(
+    terms: list[str],
+    search_mode: str,
+    field_terms: dict[str, list[str]],
+    *,
+    near_distance: int = DEFAULT_NEAR_DISTANCE,
+) -> str:
     """Build the FTS5 MATCH string; with field filters the query is restricted to body text.
 
     search_mode applies to the query only; every filter requires all of its words in its column.
     """
     if not field_terms:
-        return _match_query(terms, search_mode)
+        return _match_query(terms, search_mode, near_distance=near_distance)
     parts = []
     if terms:
-        parts.append(f"text : ({_match_query(terms, search_mode)})")
+        parts.append(f"text : ({_match_query(terms, search_mode, near_distance=near_distance)})")
     for name, words in field_terms.items():
         quoted = " AND ".join('"' + word + '"' for word in words)
         parts.append(f"{_FILTER_COLUMNS[name]} : ({quoted})")
