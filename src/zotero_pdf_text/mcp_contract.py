@@ -65,17 +65,23 @@ from .fts import (
     MAX_QUERY_CHARS,
     MAX_QUERY_TERM_CHARS,
     MAX_QUERY_TERMS,
+    MAX_NEAR_DISTANCE,
     SEARCH_MODES,
     SearchMode,
     SearchResult,
     StaleLocatorError,
+    StemmingUnavailableError,
     get_fulltext,
     get_page as get_page_fn,
     get_item_context as get_item_context_fn,
     get_markdown_path,
     indexed_state_by_attachment,
     lookup_citation_key as lookup_citation_key_fn,
+    lookup_identifier as lookup_identifier_fn,
+    MAX_IDENTIFIER_CHARS,
+    parse_query_terms,
     search_fts,
+    validate_near_distance,
 )
 from .orphan_candidates import list_candidates as list_orphan_candidate_records
 from .timeout_candidates import (
@@ -93,6 +99,8 @@ if TYPE_CHECKING:
     YearInput = object
     LimitInput = object
     SearchModeInput = object
+    NearDistanceInput = object
+    StemmingInput = object
     AttachmentKeyInput = object
     MaxCharsInput = object
     ChunkIndexInput = object
@@ -103,6 +111,7 @@ if TYPE_CHECKING:
     PassageImageResult = object
     ContextKeyInput = object
     CitationKeyInput = object
+    IdentifierInput = object
     CitationKeysInput = object
     ConfirmationInput = object
     TimeoutCandidateStatusInput = object
@@ -146,6 +155,7 @@ DEFAULT_MCP_TOOL_NAMES = (
     "get_passage_image",
     "get_item_context",
     "lookup_citation_key",
+    "lookup_identifier",
     "list_timeout_candidates",
     "list_orphan_candidates",
     "library_status",
@@ -402,6 +412,17 @@ class CitationKeyLookupResponse(TypedDict):
     records: list[CitationKeyRecord]
 
 
+class IdentifierLookupResponse(TypedDict):
+    identifier: str
+    identifier_type: str
+    normalized: str
+    found: bool
+    parent_keys: list[str]
+    ambiguous: bool
+    truncated: bool
+    records: list[CitationKeyRecord]
+
+
 class BibtexResponse(TypedDict):
     citation_keys: list[str]
     translator: str
@@ -487,6 +508,7 @@ class IndexSnapshotStats(TypedDict):
     by_extraction_quality: dict[str, int]
     schema_current: bool
     zotero_metadata_populated: int
+    stemmed_search: bool
 
 
 class LibraryHealth(TypedDict):
@@ -731,6 +753,11 @@ def create_server(
                 ],
                 LimitInput=Annotated[object, WithJsonSchema({"type": "integer", "minimum": 1, "maximum": MAX_SEARCH_RESULTS})],
                 SearchModeInput=Annotated[object, WithJsonSchema({"enum": sorted(SEARCH_MODES)})],
+                NearDistanceInput=Annotated[
+                    object,
+                    WithJsonSchema({"anyOf": [{"type": "integer", "minimum": 0, "maximum": MAX_NEAR_DISTANCE}, {"type": "null"}]}),
+                ],
+                StemmingInput=Annotated[object, WithJsonSchema({"type": "boolean"})],
                 AttachmentKeyInput=Annotated[object, WithJsonSchema({"type": "string", "maxLength": MAX_CITATION_KEY_CHARS})],
                 MaxCharsInput=Annotated[object, WithJsonSchema({"type": "integer", "minimum": 1, "maximum": MAX_RETRIEVED_CHARS})],
                 ChunkIndexInput=Annotated[
@@ -749,6 +776,7 @@ def create_server(
                 ImageLinkInput=Annotated[object, WithJsonSchema({"type": "string", "minLength": 1, "maxLength": MAX_IMAGE_LINK_CHARS})],
                 ContextKeyInput=Annotated[object, WithJsonSchema({"anyOf": [{"type": "string", "maxLength": MAX_CITATION_KEY_CHARS}, {"type": "null"}]})],
                 CitationKeyInput=Annotated[object, WithJsonSchema({"type": "string", "minLength": 1, "maxLength": MAX_CITATION_KEY_CHARS})],
+                IdentifierInput=Annotated[object, WithJsonSchema({"type": "string", "minLength": 1, "maxLength": MAX_IDENTIFIER_CHARS})],
                 CitationKeysInput=Annotated[
                     object,
                     WithJsonSchema({"type": "array", "minItems": 1, "maxItems": MAX_CITATION_KEYS, "items": {"type": "string", "maxLength": MAX_CITATION_KEY_CHARS}}),
@@ -802,12 +830,18 @@ def create_server(
         citation_key: FilterInput = "",
         year_from: YearInput = None,
         year_to: YearInput = None,
+        near_distance: NearDistanceInput = None,
+        stemming: StemmingInput = False,
     ) -> SearchResponse:
         """Search title, creators, citation key, and converted body text.
 
         search_mode: "all_terms" (default) requires every normalized query term, so pass 2-4
         distinctive terms rather than a question; "any_terms" is a broader fallback that matches any
-        term; "phrase" requires the normalized terms in order.
+        term; "phrase" requires the normalized terms in order; "near" requires 2+ terms within
+        near_distance tokens (default 10) of each other, in any order. A query term ending in "*"
+        (3+ letters first) matches every word with that prefix. stemming=true matches English
+        word forms (model, models, modeling); try it when exact words find too little. It
+        cannot be combined with "*".
         Results are discovery candidates: retrieve the returned source_locator.chunk_index before
         treating a hit as body-text evidence. matched_fields identifies why the record matched;
         for metadata-only hits, the chunk locator is a navigation starting point rather than proof
@@ -825,6 +859,12 @@ def create_server(
         def operation() -> SearchResponse:
             validated_mode = _validate_search_mode(search_mode)
             validated_query = _validate_optional_query(query)
+            validated_stemming = _validate_stemming(stemming)
+            if validated_query is not None:
+                _validate_query_for_mode(validated_query, validated_mode, validated_stemming)
+            elif near_distance is not None:
+                raise PublicMcpError("invalid_near_distance", "near_distance needs a query.")
+            validated_distance = _validate_near_distance(near_distance, validated_mode)
             validated_limit = _validate_limit(limit)
             filters = {
                 "author": _validate_search_filter(author, "author"),
@@ -847,6 +887,8 @@ def create_server(
                 citation_key=filters["citation_key"],
                 year_from=validated_from,
                 year_to=validated_to,
+                near_distance=validated_distance,
+                stemming=validated_stemming,
             )
             return {
                 "search_mode": validated_mode,
@@ -862,14 +904,16 @@ def create_server(
         query: QueryInput,
         search_mode: SearchModeInput = "all_terms",
         limit: LimitInput = 10,
+        near_distance: NearDistanceInput = None,
+        stemming: StemmingInput = False,
     ) -> SearchResponse:
         """Search the converted body text of one indexed attachment only.
 
         Title, creator and citation-key terms are not matched here, so every hit is a body-text
         passage. Returns up to limit distinct matching chunks of that attachment, ordered by
-        relevance and
-        then chunk_index; other attachments, including siblings under the same parent, are never
-        searched. search_mode behaves as in search_fulltext. An attachment with no match returns
+        relevance and then chunk_index; other attachments, including siblings under the same
+        parent, are never searched. search_mode, near_distance, stemming and "*" prefixes behave as
+        in search_fulltext. An attachment with no match returns
         no_results; an attachment key absent from the index answers attachment_not_found. Retrieve
         a hit with get_fulltext_chunk using its source_locator.chunk_index and chunk_sha256.
         """
@@ -877,12 +921,17 @@ def create_server(
         def operation() -> SearchResponse:
             validated_key = _validate_attachment_key(attachment_key)
             validated_mode = _validate_search_mode(search_mode)
+            validated_query = _validate_query(query)
+            validated_stemming = _validate_stemming(stemming)
+            _validate_query_for_mode(validated_query, validated_mode, validated_stemming)
             results = search_fts(
                 _resolve_request_db(db_path),
-                _validate_query(query),
+                validated_query,
                 limit=_validate_limit(limit),
                 search_mode=validated_mode,
                 attachment_key=validated_key,
+                near_distance=_validate_near_distance(near_distance, validated_mode),
+                stemming=validated_stemming,
             )
             return {
                 "search_mode": validated_mode,
@@ -1061,6 +1110,41 @@ def create_server(
                 validated,
                 lookup_citation_key_fn(_resolve_request_db(db_path), validated, limit=MAX_CONTEXT_RECORDS),
             )
+
+        return _public_call(operation)
+
+    @mcp.tool(annotations=READ_ONLY_TOOL_ANNOTATIONS)
+    def lookup_identifier(identifier: IdentifierInput) -> IdentifierLookupResponse:
+        """Return indexed attachments whose stored DOI or ISBN matches identifier.
+
+        identifier is a DOI (bare, doi: or a doi.org URL; case is ignored) or an ISBN-10/ISBN-13
+        (hyphens allowed, check digit verified; both forms of one book match). The type is
+        detected and reported as identifier_type with the normalized value. Only the local index
+        is searched, never the internet: found=false means no indexed attachment carries that
+        identifier, not that the work does not exist. A book's chapters can share its ISBN, so
+        several parents may match (ambiguous=true). To read a match, call get_fulltext_chunk with
+        its attachment_key and chunk_index=0 (when chunk_count > 0); when truncated is true, use
+        get_item_context(parent_key=...).
+        """
+        def operation() -> IdentifierLookupResponse:
+            if not isinstance(identifier, str):
+                raise PublicMcpError("invalid_identifier", "identifier must be a string.")
+            db = _resolve_request_db(db_path)
+            try:
+                lookup = lookup_identifier_fn(db, identifier, limit=MAX_CONTEXT_RECORDS)
+            except ValueError as exc:
+                raise PublicMcpError("invalid_identifier", f"{str(exc)[:1].upper()}{str(exc)[1:]}.") from None
+            response = serialize_citation_key_lookup(identifier.strip(), lookup)
+            return {
+                "identifier": response["citation_key"],
+                "identifier_type": str(lookup["identifier_type"]),
+                "normalized": str(lookup["normalized"]),
+                "found": response["found"],
+                "parent_keys": response["parent_keys"],
+                "ambiguous": response["ambiguous"],
+                "truncated": response["truncated"],
+                "records": response["records"],
+            }
 
         return _public_call(operation)
 
@@ -1310,7 +1394,7 @@ def build_mcp_instructions(
     tool_map = [
         "search_fulltext and search_within_fulltext find hits",
         "get_fulltext_chunk reads a passage and get_page a whole PDF page",
-        "get_item_context and lookup_citation_key resolve items and citation keys",
+        "get_item_context, lookup_citation_key and lookup_identifier resolve items, citation keys and DOIs/ISBNs",
         "library_status says how current the index is",
         "list_timeout_candidates and list_orphan_candidates list conversion follow-ups",
     ]
@@ -1393,7 +1477,12 @@ def guide_response(
             "names, numbers) and search_mode all_terms (the default: every normalized term must "
             "match); leave out question words and generic words such as how, effect or results. "
             "If nothing matches, drop the most generic term before switching to any_terms, which "
-            "broadens a search that found too little; use phrase for exact wording in order. "
+            "broadens a search that found too little; use phrase for exact wording in order "
+            "(including a hyphenated term such as meta-analysis), and near (with near_distance, "
+            "default 10 tokens) for terms close together in any order. A term ending in * "
+            "matches word endings (estimat* finds estimate and estimation). stemming=true "
+            "matches English word forms (model, models, modeling) in every mode, but not "
+            "together with *; leave it off for names, identifiers and exact wording. "
             "Passages are about 1,500 characters, so an answer often sits in the next or previous "
             "chunk of a hit: read the neighbours (next_chunk_index) before concluding a paper does "
             "not say it, and in a paper that is clearly right use search_within_fulltext to find "
@@ -1415,8 +1504,8 @@ def guide_response(
             "under the citation you formed; search again. Use get_item_context for bibliographic "
             "and extraction context. For a paper known by its citation key, lookup_citation_key "
             "returns its attachment keys (ambiguous is true when several papers share the key; do "
-            "not guess which was meant); read chunk 0 with get_fulltext_chunk and follow "
-            "next_chunk_index. Cite human-readable bibliographic metadata (title, creators, year, "
+            "not guess which was meant); lookup_identifier does the same for a DOI or ISBN. Read "
+            "chunk 0 with get_fulltext_chunk and follow next_chunk_index. Cite human-readable bibliographic metadata (title, creators, year, "
             "DOI or citation key) and retain the attachment key and source locator for "
             "traceability; the attachment key is a retrieval handle, not a citation. A passage's "
             "pdf_pages are measured physical PDF page indices (1-based, not printed page numbers) "
@@ -1440,7 +1529,8 @@ def guide_response(
             "missing from search because extraction failed, not because the paper lacks the "
             "passage. schema_current false means the index predates newer fields and needs a rebuild; "
             "zotero_metadata_populated counts records that hold Zotero fields, and is 0 until a "
-            "metadata refresh has run."
+            "metadata refresh has run. stemmed_search false means stemming=true searches answer "
+            "stemming_unavailable until a plain rebuild-index."
         )
     elif topic == "writes":
         text = (
@@ -1675,6 +1765,7 @@ def _index_snapshot_stats(db_path: Path) -> IndexSnapshotStats:
         by_extraction_quality=stats["by_extraction_quality"],
         schema_current=stats["schema_current"],
         zotero_metadata_populated=stats["zotero_metadata_populated"],
+        stemmed_search=stats["stemmed_search"],
     )
 
 
@@ -2500,6 +2591,12 @@ def _public_call(operation: Callable[[], Any], *, integration: bool = False) -> 
         ) from None
     except FileNotFoundError:
         raise PublicMcpError("database_unavailable", "The local full-text index is unavailable.") from None
+    except StemmingUnavailableError:
+        raise PublicMcpError(
+            "stemming_unavailable",
+            "This index was built before stemmed search existed. Search without stemming, or ask "
+            "the user to rebuild it with the CLI's rebuild-index command.",
+        ) from None
     except StaleLocatorError as exc:
         raise PublicMcpError(
             "stale_locator",
@@ -2568,6 +2665,29 @@ def _validate_optional_query(query: object) -> str | None:
     if isinstance(query, str) and not query.strip():
         return None
     return _validate_query(query)
+
+
+def _validate_query_for_mode(query: str, search_mode: SearchMode, stemming: bool = False) -> None:
+    """Prefix, stemming and near-mode rules, checked by the same code search_fts uses."""
+    try:
+        parse_query_terms(query, search_mode, stemming=stemming)
+    except ValueError as exc:
+        raise PublicMcpError("invalid_query", f"{str(exc)[:1].upper()}{str(exc)[1:]}.") from None
+
+
+def _validate_near_distance(near_distance: object, search_mode: SearchMode) -> int | None:
+    if near_distance is None:
+        return None
+    try:
+        return validate_near_distance(near_distance, search_mode)
+    except ValueError as exc:
+        raise PublicMcpError("invalid_near_distance", f"{str(exc)[:1].upper()}{str(exc)[1:]}.") from None
+
+
+def _validate_stemming(stemming: object) -> bool:
+    if not isinstance(stemming, bool):
+        raise PublicMcpError("invalid_stemming", "stemming must be true or false.")
+    return stemming
 
 
 def _validate_search_filter(value: object, field: str) -> str | None:

@@ -219,6 +219,58 @@ class ConvertIndexServeTests(unittest.TestCase):
             self.assertIn("Appendix on a second page.", page.structuredContent["text"])
             self.assertNotIn("zebrafinch", page.structuredContent["text"])
 
+    def test_prefix_near_stemming_and_identifier_lookup_through_the_registered_server(self):
+        """The #77 search additions on an index `convert-new` published, over real stdio."""
+        with tempfile.TemporaryDirectory() as tmp:
+            library = Library(Path(tmp))
+            library.add(FIRST)
+            library.add(SECOND)
+            library.convert_new()
+
+            server_command, enabled_tools = library.registration()
+            self.assertIn("lookup_identifier", enabled_tools)
+            calls = [
+                ("search_fulltext", {"query": "zebrafin*"}),
+                ("search_fulltext", {"query": "zebrafinch estimator", "search_mode": "near"}),
+                ("search_fulltext", {"query": "estimator zebrafinch", "search_mode": "near", "near_distance": 0}),
+                ("search_fulltext", {"query": "estimator heteroscedasticity", "search_mode": "near", "near_distance": 0}),
+                ("search_fulltext", {"query": "estimators"}),
+                ("search_fulltext", {"query": "estimators", "stemming": True}),
+                ("search_within_fulltext", {"attachment_key": FIRST.attachment_key, "query": "drive", "stemming": True}),
+                ("lookup_identifier", {"identifier": "https://doi.org/" + FIRST.doi.upper()}),
+                ("lookup_identifier", {"identifier": "10.1000/absent"}),
+                ("search_fulltext", {"query": "zebrafin*", "stemming": True}),
+                ("library_status", {}),
+            ]
+            _, results = _call_server(server_command, calls)
+            (prefix, near, near_adjacent, near_too_far, exact, stemmed, within_stemmed,
+             doi_hit, doi_miss, prefix_with_stemming, status) = results
+
+            self.assertEqual(_keys(prefix), [FIRST.attachment_key])
+            self.assertEqual(_keys(near), [FIRST.attachment_key])
+            # "zebrafinch estimator" are adjacent, in any order; "heteroscedasticity" is three words away.
+            self.assertEqual(_keys(near_adjacent), [FIRST.attachment_key])
+            self.assertEqual(_keys(near_too_far), [])
+            # The stemmed table is built and published by convert-new, not only by test helpers.
+            self.assertEqual(_keys(exact), [])
+            self.assertEqual(_keys(stemmed), [FIRST.attachment_key])
+            self.assertIn("[estimator]", stemmed.structuredContent["results"][0]["snippet"])
+            self.assertEqual(_keys(within_stemmed), [FIRST.attachment_key])
+            # The DOI travels from the Zotero database into the published index.
+            self.assertFalse(doi_hit.isError)
+            self.assertEqual(doi_hit.structuredContent["identifier_type"], "doi")
+            self.assertEqual(doi_hit.structuredContent["normalized"], FIRST.doi)
+            self.assertEqual([r["attachment_key"] for r in doi_hit.structuredContent["records"]], [FIRST.attachment_key])
+            self.assertFalse(doi_miss.structuredContent["found"])
+            self.assertTrue(prefix_with_stemming.isError)
+            self.assertIn("invalid_query", json.dumps([c.model_dump() for c in prefix_with_stemming.content]))
+            self.assertIs(status.structuredContent["index"]["stemmed_search"], True)
+
+            # A located stemmed hit reads back through the normal verified retrieval path.
+            _, (passage,) = _call_server(server_command, [_fetch(stemmed.structuredContent["results"][0])])
+            self.assertFalse(passage.isError)
+            self.assertIn("estimator", passage.structuredContent["text"])
+
     def test_incremental_conversion_and_reindex_keep_old_locators_valid(self):
         with tempfile.TemporaryDirectory() as tmp:
             library = Library(Path(tmp))

@@ -57,6 +57,7 @@ from .fts import (
     list_extraction_quality,
     index_statistics,
     get_fulltext,
+    StemmingUnavailableError,
     search_fts,
 )
 from .ingestion import dry_run_ingest, ingest_approved
@@ -409,9 +410,23 @@ def build_parser() -> argparse.ArgumentParser:
     search.add_argument("--year-to", type=int, default=None, help="Latest publication year, inclusive.")
     search.add_argument(
         "--search-mode",
-        choices=("all_terms", "any_terms", "phrase"),
+        choices=("all_terms", "any_terms", "phrase", "near"),
         default="all_terms",
-        help="Match all normalized terms (default), any term, or the normalized phrase.",
+        help=(
+            "Match all normalized terms (default), any term, the normalized phrase, or all terms "
+            "within --near-distance tokens of each other. A term ending in * matches as a prefix."
+        ),
+    )
+    search.add_argument(
+        "--near-distance",
+        type=int,
+        default=None,
+        help="With --search-mode near: maximum tokens between the terms (default 10, at most 100).",
+    )
+    search.add_argument(
+        "--stemming",
+        action="store_true",
+        help="Match English word forms (model, models, modeling) using the stemmed index.",
     )
     search.add_argument("--limit", type=int, default=10, help="Maximum results.")
     search.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
@@ -1397,8 +1412,10 @@ def main(argv: list[str] | None = None) -> int:
                 citation_key=args.citation_key,
                 year_from=args.year_from,
                 year_to=args.year_to,
+                near_distance=args.near_distance,
+                stemming=args.stemming,
             )
-        except (ArtifactError, IndexSchemaUnsupportedError, ValueError) as exc:
+        except (ArtifactError, IndexSchemaUnsupportedError, StemmingUnavailableError, ValueError) as exc:
             print(str(exc), file=sys.stderr)
             return 2
         if args.json:
@@ -2517,10 +2534,21 @@ def _print_index_statistics(report: IndexStatistics) -> None:
     print("")
     print(str(report["scope_note"]))
     print(f"Records with Zotero fields: {report['zotero_metadata_populated']} of {report['records']}")
-    if not report["schema_current"] or report["zotero_metadata_populated"] < report["records"]:
+    # schema_current also covers the stemmed search table, which a plain rebuild adds without
+    # touching Zotero; only missing fields or scores need the metadata refresh.
+    stemmed_search = bool(report.get("stemmed_search", True))
+    fields_stale = report["zotero_metadata_populated"] < report["records"] or (
+        not report["schema_current"] and stemmed_search
+    )
+    if fields_stale:
         print(
             "Some records lack stored Zotero fields or extraction-quality scores; run "
             "'zotero-pdf-text rebuild-index --refresh-zotero-metadata' to add them."
+        )
+    elif not stemmed_search:
+        print(
+            "This index predates stemmed search; run 'zotero-pdf-text rebuild-index' to enable "
+            "--stemming (no Zotero metadata refresh needed)."
         )
 
 

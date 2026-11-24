@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import bisect
 import contextlib
+import functools
 import hashlib
 import json
 import math
@@ -13,6 +14,7 @@ from pathlib import Path
 from typing import Iterable, Literal, TypedDict, cast
 
 from ._atomic import replace_with_retry
+from .identity import extract_isbns, normalize_doi_identifier, normalize_isbn
 from .pages import PageMap, page_range, validate_page_map
 from .quality import detect_language, quality_signals_json, score_extraction
 from .zotero_db import read_only_uri
@@ -34,8 +36,22 @@ MAX_SEARCH_RESULTS = 100
 SEARCH_CANDIDATE_MULTIPLIER = 5
 MIN_SEARCH_CANDIDATES = 50
 MAX_SEARCH_CANDIDATES = 500
-SearchMode = Literal["all_terms", "any_terms", "phrase"]
-SEARCH_MODES = frozenset({"all_terms", "any_terms", "phrase"})
+SearchMode = Literal["all_terms", "any_terms", "phrase", "near"]
+SEARCH_MODES = frozenset({"all_terms", "any_terms", "phrase", "near"})
+# search_mode "near": every term within this many tokens of the others (FTS5 NEAR). The default is
+# FTS5's own; the maximum keeps "near" meaningfully narrower than all_terms over a whole chunk.
+DEFAULT_NEAR_DISTANCE = 10
+MAX_NEAR_DISTANCE = 100
+# A query term may end in "*" to match every indexed token starting with it. Short prefixes would
+# match a large share of the vocabulary, so a prefix needs at least this many word characters.
+MIN_PREFIX_CHARS = 3
+PREFIX_MARKER = "*"
+# A word, optionally followed by a "*" that is not itself followed by a word character, so
+# "psychometr*" is a prefix term while "a*b" stays the two plain terms it always was.
+_QUERY_TERM_RE = re.compile(r"\w+(?:\*(?!\w))?", flags=re.UNICODE)
+# unicode61 splits words at "_" (Python's \w does not), so the prefix FTS5 actually sees is the
+# part after the last underscore; that part is what MIN_PREFIX_CHARS counts.
+_UNICODE61_SEPARATOR_RE = re.compile(r"_+")
 # Starting guess for how many characters consecutive stored chunks advance by. An index is not
 # required to have been built with the default chunk_chars/overlap_chars, so this is only an
 # initial estimate for the first fetch in _fetch_covering_chunks below, never assumed correct.
@@ -214,6 +230,15 @@ class IndexSchemaUnsupportedError(RuntimeError):
 
 
 _REQUIRED_TABLES = frozenset({"metadata", "chunks", "chunks_fts"})
+# Optional second FTS5 index over the same rows, tokenized with the Porter stemmer (English). It is
+# an external-content table reading its columns from chunks_fts, so it adds an index but no second
+# copy of the text, and highlight()/snippet() return the same stored text. Absent from indexes
+# built before stemming existed; search with stemming=True then raises StemmingUnavailableError.
+STEMMED_FTS_TABLE = "chunks_fts_stemmed"
+
+
+class StemmingUnavailableError(RuntimeError):
+    """The index was built before the stemmed FTS table existed; a rebuild adds it."""
 # Added with structure-based chunking. Like the metadata columns that are not required, an index
 # built before them stays readable: it reports no pages (see _page_schema) and a rebuild adds them.
 PAGE_CHUNK_COLUMNS = ("page_start", "page_end", "heading_path")
@@ -324,6 +349,12 @@ def _check_integrity(db_path: Path) -> None:
     con = sqlite3.connect(db_path)
     try:
         rows = con.execute("PRAGMA integrity_check").fetchall()
+        if rows and rows[0][0] == "ok" and has_stemmed_index(con):
+            # FTS5's own check: the stemmed index must agree with the chunks_fts rows it reads.
+            try:
+                con.execute(f"INSERT INTO {STEMMED_FTS_TABLE}({STEMMED_FTS_TABLE}) VALUES ('integrity-check')")
+            except sqlite3.DatabaseError as exc:
+                rows = [(f"{STEMMED_FTS_TABLE}: {exc}",)]
     finally:
         con.close()
     if not rows or rows[0][0] != "ok":
@@ -343,6 +374,8 @@ def search_fts(
     citation_key: str | None = None,
     year_from: int | None = None,
     year_to: int | None = None,
+    near_distance: int | None = None,
+    stemming: bool = False,
 ) -> list[SearchResult]:
     """Search the index; with attachment_key, rank that one attachment's chunks instead.
 
@@ -361,14 +394,32 @@ def search_fts(
     (hits then point at chunk 0 as a navigation start, not as evidence). year_from/year_to bound
     metadata.year inclusively and exclude records whose year is not a plain four-digit year. A
     year filter alone is rejected. Filters cannot be combined with attachment_key.
+
+    Query terms (not filters) may end in "*" for prefix matching (at least MIN_PREFIX_CHARS
+    characters before it, else the "*" is ignored as it always was; in phrase mode it counts only
+    on the last term). Prefixes cannot be combined with stemming. search_mode "near" requires every
+    term within near_distance tokens (default DEFAULT_NEAR_DISTANCE) of the others, between
+    all_terms (anywhere in the chunk) and phrase (adjacent, in order); near_distance is rejected
+    with any other mode.
+
+    stemming=True matches query terms and filters by their English Porter stem (model, models,
+    modeling; estimate, estimation), against the stemmed index built beside the exact one. Ranking
+    weights, results shape and locators are the same; an index without that table raises
+    StemmingUnavailableError.
     """
+    if not isinstance(stemming, bool):
+        raise ValueError("stemming must be true or false")
+    fts = STEMMED_FTS_TABLE if stemming else "chunks_fts"
     terms, field_terms, year_from, year_to = _validate_search_request(
         query, limit, search_mode, author=author, title=title, citation_key=citation_key,
-        year_from=year_from, year_to=year_to,
+        year_from=year_from, year_to=year_to, stemming=stemming,
     )
+    if near_distance is not None and not terms:
+        raise ValueError("near_distance needs a query")
+    near_distance = validate_near_distance(near_distance, search_mode)
     if attachment_key is not None and (field_terms or year_from is not None or year_to is not None):
         raise ValueError("attachment_key cannot be combined with author, title, citation_key or year filters")
-    match_query = _compose_match_query(terms, search_mode, field_terms)
+    match_query = _compose_match_query(terms, search_mode, field_terms, near_distance=near_distance)
     # A metadata-only match (field filter, no query) scores every chunk of a record on the same
     # metadata, so bm25 length normalization would pick an arbitrary chunk; take chunk 0, the
     # natural navigation start.
@@ -394,6 +445,11 @@ def search_fts(
     con = connect_readonly(db_path)
     con.row_factory = sqlite3.Row
     try:
+        if stemming and not has_stemmed_index(con):
+            raise StemmingUnavailableError(
+                f"{db_path} was built before stemmed search existed. Rebuild it with "
+                "'zotero-pdf-text rebuild-index' to search with stemming."
+            )
         if attachment_key is not None:
             # Same lookup as get_fulltext, so hits resolve to the record retrieval will verify.
             record = con.execute(
@@ -435,12 +491,12 @@ def search_fts(
                     m.year,
                     m.doi,
                     m.citation_key,
-                    snippet(chunks_fts, 2, '[', ']', ' ... ', 32) AS snippet,
+                    snippet({fts}, 2, '[', ']', ' ... ', 32) AS snippet,
                     -- Body-match detection only, using control characters that cannot appear in
                     -- indexed document text (unlike '[' or ']', which are common in citations and
                     -- math notation and would otherwise falsely signal a body-text match).
-                    snippet(chunks_fts, 2, char(2), char(3), '', 32) AS body_match_marker,
-                    bm25(chunks_fts, 8.0, 1.0, 1.0, 6.0) AS score,
+                    snippet({fts}, 2, char(2), char(3), '', 32) AS body_match_marker,
+                    bm25({fts}, 8.0, 1.0, 1.0, 6.0) AS score,
                     c.chunk_id,
                     c.chunk_index,
                     c.start_char,
@@ -454,10 +510,10 @@ def search_fts(
                     m.identity_status,
                     m.identity_rule,
                     m.has_math
-                FROM chunks_fts f
+                FROM {fts} f
                 JOIN chunks c ON c.chunk_id = f.chunk_id
                 JOIN metadata m ON m.record_id = f.record_id
-                WHERE chunks_fts MATCH ? {attachment_filter} {year_filter}
+                WHERE {fts} MATCH ? {attachment_filter} {year_filter}
             ), ranked AS (
                 SELECT *, ROW_NUMBER() OVER (
                     PARTITION BY record_id
@@ -474,7 +530,7 @@ def search_fts(
         ).fetchall()
         selected_rows = rows[:limit]
         chunk_facts_by_chunk_id = _chunk_facts_for_chunks(
-            con, match_query, [row["chunk_id"] for row in selected_rows]
+            con, match_query, [row["chunk_id"] for row in selected_rows], fts=fts
         )
     finally:
         con.close()
@@ -499,7 +555,7 @@ class _ChunkFacts:
 
 
 def _chunk_facts_for_chunks(
-    con: sqlite3.Connection, match_query: str, chunk_ids: list[int]
+    con: sqlite3.Connection, match_query: str, chunk_ids: list[int], *, fts: str = "chunks_fts"
 ) -> dict[int, _ChunkFacts]:
     """Compute precise matched_fields and a chunk content hash for already-selected chunks.
 
@@ -519,19 +575,19 @@ def _chunk_facts_for_chunks(
         f"""
         SELECT
             c.chunk_id,
-            highlight(chunks_fts, 0, char(2), char(3)) AS title_highlighted,
-            highlight(chunks_fts, 1, char(2), char(3)) AS creators_highlighted,
-            highlight(chunks_fts, 2, char(2), char(3)) AS text_highlighted,
-            highlight(chunks_fts, 3, char(2), char(3)) AS citation_key_highlighted,
+            highlight({fts}, 0, char(2), char(3)) AS title_highlighted,
+            highlight({fts}, 1, char(2), char(3)) AS creators_highlighted,
+            highlight({fts}, 2, char(2), char(3)) AS text_highlighted,
+            highlight({fts}, 3, char(2), char(3)) AS citation_key_highlighted,
             m.title,
             m.creators,
             c.text AS stored_text,
             f.text AS indexed_text,
             m.citation_key
-        FROM chunks_fts f
+        FROM {fts} f
         JOIN chunks c ON c.chunk_id = f.chunk_id
         JOIN metadata m ON m.record_id = f.record_id
-        WHERE chunks_fts MATCH ? AND c.chunk_id IN ({placeholders})
+        WHERE {fts} MATCH ? AND c.chunk_id IN ({placeholders})
         """,
         (match_query, *chunk_ids),
     ).fetchall()
@@ -1021,6 +1077,95 @@ def lookup_citation_key(
     return {"records": records, "truncated": len(rows) > limit, "parent_keys": parent_keys}
 
 
+IdentifierType = Literal["doi", "isbn"]
+MAX_IDENTIFIER_CHARS = 256
+
+
+def parse_identifier(identifier: str) -> tuple[IdentifierType, str]:
+    """Classify identifier as a DOI or an ISBN and return its normalized form.
+
+    A DOI (bare, "doi:" or a doi.org URL) is case-folded, as DOIs are case-insensitive. An ISBN
+    is returned in ISBN-13 form, so ISBN-10 and ISBN-13 spellings of one book match each other.
+    Anything else, including an ISBN with a wrong check digit, raises ValueError.
+    """
+    if not isinstance(identifier, str) or not identifier.strip() or len(identifier) > MAX_IDENTIFIER_CHARS:
+        raise ValueError(f"identifier must contain 1 to {MAX_IDENTIFIER_CHARS} characters")
+    doi = normalize_doi_identifier(identifier)
+    if re.fullmatch(r"10\.\d{4,9}/\S+", doi):
+        return "doi", doi
+    isbn = normalize_isbn(identifier)
+    if isbn:
+        return "isbn", isbn
+    raise ValueError("identifier must be a DOI (10.xxxx/...) or an ISBN-10/ISBN-13 with a valid check digit")
+
+
+def lookup_identifier(
+    db_path: Path,
+    identifier: str,
+    *,
+    limit: int = DEFAULT_CONTEXT_RECORD_LIMIT,
+) -> dict[str, object]:
+    """Return every indexed attachment whose stored DOI or ISBN equals ``identifier``.
+
+    Exact after normalization (see parse_identifier): a stored DOI is compared in the same
+    normalized form, and a stored ISBN field matches when any ISBN it lists does. Nothing is
+    looked up online. The result has the shape of lookup_citation_key's plus ``identifier_type``
+    and ``normalized``. An index that predates the isbn column matches no ISBN.
+
+    The metadata table holds one row per attachment, so normalizing every non-empty value in
+    Python is a cheap scan, and it needs no new index or schema change.
+    """
+    if limit < 1:
+        raise ValueError("limit must be at least 1")
+    identifier_type, normalized = parse_identifier(identifier)
+    con = connect_readonly(db_path)
+    con.row_factory = sqlite3.Row
+    try:
+        columns = {row[1] for row in con.execute("PRAGMA table_info(metadata)").fetchall()}
+        if identifier_type not in columns:
+            matching_ids: list[int] = []
+        else:
+            candidates = con.execute(
+                f"SELECT record_id, {identifier_type} AS value FROM metadata WHERE {identifier_type} != ''"
+            ).fetchall()
+            if identifier_type == "doi":
+                matching_ids = [int(row[0]) for row in candidates if normalize_doi_identifier(str(row[1])) == normalized]
+            else:
+                matching_ids = [int(row[0]) for row in candidates if normalized in extract_isbns(str(row[1]))]
+        rows: list[sqlite3.Row] = []
+        for start in range(0, len(matching_ids), INDEXED_STATE_BATCH_SIZE):
+            batch = matching_ids[start : start + INDEXED_STATE_BATCH_SIZE]
+            placeholders = ", ".join("?" for _ in batch)
+            rows.extend(
+                con.execute(
+                    f"""
+                    SELECT metadata.*, (
+                        SELECT COUNT(*) FROM chunks WHERE chunks.record_id = metadata.record_id
+                    ) AS chunk_count
+                    FROM metadata
+                    WHERE record_id IN ({placeholders})
+                    """,
+                    batch,
+                ).fetchall()
+            )
+    finally:
+        con.close()
+    rows.sort(key=lambda row: (str(row["zotero_parent_key"]), str(row["zotero_attachment_key"])))
+    parent_keys = {str(row["zotero_parent_key"]) for row in rows}
+    records = []
+    for row in rows[:limit]:
+        record = {**_metadata_dict(row), **_extended_metadata(row)}
+        record["chunk_count"] = int(row["chunk_count"])
+        records.append(record)
+    return {
+        "identifier_type": identifier_type,
+        "normalized": normalized,
+        "records": records,
+        "truncated": len(rows) > limit,
+        "parent_keys": sorted(parent_keys)[:MAX_LOOKUP_PARENT_KEYS],
+    }
+
+
 # Keys per `IN (...)` query. Older SQLite builds cap bound parameters at 999, and the candidate
 # history this is used for grows without bound, so one query over every key could fail outright.
 INDEXED_STATE_BATCH_SIZE = 500
@@ -1086,6 +1231,9 @@ class IndexStatistics(TypedDict):
     # rebuilt-but-never-refreshed index is not mistaken for a populated one.
     schema_current: bool
     zotero_metadata_populated: int
+    # Whether the stemmed FTS table exists. It is part of schema_current, reported on its own so
+    # a caller can name the right fix: a plain rebuild adds it, no Zotero metadata refresh needed.
+    stemmed_search: bool
 
 
 _GROUPED_STATISTIC_COLUMNS: tuple[tuple[str, str], ...] = (
@@ -1143,7 +1291,12 @@ def index_statistics(
         # An index built before extraction quality was scored has no such column. Report its rows
         # as "unscored" and say the schema is not current, rather than failing the whole summary.
         columns = {row[1] for row in con.execute("PRAGMA table_info(metadata)").fetchall()}
-        schema_current = set(DERIVED_COLUMNS + ZOTERO_TEXT_COLUMNS + ZOTERO_JSON_COLUMNS) <= columns and _page_schema(con)
+        stemmed_search = has_stemmed_index(con)
+        schema_current = (
+            set(DERIVED_COLUMNS + ZOTERO_TEXT_COLUMNS + ZOTERO_JSON_COLUMNS) <= columns
+            and _page_schema(con)
+            and stemmed_search
+        )
         populated = (
             int(con.execute("SELECT COUNT(*) FROM metadata WHERE item_type != ''").fetchone()[0])
             if "item_type" in columns
@@ -1175,6 +1328,7 @@ def index_statistics(
         "by_extraction_quality": by_quality,
         "schema_current": schema_current,
         "zotero_metadata_populated": populated,
+        "stemmed_search": stemmed_search,
     }
 
 
@@ -1328,6 +1482,16 @@ def _create_schema(con: sqlite3.Connection) -> None:
             record_id UNINDEXED,
             chunk_id UNINDEXED,
             tokenize='unicode61'
+        );
+        CREATE VIRTUAL TABLE chunks_fts_stemmed USING fts5(
+            title,
+            creators,
+            text,
+            citation_key,
+            record_id UNINDEXED,
+            chunk_id UNINDEXED,
+            content='chunks_fts',
+            tokenize='porter unicode61'
         );
         """
     )
@@ -1594,21 +1758,25 @@ def _insert_chunk(
         (record_id, chunk_index, start_char, end_char, text, page_start, page_end, heading_path),
     )
     chunk_id = int(cast(int, cursor.lastrowid))
-    con.execute(
-        """
-        INSERT INTO chunks_fts (rowid, title, creators, text, citation_key, record_id, chunk_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        """,
-        (
-            chunk_id,
-            _string(record.get("title")),
-            _string(record.get("creators")),
-            fts_body_text(text, start_char, image_spans),
-            _string(record.get("citation_key")),
-            record_id,
-            chunk_id,
-        ),
+    fts_row = (
+        chunk_id,
+        _string(record.get("title")),
+        _string(record.get("creators")),
+        fts_body_text(text, start_char, image_spans),
+        _string(record.get("citation_key")),
+        record_id,
+        chunk_id,
     )
+    # The stemmed table is external-content over chunks_fts: it must receive exactly the same row
+    # under the same rowid, or its highlights would mark the wrong text.
+    for table in ("chunks_fts", STEMMED_FTS_TABLE):
+        con.execute(
+            f"""
+            INSERT INTO {table} (rowid, title, creators, text, citation_key, record_id, chunk_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            fts_row,
+        )
 
 
 def _insert_pages(con: sqlite3.Connection, record_id: int, text: str, page_map: PageMap | None) -> None:
@@ -1617,6 +1785,16 @@ def _insert_pages(con: sqlite3.Connection, record_id: int, text: str, page_map: 
             "INSERT INTO pages (record_id, page, start_char, end_char, text) VALUES (?, ?, ?, ?, ?)",
             (record_id, page, start_char, end_char, text[start_char:end_char]),
         )
+
+
+def has_stemmed_index(con: sqlite3.Connection) -> bool:
+    """Whether this index has the stemmed FTS table (built after stemmed search existed)."""
+    return (
+        con.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (STEMMED_FTS_TABLE,)
+        ).fetchone()
+        is not None
+    )
 
 
 def _page_schema(con: sqlite3.Connection) -> bool:
@@ -1796,22 +1974,112 @@ def _validate_chunking(chunk_chars: int, overlap_chars: int) -> None:
 _FILTER_COLUMNS = {"author": "creators", "title": "title", "citation_key": "citation_key"}
 
 
-def _normalize_terms(value: str | None, field: str) -> list[str]:
-    """Split a query or filter into searchable word terms; None or blank means not supplied."""
+def _normalize_terms(value: str | None, field: str, *, allow_prefix: bool = False) -> list[str]:
+    """Split a query or filter into searchable word terms; None or blank means not supplied.
+
+    With allow_prefix (the query, never a field filter), a term keeps a trailing PREFIX_MARKER.
+    Without it a "*" is a separator, as it always was.
+    """
     if value is None:
         return []
     if not isinstance(value, str) or len(value) > MAX_QUERY_CHARS:
         raise ValueError(f"{field} must contain 1 to {MAX_QUERY_CHARS} characters")
     if not value.strip():
         return []
-    terms = re.findall(r"[\w]+", value, flags=re.UNICODE)
+    pattern = _QUERY_TERM_RE if allow_prefix else re.compile(r"[\w]+", flags=re.UNICODE)
+    terms = pattern.findall(value)
     if not terms:
         raise ValueError(f"{field} must contain at least one searchable term")
     if len(terms) > MAX_QUERY_TERMS:
         raise ValueError(f"{field} may contain at most {MAX_QUERY_TERMS} searchable terms")
-    if any(len(term) > MAX_QUERY_TERM_CHARS for term in terms):
+    if any(len(term.removesuffix(PREFIX_MARKER)) > MAX_QUERY_TERM_CHARS for term in terms):
         raise ValueError(f"{field} terms may contain at most {MAX_QUERY_TERM_CHARS} characters")
+    # A "*" after fewer than MIN_PREFIX_CHARS characters ("A* search") is ignored, as every "*"
+    # was before prefix search existed, rather than turning an old query into an error.
+    return [
+        term.removesuffix(PREFIX_MARKER) if term.endswith(PREFIX_MARKER) and not _is_valid_prefix(term) else term
+        for term in terms
+    ]
+
+
+def _is_valid_prefix(term: str) -> bool:
+    last_token = _UNICODE61_SEPARATOR_RE.split(term.removesuffix(PREFIX_MARKER))[-1]
+    return len(last_token) >= MIN_PREFIX_CHARS
+
+
+def parse_query_terms(query: str, search_mode: str, *, stemming: bool = False) -> list[str]:
+    """Validate a query for search_mode and return its terms; raises ValueError with the reason.
+
+    Shared with the MCP boundary so both reject exactly the same queries with the same message.
+    """
+    terms = _normalize_terms(query, "query", allow_prefix=True)
+    if not terms:
+        raise ValueError("query must contain at least one searchable term")
+    return _terms_for_mode(terms, search_mode, stemming=stemming)
+
+
+def _terms_for_mode(terms: list[str], search_mode: str, *, stemming: bool = False) -> list[str]:
+    if search_mode == "phrase":
+        # FTS5 takes a prefix only on a phrase's last token. A "*" on an earlier term is ignored,
+        # as before prefix search existed, so an old phrase query keeps its meaning.
+        terms = [term.removesuffix(PREFIX_MARKER) for term in terms[:-1]] + terms[-1:]
+    if stemming and any(term.endswith(PREFIX_MARKER) for term in terms):
+        # FTS5 runs the prefix through the Porter tokenizer, which mangles partial words
+        # ("estimat" no longer prefixes the stem "estim"), so the combination silently misses.
+        raise ValueError(f"'{PREFIX_MARKER}' prefix terms cannot be combined with stemming; use one or the other")
+    if search_mode == "near" and not _has_independent_pair(terms, stemming=stemming):
+        raise ValueError("search_mode near needs at least two different query terms")
     return terms
+
+
+@functools.lru_cache(maxsize=1024)
+def _fts_tokens(term: str, stemming: bool) -> str:
+    """The token(s) FTS5 indexes for term, from SQLite's own tokenizer (case, diacritics, stem)."""
+    tokenizer = "porter unicode61" if stemming else "unicode61"
+    with contextlib.closing(sqlite3.connect(":memory:")) as con:
+        con.execute(f"CREATE VIRTUAL TABLE t USING fts5(x, tokenize='{tokenizer}')")
+        con.execute("CREATE VIRTUAL TABLE v USING fts5vocab(t, 'instance')")
+        con.execute("INSERT INTO t(x) VALUES (?)", (term,))
+        return " ".join(str(row[0]) for row in con.execute("SELECT term FROM v ORDER BY offset"))
+
+
+def _has_independent_pair(terms: list[str], *, stemming: bool) -> bool:
+    """Whether two terms exist that no single indexed word can satisfy at once.
+
+    FTS5's NEAR lets one occurrence satisfy several phrases, so "models modeling" (one stem),
+    "café cafe" (one token after diacritic folding) or "mod* model" (the prefix covers the word)
+    would otherwise make near a one-term search. Terms are compared as FTS5 tokenizes them.
+    """
+    # A term FTS5 reads as no token at all ("___") is ignored inside NEAR, so it cannot be one
+    # of the pair.
+    tokens = [
+        (token, term.endswith(PREFIX_MARKER))
+        for term in terms
+        if (token := _fts_tokens(term.removesuffix(PREFIX_MARKER), stemming))
+    ]
+
+    def overlap(a: tuple[str, bool], b: tuple[str, bool]) -> bool:
+        (token_a, prefix_a), (token_b, prefix_b) = a, b
+        return (
+            token_a == token_b
+            or (prefix_a and token_b.startswith(token_a))
+            or (prefix_b and token_a.startswith(token_b))
+        )
+
+    return any(
+        not overlap(tokens[i], tokens[j]) for i in range(len(tokens)) for j in range(i + 1, len(tokens))
+    )
+
+
+def validate_near_distance(near_distance: object, search_mode: str) -> int:
+    """Return the NEAR distance for search_mode near; reject one given with any other mode."""
+    if near_distance is None:
+        return DEFAULT_NEAR_DISTANCE
+    if search_mode != "near":
+        raise ValueError("near_distance applies only to search_mode near")
+    if isinstance(near_distance, bool) or not isinstance(near_distance, int) or not 0 <= near_distance <= MAX_NEAR_DISTANCE:
+        raise ValueError(f"near_distance must be an integer between 0 and {MAX_NEAR_DISTANCE}")
+    return near_distance
 
 
 def _validate_year(value: object, field: str) -> int | None:
@@ -1832,8 +2100,9 @@ def _validate_search_request(
     citation_key: str | None = None,
     year_from: object = None,
     year_to: object = None,
+    stemming: bool = False,
 ) -> tuple[list[str], dict[str, list[str]], int | None, int | None]:
-    terms = _normalize_terms(query, "query")
+    terms = _normalize_terms(query, "query", allow_prefix=True)
     field_terms = {
         name: normalized
         for name, value in (("author", author), ("title", title), ("citation_key", citation_key))
@@ -1845,6 +2114,8 @@ def _validate_search_request(
         raise ValueError(f"limit must be between 1 and {MAX_SEARCH_RESULTS}")
     if search_mode not in SEARCH_MODES:
         raise ValueError(f"search_mode must be one of: {', '.join(sorted(SEARCH_MODES))}")
+    if terms:
+        terms = _terms_for_mode(terms, search_mode, stemming=stemming)
     year_low = _validate_year(year_from, "year_from")
     year_high = _validate_year(year_to, "year_to")
     if year_low is not None and year_high is not None and year_low > year_high:
@@ -1852,23 +2123,42 @@ def _validate_search_request(
     return terms, field_terms, year_low, year_high
 
 
-def _match_query(terms: list[str], search_mode: str) -> str:
+def _quote_term(term: str) -> str:
+    r"""One FTS5 phrase for a term: quoted (terms are \w+, so no quote can occur), "*" kept outside."""
+    if term.endswith(PREFIX_MARKER):
+        return '"' + term.removesuffix(PREFIX_MARKER) + '"' + PREFIX_MARKER
+    return '"' + term + '"'
+
+
+def _match_query(terms: list[str], search_mode: str, *, near_distance: int = DEFAULT_NEAR_DISTANCE) -> str:
     if search_mode == "phrase":
-        return '"' + " ".join(terms) + '"'
+        # FTS5 allows a prefix only on a phrase's last token: '"one two thr" *'.
+        last = terms[-1]
+        prefix = PREFIX_MARKER if last.endswith(PREFIX_MARKER) else ""
+        words = [*terms[:-1], last.removesuffix(PREFIX_MARKER)]
+        return '"' + " ".join(words) + '"' + prefix
+    if search_mode == "near":
+        return "NEAR(" + " ".join(_quote_term(term) for term in terms) + f", {int(near_distance)})"
     operator = " AND " if search_mode == "all_terms" else " OR "
-    return operator.join(f'"{term}"' for term in terms)
+    return operator.join(_quote_term(term) for term in terms)
 
 
-def _compose_match_query(terms: list[str], search_mode: str, field_terms: dict[str, list[str]]) -> str:
+def _compose_match_query(
+    terms: list[str],
+    search_mode: str,
+    field_terms: dict[str, list[str]],
+    *,
+    near_distance: int = DEFAULT_NEAR_DISTANCE,
+) -> str:
     """Build the FTS5 MATCH string; with field filters the query is restricted to body text.
 
     search_mode applies to the query only; every filter requires all of its words in its column.
     """
     if not field_terms:
-        return _match_query(terms, search_mode)
+        return _match_query(terms, search_mode, near_distance=near_distance)
     parts = []
     if terms:
-        parts.append(f"text : ({_match_query(terms, search_mode)})")
+        parts.append(f"text : ({_match_query(terms, search_mode, near_distance=near_distance)})")
     for name, words in field_terms.items():
         quoted = " AND ".join('"' + word + '"' for word in words)
         parts.append(f"{_FILTER_COLUMNS[name]} : ({quoted})")

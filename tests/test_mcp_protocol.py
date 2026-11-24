@@ -25,7 +25,7 @@ class McpProtocolTests(unittest.TestCase):
             tools = {tool.name: tool for tool in asyncio.run(server.list_tools())}
             self.assertEqual(
                 set(tools),
-                {"search_fulltext", "search_within_fulltext", "get_fulltext_chunk", "get_page", "get_passage_image", "get_item_context", "lookup_citation_key", "list_timeout_candidates", "list_orphan_candidates", "library_status", "guide"},
+                {"search_fulltext", "search_within_fulltext", "get_fulltext_chunk", "get_page", "get_passage_image", "get_item_context", "lookup_citation_key", "lookup_identifier", "list_timeout_candidates", "list_orphan_candidates", "library_status", "guide"},
             )
             for tool in tools.values():
                 self.assertIsNotNone(tool.outputSchema)
@@ -37,7 +37,12 @@ class McpProtocolTests(unittest.TestCase):
             self.assertIn("records", tools["get_item_context"].outputSchema["properties"])
             self.assertEqual(tools["search_fulltext"].inputSchema["properties"]["query"]["type"], "string")
             self.assertEqual(tools["search_fulltext"].inputSchema["properties"]["limit"]["type"], "integer")
-            self.assertEqual(tools["search_fulltext"].inputSchema["properties"]["search_mode"]["enum"], ["all_terms", "any_terms", "phrase"])
+            self.assertEqual(tools["search_fulltext"].inputSchema["properties"]["search_mode"]["enum"], ["all_terms", "any_terms", "near", "phrase"])
+            near_schema = tools["search_fulltext"].inputSchema["properties"]["near_distance"]
+            self.assertEqual(near_schema["anyOf"][0], {"type": "integer", "minimum": 0, "maximum": 100})
+            self.assertIn("near_distance", tools["search_within_fulltext"].inputSchema["properties"])
+            for name in ("search_fulltext", "search_within_fulltext"):
+                self.assertEqual(tools[name].inputSchema["properties"]["stemming"]["type"], "boolean")
 
             search_schema = tools["search_fulltext"].inputSchema
             self.assertNotIn("query", search_schema.get("required", []))
@@ -150,6 +155,7 @@ class McpProtocolTests(unittest.TestCase):
                     "get_passage_image",
                     "get_item_context",
                     "lookup_citation_key",
+                    "lookup_identifier",
                     "list_timeout_candidates",
                     "list_orphan_candidates",
                     "library_status",

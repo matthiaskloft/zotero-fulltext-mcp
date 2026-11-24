@@ -8,11 +8,26 @@ for guidance matched to its enabled capabilities.
 
 The safe default server exposes:
 
-- `search_fulltext(query="", limit=10, search_mode="all_terms", author="", title="", citation_key="", year_from=None, year_to=None)` — ranked search (one hit per paper,
+- `search_fulltext(query="", limit=10, search_mode="all_terms", author="", title="", citation_key="", year_from=None, year_to=None, near_distance=None, stemming=False)` — ranked search (one hit per paper,
   at most 20) over converted body text and
   indexed title/creator/citation-key metadata, with bounded snippets and `matched_fields` showing
   which indexed fields actually matched. `any_terms` is the broader fallback and `phrase`
-  requires normalized words in order. The optional filters narrow the search before ranking and
+  requires normalized words in order (use it for an exact hyphenated term such as
+  `meta-analysis`). `near` requires at least two different terms (different as indexed: case,
+  accents, stems with `stemming=true`, and a prefix covering the other term all make two terms
+  the same) within `near_distance` tokens of each other (default 10, 0-100) in any order: narrower than `all_terms`, which accepts the terms
+  anywhere in a ~1,500-character chunk, and looser than `phrase`. `near_distance` is rejected with
+  any other mode and without a query. A query term ending in `*` (at least three characters
+  before it, counted after the last `_`) matches every indexed word with that prefix, e.g.
+  `estimat*` finds `estimate` and `estimation`. A `*` that cannot be a prefix is ignored, as every
+  `*` was before prefix search: a shorter one (`A* search`), one on a non-final `phrase` term, and
+  one inside a word (a separator). Filters never take prefixes.
+  `stemming=true` matches English word forms through the Porter stemmer (`model`, `models`,
+  `modeling`; `estimate`, `estimation`), in every mode and for the field filters too. It cannot be
+  combined with `*` prefixes (FTS5 would stem the partial word and silently miss matches), so
+  that combination answers `invalid_query`. It is off by default because it also conflates names
+  and terms (`Modell` stems to `model`); use it when exact words find too little. An index built before stemming existed answers `stemming_unavailable`
+  until it is rebuilt with `rebuild-index`; exact search keeps working. The optional filters narrow the search before ranking and
   limits: `author` (matches every creator role, editors included), `title` and `citation_key`
   each require all their words in that field (whole words in any order, case- and
   diacritic-insensitive: `muller` matches `Müller`, `Mueller` does not; no substring or prefix
@@ -23,8 +38,8 @@ The safe default server exposes:
   are inclusive; records whose year is missing or not a plain four-digit year are excluded
   when a year filter is set, and a year filter needs a query or a field filter. Blank strings
   count as absent. Calls without filters behave as before.
-- `search_within_fulltext(attachment_key, query, search_mode="all_terms", limit=10)` — the same
-  search constrained to one indexed attachment (siblings under the same parent item are not
+- `search_within_fulltext(attachment_key, query, search_mode="all_terms", limit=10, near_distance=None, stemming=False)` — the same
+  search (including `near`, `*` prefixes and stemming) constrained to one indexed attachment (siblings under the same parent item are not
   searched). It matches converted body text only, so every hit is a passage rather than a
   metadata match. Returns up to `limit` matching chunks of that attachment, ordered by relevance then
   chunk index, each with the same metadata, provenance and `source_locator` as `search_fulltext`.
@@ -96,6 +111,19 @@ The safe default server exposes:
 
   Keep each passage's `source_locator.chunk_sha256` and pass it back when re-reading that chunk
   to cite it, so a replaced passage answers `stale_locator`.
+- `lookup_identifier(identifier)` — the same lookup for a DOI or ISBN stored in the index. The
+  type is detected: a DOI may be bare, `doi:`/`DOI `/`info:doi/`-prefixed or a `doi.org` link
+  (with or without scheme or `www.`, `%2F` decoded) and is compared case-insensitively; an ISBN
+  may be ISBN-10 or ISBN-13, with hyphens or spaces, an `ISBN`/`ISBN-13:` label or a trailing
+  `(pbk.)`, and must have a valid check digit. Both forms of one book match each other, and a
+  stored ISBN field listing several ISBNs matches any valid one of them; a stored ISBN with a
+  wrong check digit matches nothing. The response has `lookup_citation_key`'s
+  fields (`identifier` in place of `citation_key`) plus `identifier_type` (`doi` or `isbn`) and
+  `normalized` (lower-case DOI or ISBN-13). Chapters of one book can share its ISBN, so expect
+  `ambiguous: true` there. Only the local index is searched: `found: false` means no indexed
+  attachment carries the identifier. Anything that is neither a DOI nor a valid ISBN answers
+  `invalid_identifier`. An index built before ISBNs were stored matches no ISBN until it is rebuilt
+  with `rebuild-index --refresh-zotero-metadata`.
 - `list_timeout_candidates(status="pending", limit=10)` — attachments whose primary extractor exceeded its
   scaled timeout budget and fell back to plain-text extraction (or failed outright). Read-only;
   pass a returned `attachment_key` to `skip_timeout_extraction` or `retry_timeout_extraction`.

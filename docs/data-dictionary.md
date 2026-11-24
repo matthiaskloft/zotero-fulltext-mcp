@@ -313,6 +313,15 @@ contains:
 - `metadata`: one record per indexed attachment
 - `chunks`: bounded text chunks with character ranges
 - `chunks_fts`: FTS5 search table over title, creators, citation key, and chunk text
+  (`unicode61` tokenizer: case- and diacritic-insensitive, no stemming)
+- `chunks_fts_stemmed`: the same columns and rowids tokenized with `porter unicode61` (English
+  Porter stemmer), used only by `stemming=true` searches. It is an external-content table
+  (`content='chunks_fts'`), so it stores an index but no second copy of the text, and snippets
+  and highlights come from the same stored text. Indexes built before it existed lack it: exact
+  search works, stemmed search answers `stemming_unavailable`, and `schema_current` is false
+  until a rebuild. `index-stats --json` and MCP `library_status` report `stemmed_search: false`,
+  and plain `index-stats` says a plain `rebuild-index` is enough. Prefix terms (`*`) are refused with stemming, because FTS5 would
+  stem the partial word. On synthetic text it added about 18% to the index file.
 
 `metadata` also stores Zotero fields the first schema dropped. All are optional: a record or index
 without them holds empty values, never a guess, and a reader opens an older index with these
@@ -380,7 +389,10 @@ values with their original values. A metadata-only match still selects a represe
 navigation, but does not claim that the query occurs in that chunk's body text.
 
 Search normalizes query text into at most 20 word terms. `all_terms` is the default mode,
-`any_terms` matches any normalized term, and `phrase` requires the normalized terms in order.
+`any_terms` matches any normalized term, `phrase` requires the normalized terms in order, and
+`near` requires at least two terms within `near_distance` tokens (FTS5 `NEAR`). A query term
+ending in `*` (at least three characters first) is an FTS5 prefix query. With `stemming=true` the
+same MATCH expression (query and filters) runs against `chunks_fts_stemmed` instead.
 
 Optional filters (no schema change; they read existing columns) narrow the search before ranking
 and the result limit:

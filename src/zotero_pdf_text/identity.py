@@ -92,6 +92,128 @@ def normalize_doi(value: str | None) -> str:
     return value.casefold()
 
 
+# ISBN-10 (nine digits and a digit or X check character) or ISBN-13 (978/979 prefix), once
+# hyphens and spaces inside the number are removed.
+_ISBN_CANDIDATE_RE = re.compile(r"(?<![0-9Xx])(?:97[89][0-9]{10}|[0-9]{9}[0-9Xx])(?![0-9Xx])")
+# The "10"/"13" after "ISBN" counts only when a separator or colon follows it, so the leading
+# digits of an ISBN-10 such as "ISBN 1032123451" are not taken for the label.
+_ISBN_LABEL_RE = re.compile(r"^\s*isbn(?:[\s\-\u2010-\u2015]*1[03](?=[\s:\-\u2010-\u2015]))?\s*:?\s*", flags=re.I)
+# The same label anywhere in a stored field, so "ISBN-13 978 0 ..." does not glue "13" onto the
+# number that follows it.
+_ISBN_LABEL_ANYWHERE_RE = re.compile(r"isbn(?:[\s\-\u2010-\u2015]*1[03](?=[\s:\-\u2010-\u2015]))?\s*:?", flags=re.I)
+# A run of digits possibly grouped by spaces or hyphens and ending in a digit or X: one ISBN, or
+# several separated by spaces, as Zotero's ISBN field can hold.
+_ISBN_RUN_RE = re.compile(r"[0-9](?:[0-9Xx\s\-\u2010-\u2015]*[0-9Xx])?")
+_DOI_LOOKUP_PREFIX_RE = re.compile(
+    r"^(?:(?:https?://)?(?:www\.|dx\.)?doi\.org/|info:doi/|doi\s*:?\s+|doi:\s*)", flags=re.I
+)
+
+
+def _isbn13_check_digit(first12: str) -> str:
+    total = sum(int(ch) * (1 if index % 2 == 0 else 3) for index, ch in enumerate(first12))
+    return str((10 - total % 10) % 10)
+
+
+def _isbn10_is_valid(value: str) -> bool:
+    total = sum((10 - index) * (10 if ch in "Xx" else int(ch)) for index, ch in enumerate(value))
+    return total % 11 == 0
+
+
+def _as_isbn13(value: str) -> str:
+    """ISBN-13 form of a 10- or 13-character candidate; an ISBN-10 gets the 978 prefix."""
+    if len(value) == 13:
+        return value
+    first12 = "978" + value[:9]
+    return first12 + _isbn13_check_digit(first12)
+
+
+def normalize_isbn(value: str | None) -> str:
+    """Return the ISBN-13 form of one ISBN, or "" when value is not a valid ISBN-10 or ISBN-13.
+
+    Accepts an optional "ISBN", "ISBN-10:" or "ISBN-13:" label and hyphens or spaces between the
+    digits. The check digit must be valid, so a mistyped number is not silently matched.
+    """
+    if not value:
+        return ""
+    compact = re.sub(r"[\s\-\u2010-\u2015]", "", _strip_isbn_qualifier(_ISBN_LABEL_RE.sub("", value, count=1)))
+    if not _ISBN_CANDIDATE_RE.fullmatch(compact):
+        return ""
+    if len(compact) == 13:
+        return compact if _isbn13_check_digit(compact[:12]) == compact[12] else ""
+    return _as_isbn13(compact.upper()) if _isbn10_is_valid(compact) else ""
+
+
+def _strip_isbn_qualifier(value: str) -> str:
+    """Drop a trailing binding qualifier ("(pbk.)", "(hardcover)") and full stops after an ISBN.
+
+    Plain string operations, not a regex: stored fields are unbounded library content, and an
+    unanchored pattern with optional whitespace runs took cubic time on long blank runs.
+    """
+    value = value.rstrip().rstrip(".").rstrip()
+    # Several qualifiers can follow ("(pbk.) (alk. paper)"); each pass drops one, so this is linear.
+    while value.endswith(")") and (opening := value.rfind("(")) != -1:
+        value = value[:opening].rstrip().rstrip(".").rstrip()
+    return value
+
+
+def extract_isbns(value: str | None) -> list[str]:
+    """ISBN-13 forms of every valid ISBN in a stored field (Zotero may hold several).
+
+    Each number goes through normalize_isbn, the same validation a lookup query gets, so a stored
+    ISBN with a wrong check digit matches nothing rather than the book its first digits name.
+    Digits grouped by spaces or hyphens are one number when they form a valid ISBN; otherwise the
+    run is split at whitespace into separate numbers.
+    """
+    if not value:
+        return []
+    found: set[str] = set()
+    value = _ISBN_LABEL_ANYWHERE_RE.sub(" ", value)
+    for run in _ISBN_RUN_RE.finditer(value):
+        whole = normalize_isbn(run.group(0))
+        if whole:
+            found.add(whole)
+        else:
+            found.update(_isbns_in_groups(run.group(0).split()))
+    return sorted(found)
+
+
+def _isbns_in_groups(groups: list[str]) -> list[str]:
+    """Valid ISBNs formed by consecutive whitespace-separated digit groups, left to right.
+
+    Handles several space-grouped numbers in one field ("978 0 306 40615 7 978 0 8044 2957 3").
+    From each start, the longest run of groups that is a valid ISBN (13 before 10) is taken and
+    scanning resumes after it; a start with none moves on by one group. Groups are at most a few
+    characters and a candidate stops past 13 digits, so this is linear in the field.
+    """
+    isbns: list[str] = []
+    start = 0
+    while start < len(groups):
+        best_end, best = start, ""
+        digits = 0
+        for end in range(start, len(groups)):
+            digits += len(re.sub(r"[\-\u2010-\u2015]", "", groups[end]))
+            if digits > 13:
+                break
+            if digits in (10, 13) and (isbn := normalize_isbn(" ".join(groups[start : end + 1]))):
+                best_end, best = end, isbn
+        if best:
+            isbns.append(best)
+            start = best_end + 1
+        else:
+            start += 1
+    return isbns
+
+
+def normalize_doi_identifier(value: str | None) -> str:
+    """normalize_doi for lookups, also accepting doi.org without a scheme, www.doi.org,
+    "DOI 10...", info:doi/ and a percent-encoded slash; used for the query and stored values alike.
+    """
+    if not value:
+        return ""
+    value = re.sub(r"%2f", "/", value.strip(), flags=re.I)
+    return normalize_doi(_DOI_LOOKUP_PREFIX_RE.sub("", value, count=1))
+
+
 def extract_year(value: str | None) -> str:
     if not value:
         return ""

@@ -97,7 +97,7 @@ class McpServerTests(unittest.TestCase):
 
             self.assertEqual(
                 set(server.tools),
-                {"search_fulltext", "search_within_fulltext", "get_fulltext_chunk", "get_page", "get_passage_image", "get_item_context", "lookup_citation_key", "list_timeout_candidates", "list_orphan_candidates", "library_status", "guide"},
+                {"search_fulltext", "search_within_fulltext", "get_fulltext_chunk", "get_page", "get_passage_image", "get_item_context", "lookup_citation_key", "lookup_identifier", "list_timeout_candidates", "list_orphan_candidates", "library_status", "guide"},
             )
             self.assertNotIn("ensure_zotero_running", server.tools)
             self.assertNotIn(ZOTERO_LAUNCH_MCP_TOOL_NAME, server.tools)
@@ -272,7 +272,7 @@ class McpServerTests(unittest.TestCase):
 
         self.assertEqual(
             {tool.name for tool in tools},
-            {"search_fulltext", "search_within_fulltext", "get_fulltext_chunk", "get_page", "get_passage_image", "get_item_context", "lookup_citation_key", "list_timeout_candidates", "list_orphan_candidates", "library_status", "guide"},
+            {"search_fulltext", "search_within_fulltext", "get_fulltext_chunk", "get_page", "get_passage_image", "get_item_context", "lookup_citation_key", "lookup_identifier", "list_timeout_candidates", "list_orphan_candidates", "library_status", "guide"},
         )
         descriptions = {tool.name: tool.description for tool in tools}
         self.assertIn("title, creators, citation key, and converted body text", descriptions["search_fulltext"])
@@ -301,6 +301,7 @@ class McpServerTests(unittest.TestCase):
                     "get_passage_image",
                     "get_item_context",
                     "lookup_citation_key",
+                    "lookup_identifier",
                     "list_timeout_candidates",
                     "list_orphan_candidates",
                     "library_status",
@@ -471,6 +472,43 @@ class McpServerTests(unittest.TestCase):
             guide = server.tools["guide"]("search")["text"]
             self.assertIn("author", guide)
             self.assertIn("year_from", guide)
+
+    def test_prefix_terms_and_near_mode_through_the_tools(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _, sqlite_path, _ = _build_index(Path(tmp))
+            server = create_server(sqlite_path, mcp_factory=FakeFastMCP)
+            search = server.tools["search_fulltext"]
+            within = server.tools["search_within_fulltext"]
+
+            self.assertTrue(search("searchab*")["results"])
+            # A "*" that cannot be a prefix is ignored, as it was before prefix search existed.
+            self.assertEqual(search("se* searchable"), search("se searchable"))
+            self.assertTrue(search("source* searchable text", search_mode="phrase")["no_results"])
+            self.assertTrue(search("searchable* source text", search_mode="phrase")["results"])
+            self.assertTrue(search("searchab")["no_results"])
+            self.assertTrue(within("ATTACH1", "searchab* sour*")["results"])
+            near = search("searchable text", search_mode="near")
+            self.assertEqual(near["search_mode"], "near")
+            self.assertTrue(near["results"])
+            self.assertTrue(search("searchable text", search_mode="near", near_distance=1)["results"])
+            self.assertTrue(search("searchable text", search_mode="near", near_distance=0)["no_results"])
+            self.assertTrue(within("ATTACH1", "source searchable", search_mode="near", near_distance=0)["results"])
+
+            for call, code in [
+                (lambda: search("searchable", search_mode="near"), "invalid_query"),
+                (lambda: search("searchable Searchable", search_mode="near"), "invalid_query"),
+                (lambda: search(author="disclose", search_mode="near", near_distance=3), "invalid_near_distance"),
+                (lambda: within("ATTACH1", "searchable", search_mode="near"), "invalid_query"),
+                (lambda: search("searchable text", near_distance=3), "invalid_near_distance"),
+                (lambda: search("searchable text", search_mode="near", near_distance=101), "invalid_near_distance"),
+                (lambda: search("searchable text", search_mode="near", near_distance="3"), "invalid_near_distance"),
+                (lambda: within("ATTACH1", "a b", near_distance=True), "invalid_near_distance"),
+            ]:
+                _assert_tool_error(self, call, code)
+
+            guide = server.tools["guide"]("search")["text"]
+            self.assertIn("near", guide)
+            self.assertIn("*", guide)
 
     def test_invalid_inputs_and_missing_database_return_stable_errors(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -1638,6 +1676,7 @@ class LibraryStatusToolTests(unittest.TestCase):
 
             self.assertEqual(response["index"]["records"], 1)
             self.assertIsNotNone(response["index"]["generation_id"])
+            self.assertIs(response["index"]["stemmed_search"], True)
             self.assertIsNone(response["library"])
             self.assertIn("without a project config", response["library_unavailable_reason"])
 
