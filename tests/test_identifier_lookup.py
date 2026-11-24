@@ -66,6 +66,25 @@ class IsbnEdgeCaseTests(unittest.TestCase):
             with self.subTest(spelling=spelling):
                 self.assertEqual(normalize_isbn(spelling), "9780306406157")
 
+    def test_a_labelled_isbn_10_starting_with_10_or_13_keeps_its_digits(self):
+        # Routledge (1-032-...) and similar ISBN-10s: the label's optional "10"/"13" must not
+        # swallow the number's first two digits.
+        for spelling in ("ISBN 1032123451", "ISBN1032123451", "ISBN-1032123451", "ISBN 1349123455"):
+            with self.subTest(spelling=spelling):
+                self.assertEqual(normalize_isbn(spelling), normalize_isbn(spelling[-10:]))
+                self.assertNotEqual(normalize_isbn(spelling), "")
+        self.assertEqual(normalize_isbn("ISBN 10 0306406152"), "9780306406157")
+
+    def test_long_blank_runs_in_a_stored_field_stay_fast(self):
+        # An unanchored optional-whitespace regex once made this cubic: about 7 s at 2,000 spaces.
+        import time
+
+        started = time.perf_counter()
+        for junk in ("1" + " " * 50_000 + "1", "1" + " " * 50_000, "(" * 10_000 + "1" + ")" * 10_000):
+            extract_isbns(junk)
+            normalize_isbn(junk)
+        self.assertLess(time.perf_counter() - started, 2.0)
+
     def test_stored_fields_are_validated_and_may_group_digits_with_spaces(self):
         # A wrong ISBN-10 check digit must not match the book its first nine digits name.
         self.assertEqual(extract_isbns("0306406159"), [])

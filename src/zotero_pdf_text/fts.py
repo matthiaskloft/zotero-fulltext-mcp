@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import bisect
 import contextlib
+import functools
 import hashlib
 import json
 import math
@@ -2026,9 +2027,44 @@ def _terms_for_mode(terms: list[str], search_mode: str, *, stemming: bool = Fals
         # FTS5 runs the prefix through the Porter tokenizer, which mangles partial words
         # ("estimat" no longer prefixes the stem "estim"), so the combination silently misses.
         raise ValueError(f"'{PREFIX_MARKER}' prefix terms cannot be combined with stemming; use one or the other")
-    if search_mode == "near" and len({term.casefold() for term in terms}) < 2:
+    if search_mode == "near" and not _has_independent_pair(terms, stemming=stemming):
         raise ValueError("search_mode near needs at least two different query terms")
     return terms
+
+
+@functools.lru_cache(maxsize=1024)
+def _fts_tokens(term: str, stemming: bool) -> str:
+    """The token(s) FTS5 indexes for term, from SQLite's own tokenizer (case, diacritics, stem)."""
+    tokenizer = "porter unicode61" if stemming else "unicode61"
+    with contextlib.closing(sqlite3.connect(":memory:")) as con:
+        con.execute(f"CREATE VIRTUAL TABLE t USING fts5(x, tokenize='{tokenizer}')")
+        con.execute("CREATE VIRTUAL TABLE v USING fts5vocab(t, 'instance')")
+        con.execute("INSERT INTO t(x) VALUES (?)", (term,))
+        return " ".join(str(row[0]) for row in con.execute("SELECT term FROM v ORDER BY offset"))
+
+
+def _has_independent_pair(terms: list[str], *, stemming: bool) -> bool:
+    """Whether two terms exist that no single indexed word can satisfy at once.
+
+    FTS5's NEAR lets one occurrence satisfy several phrases, so "models modeling" (one stem),
+    "café cafe" (one token after diacritic folding) or "mod* model" (the prefix covers the word)
+    would otherwise make near a one-term search. Terms are compared as FTS5 tokenizes them.
+    """
+    tokens = [
+        (_fts_tokens(term.removesuffix(PREFIX_MARKER), stemming), term.endswith(PREFIX_MARKER)) for term in terms
+    ]
+
+    def overlap(a: tuple[str, bool], b: tuple[str, bool]) -> bool:
+        (token_a, prefix_a), (token_b, prefix_b) = a, b
+        return (
+            token_a == token_b
+            or (prefix_a and token_b.startswith(token_a))
+            or (prefix_b and token_a.startswith(token_b))
+        )
+
+    return any(
+        not overlap(tokens[i], tokens[j]) for i in range(len(tokens)) for j in range(i + 1, len(tokens))
+    )
 
 
 def validate_near_distance(near_distance: object, search_mode: str) -> int:

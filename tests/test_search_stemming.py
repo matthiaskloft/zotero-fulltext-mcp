@@ -98,6 +98,17 @@ class StemmedSearchTests(unittest.TestCase):
             # A "*" too short to be a prefix is ignored, so it does not block stemming.
             self.assertEqual(_keys(search_fts(db, "models es*", search_mode="any_terms", stemming=True)), {"S1", "S2", "S4"})
 
+    def test_near_needs_terms_with_different_stems(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = _build(tmp)
+            # "models" and "modeling" share the stem "model", so near would be a one-term search.
+            self.assertEqual(_keys(search_fts(db, "models modeling", search_mode="near")), set())
+            with self.assertRaises(ValueError):
+                search_fts(db, "models modeling", search_mode="near", stemming=True)
+            self.assertEqual(
+                _keys(search_fts(db, "models modeling estimate", search_mode="near", stemming=True)), {"S1", "S2"}
+            )
+
     def test_stemming_must_be_a_boolean(self):
         with tempfile.TemporaryDirectory() as tmp:
             db = _build(tmp)

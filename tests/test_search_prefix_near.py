@@ -124,6 +124,11 @@ class NearModeTests(unittest.TestCase):
             invalid = [
                 dict(query="meta", search_mode="near"),
                 dict(query="meta META", search_mode="near"),
+                # One indexed word could satisfy both terms: same token after diacritic folding,
+                # or a prefix covering the other term.
+                dict(query="café cafe", search_mode="near"),
+                dict(query="anal* analysis", search_mode="near"),
+                dict(query="meta* meta", search_mode="near"),
                 dict(query=None, author="doe", search_mode="near", near_distance=5),
                 dict(query="meta analysis", search_mode="all_terms", near_distance=5),
                 dict(query="meta analysis", search_mode="near", near_distance=-1),

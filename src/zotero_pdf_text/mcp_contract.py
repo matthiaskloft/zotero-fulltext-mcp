@@ -508,6 +508,7 @@ class IndexSnapshotStats(TypedDict):
     by_extraction_quality: dict[str, int]
     schema_current: bool
     zotero_metadata_populated: int
+    stemmed_search: bool
 
 
 class LibraryHealth(TypedDict):
@@ -1528,7 +1529,8 @@ def guide_response(
             "missing from search because extraction failed, not because the paper lacks the "
             "passage. schema_current false means the index predates newer fields and needs a rebuild; "
             "zotero_metadata_populated counts records that hold Zotero fields, and is 0 until a "
-            "metadata refresh has run."
+            "metadata refresh has run. stemmed_search false means stemming=true searches answer "
+            "stemming_unavailable until a plain rebuild-index."
         )
     elif topic == "writes":
         text = (
@@ -1763,6 +1765,7 @@ def _index_snapshot_stats(db_path: Path) -> IndexSnapshotStats:
         by_extraction_quality=stats["by_extraction_quality"],
         schema_current=stats["schema_current"],
         zotero_metadata_populated=stats["zotero_metadata_populated"],
+        stemmed_search=stats["stemmed_search"],
     )
 
 

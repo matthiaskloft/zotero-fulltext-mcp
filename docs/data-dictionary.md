@@ -319,8 +319,8 @@ contains:
   (`content='chunks_fts'`), so it stores an index but no second copy of the text, and snippets
   and highlights come from the same stored text. Indexes built before it existed lack it: exact
   search works, stemmed search answers `stemming_unavailable`, and `schema_current` is false
-  until a rebuild (`index-stats` reports `stemmed_search: false` and says a plain
-  `rebuild-index` is enough). Prefix terms (`*`) are refused with stemming, because FTS5 would
+  until a rebuild. `index-stats --json` and MCP `library_status` report `stemmed_search: false`,
+  and plain `index-stats` says a plain `rebuild-index` is enough. Prefix terms (`*`) are refused with stemming, because FTS5 would
   stem the partial word. On synthetic text it added about 18% to the index file.
 
 `metadata` also stores Zotero fields the first schema dropped. All are optional: a record or index

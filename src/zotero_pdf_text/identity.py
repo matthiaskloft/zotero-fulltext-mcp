@@ -95,9 +95,9 @@ def normalize_doi(value: str | None) -> str:
 # ISBN-10 (nine digits and a digit or X check character) or ISBN-13 (978/979 prefix), once
 # hyphens and spaces inside the number are removed.
 _ISBN_CANDIDATE_RE = re.compile(r"(?<![0-9Xx])(?:97[89][0-9]{10}|[0-9]{9}[0-9Xx])(?![0-9Xx])")
-_ISBN_LABEL_RE = re.compile(r"^\s*isbn(?:[\s\-]*1[03])?\s*:?\s*", flags=re.I)
-# A trailing binding qualifier ("(pbk.)", "(hardcover)") or full stop after an ISBN.
-_ISBN_QUALIFIER_RE = re.compile(r"(?:\s*\([^()]*\))?\s*\.?\s*$")
+# The "10"/"13" after "ISBN" counts only when a separator or colon follows it, so the leading
+# digits of an ISBN-10 such as "ISBN 1032123451" are not taken for the label.
+_ISBN_LABEL_RE = re.compile(r"^\s*isbn(?:[\s\-]*1[03](?=[\s:\-]))?\s*:?\s*", flags=re.I)
 # A run of digits possibly grouped by spaces or hyphens and ending in a digit or X: one ISBN, or
 # several separated by spaces, as Zotero's ISBN field can hold.
 _ISBN_RUN_RE = re.compile(r"[0-9](?:[0-9Xx\s\-\u2010-\u2015]*[0-9Xx])?")
@@ -132,12 +132,24 @@ def normalize_isbn(value: str | None) -> str:
     """
     if not value:
         return ""
-    compact = re.sub(r"[\s\-\u2010-\u2015]", "", _ISBN_QUALIFIER_RE.sub("", _ISBN_LABEL_RE.sub("", value), count=1))
+    compact = re.sub(r"[\s\-\u2010-\u2015]", "", _strip_isbn_qualifier(_ISBN_LABEL_RE.sub("", value, count=1)))
     if not _ISBN_CANDIDATE_RE.fullmatch(compact):
         return ""
     if len(compact) == 13:
         return compact if _isbn13_check_digit(compact[:12]) == compact[12] else ""
     return _as_isbn13(compact.upper()) if _isbn10_is_valid(compact) else ""
+
+
+def _strip_isbn_qualifier(value: str) -> str:
+    """Drop a trailing binding qualifier ("(pbk.)", "(hardcover)") and full stops after an ISBN.
+
+    Plain string operations, not a regex: stored fields are unbounded library content, and an
+    unanchored pattern with optional whitespace runs took cubic time on long blank runs.
+    """
+    value = value.rstrip().rstrip(".").rstrip()
+    if value.endswith(")") and (opening := value.rfind("(")) != -1:
+        value = value[:opening].rstrip().rstrip(".").rstrip()
+    return value
 
 
 def extract_isbns(value: str | None) -> list[str]:

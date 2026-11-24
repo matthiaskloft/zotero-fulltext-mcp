@@ -13,8 +13,9 @@ The safe default server exposes:
   indexed title/creator/citation-key metadata, with bounded snippets and `matched_fields` showing
   which indexed fields actually matched. `any_terms` is the broader fallback and `phrase`
   requires normalized words in order (use it for an exact hyphenated term such as
-  `meta-analysis`). `near` requires at least two different terms within `near_distance` tokens of
-  each other (default 10, 0-100) in any order: narrower than `all_terms`, which accepts the terms
+  `meta-analysis`). `near` requires at least two different terms (different as indexed: case,
+  accents, stems with `stemming=true`, and a prefix covering the other term all make two terms
+  the same) within `near_distance` tokens of each other (default 10, 0-100) in any order: narrower than `all_terms`, which accepts the terms
   anywhere in a ~1,500-character chunk, and looser than `phrase`. `near_distance` is rejected with
   any other mode and without a query. A query term ending in `*` (at least three characters
   before it, counted after the last `_`) matches every indexed word with that prefix, e.g.

@@ -1676,6 +1676,7 @@ class LibraryStatusToolTests(unittest.TestCase):
 
             self.assertEqual(response["index"]["records"], 1)
             self.assertIsNotNone(response["index"]["generation_id"])
+            self.assertIs(response["index"]["stemmed_search"], True)
             self.assertIsNone(response["library"])
             self.assertIn("without a project config", response["library_unavailable_reason"])
 
