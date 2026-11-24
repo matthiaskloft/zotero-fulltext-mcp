@@ -60,9 +60,28 @@ class IsbnNormalizationTests(unittest.TestCase):
         self.assertEqual(extract_isbns(""), [])
 
 
+class IsbnEdgeCaseTests(unittest.TestCase):
+    def test_label_and_qualifier_variants(self):
+        for spelling in ("ISBN 13: 978-0-306-40615-7", "isbn10 0306406152", f"{BOOK_13}.", f"{BOOK_13} (pbk.)"):
+            with self.subTest(spelling=spelling):
+                self.assertEqual(normalize_isbn(spelling), "9780306406157")
+
+    def test_stored_fields_are_validated_and_may_group_digits_with_spaces(self):
+        # A wrong ISBN-10 check digit must not match the book its first nine digits name.
+        self.assertEqual(extract_isbns("0306406159"), [])
+        self.assertEqual(extract_isbns("ISBN 978 0 306 40615 7"), ["9780306406157"])
+        self.assertEqual(
+            extract_isbns(f"{BOOK_13} {BOOK_10}, 080442957X (pbk.)"), sorted(["9780306406157", OTHER_BOOK_13])
+        )
+
+
 class ParseIdentifierTests(unittest.TestCase):
     def test_dois_in_common_spellings(self):
-        for spelling in ("10.1000/ABC.123", "doi:10.1000/abc.123", "https://doi.org/10.1000/abc.123", " http://dx.doi.org/10.1000/abc.123 "):
+        for spelling in (
+            "10.1000/ABC.123", "doi:10.1000/abc.123", "https://doi.org/10.1000/abc.123",
+            " http://dx.doi.org/10.1000/abc.123 ", "doi.org/10.1000/abc.123", "https://www.doi.org/10.1000/abc.123",
+            "DOI 10.1000/abc.123", "info:doi/10.1000/abc.123", "10.1000%2Fabc.123",
+        ):
             with self.subTest(spelling=spelling):
                 self.assertEqual(parse_identifier(spelling), ("doi", "10.1000/abc.123"))
 

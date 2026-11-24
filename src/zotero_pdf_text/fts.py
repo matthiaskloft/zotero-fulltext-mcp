@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Iterable, Literal, TypedDict, cast
 
 from ._atomic import replace_with_retry
-from .identity import extract_isbns, normalize_doi, normalize_isbn
+from .identity import extract_isbns, normalize_doi_identifier, normalize_isbn
 from .pages import PageMap, page_range, validate_page_map
 from .quality import detect_language, quality_signals_json, score_extraction
 from .zotero_db import read_only_uri
@@ -48,6 +48,9 @@ PREFIX_MARKER = "*"
 # A word, optionally followed by a "*" that is not itself followed by a word character, so
 # "psychometr*" is a prefix term while "a*b" stays the two plain terms it always was.
 _QUERY_TERM_RE = re.compile(r"\w+(?:\*(?!\w))?", flags=re.UNICODE)
+# unicode61 splits words at "_" (Python's \w does not), so the prefix FTS5 actually sees is the
+# part after the last underscore; that part is what MIN_PREFIX_CHARS counts.
+_UNICODE61_SEPARATOR_RE = re.compile(r"_+")
 # Starting guess for how many characters consecutive stored chunks advance by. An index is not
 # required to have been built with the default chunk_chars/overlap_chars, so this is only an
 # initial estimate for the first fetch in _fetch_covering_chunks below, never assumed correct.
@@ -391,8 +394,9 @@ def search_fts(
     metadata.year inclusively and exclude records whose year is not a plain four-digit year. A
     year filter alone is rejected. Filters cannot be combined with attachment_key.
 
-    Query terms (not filters) may end in "*" for prefix matching (at least MIN_PREFIX_CHARS word
-    characters before it; in phrase mode only the last term). search_mode "near" requires every
+    Query terms (not filters) may end in "*" for prefix matching (at least MIN_PREFIX_CHARS
+    characters before it, else the "*" is ignored as it always was; in phrase mode it counts only
+    on the last term). Prefixes cannot be combined with stemming. search_mode "near" requires every
     term within near_distance tokens (default DEFAULT_NEAR_DISTANCE) of the others, between
     all_terms (anywhere in the chunk) and phrase (adjacent, in order); near_distance is rejected
     with any other mode.
@@ -407,8 +411,10 @@ def search_fts(
     fts = STEMMED_FTS_TABLE if stemming else "chunks_fts"
     terms, field_terms, year_from, year_to = _validate_search_request(
         query, limit, search_mode, author=author, title=title, citation_key=citation_key,
-        year_from=year_from, year_to=year_to,
+        year_from=year_from, year_to=year_to, stemming=stemming,
     )
+    if near_distance is not None and not terms:
+        raise ValueError("near_distance needs a query")
     near_distance = validate_near_distance(near_distance, search_mode)
     if attachment_key is not None and (field_terms or year_from is not None or year_to is not None):
         raise ValueError("attachment_key cannot be combined with author, title, citation_key or year filters")
@@ -1083,7 +1089,7 @@ def parse_identifier(identifier: str) -> tuple[IdentifierType, str]:
     """
     if not isinstance(identifier, str) or not identifier.strip() or len(identifier) > MAX_IDENTIFIER_CHARS:
         raise ValueError(f"identifier must contain 1 to {MAX_IDENTIFIER_CHARS} characters")
-    doi = normalize_doi(identifier)
+    doi = normalize_doi_identifier(identifier)
     if re.fullmatch(r"10\.\d{4,9}/\S+", doi):
         return "doi", doi
     isbn = normalize_isbn(identifier)
@@ -1122,7 +1128,7 @@ def lookup_identifier(
                 f"SELECT record_id, {identifier_type} AS value FROM metadata WHERE {identifier_type} != ''"
             ).fetchall()
             if identifier_type == "doi":
-                matching_ids = [int(row[0]) for row in candidates if normalize_doi(str(row[1])) == normalized]
+                matching_ids = [int(row[0]) for row in candidates if normalize_doi_identifier(str(row[1])) == normalized]
             else:
                 matching_ids = [int(row[0]) for row in candidates if normalized in extract_isbns(str(row[1]))]
         rows: list[sqlite3.Row] = []
@@ -1224,6 +1230,9 @@ class IndexStatistics(TypedDict):
     # rebuilt-but-never-refreshed index is not mistaken for a populated one.
     schema_current: bool
     zotero_metadata_populated: int
+    # Whether the stemmed FTS table exists. It is part of schema_current, reported on its own so
+    # a caller can name the right fix: a plain rebuild adds it, no Zotero metadata refresh needed.
+    stemmed_search: bool
 
 
 _GROUPED_STATISTIC_COLUMNS: tuple[tuple[str, str], ...] = (
@@ -1281,10 +1290,11 @@ def index_statistics(
         # An index built before extraction quality was scored has no such column. Report its rows
         # as "unscored" and say the schema is not current, rather than failing the whole summary.
         columns = {row[1] for row in con.execute("PRAGMA table_info(metadata)").fetchall()}
+        stemmed_search = has_stemmed_index(con)
         schema_current = (
             set(DERIVED_COLUMNS + ZOTERO_TEXT_COLUMNS + ZOTERO_JSON_COLUMNS) <= columns
             and _page_schema(con)
-            and has_stemmed_index(con)
+            and stemmed_search
         )
         populated = (
             int(con.execute("SELECT COUNT(*) FROM metadata WHERE item_type != ''").fetchone()[0])
@@ -1317,6 +1327,7 @@ def index_statistics(
         "by_extraction_quality": by_quality,
         "schema_current": schema_current,
         "zotero_metadata_populated": populated,
+        "stemmed_search": stemmed_search,
     }
 
 
@@ -1982,14 +1993,20 @@ def _normalize_terms(value: str | None, field: str, *, allow_prefix: bool = Fals
         raise ValueError(f"{field} may contain at most {MAX_QUERY_TERMS} searchable terms")
     if any(len(term.removesuffix(PREFIX_MARKER)) > MAX_QUERY_TERM_CHARS for term in terms):
         raise ValueError(f"{field} terms may contain at most {MAX_QUERY_TERM_CHARS} characters")
-    if any(
-        term.endswith(PREFIX_MARKER) and len(term) - len(PREFIX_MARKER) < MIN_PREFIX_CHARS for term in terms
-    ):
-        raise ValueError(f"a prefix term needs at least {MIN_PREFIX_CHARS} characters before '{PREFIX_MARKER}'")
-    return terms
+    # A "*" after fewer than MIN_PREFIX_CHARS characters ("A* search") is ignored, as every "*"
+    # was before prefix search existed, rather than turning an old query into an error.
+    return [
+        term.removesuffix(PREFIX_MARKER) if term.endswith(PREFIX_MARKER) and not _is_valid_prefix(term) else term
+        for term in terms
+    ]
 
 
-def parse_query_terms(query: str, search_mode: str) -> list[str]:
+def _is_valid_prefix(term: str) -> bool:
+    last_token = _UNICODE61_SEPARATOR_RE.split(term.removesuffix(PREFIX_MARKER))[-1]
+    return len(last_token) >= MIN_PREFIX_CHARS
+
+
+def parse_query_terms(query: str, search_mode: str, *, stemming: bool = False) -> list[str]:
     """Validate a query for search_mode and return its terms; raises ValueError with the reason.
 
     Shared with the MCP boundary so both reject exactly the same queries with the same message.
@@ -1997,15 +2014,21 @@ def parse_query_terms(query: str, search_mode: str) -> list[str]:
     terms = _normalize_terms(query, "query", allow_prefix=True)
     if not terms:
         raise ValueError("query must contain at least one searchable term")
-    _check_terms_for_mode(terms, search_mode)
+    return _terms_for_mode(terms, search_mode, stemming=stemming)
+
+
+def _terms_for_mode(terms: list[str], search_mode: str, *, stemming: bool = False) -> list[str]:
+    if search_mode == "phrase":
+        # FTS5 takes a prefix only on a phrase's last token. A "*" on an earlier term is ignored,
+        # as before prefix search existed, so an old phrase query keeps its meaning.
+        terms = [term.removesuffix(PREFIX_MARKER) for term in terms[:-1]] + terms[-1:]
+    if stemming and any(term.endswith(PREFIX_MARKER) for term in terms):
+        # FTS5 runs the prefix through the Porter tokenizer, which mangles partial words
+        # ("estimat" no longer prefixes the stem "estim"), so the combination silently misses.
+        raise ValueError(f"'{PREFIX_MARKER}' prefix terms cannot be combined with stemming; use one or the other")
+    if search_mode == "near" and len({term.casefold() for term in terms}) < 2:
+        raise ValueError("search_mode near needs at least two different query terms")
     return terms
-
-
-def _check_terms_for_mode(terms: list[str], search_mode: str) -> None:
-    if search_mode == "phrase" and any(term.endswith(PREFIX_MARKER) for term in terms[:-1]):
-        raise ValueError(f"in phrase mode only the last term may end in '{PREFIX_MARKER}'")
-    if search_mode == "near" and len(terms) < 2:
-        raise ValueError("search_mode near needs at least two query terms")
 
 
 def validate_near_distance(near_distance: object, search_mode: str) -> int:
@@ -2037,6 +2060,7 @@ def _validate_search_request(
     citation_key: str | None = None,
     year_from: object = None,
     year_to: object = None,
+    stemming: bool = False,
 ) -> tuple[list[str], dict[str, list[str]], int | None, int | None]:
     terms = _normalize_terms(query, "query", allow_prefix=True)
     field_terms = {
@@ -2051,7 +2075,7 @@ def _validate_search_request(
     if search_mode not in SEARCH_MODES:
         raise ValueError(f"search_mode must be one of: {', '.join(sorted(SEARCH_MODES))}")
     if terms:
-        _check_terms_for_mode(terms, search_mode)
+        terms = _terms_for_mode(terms, search_mode, stemming=stemming)
     year_low = _validate_year(year_from, "year_from")
     year_high = _validate_year(year_to, "year_to")
     if year_low is not None and year_high is not None and year_low > year_high:

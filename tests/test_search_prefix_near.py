@@ -76,14 +76,21 @@ class PrefixTermTests(unittest.TestCase):
             # Filters keep whole-word matching: "Do*" is the word "Do", which matches no creator.
             self.assertEqual(search_fts(db, None, author="Do*"), [])
 
-    def test_short_prefixes_and_non_final_phrase_prefixes_are_rejected(self):
+    def test_a_star_that_cannot_be_a_prefix_is_ignored_as_before(self):
         with tempfile.TemporaryDirectory() as tmp:
             db = _build(tmp)
-            short = "p" * (MIN_PREFIX_CHARS - 1) + "*"
-            for query, mode in ((short, "all_terms"), ("meta* analysis", "phrase"), ("x" * 65 + "*", "all_terms")):
-                with self.subTest(query=query, mode=mode), self.assertRaises(ValueError):
-                    search_fts(db, query, search_mode=mode)
+            # "A* search" (the algorithm) and a "*" before the last phrase word searched with the
+            # "*" ignored before prefix search existed; they still do, rather than failing.
+            self.assertEqual(parse_query_terms("A* search", "all_terms"), ["A", "search"])
+            self.assertEqual(parse_query_terms("p" * (MIN_PREFIX_CHARS - 1) + "*", "all_terms"), ["pp"])
+            self.assertEqual(parse_query_terms("meta* anal*", "phrase"), ["meta", "anal*"])
+            self.assertEqual(_keys(search_fts(db, "meta* analysis", search_mode="phrase")), {"M1", "M3"})
             self.assertEqual(parse_query_terms("p" * MIN_PREFIX_CHARS + "*", "all_terms"), ["ppp*"])
+            # unicode61 splits at "_", so "___ab*" would really be the 2-character prefix "ab".
+            self.assertEqual(parse_query_terms("___ab*", "all_terms"), ["___ab"])
+            self.assertEqual(parse_query_terms("a_bcd*", "all_terms"), ["a_bcd*"])
+            with self.assertRaises(ValueError):
+                search_fts(db, "x" * 65 + "*")
 
 
 class NearModeTests(unittest.TestCase):
@@ -116,6 +123,8 @@ class NearModeTests(unittest.TestCase):
             db = _build(tmp)
             invalid = [
                 dict(query="meta", search_mode="near"),
+                dict(query="meta META", search_mode="near"),
+                dict(query=None, author="doe", search_mode="near", near_distance=5),
                 dict(query="meta analysis", search_mode="all_terms", near_distance=5),
                 dict(query="meta analysis", search_mode="near", near_distance=-1),
                 dict(query="meta analysis", search_mode="near", near_distance=MAX_NEAR_DISTANCE + 1),

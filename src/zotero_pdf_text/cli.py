@@ -2534,10 +2534,21 @@ def _print_index_statistics(report: IndexStatistics) -> None:
     print("")
     print(str(report["scope_note"]))
     print(f"Records with Zotero fields: {report['zotero_metadata_populated']} of {report['records']}")
-    if not report["schema_current"] or report["zotero_metadata_populated"] < report["records"]:
+    # schema_current also covers the stemmed search table, which a plain rebuild adds without
+    # touching Zotero; only missing fields or scores need the metadata refresh.
+    stemmed_search = bool(report.get("stemmed_search", True))
+    fields_stale = report["zotero_metadata_populated"] < report["records"] or (
+        not report["schema_current"] and stemmed_search
+    )
+    if fields_stale:
         print(
             "Some records lack stored Zotero fields or extraction-quality scores; run "
             "'zotero-pdf-text rebuild-index --refresh-zotero-metadata' to add them."
+        )
+    elif not stemmed_search:
+        print(
+            "This index predates stemmed search; run 'zotero-pdf-text rebuild-index' to enable "
+            "--stemming (no Zotero metadata refresh needed)."
         )
 
 

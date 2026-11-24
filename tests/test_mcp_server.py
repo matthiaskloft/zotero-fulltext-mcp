@@ -481,6 +481,10 @@ class McpServerTests(unittest.TestCase):
             within = server.tools["search_within_fulltext"]
 
             self.assertTrue(search("searchab*")["results"])
+            # A "*" that cannot be a prefix is ignored, as it was before prefix search existed.
+            self.assertEqual(search("se* searchable"), search("se searchable"))
+            self.assertTrue(search("source* searchable text", search_mode="phrase")["no_results"])
+            self.assertTrue(search("searchable* source text", search_mode="phrase")["results"])
             self.assertTrue(search("searchab")["no_results"])
             self.assertTrue(within("ATTACH1", "searchab* sour*")["results"])
             near = search("searchable text", search_mode="near")
@@ -491,9 +495,9 @@ class McpServerTests(unittest.TestCase):
             self.assertTrue(within("ATTACH1", "source searchable", search_mode="near", near_distance=0)["results"])
 
             for call, code in [
-                (lambda: search("se*"), "invalid_query"),
-                (lambda: search("searchab* text", search_mode="phrase"), "invalid_query"),
                 (lambda: search("searchable", search_mode="near"), "invalid_query"),
+                (lambda: search("searchable Searchable", search_mode="near"), "invalid_query"),
+                (lambda: search(author="disclose", search_mode="near", near_distance=3), "invalid_near_distance"),
                 (lambda: within("ATTACH1", "searchable", search_mode="near"), "invalid_query"),
                 (lambda: search("searchable text", near_distance=3), "invalid_near_distance"),
                 (lambda: search("searchable text", search_mode="near", near_distance=101), "invalid_near_distance"),

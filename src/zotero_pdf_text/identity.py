@@ -95,7 +95,15 @@ def normalize_doi(value: str | None) -> str:
 # ISBN-10 (nine digits and a digit or X check character) or ISBN-13 (978/979 prefix), once
 # hyphens and spaces inside the number are removed.
 _ISBN_CANDIDATE_RE = re.compile(r"(?<![0-9Xx])(?:97[89][0-9]{10}|[0-9]{9}[0-9Xx])(?![0-9Xx])")
-_ISBN_LABEL_RE = re.compile(r"^\s*isbn(?:-1[03])?\s*:?\s*", flags=re.I)
+_ISBN_LABEL_RE = re.compile(r"^\s*isbn(?:[\s\-]*1[03])?\s*:?\s*", flags=re.I)
+# A trailing binding qualifier ("(pbk.)", "(hardcover)") or full stop after an ISBN.
+_ISBN_QUALIFIER_RE = re.compile(r"(?:\s*\([^()]*\))?\s*\.?\s*$")
+# A run of digits possibly grouped by spaces or hyphens and ending in a digit or X: one ISBN, or
+# several separated by spaces, as Zotero's ISBN field can hold.
+_ISBN_RUN_RE = re.compile(r"[0-9](?:[0-9Xx\s\-\u2010-\u2015]*[0-9Xx])?")
+_DOI_LOOKUP_PREFIX_RE = re.compile(
+    r"^(?:(?:https?://)?(?:www\.|dx\.)?doi\.org/|info:doi/|doi\s*:?\s+|doi:\s*)", flags=re.I
+)
 
 
 def _isbn13_check_digit(first12: str) -> str:
@@ -124,7 +132,7 @@ def normalize_isbn(value: str | None) -> str:
     """
     if not value:
         return ""
-    compact = re.sub(r"[\s\-\u2010-\u2015]", "", _ISBN_LABEL_RE.sub("", value))
+    compact = re.sub(r"[\s\-\u2010-\u2015]", "", _ISBN_QUALIFIER_RE.sub("", _ISBN_LABEL_RE.sub("", value), count=1))
     if not _ISBN_CANDIDATE_RE.fullmatch(compact):
         return ""
     if len(compact) == 13:
@@ -133,15 +141,33 @@ def normalize_isbn(value: str | None) -> str:
 
 
 def extract_isbns(value: str | None) -> list[str]:
-    """ISBN-13 forms of every ISBN in a stored field (Zotero may hold several, space-separated).
+    """ISBN-13 forms of every valid ISBN in a stored field (Zotero may hold several).
 
-    Stored values are not checksum-validated: the field is what the library says, and a lookup
-    with a valid ISBN can only match a stored number with the same digits.
+    Each number goes through normalize_isbn, the same validation a lookup query gets, so a stored
+    ISBN with a wrong check digit matches nothing rather than the book its first digits name.
+    Digits grouped by spaces or hyphens are one number when they form a valid ISBN; otherwise the
+    run is split at whitespace into separate numbers.
     """
     if not value:
         return []
-    compact = re.sub(r"[\-\u2010-\u2015]", "", value)
-    return sorted({_as_isbn13(match.group(0).upper()) for match in _ISBN_CANDIDATE_RE.finditer(compact)})
+    found: set[str] = set()
+    for run in _ISBN_RUN_RE.finditer(value):
+        whole = normalize_isbn(run.group(0))
+        if whole:
+            found.add(whole)
+            continue
+        found.update(isbn for token in run.group(0).split() if (isbn := normalize_isbn(token)))
+    return sorted(found)
+
+
+def normalize_doi_identifier(value: str | None) -> str:
+    """normalize_doi for lookups, also accepting doi.org without a scheme, www.doi.org,
+    "DOI 10...", info:doi/ and a percent-encoded slash; used for the query and stored values alike.
+    """
+    if not value:
+        return ""
+    value = re.sub(r"%2f", "/", value.strip(), flags=re.I)
+    return normalize_doi(_DOI_LOOKUP_PREFIX_RE.sub("", value, count=1))
 
 
 def extract_year(value: str | None) -> str:

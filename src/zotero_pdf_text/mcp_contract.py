@@ -839,7 +839,8 @@ def create_server(
         term; "phrase" requires the normalized terms in order; "near" requires 2+ terms within
         near_distance tokens (default 10) of each other, in any order. A query term ending in "*"
         (3+ letters first) matches every word with that prefix. stemming=true matches English
-        word forms (model, models, modeling); try it when exact words find too little.
+        word forms (model, models, modeling); try it when exact words find too little. It
+        cannot be combined with "*".
         Results are discovery candidates: retrieve the returned source_locator.chunk_index before
         treating a hit as body-text evidence. matched_fields identifies why the record matched;
         for metadata-only hits, the chunk locator is a navigation starting point rather than proof
@@ -857,10 +858,12 @@ def create_server(
         def operation() -> SearchResponse:
             validated_mode = _validate_search_mode(search_mode)
             validated_query = _validate_optional_query(query)
-            if validated_query is not None:
-                _validate_query_for_mode(validated_query, validated_mode)
-            validated_distance = _validate_near_distance(near_distance, validated_mode)
             validated_stemming = _validate_stemming(stemming)
+            if validated_query is not None:
+                _validate_query_for_mode(validated_query, validated_mode, validated_stemming)
+            elif near_distance is not None:
+                raise PublicMcpError("invalid_near_distance", "near_distance needs a query.")
+            validated_distance = _validate_near_distance(near_distance, validated_mode)
             validated_limit = _validate_limit(limit)
             filters = {
                 "author": _validate_search_filter(author, "author"),
@@ -918,7 +921,8 @@ def create_server(
             validated_key = _validate_attachment_key(attachment_key)
             validated_mode = _validate_search_mode(search_mode)
             validated_query = _validate_query(query)
-            _validate_query_for_mode(validated_query, validated_mode)
+            validated_stemming = _validate_stemming(stemming)
+            _validate_query_for_mode(validated_query, validated_mode, validated_stemming)
             results = search_fts(
                 _resolve_request_db(db_path),
                 validated_query,
@@ -926,7 +930,7 @@ def create_server(
                 search_mode=validated_mode,
                 attachment_key=validated_key,
                 near_distance=_validate_near_distance(near_distance, validated_mode),
-                stemming=_validate_stemming(stemming),
+                stemming=validated_stemming,
             )
             return {
                 "search_mode": validated_mode,
@@ -1472,12 +1476,12 @@ def guide_response(
             "names, numbers) and search_mode all_terms (the default: every normalized term must "
             "match); leave out question words and generic words such as how, effect or results. "
             "If nothing matches, drop the most generic term before switching to any_terms, which "
-            "broadens a search that found too little; use phrase for exact wording in order, and "
-            "near (with near_distance, default 10 tokens) for terms close together in any order, "
-            "e.g. a hyphenated term such as meta-analysis. A term ending in * matches word "
-            "endings (estimat* finds estimate and estimation). stemming=true matches English word "
-            "forms (model, models, modeling) in every mode; leave it off for names, identifiers "
-            "and exact wording. "
+            "broadens a search that found too little; use phrase for exact wording in order "
+            "(including a hyphenated term such as meta-analysis), and near (with near_distance, "
+            "default 10 tokens) for terms close together in any order. A term ending in * "
+            "matches word endings (estimat* finds estimate and estimation). stemming=true "
+            "matches English word forms (model, models, modeling) in every mode, but not "
+            "together with *; leave it off for names, identifiers and exact wording. "
             "Passages are about 1,500 characters, so an answer often sits in the next or previous "
             "chunk of a hit: read the neighbours (next_chunk_index) before concluding a paper does "
             "not say it, and in a paper that is clearly right use search_within_fulltext to find "
@@ -2660,10 +2664,10 @@ def _validate_optional_query(query: object) -> str | None:
     return _validate_query(query)
 
 
-def _validate_query_for_mode(query: str, search_mode: SearchMode) -> None:
-    """Prefix and near-mode rules, checked by the same code search_fts uses."""
+def _validate_query_for_mode(query: str, search_mode: SearchMode, stemming: bool = False) -> None:
+    """Prefix, stemming and near-mode rules, checked by the same code search_fts uses."""
     try:
-        parse_query_terms(query, search_mode)
+        parse_query_terms(query, search_mode, stemming=stemming)
     except ValueError as exc:
         raise PublicMcpError("invalid_query", f"{str(exc)[:1].upper()}{str(exc)[1:]}.") from None
 

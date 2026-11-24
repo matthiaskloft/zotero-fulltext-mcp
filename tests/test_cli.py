@@ -1405,7 +1405,7 @@ class SearchCliTests(unittest.TestCase):
                 ["--year-from", "2000"],
                 ["--query", "searchable", "--year-from", "2020", "--year-to", "2010"],
                 ["--query", "searchable", "--year-from", "0"],
-                ["--query", "se*"],
+                ["--query", "sourc*", "--stemming"],
                 ["--query", "searchable", "--search-mode", "near"],
                 ["--query", "searchable text", "--near-distance", "3"],
             ):
@@ -1832,6 +1832,30 @@ class IndexStatsCliTests(unittest.TestCase):
             with redirect_stdout(out), redirect_stderr(err):
                 code = main(argv)
         return code, out.getvalue(), err.getvalue(), stats
+
+    def test_rebuild_advice_names_the_right_fix(self):
+        from zotero_pdf_text.cli import _print_index_statistics
+
+        refresh = "--refresh-zotero-metadata"
+        plain = "predates stemmed search"
+        cases = [
+            (dict(schema_current=True, stemmed_search=True), None),
+            # Only the stemmed table is missing: a plain rebuild, no Zotero metadata refresh.
+            (dict(schema_current=False, stemmed_search=False), plain),
+            (dict(schema_current=False, stemmed_search=True), refresh),
+            (dict(schema_current=False, stemmed_search=False, zotero_metadata_populated=1), refresh),
+            # A payload from before stemmed_search existed keeps the old behaviour.
+            (dict(schema_current=False), refresh),
+        ]
+        for overrides, expected in cases:
+            with self.subTest(overrides=overrides):
+                report = {**self._stats(), **overrides}
+                out = io.StringIO()
+                with redirect_stdout(out):
+                    _print_index_statistics(report)
+                printed = out.getvalue()
+                self.assertEqual(refresh in printed, expected == refresh)
+                self.assertEqual(plain in printed, expected == plain)
 
     def test_index_stats_reports_the_generation_it_read(self):
         code, stdout, stderr, _ = self._run(["index-stats"])

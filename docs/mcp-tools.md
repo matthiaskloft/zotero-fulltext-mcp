@@ -12,17 +12,20 @@ The safe default server exposes:
   at most 20) over converted body text and
   indexed title/creator/citation-key metadata, with bounded snippets and `matched_fields` showing
   which indexed fields actually matched. `any_terms` is the broader fallback and `phrase`
-  requires normalized words in order. `near` requires at least two terms within `near_distance`
-  tokens of each other (default 10, 0-100) in any order: narrower than `all_terms`, which accepts
-  the terms anywhere in a ~1,500-character chunk, and looser than `phrase`; it suits hyphenated
-  terms such as `meta-analysis`. `near_distance` is rejected with any other mode. A query term
-  ending in `*` (at least three characters before it) matches every indexed word with that
-  prefix, e.g. `estimat*` finds `estimate` and `estimation`. In `phrase` mode only the last term
-  may carry `*`; a `*` inside a word is a separator, as before, and filters never take prefixes.
+  requires normalized words in order (use it for an exact hyphenated term such as
+  `meta-analysis`). `near` requires at least two different terms within `near_distance` tokens of
+  each other (default 10, 0-100) in any order: narrower than `all_terms`, which accepts the terms
+  anywhere in a ~1,500-character chunk, and looser than `phrase`. `near_distance` is rejected with
+  any other mode and without a query. A query term ending in `*` (at least three characters
+  before it, counted after the last `_`) matches every indexed word with that prefix, e.g.
+  `estimat*` finds `estimate` and `estimation`. A `*` that cannot be a prefix is ignored, as every
+  `*` was before prefix search: a shorter one (`A* search`), one on a non-final `phrase` term, and
+  one inside a word (a separator). Filters never take prefixes.
   `stemming=true` matches English word forms through the Porter stemmer (`model`, `models`,
-  `modeling`; `estimate`, `estimation`), in every mode and for the field filters too. It is off by
-  default because it also conflates names and terms (`Modell` stems to `model`); use it when exact
-  words find too little. An index built before stemming existed answers `stemming_unavailable`
+  `modeling`; `estimate`, `estimation`), in every mode and for the field filters too. It cannot be
+  combined with `*` prefixes (FTS5 would stem the partial word and silently miss matches), so
+  that combination answers `invalid_query`. It is off by default because it also conflates names
+  and terms (`Modell` stems to `model`); use it when exact words find too little. An index built before stemming existed answers `stemming_unavailable`
   until it is rebuilt with `rebuild-index`; exact search keeps working. The optional filters narrow the search before ranking and
   limits: `author` (matches every creator role, editors included), `title` and `citation_key`
   each require all their words in that field (whole words in any order, case- and
@@ -108,10 +111,12 @@ The safe default server exposes:
   Keep each passage's `source_locator.chunk_sha256` and pass it back when re-reading that chunk
   to cite it, so a replaced passage answers `stale_locator`.
 - `lookup_identifier(identifier)` — the same lookup for a DOI or ISBN stored in the index. The
-  type is detected: a DOI may be bare, `doi:`-prefixed or a `doi.org` URL and is compared
-  case-insensitively; an ISBN may be ISBN-10 or ISBN-13, with or without hyphens or an `ISBN`
-  label, and must have a valid check digit. Both forms of one book match each other, and a stored
-  ISBN field listing several ISBNs matches any of them. The response has `lookup_citation_key`'s
+  type is detected: a DOI may be bare, `doi:`/`DOI `/`info:doi/`-prefixed or a `doi.org` link
+  (with or without scheme or `www.`, `%2F` decoded) and is compared case-insensitively; an ISBN
+  may be ISBN-10 or ISBN-13, with hyphens or spaces, an `ISBN`/`ISBN-13:` label or a trailing
+  `(pbk.)`, and must have a valid check digit. Both forms of one book match each other, and a
+  stored ISBN field listing several ISBNs matches any valid one of them; a stored ISBN with a
+  wrong check digit matches nothing. The response has `lookup_citation_key`'s
   fields (`identifier` in place of `citation_key`) plus `identifier_type` (`doi` or `isbn`) and
   `normalized` (lower-case DOI or ISBN-13). Chapters of one book can share its ISBN, so expect
   `ambiguous: true` there. Only the local index is searched: `found: false` means no indexed

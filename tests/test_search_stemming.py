@@ -79,13 +79,24 @@ class StemmedSearchTests(unittest.TestCase):
             self.assertEqual(_keys(search_fts(db, "estimate model", search_mode="phrase", stemming=True)), set())
             self.assertEqual(_keys(search_fts(db, "estimate two model", search_mode="phrase", stemming=True)), {"S1"})
             self.assertEqual(_keys(search_fts(db, "model estimate", search_mode="near", stemming=True)), {"S1", "S2"})
-            self.assertEqual(_keys(search_fts(db, "estim*", stemming=True)), {"S1", "S2"})
             # Filters are stemmed too, names included.
             self.assertEqual(_keys(search_fts(db, None, title="models", stemming=True)), {"S1", "S2"})
             self.assertEqual(_keys(search_fts(db, None, author="model")), set())
             self.assertEqual(_keys(search_fts(db, None, author="model", stemming=True)), {"S4"})
             (hit,) = search_fts(db, "estimate", attachment_key="S2", stemming=True)
             self.assertEqual(hit.matched_fields, ["text"])
+
+    def test_prefix_terms_are_rejected_with_stemming(self):
+        # FTS5 stems the prefix itself ("estimat" -> "estimat", indexed stem "estim"), so the
+        # combination would silently miss matches that exact prefix search finds.
+        with tempfile.TemporaryDirectory() as tmp:
+            db = _build(tmp)
+            self.assertEqual(_keys(search_fts(db, "estimat*")), {"S1", "S2"})
+            for mode in ("all_terms", "any_terms", "phrase", "near"):
+                with self.subTest(mode=mode), self.assertRaises(ValueError):
+                    search_fts(db, "model estimat*", search_mode=mode, stemming=True)
+            # A "*" too short to be a prefix is ignored, so it does not block stemming.
+            self.assertEqual(_keys(search_fts(db, "models es*", search_mode="any_terms", stemming=True)), {"S1", "S2", "S4"})
 
     def test_stemming_must_be_a_boolean(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -126,6 +137,8 @@ class LegacyIndexTests(unittest.TestCase):
             self.assertTrue(within("ATTACH1", "sources", stemming=True)["results"])
             _assert_tool_error(self, lambda: search("source", stemming="yes"), "invalid_stemming")
             _assert_tool_error(self, lambda: within("ATTACH1", "source", stemming=1), "invalid_stemming")
+            _assert_tool_error(self, lambda: search("sourc*", stemming=True), "invalid_query")
+            _assert_tool_error(self, lambda: within("ATTACH1", "sourc*", stemming=True), "invalid_query")
 
             from zotero_pdf_text.artifacts import resolve_reader_db_path
 
