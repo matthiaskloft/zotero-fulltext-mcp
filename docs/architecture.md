@@ -68,7 +68,7 @@ as primary library records.
 - Full-text MCP: the default surface is bounded, read-only search (`search_fulltext`, and
   `search_within_fulltext` for one attachment), passage retrieval (`get_fulltext_chunk`, and
   `get_passage_image` for the extracted images a passage links to), item
-  context (`get_item_context`, `lookup_citation_key`) and index status (`library_status`) over
+  context (`get_item_context`, `lookup_citation_key`, `lookup_identifier` for a DOI or ISBN) and index status (`library_status`) over
   converted Markdown. It never launches Zotero or exposes local paths; returned
   library material is labelled untrusted. Search results identify the fields that matched, and
   search/passage locators bind attachment/chunk/character identity to the converted Markdown

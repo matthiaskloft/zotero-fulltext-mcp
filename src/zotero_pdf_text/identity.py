@@ -97,7 +97,10 @@ def normalize_doi(value: str | None) -> str:
 _ISBN_CANDIDATE_RE = re.compile(r"(?<![0-9Xx])(?:97[89][0-9]{10}|[0-9]{9}[0-9Xx])(?![0-9Xx])")
 # The "10"/"13" after "ISBN" counts only when a separator or colon follows it, so the leading
 # digits of an ISBN-10 such as "ISBN 1032123451" are not taken for the label.
-_ISBN_LABEL_RE = re.compile(r"^\s*isbn(?:[\s\-]*1[03](?=[\s:\-]))?\s*:?\s*", flags=re.I)
+_ISBN_LABEL_RE = re.compile(r"^\s*isbn(?:[\s\-\u2010-\u2015]*1[03](?=[\s:\-\u2010-\u2015]))?\s*:?\s*", flags=re.I)
+# The same label anywhere in a stored field, so "ISBN-13 978 0 ..." does not glue "13" onto the
+# number that follows it.
+_ISBN_LABEL_ANYWHERE_RE = re.compile(r"isbn(?:[\s\-\u2010-\u2015]*1[03](?=[\s:\-\u2010-\u2015]))?\s*:?", flags=re.I)
 # A run of digits possibly grouped by spaces or hyphens and ending in a digit or X: one ISBN, or
 # several separated by spaces, as Zotero's ISBN field can hold.
 _ISBN_RUN_RE = re.compile(r"[0-9](?:[0-9Xx\s\-\u2010-\u2015]*[0-9Xx])?")
@@ -147,7 +150,8 @@ def _strip_isbn_qualifier(value: str) -> str:
     unanchored pattern with optional whitespace runs took cubic time on long blank runs.
     """
     value = value.rstrip().rstrip(".").rstrip()
-    if value.endswith(")") and (opening := value.rfind("(")) != -1:
+    # Several qualifiers can follow ("(pbk.) (alk. paper)"); each pass drops one, so this is linear.
+    while value.endswith(")") and (opening := value.rfind("(")) != -1:
         value = value[:opening].rstrip().rstrip(".").rstrip()
     return value
 
@@ -163,6 +167,7 @@ def extract_isbns(value: str | None) -> list[str]:
     if not value:
         return []
     found: set[str] = set()
+    value = _ISBN_LABEL_ANYWHERE_RE.sub(" ", value)
     for run in _ISBN_RUN_RE.finditer(value):
         whole = normalize_isbn(run.group(0))
         if whole:

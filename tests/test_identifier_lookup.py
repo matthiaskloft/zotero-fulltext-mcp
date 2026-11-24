@@ -75,6 +75,12 @@ class IsbnEdgeCaseTests(unittest.TestCase):
                 self.assertNotEqual(normalize_isbn(spelling), "")
         self.assertEqual(normalize_isbn("ISBN 10 0306406152"), "9780306406157")
 
+    def test_pdf_hyphens_several_qualifiers_and_labelled_stored_values(self):
+        self.assertEqual(normalize_isbn("ISBN\u201013: 978\u20100\u2010306\u201040615\u20107"), "9780306406157")
+        self.assertEqual(normalize_isbn("0306406152 (pbk.) (alk. paper)"), "9780306406157")
+        self.assertEqual(extract_isbns("ISBN-13 978 0 306 40615 7"), ["9780306406157"])
+        self.assertEqual(extract_isbns("ISBN 10: 0306406152; ISBN-13: 9780804429573"), sorted(["9780306406157", OTHER_BOOK_13]))
+
     def test_long_blank_runs_in_a_stored_field_stay_fast(self):
         # An unanchored optional-whitespace regex once made this cubic: about 7 s at 2,000 spaces.
         import time

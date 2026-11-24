@@ -129,6 +129,8 @@ class NearModeTests(unittest.TestCase):
                 dict(query="café cafe", search_mode="near"),
                 dict(query="anal* analysis", search_mode="near"),
                 dict(query="meta* meta", search_mode="near"),
+                # "___" is no token for FTS5, which ignores it inside NEAR.
+                dict(query="___ meta", search_mode="near"),
                 dict(query=None, author="doe", search_mode="near", near_distance=5),
                 dict(query="meta analysis", search_mode="all_terms", near_distance=5),
                 dict(query="meta analysis", search_mode="near", near_distance=-1),

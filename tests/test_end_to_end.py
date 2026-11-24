@@ -248,7 +248,7 @@ class ConvertIndexServeTests(unittest.TestCase):
 
             self.assertEqual(_keys(prefix), [FIRST.attachment_key])
             self.assertEqual(_keys(near), [FIRST.attachment_key])
-            # "zebrafinch estimator" are adjacent, in any order; "heteroscedasticity" is two away.
+            # "zebrafinch estimator" are adjacent, in any order; "heteroscedasticity" is three words away.
             self.assertEqual(_keys(near_adjacent), [FIRST.attachment_key])
             self.assertEqual(_keys(near_too_far), [])
             # The stemmed table is built and published by convert-new, not only by test helpers.

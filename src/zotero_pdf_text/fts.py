@@ -2050,8 +2050,12 @@ def _has_independent_pair(terms: list[str], *, stemming: bool) -> bool:
     "café cafe" (one token after diacritic folding) or "mod* model" (the prefix covers the word)
     would otherwise make near a one-term search. Terms are compared as FTS5 tokenizes them.
     """
+    # A term FTS5 reads as no token at all ("___") is ignored inside NEAR, so it cannot be one
+    # of the pair.
     tokens = [
-        (_fts_tokens(term.removesuffix(PREFIX_MARKER), stemming), term.endswith(PREFIX_MARKER)) for term in terms
+        (token, term.endswith(PREFIX_MARKER))
+        for term in terms
+        if (token := _fts_tokens(term.removesuffix(PREFIX_MARKER), stemming))
     ]
 
     def overlap(a: tuple[str, bool], b: tuple[str, bool]) -> bool:
