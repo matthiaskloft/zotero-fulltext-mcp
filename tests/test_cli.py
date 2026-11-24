@@ -1349,6 +1349,8 @@ class SearchCliTests(unittest.TestCase):
                 (["--query", "searchab*", "--json"], True),
                 (["--query", "searchable text", "--search-mode", "near", "--near-distance", "1", "--json"], True),
                 (["--query", "searchable text", "--search-mode", "near", "--near-distance", "0", "--json"], False),
+                (["--query", "instruction sources", "--json"], False),
+                (["--query", "instruction sources", "--stemming", "--json"], True),
             ):
                 with self.subTest(argv=argv):
                     output = io.StringIO()
@@ -1370,6 +1372,7 @@ class SearchCliTests(unittest.TestCase):
         search.assert_called_once_with(
             Path("unused.sqlite"), "topic", limit=10, search_mode="any_terms",
             author=None, title=None, citation_key=None, year_from=None, year_to=None, near_distance=None,
+            stemming=False,
         )
         self.assertEqual(json.loads(output.getvalue()), {"search_mode": "any_terms", "no_results": True, "results": []})
 

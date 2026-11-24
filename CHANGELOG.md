@@ -26,13 +26,20 @@ All notable changes to this project are documented here. Format loosely follows
   `near_distance` tokens of each other (default 10, at most 100) in any order, between
   `all_terms` (anywhere in a chunk) and `phrase` (adjacent, in order). New optional
   `near_distance` parameter on both search tools and `--near-distance` on `search-fts`.
+- Opt-in stemmed search (#77 C): `stemming=true` on both search tools (`--stemming` on
+  `search-fts`) matches English word forms with the Porter stemmer (`model`, `models`, `modeling`),
+  in every search mode and for field filters. Exact search stays the default. Indexes now contain
+  `chunks_fts_stemmed`, an external-content FTS5 table over `chunks_fts` (an index, no second copy
+  of the text; about 18% larger index files on synthetic text). **Rebuild the index with
+  `rebuild-index` to use stemming**: an older index keeps exact search, answers
+  `stemming_unavailable` for stemmed search, and reports `schema_current: false`.
 - `lookup_identifier` MCP tool (#77 F): exact lookup of indexed attachments by DOI (bare, `doi:`
   or `doi.org` URL, case-insensitive) or ISBN (ISBN-10 or ISBN-13, hyphens allowed, check digit
   verified, both forms of one book match). Same response shape as `lookup_citation_key`, plus
   `identifier_type` and `normalized`. Reads existing metadata.
 
-  None of these three needs an index rebuild or schema change, and calls that use neither `*`
-  nor the `near` mode return the same results as before.
+  Prefix terms, `near` and `lookup_identifier` need no index rebuild. Calls that use none of `*`,
+  `near` or `stemming` return the same results as before.
 - Pilot labels no longer record line-break-only hyphens: words split at a line end are joined (`criti- cal` to `critical`), real hyphens are kept without the stray space, and a test rejects any
   unlisted `letter- lowercase` sequence. Hashes were recomputed for the changed blocks; the convention
   is in `docs/extraction-pilot-review.md`.

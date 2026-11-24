@@ -8,7 +8,7 @@ for guidance matched to its enabled capabilities.
 
 The safe default server exposes:
 
-- `search_fulltext(query="", limit=10, search_mode="all_terms", author="", title="", citation_key="", year_from=None, year_to=None, near_distance=None)` — ranked search (one hit per paper,
+- `search_fulltext(query="", limit=10, search_mode="all_terms", author="", title="", citation_key="", year_from=None, year_to=None, near_distance=None, stemming=False)` — ranked search (one hit per paper,
   at most 20) over converted body text and
   indexed title/creator/citation-key metadata, with bounded snippets and `matched_fields` showing
   which indexed fields actually matched. `any_terms` is the broader fallback and `phrase`
@@ -17,9 +17,13 @@ The safe default server exposes:
   the terms anywhere in a ~1,500-character chunk, and looser than `phrase`; it suits hyphenated
   terms such as `meta-analysis`. `near_distance` is rejected with any other mode. A query term
   ending in `*` (at least three characters before it) matches every indexed word with that
-  prefix, e.g. `estimat*` finds `estimate` and `estimation`; there is no stemming otherwise. In
-  `phrase` mode only the last term may carry `*`; a `*` inside a word is a separator, as before,
-  and filters never take prefixes. The optional filters narrow the search before ranking and
+  prefix, e.g. `estimat*` finds `estimate` and `estimation`. In `phrase` mode only the last term
+  may carry `*`; a `*` inside a word is a separator, as before, and filters never take prefixes.
+  `stemming=true` matches English word forms through the Porter stemmer (`model`, `models`,
+  `modeling`; `estimate`, `estimation`), in every mode and for the field filters too. It is off by
+  default because it also conflates names and terms (`Modell` stems to `model`); use it when exact
+  words find too little. An index built before stemming existed answers `stemming_unavailable`
+  until it is rebuilt with `rebuild-index`; exact search keeps working. The optional filters narrow the search before ranking and
   limits: `author` (matches every creator role, editors included), `title` and `citation_key`
   each require all their words in that field (whole words in any order, case- and
   diacritic-insensitive: `muller` matches `Müller`, `Mueller` does not; no substring or prefix
@@ -30,8 +34,8 @@ The safe default server exposes:
   are inclusive; records whose year is missing or not a plain four-digit year are excluded
   when a year filter is set, and a year filter needs a query or a field filter. Blank strings
   count as absent. Calls without filters behave as before.
-- `search_within_fulltext(attachment_key, query, search_mode="all_terms", limit=10, near_distance=None)` — the same
-  search (including `near` and `*` prefixes) constrained to one indexed attachment (siblings under the same parent item are not
+- `search_within_fulltext(attachment_key, query, search_mode="all_terms", limit=10, near_distance=None, stemming=False)` — the same
+  search (including `near`, `*` prefixes and stemming) constrained to one indexed attachment (siblings under the same parent item are not
   searched). It matches converted body text only, so every hit is a passage rather than a
   metadata match. Returns up to `limit` matching chunks of that attachment, ordered by relevance then
   chunk index, each with the same metadata, provenance and `source_locator` as `search_fulltext`.

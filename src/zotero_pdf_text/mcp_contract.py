@@ -70,6 +70,7 @@ from .fts import (
     SearchMode,
     SearchResult,
     StaleLocatorError,
+    StemmingUnavailableError,
     get_fulltext,
     get_page as get_page_fn,
     get_item_context as get_item_context_fn,
@@ -99,6 +100,7 @@ if TYPE_CHECKING:
     LimitInput = object
     SearchModeInput = object
     NearDistanceInput = object
+    StemmingInput = object
     AttachmentKeyInput = object
     MaxCharsInput = object
     ChunkIndexInput = object
@@ -754,6 +756,7 @@ def create_server(
                     object,
                     WithJsonSchema({"anyOf": [{"type": "integer", "minimum": 0, "maximum": MAX_NEAR_DISTANCE}, {"type": "null"}]}),
                 ],
+                StemmingInput=Annotated[object, WithJsonSchema({"type": "boolean"})],
                 AttachmentKeyInput=Annotated[object, WithJsonSchema({"type": "string", "maxLength": MAX_CITATION_KEY_CHARS})],
                 MaxCharsInput=Annotated[object, WithJsonSchema({"type": "integer", "minimum": 1, "maximum": MAX_RETRIEVED_CHARS})],
                 ChunkIndexInput=Annotated[
@@ -827,6 +830,7 @@ def create_server(
         year_from: YearInput = None,
         year_to: YearInput = None,
         near_distance: NearDistanceInput = None,
+        stemming: StemmingInput = False,
     ) -> SearchResponse:
         """Search title, creators, citation key, and converted body text.
 
@@ -834,7 +838,8 @@ def create_server(
         distinctive terms rather than a question; "any_terms" is a broader fallback that matches any
         term; "phrase" requires the normalized terms in order; "near" requires 2+ terms within
         near_distance tokens (default 10) of each other, in any order. A query term ending in "*"
-        (3+ letters first) matches every word with that prefix.
+        (3+ letters first) matches every word with that prefix. stemming=true matches English
+        word forms (model, models, modeling); try it when exact words find too little.
         Results are discovery candidates: retrieve the returned source_locator.chunk_index before
         treating a hit as body-text evidence. matched_fields identifies why the record matched;
         for metadata-only hits, the chunk locator is a navigation starting point rather than proof
@@ -855,6 +860,7 @@ def create_server(
             if validated_query is not None:
                 _validate_query_for_mode(validated_query, validated_mode)
             validated_distance = _validate_near_distance(near_distance, validated_mode)
+            validated_stemming = _validate_stemming(stemming)
             validated_limit = _validate_limit(limit)
             filters = {
                 "author": _validate_search_filter(author, "author"),
@@ -878,6 +884,7 @@ def create_server(
                 year_from=validated_from,
                 year_to=validated_to,
                 near_distance=validated_distance,
+                stemming=validated_stemming,
             )
             return {
                 "search_mode": validated_mode,
@@ -894,14 +901,15 @@ def create_server(
         search_mode: SearchModeInput = "all_terms",
         limit: LimitInput = 10,
         near_distance: NearDistanceInput = None,
+        stemming: StemmingInput = False,
     ) -> SearchResponse:
         """Search the converted body text of one indexed attachment only.
 
         Title, creator and citation-key terms are not matched here, so every hit is a body-text
         passage. Returns up to limit distinct matching chunks of that attachment, ordered by
         relevance and then chunk_index; other attachments, including siblings under the same
-        parent, are never searched. search_mode, near_distance and "*" prefixes behave as in
-        search_fulltext. An attachment with no match returns
+        parent, are never searched. search_mode, near_distance, stemming and "*" prefixes behave as
+        in search_fulltext. An attachment with no match returns
         no_results; an attachment key absent from the index answers attachment_not_found. Retrieve
         a hit with get_fulltext_chunk using its source_locator.chunk_index and chunk_sha256.
         """
@@ -918,6 +926,7 @@ def create_server(
                 search_mode=validated_mode,
                 attachment_key=validated_key,
                 near_distance=_validate_near_distance(near_distance, validated_mode),
+                stemming=_validate_stemming(stemming),
             )
             return {
                 "search_mode": validated_mode,
@@ -1466,7 +1475,9 @@ def guide_response(
             "broadens a search that found too little; use phrase for exact wording in order, and "
             "near (with near_distance, default 10 tokens) for terms close together in any order, "
             "e.g. a hyphenated term such as meta-analysis. A term ending in * matches word "
-            "endings (estimat* finds estimate and estimation); there is no stemming otherwise. "
+            "endings (estimat* finds estimate and estimation). stemming=true matches English word "
+            "forms (model, models, modeling) in every mode; leave it off for names, identifiers "
+            "and exact wording. "
             "Passages are about 1,500 characters, so an answer often sits in the next or previous "
             "chunk of a hit: read the neighbours (next_chunk_index) before concluding a paper does "
             "not say it, and in a paper that is clearly right use search_within_fulltext to find "
@@ -2573,6 +2584,12 @@ def _public_call(operation: Callable[[], Any], *, integration: bool = False) -> 
         ) from None
     except FileNotFoundError:
         raise PublicMcpError("database_unavailable", "The local full-text index is unavailable.") from None
+    except StemmingUnavailableError:
+        raise PublicMcpError(
+            "stemming_unavailable",
+            "This index was built before stemmed search existed. Search without stemming, or ask "
+            "the user to rebuild it with the CLI's rebuild-index command.",
+        ) from None
     except StaleLocatorError as exc:
         raise PublicMcpError(
             "stale_locator",
@@ -2658,6 +2675,12 @@ def _validate_near_distance(near_distance: object, search_mode: SearchMode) -> i
         return validate_near_distance(near_distance, search_mode)
     except ValueError as exc:
         raise PublicMcpError("invalid_near_distance", f"{str(exc)[:1].upper()}{str(exc)[1:]}.") from None
+
+
+def _validate_stemming(stemming: object) -> bool:
+    if not isinstance(stemming, bool):
+        raise PublicMcpError("invalid_stemming", "stemming must be true or false.")
+    return stemming
 
 
 def _validate_search_filter(value: object, field: str) -> str | None:

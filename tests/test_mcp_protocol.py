@@ -41,6 +41,8 @@ class McpProtocolTests(unittest.TestCase):
             near_schema = tools["search_fulltext"].inputSchema["properties"]["near_distance"]
             self.assertEqual(near_schema["anyOf"][0], {"type": "integer", "minimum": 0, "maximum": 100})
             self.assertIn("near_distance", tools["search_within_fulltext"].inputSchema["properties"])
+            for name in ("search_fulltext", "search_within_fulltext"):
+                self.assertEqual(tools[name].inputSchema["properties"]["stemming"]["type"], "boolean")
 
             search_schema = tools["search_fulltext"].inputSchema
             self.assertNotIn("query", search_schema.get("required", []))

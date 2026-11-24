@@ -57,6 +57,7 @@ from .fts import (
     list_extraction_quality,
     index_statistics,
     get_fulltext,
+    StemmingUnavailableError,
     search_fts,
 )
 from .ingestion import dry_run_ingest, ingest_approved
@@ -421,6 +422,11 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=None,
         help="With --search-mode near: maximum tokens between the terms (default 10, at most 100).",
+    )
+    search.add_argument(
+        "--stemming",
+        action="store_true",
+        help="Match English word forms (model, models, modeling) using the stemmed index.",
     )
     search.add_argument("--limit", type=int, default=10, help="Maximum results.")
     search.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
@@ -1407,8 +1413,9 @@ def main(argv: list[str] | None = None) -> int:
                 year_from=args.year_from,
                 year_to=args.year_to,
                 near_distance=args.near_distance,
+                stemming=args.stemming,
             )
-        except (ArtifactError, IndexSchemaUnsupportedError, ValueError) as exc:
+        except (ArtifactError, IndexSchemaUnsupportedError, StemmingUnavailableError, ValueError) as exc:
             print(str(exc), file=sys.stderr)
             return 2
         if args.json:

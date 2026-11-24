@@ -14,7 +14,8 @@ MCP server for clients such as Claude Code and Codex.
 ## What you can do
 
 - **Search across your papers' full text** and narrow results by author, title, citation key,
-  or publication year. Match word beginnings (`psychometr*`) or terms close together in any
+  or publication year. Match word beginnings (`psychometr*`), English word forms
+  (`model` finds `models` and `modeling` with stemming on), or terms close together in any
   order (`near` mode).
 - **Read the passages behind an answer**, search within one paper, and retrieve papers by
   their Better BibTeX citation keys, DOIs or ISBNs. Source locators let your assistant check that a cited

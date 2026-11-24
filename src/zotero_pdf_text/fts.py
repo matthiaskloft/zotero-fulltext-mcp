@@ -226,6 +226,15 @@ class IndexSchemaUnsupportedError(RuntimeError):
 
 
 _REQUIRED_TABLES = frozenset({"metadata", "chunks", "chunks_fts"})
+# Optional second FTS5 index over the same rows, tokenized with the Porter stemmer (English). It is
+# an external-content table reading its columns from chunks_fts, so it adds an index but no second
+# copy of the text, and highlight()/snippet() return the same stored text. Absent from indexes
+# built before stemming existed; search with stemming=True then raises StemmingUnavailableError.
+STEMMED_FTS_TABLE = "chunks_fts_stemmed"
+
+
+class StemmingUnavailableError(RuntimeError):
+    """The index was built before the stemmed FTS table existed; a rebuild adds it."""
 # Added with structure-based chunking. Like the metadata columns that are not required, an index
 # built before them stays readable: it reports no pages (see _page_schema) and a rebuild adds them.
 PAGE_CHUNK_COLUMNS = ("page_start", "page_end", "heading_path")
@@ -336,6 +345,12 @@ def _check_integrity(db_path: Path) -> None:
     con = sqlite3.connect(db_path)
     try:
         rows = con.execute("PRAGMA integrity_check").fetchall()
+        if rows and rows[0][0] == "ok" and has_stemmed_index(con):
+            # FTS5's own check: the stemmed index must agree with the chunks_fts rows it reads.
+            try:
+                con.execute(f"INSERT INTO {STEMMED_FTS_TABLE}({STEMMED_FTS_TABLE}) VALUES ('integrity-check')")
+            except sqlite3.DatabaseError as exc:
+                rows = [(f"{STEMMED_FTS_TABLE}: {exc}",)]
     finally:
         con.close()
     if not rows or rows[0][0] != "ok":
@@ -356,6 +371,7 @@ def search_fts(
     year_from: int | None = None,
     year_to: int | None = None,
     near_distance: int | None = None,
+    stemming: bool = False,
 ) -> list[SearchResult]:
     """Search the index; with attachment_key, rank that one attachment's chunks instead.
 
@@ -380,7 +396,15 @@ def search_fts(
     term within near_distance tokens (default DEFAULT_NEAR_DISTANCE) of the others, between
     all_terms (anywhere in the chunk) and phrase (adjacent, in order); near_distance is rejected
     with any other mode.
+
+    stemming=True matches query terms and filters by their English Porter stem (model, models,
+    modeling; estimate, estimation), against the stemmed index built beside the exact one. Ranking
+    weights, results shape and locators are the same; an index without that table raises
+    StemmingUnavailableError.
     """
+    if not isinstance(stemming, bool):
+        raise ValueError("stemming must be true or false")
+    fts = STEMMED_FTS_TABLE if stemming else "chunks_fts"
     terms, field_terms, year_from, year_to = _validate_search_request(
         query, limit, search_mode, author=author, title=title, citation_key=citation_key,
         year_from=year_from, year_to=year_to,
@@ -414,6 +438,11 @@ def search_fts(
     con = connect_readonly(db_path)
     con.row_factory = sqlite3.Row
     try:
+        if stemming and not has_stemmed_index(con):
+            raise StemmingUnavailableError(
+                f"{db_path} was built before stemmed search existed. Rebuild it with "
+                "'zotero-pdf-text rebuild-index' to search with stemming."
+            )
         if attachment_key is not None:
             # Same lookup as get_fulltext, so hits resolve to the record retrieval will verify.
             record = con.execute(
@@ -455,12 +484,12 @@ def search_fts(
                     m.year,
                     m.doi,
                     m.citation_key,
-                    snippet(chunks_fts, 2, '[', ']', ' ... ', 32) AS snippet,
+                    snippet({fts}, 2, '[', ']', ' ... ', 32) AS snippet,
                     -- Body-match detection only, using control characters that cannot appear in
                     -- indexed document text (unlike '[' or ']', which are common in citations and
                     -- math notation and would otherwise falsely signal a body-text match).
-                    snippet(chunks_fts, 2, char(2), char(3), '', 32) AS body_match_marker,
-                    bm25(chunks_fts, 8.0, 1.0, 1.0, 6.0) AS score,
+                    snippet({fts}, 2, char(2), char(3), '', 32) AS body_match_marker,
+                    bm25({fts}, 8.0, 1.0, 1.0, 6.0) AS score,
                     c.chunk_id,
                     c.chunk_index,
                     c.start_char,
@@ -474,10 +503,10 @@ def search_fts(
                     m.identity_status,
                     m.identity_rule,
                     m.has_math
-                FROM chunks_fts f
+                FROM {fts} f
                 JOIN chunks c ON c.chunk_id = f.chunk_id
                 JOIN metadata m ON m.record_id = f.record_id
-                WHERE chunks_fts MATCH ? {attachment_filter} {year_filter}
+                WHERE {fts} MATCH ? {attachment_filter} {year_filter}
             ), ranked AS (
                 SELECT *, ROW_NUMBER() OVER (
                     PARTITION BY record_id
@@ -494,7 +523,7 @@ def search_fts(
         ).fetchall()
         selected_rows = rows[:limit]
         chunk_facts_by_chunk_id = _chunk_facts_for_chunks(
-            con, match_query, [row["chunk_id"] for row in selected_rows]
+            con, match_query, [row["chunk_id"] for row in selected_rows], fts=fts
         )
     finally:
         con.close()
@@ -519,7 +548,7 @@ class _ChunkFacts:
 
 
 def _chunk_facts_for_chunks(
-    con: sqlite3.Connection, match_query: str, chunk_ids: list[int]
+    con: sqlite3.Connection, match_query: str, chunk_ids: list[int], *, fts: str = "chunks_fts"
 ) -> dict[int, _ChunkFacts]:
     """Compute precise matched_fields and a chunk content hash for already-selected chunks.
 
@@ -539,19 +568,19 @@ def _chunk_facts_for_chunks(
         f"""
         SELECT
             c.chunk_id,
-            highlight(chunks_fts, 0, char(2), char(3)) AS title_highlighted,
-            highlight(chunks_fts, 1, char(2), char(3)) AS creators_highlighted,
-            highlight(chunks_fts, 2, char(2), char(3)) AS text_highlighted,
-            highlight(chunks_fts, 3, char(2), char(3)) AS citation_key_highlighted,
+            highlight({fts}, 0, char(2), char(3)) AS title_highlighted,
+            highlight({fts}, 1, char(2), char(3)) AS creators_highlighted,
+            highlight({fts}, 2, char(2), char(3)) AS text_highlighted,
+            highlight({fts}, 3, char(2), char(3)) AS citation_key_highlighted,
             m.title,
             m.creators,
             c.text AS stored_text,
             f.text AS indexed_text,
             m.citation_key
-        FROM chunks_fts f
+        FROM {fts} f
         JOIN chunks c ON c.chunk_id = f.chunk_id
         JOIN metadata m ON m.record_id = f.record_id
-        WHERE chunks_fts MATCH ? AND c.chunk_id IN ({placeholders})
+        WHERE {fts} MATCH ? AND c.chunk_id IN ({placeholders})
         """,
         (match_query, *chunk_ids),
     ).fetchall()
@@ -1252,7 +1281,11 @@ def index_statistics(
         # An index built before extraction quality was scored has no such column. Report its rows
         # as "unscored" and say the schema is not current, rather than failing the whole summary.
         columns = {row[1] for row in con.execute("PRAGMA table_info(metadata)").fetchall()}
-        schema_current = set(DERIVED_COLUMNS + ZOTERO_TEXT_COLUMNS + ZOTERO_JSON_COLUMNS) <= columns and _page_schema(con)
+        schema_current = (
+            set(DERIVED_COLUMNS + ZOTERO_TEXT_COLUMNS + ZOTERO_JSON_COLUMNS) <= columns
+            and _page_schema(con)
+            and has_stemmed_index(con)
+        )
         populated = (
             int(con.execute("SELECT COUNT(*) FROM metadata WHERE item_type != ''").fetchone()[0])
             if "item_type" in columns
@@ -1437,6 +1470,16 @@ def _create_schema(con: sqlite3.Connection) -> None:
             record_id UNINDEXED,
             chunk_id UNINDEXED,
             tokenize='unicode61'
+        );
+        CREATE VIRTUAL TABLE chunks_fts_stemmed USING fts5(
+            title,
+            creators,
+            text,
+            citation_key,
+            record_id UNINDEXED,
+            chunk_id UNINDEXED,
+            content='chunks_fts',
+            tokenize='porter unicode61'
         );
         """
     )
@@ -1703,21 +1746,25 @@ def _insert_chunk(
         (record_id, chunk_index, start_char, end_char, text, page_start, page_end, heading_path),
     )
     chunk_id = int(cast(int, cursor.lastrowid))
-    con.execute(
-        """
-        INSERT INTO chunks_fts (rowid, title, creators, text, citation_key, record_id, chunk_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        """,
-        (
-            chunk_id,
-            _string(record.get("title")),
-            _string(record.get("creators")),
-            fts_body_text(text, start_char, image_spans),
-            _string(record.get("citation_key")),
-            record_id,
-            chunk_id,
-        ),
+    fts_row = (
+        chunk_id,
+        _string(record.get("title")),
+        _string(record.get("creators")),
+        fts_body_text(text, start_char, image_spans),
+        _string(record.get("citation_key")),
+        record_id,
+        chunk_id,
     )
+    # The stemmed table is external-content over chunks_fts: it must receive exactly the same row
+    # under the same rowid, or its highlights would mark the wrong text.
+    for table in ("chunks_fts", STEMMED_FTS_TABLE):
+        con.execute(
+            f"""
+            INSERT INTO {table} (rowid, title, creators, text, citation_key, record_id, chunk_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            fts_row,
+        )
 
 
 def _insert_pages(con: sqlite3.Connection, record_id: int, text: str, page_map: PageMap | None) -> None:
@@ -1726,6 +1773,16 @@ def _insert_pages(con: sqlite3.Connection, record_id: int, text: str, page_map: 
             "INSERT INTO pages (record_id, page, start_char, end_char, text) VALUES (?, ?, ?, ?, ?)",
             (record_id, page, start_char, end_char, text[start_char:end_char]),
         )
+
+
+def has_stemmed_index(con: sqlite3.Connection) -> bool:
+    """Whether this index has the stemmed FTS table (built after stemmed search existed)."""
+    return (
+        con.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (STEMMED_FTS_TABLE,)
+        ).fetchone()
+        is not None
+    )
 
 
 def _page_schema(con: sqlite3.Connection) -> bool:
